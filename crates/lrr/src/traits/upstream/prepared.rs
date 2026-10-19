@@ -154,6 +154,7 @@ pub(super) struct Clients<'cx> {
 }
 
 pub(super) struct PredicateFacts<'cx> {
+    pub(super) explicit_item: Spanned<'cx>,
     pub(super) item: ClauseList<'cx>,
     pub(super) item_self: ClauseList<'cx>,
     pub(super) item_non_self: ClauseList<'cx>,
@@ -198,6 +199,7 @@ pub(super) struct DefinitionFacts<'cx> {
     pub(super) constant_function: bool,
     pub(super) constant_closure: bool,
     pub(super) has_const_conditions: bool,
+    pub(super) conditionally_const: bool,
     pub(super) target_features: bool,
     pub(super) impl_trait_in_trait: bool,
     pub(super) has_definition: bool,
@@ -921,6 +923,16 @@ impl<'cx> SourceFacts<'cx> for PreparedProvider<'cx> {
         id: DefinitionId,
     ) -> Early<'cx, impl IntoIterator<Item = C<'cx>>> {
         self.definition(id).predicates.item
+    }
+    fn explicit_item_bounds(
+        self,
+        _: Cx<'cx>,
+        id: DefinitionId,
+    ) -> Early<'cx, impl IntoIterator<Item = (C<'cx>, Span)>> {
+        self.definition(id).predicates.explicit_item.map_bound(|values| values.iter().copied())
+    }
+    fn is_conditionally_const(self, _: Cx<'cx>, id: DefinitionId) -> bool {
+        self.definition(id).conditionally_const
     }
     fn item_self_bounds(
         self,

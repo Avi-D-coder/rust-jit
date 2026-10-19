@@ -55,7 +55,6 @@ pub(crate) struct SolverClients<'db> {
     pub(crate) evaluate_const: fn(&InferenceContext<'db>, ParamEnv<'db>, ty::AliasConst<DbInterner<'db>>,
         &mut dyn FnMut(ty::Unnormalized<DbInterner<'db>,Ty<'db>>) -> Option<Ty<'db>>) -> Result<Option<Const<'db>>,()>,
     pub(crate) well_formed_goals: fn(&InferenceContext<'db>,ParamEnv<'db>,Term<'db>) -> Option<Vec<Goal<DbInterner<'db>,Predicate<'db>>>>,
-    pub(crate) hidden_type_bounds: fn(&InferenceContext<'db>,DefinitionId,Args<'db>,ParamEnv<'db>,Ty<'db>,&mut Vec<Goal<DbInterner<'db>,Predicate<'db>>>),
     pub(crate) eligible_assoc_item: fn(&InferenceContext<'db>,ty::TraitRef<DbInterner<'db>>,DefinitionId,DefinitionId) -> FetchEligibleAssocItemResponse<DbInterner<'db>>,
     pub(crate) transmutable: fn(&InferenceContext<'db>,Ty<'db>,Ty<'db>,Const<'db>) -> Result<Certainty,NoSolution>,
 }
@@ -104,7 +103,7 @@ impl<'db> SolverDelegate for SolverContext<'db> {
         self.0.make_deduplicated_region_constraints()
     }
     fn add_item_bounds_for_hidden_type(&self,id:DefinitionId,args:Args<'db>,env:ParamEnv<'db>,hidden:Ty<'db>,goals:&mut Vec<Goal<Self::Interner,Predicate<'db>>>) {
-        (self.interner.services().solver_clients().hidden_type_bounds)(&self.0,id,args,env,hidden,goals)
+        self.0.add_item_bounds_for_hidden_type(id,args,env,hidden,goals)
     }
     fn fetch_eligible_assoc_item(&self,goal:ty::TraitRef<Self::Interner>,item:DefinitionId,implementation:DefinitionId) -> FetchEligibleAssocItemResponse<Self::Interner> {
         (self.interner.services().solver_clients().eligible_assoc_item)(&self.0,goal,item,implementation)

@@ -122,6 +122,14 @@ pub(crate) trait SourceFacts<'cx>:
         cx: Context<'cx, Self>,
         def_id: DefinitionId,
     ) -> ty::EarlyBinder<Context<'cx, Self>, impl IntoIterator<Item = Clause<'cx, Self>>>;
+    /// Explicit bounds retain their genuine source spans. They are distinct
+    /// from elaborated/all item bounds and require their own source producer.
+    fn explicit_item_bounds(
+        self,
+        cx: Context<'cx, Self>,
+        def_id: DefinitionId,
+    ) -> ty::EarlyBinder<Context<'cx, Self>, impl IntoIterator<Item = (Clause<'cx, Self>, Span)>>;
+    fn is_conditionally_const(self, cx: Context<'cx, Self>, def_id: DefinitionId) -> bool;
     fn item_self_bounds(
         self,
         cx: Context<'cx, Self>,

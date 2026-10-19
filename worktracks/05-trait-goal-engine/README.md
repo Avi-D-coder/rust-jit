@@ -4,6 +4,8 @@ Integrate the pinned next-generation rustc trait solver with LRR's demand-driven
 
 ## Current boundary
 
+Latest held M020 client: V376 complete compiler hidden-type bounds/BottomUpFolder replaces its function-pointer contract. Both builds/2source matrices pass; actual opaque fact/bound/conditional branches remain unexecuted. Four semantic clients plus source/root/member/VM integration still missing. Unchanged nesting runtime fails all4editions at unbound generic U, no new runtime gain. [Evidence](../evidence/2026-10-19-v374-v376-upstream-hidden-type-bounds.json).
+
 Latest held M020 interface: V373 concrete owning SolverContext satisfies upstream SolverDelegate and connects existing compiler operations/proof-tree provider. Both builds and2/2source matrices pass over140Types/136TraitRefs/48edition-origin worlds. Five mandatory semantic clients and actual fact/root/member/VM integration remain unimplemented; no new stock runtime gain or gate closure. [Evidence](../evidence/2026-10-19-v370-v373-upstream-delegate.json).
 
 Latest held E006/M020 prerequisite: V368 removes connected structural resource guards and uses one heap substitution/closed traversal; the unchanged depth300 signature boundary passes all4editions. Three stock runtime contracts pass all4editions/12rows at V368. V369 changes only a stale host region expectation; final builds/affected control pass, production unchanged, earlier source/runtime evidence stays at V368. No measured stock gain/refreshed total or full upstream root/VM integration. [Evidence](../evidence/2026-10-19-v366-v369-structural-resource-guards.json).

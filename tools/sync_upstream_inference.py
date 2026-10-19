@@ -18,6 +18,7 @@ from upstream_canonical_instantiation import extend_canonical_instantiation
 from upstream_region_response import extend_region_response
 from upstream_goal_fast_path import extend_goal_fast_path
 from upstream_solver_delegate import extend_solver_delegate
+from upstream_hidden_type_bounds import extend_hidden_type_bounds
 
 ROOT = Path(__file__).resolve().parents[1]
 PIN = 'ae0fe511b15ab760d7e963b13389d1bc2ab42b18'
@@ -147,6 +148,7 @@ impl Span {
     extend_region_response(outputs, header, rustfmt)
     extend_goal_fast_path(outputs, header, rustfmt)
     extend_solver_delegate(outputs, header, rustfmt)
+    extend_hidden_type_bounds(outputs, header, rustfmt)
     return outputs
 
 

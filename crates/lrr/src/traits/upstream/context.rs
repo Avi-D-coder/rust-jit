@@ -190,6 +190,15 @@ impl<'cx, F: SourceFacts<'cx>> State<'cx, F> {
     }
 }
 impl<'cx, F: SourceFacts<'cx>> Context<'cx, F> {
+    pub(super) fn explicit_item_bounds(
+        self,
+        definition: DefinitionId,
+    ) -> ty::EarlyBinder<Self, impl IntoIterator<Item = (Clause<'cx, F>, Span)>> {
+        self.services().explicit_item_bounds(self, definition)
+    }
+    pub(super) fn is_conditionally_const(self, definition: DefinitionId) -> bool {
+        self.services().is_conditionally_const(self, definition)
+    }
     pub(super) fn instantiation_caches(self) -> &'cx CanonicalInstantiationCaches<'cx,F> { self.state.canonical_instantiation }
     pub(crate) fn services(self) -> F {
         self.state.services

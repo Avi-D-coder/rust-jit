@@ -1,0 +1,966 @@
+{
+  "schema": "lrr/held-component-evidence/v1",
+  "task_ids": [
+    "M020"
+  ],
+  "claim_ids": [
+    "LOCAL-049"
+  ],
+  "track": "WT05-02",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "baseline_commit": "64a307c7073980b487e36220eafd7585751c31f7",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "architecture": "worktracks/05-trait-goal-engine/2026-10-19-upstream-hidden-type-bounds.md",
+  "review": "worktracks/05-trait-goal-engine/2026-10-19-upstream-hidden-type-bounds-review.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-19-upstream-hidden-type-bounds-controls.json",
+  "scope": "Actual pinned complete hidden-bounds method/BottomUpFolder, not an exercised opaque/source/root client",
+  "vendor_audit": {
+    "session": 76094,
+    "exit": 0,
+    "command": "python3.12 tools/bootstrap_trait_solver.py --verify-upstream --checkout rustc/rust",
+    "crates": 8,
+    "files": 183,
+    "source_bytes": 2742155,
+    "retained_original_rust_changes": 0,
+    "registered_stable_dependency_projections": 5
+  },
+  "generator_audit": {
+    "command": "python3.12 tools/sync_upstream_inference.py",
+    "exit": 0,
+    "source_hashes": {
+      "compiler/rustc_middle/src/ty/fold.rs": "e07cb2d26e76490d9a5cb6af659d993f5a95e4ccc99088ed90f233e2842f50b4",
+      "compiler/rustc_infer/src/infer/opaque_types/mod.rs": "5fa09869ec7c26a4065504a401729e05f588efdffe4bb74998faa14d9cd2a1a6"
+    }
+  },
+  "sessions": {
+    "374": {
+      "lib": {
+        "id": 76153,
+        "exit": 101
+      }
+    },
+    "375": {
+      "lib": {
+        "id": 68319,
+        "exit": 0
+      }
+    },
+    "376": {
+      "lib": {
+        "id": 56990,
+        "exit": 0
+      },
+      "cli": {
+        "id": 82634,
+        "exit": 0
+      },
+      "controls": {
+        "id": 25134,
+        "exit": 0
+      },
+      "runtime": {
+        "id": 7215,
+        "exit": 0
+      }
+    }
+  },
+  "cohorts": {
+    "374": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T23:00:15.698329+00:00",
+          "head": "64a307c7073980b487e36220eafd7585751c31f7",
+          "file_count": 8605,
+          "source_sha256": "2f5863c44bac933670c972ab62edfab3f4583114149821ff3b52d28c7d924177",
+          "binaries": {},
+          "slice_files": {
+            "crates/lrr/src/traits/upstream/context.rs": "b2c9148b572854cb23187f9ab6aecdb9a554a59f63e11d28ef86081dd5dac4fd",
+            "crates/lrr/src/traits/upstream/facts.rs": "adf39809cefc482e9644b5f98ceda4be43f1b1449d9e30bfeeaf76fee48f6753",
+            "crates/lrr/src/traits/upstream/prepared.rs": "1eb4ee8a683d32b9bb93a1016a29d7e2665b5d40d146912caa05d1040a086806",
+            "crates/lrr/src/traits/upstream/infer/delegate.rs": "1b356d2d9c45d0d55f5d4bcfc5b05798d42f2db4c0f01658ef4271fcba0d3e27",
+            "crates/lrr/src/traits/upstream/infer/hidden_type_bounds.rs": "0b2078b31c808c2ead1d7d24b744345eeef151fc8b915ef59f841dd624c14456",
+            "crates/lrr/src/traits/upstream/infer/tests.rs": "60afdeb0a9fa191570ea1f2b083600feda4d8bb5fc51fe680d2ec912586dae8c",
+            "tools/upstream_hidden_type_bounds.py": "7442b92d01277a9da3c7c9e4bcd8116baa6b8e49856ed35b04549401a7253826",
+            "tools/upstream_solver_delegate.py": "ee22d957697b9d487bfd0195aa0fb4d5fa08e87d0c898867091f6070f0ec82e5",
+            "tools/sync_upstream_inference.py": "af309ff201259c8bdafa80c7d518ae0c4306a631236cedf412fa8f1d2ab60cf7"
+          }
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T23:00:42.407379+00:00",
+          "head": "64a307c7073980b487e36220eafd7585751c31f7",
+          "file_count": 8605,
+          "source_sha256": "2f5863c44bac933670c972ab62edfab3f4583114149821ff3b52d28c7d924177",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "slice_files": {
+            "crates/lrr/src/traits/upstream/context.rs": "b2c9148b572854cb23187f9ab6aecdb9a554a59f63e11d28ef86081dd5dac4fd",
+            "crates/lrr/src/traits/upstream/facts.rs": "adf39809cefc482e9644b5f98ceda4be43f1b1449d9e30bfeeaf76fee48f6753",
+            "crates/lrr/src/traits/upstream/prepared.rs": "1eb4ee8a683d32b9bb93a1016a29d7e2665b5d40d146912caa05d1040a086806",
+            "crates/lrr/src/traits/upstream/infer/delegate.rs": "1b356d2d9c45d0d55f5d4bcfc5b05798d42f2db4c0f01658ef4271fcba0d3e27",
+            "crates/lrr/src/traits/upstream/infer/hidden_type_bounds.rs": "0b2078b31c808c2ead1d7d24b744345eeef151fc8b915ef59f841dd624c14456",
+            "crates/lrr/src/traits/upstream/infer/tests.rs": "60afdeb0a9fa191570ea1f2b083600feda4d8bb5fc51fe680d2ec912586dae8c",
+            "tools/upstream_hidden_type_bounds.py": "7442b92d01277a9da3c7c9e4bcd8116baa6b8e49856ed35b04549401a7253826",
+            "tools/upstream_solver_delegate.py": "ee22d957697b9d487bfd0195aa0fb4d5fa08e87d0c898867091f6070f0ec82e5",
+            "tools/sync_upstream_inference.py": "af309ff201259c8bdafa80c7d518ae0c4306a631236cedf412fa8f1d2ab60cf7"
+          }
+        }
+      },
+      "build_terminals": {
+        "lib": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 3 previous errors; 50 warnings emitted\n"
+      },
+      "compiler_errors": [
+        "error[E0425]: cannot find type `ParamEnv` in crate `ty`\n  --> crates/lrr/src/traits/upstream/infer/hidden_type_bounds.rs:57:24\n   |\n57 |         param_env: ty::ParamEnv<'db>,\n   |                        ^^^^^^^^ not found in `ty`\n   |\nnote: these type aliases exist but are inaccessible\n  --> crates/lrr/src/traits/upstream/infer/fast_path.rs:21:1\n   |\n21 | type ParamEnv<'db> = model::ParamEnv<'db, PreparedProvider<'db>>;\n   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `crate::traits::upstream::infer::fast_path::ParamEnv`: not accessible\n   |\n  ::: crates/lrr/src/traits/upstream/infer/delegate.rs:15:1\n   |\n15 | type ParamEnv<'db> = model::ParamEnv<'db, PreparedProvider<'db>>;\n   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `crate::traits::upstream::infer::delegate::ParamEnv`: not accessible\nhelp: consider importing one of these structs\n   |\n 4 + use crate::traits::term::ParamEnv;\n   |\n 4 + use crate::traits::upstream::model::ParamEnv;\n   |\nhelp: if you import `ParamEnv`, refer to it directly\n   |\n57 -         param_env: ty::ParamEnv<'db>,\n57 +         param_env: ParamEnv<'db>,\n   |\n\n",
+        "error[E0599]: the method `iter_instantiated_copied` exists for struct `EarlyBinder<Context<'_, PreparedProvider<'db>>, _>`, but its trait bounds were not satisfied\n   --> crates/lrr/src/traits/upstream/infer/hidden_type_bounds.rs:127:14\n    |\n126 |           for (predicate, _) in item_bounds\n    |  _______________________________-\n127 | |             .iter_instantiated_copied(tcx, args)\n    | |_____________-^^^^^^^^^^^^^^^^^^^^^^^^\n    |\n    = note: the following trait bounds were not satisfied:\n            `(model::Clause<'db, PreparedProvider<'db>>, model::Span): std::ops::Deref`\n    = note: the full name for the type has been written to '/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480.long-type-11899145551371792148.txt'\n    = note: consider using `--verbose` to print the full type name to the console\n\n",
+        "error[E0599]: the method `iter_instantiated_copied` exists for struct `EarlyBinder<Context<'db, PreparedProvider<'db>>, _>`, but its trait bounds were not satisfied\n   --> crates/lrr/src/traits/upstream/infer/hidden_type_bounds.rs:141:18\n    |\n140 |               for predicate in item_bounds\n    |  ______________________________-\n141 | |                 .iter_instantiated_copied(tcx, args)\n    | |_________________-^^^^^^^^^^^^^^^^^^^^^^^^\n    |\n   ::: vendor/rustc-trait-solver/compiler/rustc_type_ir/src/binder.rs:31:1\n    |\n 31 |   pub struct Binder<I: Interner, T> {\n    |   --------------------------------- doesn't satisfy `_: Deref`\n    |\n    = note: the following trait bounds were not satisfied:\n            `rustc_type_ir::Binder<upstream::context::Context<'db, PreparedProvider<'db>>, rustc_type_ir::TraitRef<upstream::context::Context<'db, PreparedProvider<'db>>>>: std::ops::Deref`\n    = note: the full name for the type has been written to '/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480.long-type-12834049147774154004.txt'\n    = note: consider using `--verbose` to print the full type name to the console\n\n"
+      ],
+      "controls": []
+    },
+    "375": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T23:01:02.742985+00:00",
+          "head": "64a307c7073980b487e36220eafd7585751c31f7",
+          "file_count": 8605,
+          "source_sha256": "411edd8839d63c915801e3693d8470558cfbd76fd6f9e7821cda926b2a1e1b0b",
+          "binaries": {},
+          "slice_files": {
+            "crates/lrr/src/traits/upstream/context.rs": "b2c9148b572854cb23187f9ab6aecdb9a554a59f63e11d28ef86081dd5dac4fd",
+            "crates/lrr/src/traits/upstream/facts.rs": "adf39809cefc482e9644b5f98ceda4be43f1b1449d9e30bfeeaf76fee48f6753",
+            "crates/lrr/src/traits/upstream/prepared.rs": "1eb4ee8a683d32b9bb93a1016a29d7e2665b5d40d146912caa05d1040a086806",
+            "crates/lrr/src/traits/upstream/infer/delegate.rs": "1b356d2d9c45d0d55f5d4bcfc5b05798d42f2db4c0f01658ef4271fcba0d3e27",
+            "crates/lrr/src/traits/upstream/infer/hidden_type_bounds.rs": "ca6b9411d153aa21c373ce85273c8c037b043f02d1b48c464bba99bf7c7dae76",
+            "crates/lrr/src/traits/upstream/infer/tests.rs": "60afdeb0a9fa191570ea1f2b083600feda4d8bb5fc51fe680d2ec912586dae8c",
+            "tools/upstream_hidden_type_bounds.py": "9bec055a1b9ab02380f1437aa76b7184270cd9936b4040f7298f7692a188e9e8",
+            "tools/upstream_solver_delegate.py": "ee22d957697b9d487bfd0195aa0fb4d5fa08e87d0c898867091f6070f0ec82e5",
+            "tools/sync_upstream_inference.py": "af309ff201259c8bdafa80c7d518ae0c4306a631236cedf412fa8f1d2ab60cf7"
+          }
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T23:02:09.111633+00:00",
+          "head": "64a307c7073980b487e36220eafd7585751c31f7",
+          "file_count": 8605,
+          "source_sha256": "411edd8839d63c915801e3693d8470558cfbd76fd6f9e7821cda926b2a1e1b0b",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "a95b7a82b6413f3205ebb10d0c14901fb940c25e899044c7756e1c6eda432a6d"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "slice_files": {
+            "crates/lrr/src/traits/upstream/context.rs": "b2c9148b572854cb23187f9ab6aecdb9a554a59f63e11d28ef86081dd5dac4fd",
+            "crates/lrr/src/traits/upstream/facts.rs": "adf39809cefc482e9644b5f98ceda4be43f1b1449d9e30bfeeaf76fee48f6753",
+            "crates/lrr/src/traits/upstream/prepared.rs": "1eb4ee8a683d32b9bb93a1016a29d7e2665b5d40d146912caa05d1040a086806",
+            "crates/lrr/src/traits/upstream/infer/delegate.rs": "1b356d2d9c45d0d55f5d4bcfc5b05798d42f2db4c0f01658ef4271fcba0d3e27",
+            "crates/lrr/src/traits/upstream/infer/hidden_type_bounds.rs": "ca6b9411d153aa21c373ce85273c8c037b043f02d1b48c464bba99bf7c7dae76",
+            "crates/lrr/src/traits/upstream/infer/tests.rs": "60afdeb0a9fa191570ea1f2b083600feda4d8bb5fc51fe680d2ec912586dae8c",
+            "tools/upstream_hidden_type_bounds.py": "9bec055a1b9ab02380f1437aa76b7184270cd9936b4040f7298f7692a188e9e8",
+            "tools/upstream_solver_delegate.py": "ee22d957697b9d487bfd0195aa0fb4d5fa08e87d0c898867091f6070f0ec82e5",
+            "tools/sync_upstream_inference.py": "af309ff201259c8bdafa80c7d518ae0c4306a631236cedf412fa8f1d2ab60cf7"
+          }
+        }
+      },
+      "build_terminals": {
+        "lib": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.76s\n"
+      },
+      "compiler_errors": [],
+      "controls": []
+    },
+    "376": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T23:02:09.660959+00:00",
+          "head": "64a307c7073980b487e36220eafd7585751c31f7",
+          "file_count": 8605,
+          "source_sha256": "f39263164c65329249298db2fef39c04a195d511559e30a169f2a9f4cd7d1b85",
+          "binaries": {},
+          "slice_files": {
+            "crates/lrr/src/traits/upstream/context.rs": "b2c9148b572854cb23187f9ab6aecdb9a554a59f63e11d28ef86081dd5dac4fd",
+            "crates/lrr/src/traits/upstream/facts.rs": "adf39809cefc482e9644b5f98ceda4be43f1b1449d9e30bfeeaf76fee48f6753",
+            "crates/lrr/src/traits/upstream/prepared.rs": "1eb4ee8a683d32b9bb93a1016a29d7e2665b5d40d146912caa05d1040a086806",
+            "crates/lrr/src/traits/upstream/infer/delegate.rs": "1b356d2d9c45d0d55f5d4bcfc5b05798d42f2db4c0f01658ef4271fcba0d3e27",
+            "crates/lrr/src/traits/upstream/infer/hidden_type_bounds.rs": "ca6b9411d153aa21c373ce85273c8c037b043f02d1b48c464bba99bf7c7dae76",
+            "crates/lrr/src/traits/upstream/infer/tests.rs": "a43ee0f00287cb013ecfa6e5c1f91c2814b37d5548c37d9eaa19973dd5aedef4",
+            "tools/upstream_hidden_type_bounds.py": "9bec055a1b9ab02380f1437aa76b7184270cd9936b4040f7298f7692a188e9e8",
+            "tools/upstream_solver_delegate.py": "ee22d957697b9d487bfd0195aa0fb4d5fa08e87d0c898867091f6070f0ec82e5",
+            "tools/sync_upstream_inference.py": "af309ff201259c8bdafa80c7d518ae0c4306a631236cedf412fa8f1d2ab60cf7"
+          }
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T23:03:56.392310+00:00",
+          "head": "64a307c7073980b487e36220eafd7585751c31f7",
+          "file_count": 8605,
+          "source_sha256": "f39263164c65329249298db2fef39c04a195d511559e30a169f2a9f4cd7d1b85",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "f395b392a1b98e227cf4652e427107f298c8f14fb3171314cdbc5a9e64c69929"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "81e133ff3578b210ca8023225126bf9dd3152590cfaa17fd705fa4fb4c93c7b9"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "slice_files": {
+            "crates/lrr/src/traits/upstream/context.rs": "b2c9148b572854cb23187f9ab6aecdb9a554a59f63e11d28ef86081dd5dac4fd",
+            "crates/lrr/src/traits/upstream/facts.rs": "adf39809cefc482e9644b5f98ceda4be43f1b1449d9e30bfeeaf76fee48f6753",
+            "crates/lrr/src/traits/upstream/prepared.rs": "1eb4ee8a683d32b9bb93a1016a29d7e2665b5d40d146912caa05d1040a086806",
+            "crates/lrr/src/traits/upstream/infer/delegate.rs": "1b356d2d9c45d0d55f5d4bcfc5b05798d42f2db4c0f01658ef4271fcba0d3e27",
+            "crates/lrr/src/traits/upstream/infer/hidden_type_bounds.rs": "ca6b9411d153aa21c373ce85273c8c037b043f02d1b48c464bba99bf7c7dae76",
+            "crates/lrr/src/traits/upstream/infer/tests.rs": "a43ee0f00287cb013ecfa6e5c1f91c2814b37d5548c37d9eaa19973dd5aedef4",
+            "tools/upstream_hidden_type_bounds.py": "9bec055a1b9ab02380f1437aa76b7184270cd9936b4040f7298f7692a188e9e8",
+            "tools/upstream_solver_delegate.py": "ee22d957697b9d487bfd0195aa0fb4d5fa08e87d0c898867091f6070f0ec82e5",
+            "tools/sync_upstream_inference.py": "af309ff201259c8bdafa80c7d518ae0c4306a631236cedf412fa8f1d2ab60cf7"
+          }
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T23:07:33.346166+00:00",
+          "head": "64a307c7073980b487e36220eafd7585751c31f7",
+          "file_count": 8605,
+          "source_sha256": "f39263164c65329249298db2fef39c04a195d511559e30a169f2a9f4cd7d1b85",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "f395b392a1b98e227cf4652e427107f298c8f14fb3171314cdbc5a9e64c69929"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "81e133ff3578b210ca8023225126bf9dd3152590cfaa17fd705fa4fb4c93c7b9"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true,
+          "slice_files": {
+            "crates/lrr/src/traits/upstream/context.rs": "b2c9148b572854cb23187f9ab6aecdb9a554a59f63e11d28ef86081dd5dac4fd",
+            "crates/lrr/src/traits/upstream/facts.rs": "adf39809cefc482e9644b5f98ceda4be43f1b1449d9e30bfeeaf76fee48f6753",
+            "crates/lrr/src/traits/upstream/prepared.rs": "1eb4ee8a683d32b9bb93a1016a29d7e2665b5d40d146912caa05d1040a086806",
+            "crates/lrr/src/traits/upstream/infer/delegate.rs": "1b356d2d9c45d0d55f5d4bcfc5b05798d42f2db4c0f01658ef4271fcba0d3e27",
+            "crates/lrr/src/traits/upstream/infer/hidden_type_bounds.rs": "ca6b9411d153aa21c373ce85273c8c037b043f02d1b48c464bba99bf7c7dae76",
+            "crates/lrr/src/traits/upstream/infer/tests.rs": "a43ee0f00287cb013ecfa6e5c1f91c2814b37d5548c37d9eaa19973dd5aedef4",
+            "tools/upstream_hidden_type_bounds.py": "9bec055a1b9ab02380f1437aa76b7184270cd9936b4040f7298f7692a188e9e8",
+            "tools/upstream_solver_delegate.py": "ee22d957697b9d487bfd0195aa0fb4d5fa08e87d0c898867091f6070f0ec82e5",
+            "tools/sync_upstream_inference.py": "af309ff201259c8bdafa80c7d518ae0c4306a631236cedf412fa8f1d2ab60cf7"
+          }
+        }
+      },
+      "build_terminals": {
+        "lib": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.41s\n",
+        "cli": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.97s\n"
+      },
+      "compiler_errors": [],
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+            "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 119.859,
+          "log": "control-0.log",
+          "terminal_tail": "at crates/lrr/src/traits/upstream/infer/canonical.rs:187:9:\nassertion `left == right` failed\n  left: 9\n right: 0\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18775524) panicked at crates/lrr/src/traits/upstream/prepared.rs:853:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18775524) panicked at crates/lrr/src/traits/upstream/infer/region_response.rs:100:9:\ncannot take registered region assumptions in a snapshot\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18775524) panicked at crates/lrr/src/traits/upstream/infer/canonical.rs:187:9:\nassertion `left == right` failed\n  left: 9\n right: 0\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18775524) panicked at crates/lrr/src/traits/upstream/prepared.rs:853:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:2; actual pinned inference storage/rollback per source head; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs,edition2024,origin2: 2source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\nactual shared source heads encoded:140; no typed source-fact publication or upstream solving\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1782 filtered out; finished in 119.44s\n\n"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+            "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 46.649,
+          "log": "control-1.log",
+          "terminal_tail": "entity_for_item, no full facts or solver root\nactual generic Type facts tests/ui/const-generics/type-dependent/issue-61936.rs,edition2021,origin2: 3rows/2consts/2regions; original main unexecuted\nactual typed source generics: 1rows/1consts/0regions; 0source identity refusals; actual generics_of and identity_for_item, no full facts or solver root\nactual generic Type facts tests/ui/const-generics/type-after-const-ok.rs,edition2024,origin0: 1rows/1consts/0regions; original main unexecuted\nactual typed source generics: 2rows/2consts/0regions; 2source identity refusals; actual generics_of and identity_for_item, no full facts or solver root\nactual generic Type facts tests/ui/const-generics/generic_const_exprs/unop.rs,edition2024,origin0: 2rows/2consts/0regions; original main unexecuted\nactual typed source generics: 3rows/2consts/2regions; 7source identity refusals; actual generics_of and identity_for_item, no full facts or solver root\nactual generic Type facts tests/ui/const-generics/type-dependent/issue-61936.rs,edition2024,origin0: 3rows/2consts/2regions; original main unexecuted\nactual typed source generics: 3rows/2consts/2regions; 7source identity refusals; actual generics_of and identity_for_item, no full facts or solver root\nactual generic Type facts tests/ui/const-generics/type-dependent/issue-61936.rs,edition2024,origin1: 3rows/2consts/2regions; original main unexecuted\nactual typed source generics: 3rows/2consts/2regions; 7source identity refusals; actual generics_of and identity_for_item, no full facts or solver root\nactual generic Type facts tests/ui/const-generics/type-dependent/issue-61936.rs,edition2024,origin2: 3rows/2consts/2regions; original main unexecuted\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1782 filtered out; finished in 46.22s\n\n"
+        }
+      ],
+      "runtime": [
+        {
+          "path": "tests/ui/impl-trait/nesting.rs",
+          "edition": 2015,
+          "sha256": "453a7890e9f8a59f60f3650af88831a14070f2cb066ea7515b65a30247ea831d",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "--edition",
+            "2015",
+            "run",
+            "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/impl-trait/nesting.rs",
+            "--runtime-capture",
+            "--capture-context",
+            "988d7b3b82043448a56378f4f9491a5c111d1d693f0716b3cfc8145e324ceeea"
+          ],
+          "environment": {
+            "LRR_EMBEDDED_FACADE": "1"
+          },
+          "exit": 2,
+          "seconds": 6.232,
+          "inputs_unchanged": true,
+          "stdout": "stock-2015.stdout",
+          "stderr": "stock-2015.stderr",
+          "host_stderr": "",
+          "expected_stdout_bytes": [
+            91,
+            52,
+            50,
+            93,
+            10,
+            91,
+            57,
+            57,
+            93,
+            10
+          ],
+          "expected_stderr_bytes": [],
+          "capture": {
+            "complete": false,
+            "scope": "dispatcher_external_effects_only_not_memory_trace",
+            "facts": {
+              "classified_operation_candidates": 32,
+              "cleanup_observed": false,
+              "closed_no_external_effects": false,
+              "effect_recipe_dispatch_attempts": 0,
+              "initializer_frames_entered": 0,
+              "observed_fault": true,
+              "observed_suspension": false,
+              "source_call_boundaries": 2,
+              "terminal": null,
+              "typed_fault_exit_candidates": 0,
+              "unsupported_operation_candidates": 0,
+              "vm_dispatches": 22,
+              "vm_outcomes": 22
+            },
+            "guest": {
+              "status": "unobserved",
+              "stdout": null,
+              "stderr": null
+            },
+            "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer"
+          },
+          "terminal": {
+            "status": "fault",
+            "code": "LRR-E-TYPE-CONTEXT",
+            "message": "generic parameter `U` has no reached binding for its path call",
+            "phase": "executor"
+          },
+          "runtime_contract_pass": false,
+          "source_frames": [
+            {
+              "definition": "04f6bb4f74fbdd3b5b1611398687e11b8ffbfa3d53211171a81745de085ac4e7",
+              "locations": [
+                {
+                  "path": "<lrr-facade>/core/convert.rs",
+                  "range": {
+                    "end": 610,
+                    "start": 597
+                  }
+                }
+              ]
+            },
+            {
+              "definition": "86c419ff0ebc36db2038d069745bea286c783a91abf3b671cbeeb409b2023e1a",
+              "locations": [
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 222,
+                    "start": 219
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 223,
+                    "start": 222
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 225,
+                    "start": 223
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 226,
+                    "start": 225
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 227,
+                    "start": 226
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 231,
+                    "start": 227
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 232,
+                    "start": 231
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 233,
+                    "start": 232
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "path": "tests/ui/impl-trait/nesting.rs",
+          "edition": 2018,
+          "sha256": "453a7890e9f8a59f60f3650af88831a14070f2cb066ea7515b65a30247ea831d",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "--edition",
+            "2018",
+            "run",
+            "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/impl-trait/nesting.rs",
+            "--runtime-capture",
+            "--capture-context",
+            "662281d32ab980f34082860db915f4896ce4248148d5d057ff2abd5101f09f85"
+          ],
+          "environment": {
+            "LRR_EMBEDDED_FACADE": "1"
+          },
+          "exit": 2,
+          "seconds": 4.122,
+          "inputs_unchanged": true,
+          "stdout": "stock-2018.stdout",
+          "stderr": "stock-2018.stderr",
+          "host_stderr": "",
+          "expected_stdout_bytes": [
+            91,
+            52,
+            50,
+            93,
+            10,
+            91,
+            57,
+            57,
+            93,
+            10
+          ],
+          "expected_stderr_bytes": [],
+          "capture": {
+            "complete": false,
+            "scope": "dispatcher_external_effects_only_not_memory_trace",
+            "facts": {
+              "classified_operation_candidates": 32,
+              "cleanup_observed": false,
+              "closed_no_external_effects": false,
+              "effect_recipe_dispatch_attempts": 0,
+              "initializer_frames_entered": 0,
+              "observed_fault": true,
+              "observed_suspension": false,
+              "source_call_boundaries": 2,
+              "terminal": null,
+              "typed_fault_exit_candidates": 0,
+              "unsupported_operation_candidates": 0,
+              "vm_dispatches": 22,
+              "vm_outcomes": 22
+            },
+            "guest": {
+              "status": "unobserved",
+              "stdout": null,
+              "stderr": null
+            },
+            "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer"
+          },
+          "terminal": {
+            "status": "fault",
+            "code": "LRR-E-TYPE-CONTEXT",
+            "message": "generic parameter `U` has no reached binding for its path call",
+            "phase": "executor"
+          },
+          "runtime_contract_pass": false,
+          "source_frames": [
+            {
+              "definition": "983490feddec4375245e649e9e2bc756f765ce8799cc6c25e90d186a11d88985",
+              "locations": [
+                {
+                  "path": "<lrr-facade>/core/convert.rs",
+                  "range": {
+                    "end": 610,
+                    "start": 597
+                  }
+                }
+              ]
+            },
+            {
+              "definition": "fce8593c7c57ceead63db9ad4b5555dd016f96ef4e3498621c83e12ba560daaf",
+              "locations": [
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 222,
+                    "start": 219
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 223,
+                    "start": 222
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 225,
+                    "start": 223
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 226,
+                    "start": 225
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 227,
+                    "start": 226
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 231,
+                    "start": 227
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 232,
+                    "start": 231
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 233,
+                    "start": 232
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "path": "tests/ui/impl-trait/nesting.rs",
+          "edition": 2021,
+          "sha256": "453a7890e9f8a59f60f3650af88831a14070f2cb066ea7515b65a30247ea831d",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "--edition",
+            "2021",
+            "run",
+            "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/impl-trait/nesting.rs",
+            "--runtime-capture",
+            "--capture-context",
+            "0b0b9cb5eaa49b896e4876fed94765403eaba7cc89da9dd8c2389679f611996b"
+          ],
+          "environment": {
+            "LRR_EMBEDDED_FACADE": "1"
+          },
+          "exit": 2,
+          "seconds": 4.175,
+          "inputs_unchanged": true,
+          "stdout": "stock-2021.stdout",
+          "stderr": "stock-2021.stderr",
+          "host_stderr": "",
+          "expected_stdout_bytes": [
+            91,
+            52,
+            50,
+            93,
+            10,
+            91,
+            57,
+            57,
+            93,
+            10
+          ],
+          "expected_stderr_bytes": [],
+          "capture": {
+            "complete": false,
+            "scope": "dispatcher_external_effects_only_not_memory_trace",
+            "facts": {
+              "classified_operation_candidates": 32,
+              "cleanup_observed": false,
+              "closed_no_external_effects": false,
+              "effect_recipe_dispatch_attempts": 0,
+              "initializer_frames_entered": 0,
+              "observed_fault": true,
+              "observed_suspension": false,
+              "source_call_boundaries": 2,
+              "terminal": null,
+              "typed_fault_exit_candidates": 0,
+              "unsupported_operation_candidates": 0,
+              "vm_dispatches": 22,
+              "vm_outcomes": 22
+            },
+            "guest": {
+              "status": "unobserved",
+              "stdout": null,
+              "stderr": null
+            },
+            "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer"
+          },
+          "terminal": {
+            "status": "fault",
+            "code": "LRR-E-TYPE-CONTEXT",
+            "message": "generic parameter `U` has no reached binding for its path call",
+            "phase": "executor"
+          },
+          "runtime_contract_pass": false,
+          "source_frames": [
+            {
+              "definition": "317ba845b920098de5a8cd03993db69741b154bcb88fe859f7339eaabf182202",
+              "locations": [
+                {
+                  "path": "<lrr-facade>/core/convert.rs",
+                  "range": {
+                    "end": 610,
+                    "start": 597
+                  }
+                }
+              ]
+            },
+            {
+              "definition": "ab064aa8a5d2b5410120ffa014e7a4428bd5c27495f6838133a963d4543e73d6",
+              "locations": [
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 222,
+                    "start": 219
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 223,
+                    "start": 222
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 225,
+                    "start": 223
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 226,
+                    "start": 225
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 227,
+                    "start": 226
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 231,
+                    "start": 227
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 232,
+                    "start": 231
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 233,
+                    "start": 232
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "path": "tests/ui/impl-trait/nesting.rs",
+          "edition": 2024,
+          "sha256": "453a7890e9f8a59f60f3650af88831a14070f2cb066ea7515b65a30247ea831d",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "--edition",
+            "2024",
+            "run",
+            "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/impl-trait/nesting.rs",
+            "--runtime-capture",
+            "--capture-context",
+            "b50c995071ee91c2a8a6e9b59d3ce3fc050c85b4b15178f80dc83f80adcc5feb"
+          ],
+          "environment": {
+            "LRR_EMBEDDED_FACADE": "1"
+          },
+          "exit": 2,
+          "seconds": 4.177,
+          "inputs_unchanged": true,
+          "stdout": "stock-2024.stdout",
+          "stderr": "stock-2024.stderr",
+          "host_stderr": "",
+          "expected_stdout_bytes": [
+            91,
+            52,
+            50,
+            93,
+            10,
+            91,
+            57,
+            57,
+            93,
+            10
+          ],
+          "expected_stderr_bytes": [],
+          "capture": {
+            "complete": false,
+            "scope": "dispatcher_external_effects_only_not_memory_trace",
+            "facts": {
+              "classified_operation_candidates": 32,
+              "cleanup_observed": false,
+              "closed_no_external_effects": false,
+              "effect_recipe_dispatch_attempts": 0,
+              "initializer_frames_entered": 0,
+              "observed_fault": true,
+              "observed_suspension": false,
+              "source_call_boundaries": 2,
+              "terminal": null,
+              "typed_fault_exit_candidates": 0,
+              "unsupported_operation_candidates": 0,
+              "vm_dispatches": 22,
+              "vm_outcomes": 22
+            },
+            "guest": {
+              "status": "unobserved",
+              "stdout": null,
+              "stderr": null
+            },
+            "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer"
+          },
+          "terminal": {
+            "status": "fault",
+            "code": "LRR-E-TYPE-CONTEXT",
+            "message": "generic parameter `U` has no reached binding for its path call",
+            "phase": "executor"
+          },
+          "runtime_contract_pass": false,
+          "source_frames": [
+            {
+              "definition": "3ed0d9f80306f4d852fa985066ac909a7ba9d0f03372e92df758d1389282680d",
+              "locations": [
+                {
+                  "path": "<lrr-facade>/core/convert.rs",
+                  "range": {
+                    "end": 610,
+                    "start": 597
+                  }
+                }
+              ]
+            },
+            {
+              "definition": "58f501acd31e3dc8ba451aa593fcb1d2f2e175f450d7d1c0ef86f846eb347cb7",
+              "locations": [
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 222,
+                    "start": 219
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 223,
+                    "start": 222
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 225,
+                    "start": 223
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 226,
+                    "start": 225
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 227,
+                    "start": 226
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 231,
+                    "start": 227
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 232,
+                    "start": 231
+                  }
+                },
+                {
+                  "path": "nesting.rs",
+                  "range": {
+                    "end": 233,
+                    "start": 232
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "remaining_required_semantic_clients": [
+    "const evaluation",
+    "well-formed goals",
+    "eligible associated items",
+    "transmutability"
+  ],
+  "required_unexecuted_branches": [
+    "actual opaque source identity/arguments encode and publication",
+    "initial hidden WF goal with real opaque definition",
+    "same opaque definition/argument replacement and explicit bounds",
+    "conditional const/HostEffect goals",
+    "actual source explicit bounds and conditionally_const producer",
+    "full root/response/member/dictionary/currentness/VM integration"
+  ],
+  "new_distinct_stock_runtime_gains": 0,
+  "refreshed_suite_total": false,
+  "M020_complete": false,
+  "upstream_runtime_acceptance": "incomplete",
+  "diagnostic_compatibility": "unassessed_by_this_slice",
+  "compiler_tooling_compatibility": "unassessed_by_this_slice",
+  "full_suite_compatibility": "incomplete",
+  "interpreter_correctness_gate": "incomplete",
+  "full_fixture_passes_claimed": 0,
+  "guest_jit_allowed": false,
+  "performance_claim": false,
+  "reproduction": {
+    "before": "python3.12 tools/validation/source_manifest.py artifacts/validation-current-vNNN before",
+    "lib": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+    "cli": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+    "after_build": "python3.12 tools/validation/source_manifest.py artifacts/validation-current-vNNN after-build --cargo-messages artifacts/validation-current-vNNN/lib-build.jsonl --cli-binary target/debug/lrr",
+    "controls": "python3.12 tools/validation/run_controls.py artifacts/validation-current-vNNN worktracks/05-trait-goal-engine/2026-10-19-upstream-hidden-type-bounds-controls.json",
+    "runtime": "For each selected edition run LRR_EMBEDDED_FACADE=1 target/debug/lrr --edition EDITION run fixtures/upstream/rustc-checkout/tests/ui/impl-trait/nesting.rs --runtime-capture --capture-context CONTEXT. Verify manifest original SHA256, complete capture, completed unit terminal/exit0 and exact guest stdout bytes [42]\\n[99]\\n with empty stderr. Actual failed argv/context/observations retained below.",
+    "after_runtime": "python3.12 tools/validation/source_manifest.py artifacts/validation-current-vNNN after-runtime",
+    "artifact_policy": "Raw logs disposable; Git owns complete licensed inputs, source hashes, commands, selections and outcome evidence. No local artifact folder required to continue/reproduce."
+  },
+  "created_utc": "2026-10-19T23:07:33.565598+00:00",
+  "summary": "V374-V376 HELD M020 actual compiler hidden-type bounds client. Complete pinned infer/opaque_types method and ty/fold BottomUpFolder now replace SolverClients.hidden_type_bounds function pointer. Initial hidden WF, same opaque definition/args substitution, explicit bounds, old-solver projection branch and conditional const HostEffect goals retained; no independent matching/folder or fake SourceFacts. Actual explicit item spans and separate conditionally_const metadata are mandatory new source facts/readers, no default/conflation with all bounds or alias const conditions; producers remain incomplete. Owned source iterables use shared iter_instantiated instead of compiler List references iter_instantiated_copied; unused implied-const span tuple removed without synthetic spans. V3743API compile errors preserved; V375 builds/no execution. V376 both macOS1.99.0 builds and2/2source-context controls pass with exact source/HEAD/test/CLI guards:140Types/136genuineTraitRefs/48edition-origin worlds plus20generic worlds/48rows/36const Types/24early regions; actual compiler postorder nested reconstruction, Type/Region/Const transport and genuine TraitRef Clause traversal. Actual hidden-bounds method/source opaque/explicit/conditional-const branches remain unexecuted; SourceTypePending::OpaqueMetadata/readiness preserved. Four required clients remain unimplemented: const evaluation, WF, eligible associated items, transmutability. Unchanged impl-trait/nesting.rs fails all4editions, CLI exit2/LRR-E-TYPE-CONTEXT generic U unbound for path call;22VMdispatches/2source call boundaries, incomplete capture/no cleanup/guest streams unobserved. Source stack identifies ordinary facade core/convert.rs U::from call; source-bound generic target transport/full solver/member join needed, no Into-specific fallback. No before/after stock gain asserted or refreshed suite total. Vendor audit8crates/183files/2742155bytes,0original Rust edits/5existing projections; deterministic generator audit passes. Full actual source facts/opaque/ParamEnv/remaining clients/root/response/member/dictionary/currentness/VM integration, obsolete consumers, origin/milestone/interpreter/JIT/Linux/full-fixture/diagnostic/performance gates remain open.",
+  "planning_checks": {
+    "worktracks_check": {
+      "exit": 0,
+      "tracks": 12,
+      "items": 60,
+      "claims": 49,
+      "scope": "planning integrity only"
+    },
+    "spec_consistency": {
+      "exit": 0,
+      "passed": true,
+      "scope": "document consistency only"
+    }
+  },
+  "executed_scope": {
+    "source_types": 140,
+    "genuine_trait_refs": 136,
+    "source_origin_edition_worlds": 48,
+    "generic_worlds": 20,
+    "generic_rows": 48,
+    "const_types": 36,
+    "early_regions": 24,
+    "hidden_bounds_method_calls": 0,
+    "opaque_source_publications": 0,
+    "semantic_root_evaluations": 0,
+    "stock_runtime_rows": 4,
+    "stock_runtime_passes": 0,
+    "stock_runtime_failures": 4
+  }
+}

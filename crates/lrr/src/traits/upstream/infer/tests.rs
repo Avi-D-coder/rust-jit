@@ -17,6 +17,7 @@ pub(crate) fn check_actual_storage<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, sp
     check_canonical_instantiation(cx, actual, span);
     check_goal_fast_path(cx, actual, span);
     check_solver_delegate(cx, actual, span);
+    check_pinned_bottom_up_folder(cx, actual, span);
     let storage = InferenceStorage::new();
     let root = ty::UniverseIndex::ROOT;
     let (a, b, integer, float, constant, first_region, second_region) = {
@@ -954,6 +955,14 @@ pub(crate) fn check_trait_fast_path<'cx>(cx: DbInterner<'cx>, reference: ty::Tra
     let owner=SolverContext::from_inference_context(InferenceContext::new(cx,ty::TypingMode::PostAnalysis));
     let unknown=owner.next_ty_var(span);
     let source_ref=reference.with_replaced_self_ty(cx,unknown);
+    // Actual source TraitRef/Clause traversal through the exact compiler folder.
+    // This is not an opaque declaration/hidden-bounds or root-goal witness.
+    use crate::traits::upstream::{infer::hidden_type_bounds::BottomUpFolder,model::Clause};
+    use ty::{TypeFoldable,inherent::Clause as _};
+    let clause=Clause::new(cx,ty::Binder::dummy(ty::ClauseKind::Trait(ty::TraitClause{trait_ref:source_ref,polarity:ty::ClausePolarity::Positive})));
+    let rewritten=clause.fold_with(&mut BottomUpFolder{interner:cx,
+        ty_op:|term| if term==unknown {reference.self_ty()}else{term},lt_op:|r|r,ct_op:|c|c});
+    assert_eq!(rewritten.kind().skip_binder(),ty::ClauseKind::Trait(ty::TraitClause{trait_ref:reference,polarity:ty::ClausePolarity::Positive}));
     let env=ParamEnv(cx.clauses(List::default()));
     for polarity in [ty::ClausePolarity::Positive,ty::ClausePolarity::Negative] {
         let goal=Goal::new(cx,env,ty::Binder::dummy(ty::TraitClause{trait_ref:source_ref,polarity}));
@@ -965,7 +974,7 @@ pub(crate) fn check_trait_fast_path<'cx>(cx: DbInterner<'cx>, reference: ty::Tra
 }
 
 // Actual SolverDelegate entry methods over the same source-owned context.
-// Five required metadata-dependent clients remain uninstalled/unexecuted.
+// Four remaining metadata-dependent clients remain uninstalled/unexecuted.
 fn check_solver_delegate<'cx>(cx:DbInterner<'cx>,actual:Ty<'cx>,span:Span) {
     use super::{InferenceContext,delegate::SolverContext};
     use rustc_next_trait_solver::delegate::SolverDelegate as Delegate;
@@ -999,4 +1008,34 @@ fn check_solver_delegate<'cx>(cx:DbInterner<'cx>,actual:Ty<'cx>,span:Span) {
     assert!(Delegate::make_deduplicated_region_constraints(&owner).is_empty());
     assert!(Delegate::leak_check(&owner,root).is_ok());
     assert!(cx.services().ready(cx).is_err(),"delegate methods grant no missing source clients or root readiness");
+}
+
+// Compiler folder postorder and Type/Region/Const transport, over the genuine
+// retained source Type. This does not fabricate opaque IDs or source facts.
+fn check_pinned_bottom_up_folder<'cx>(cx:DbInterner<'cx>,actual:Ty<'cx>,span:Span) {
+    use super::{InferenceContext,hidden_type_bounds::BottomUpFolder};
+    use ty::{TypeFoldable,inherent::Ty as _};
+    let owner=InferenceContext::new(cx,ty::TypingMode::PostAnalysis);
+    let unknown=owner.next_ty_var(span);
+    let inner=Ty::new_tup(cx,&[unknown]);
+    let replaced_inner=Ty::new_tup(cx,&[actual]);
+    let region=Region::new_static(cx);
+    let source=Ty::new_tup(cx,&[Ty::new_ref(cx,region,inner,ty::Mutability::Not)]);
+    let expected=Ty::new_tup(cx,&[Ty::new_ref(cx,region,Ty::new_slice(cx,actual),ty::Mutability::Not)]);
+    let mut visited=Vec::new();let mut regions=Vec::new();
+    let folded=source.fold_with(&mut BottomUpFolder { interner:cx,
+        ty_op:|term| {visited.push(term);if term==unknown{actual}else if term==replaced_inner{Ty::new_slice(cx,actual)}else{term}},
+        lt_op:|r|{regions.push(r);r},ct_op:|c|c });
+    assert_eq!(folded,expected);
+    let before=visited.iter().position(|t|*t==unknown).unwrap();
+    let after=visited.iter().position(|t|*t==replaced_inner).unwrap();
+    assert!(before<after,"parent callback must receive the reconstructed child");
+    assert_eq!(visited.last(),Some(&expected));assert_eq!(regions,vec![region]);
+    let boolean=cx.ty(ty::Bool);
+    let constant=Const::new(cx,ty::ConstKind::Value(ValueConst{ty:boolean,tree:cx.valtree(ty::ValTreeKind::Leaf(ScalarInt{bits:1,bytes:1}))}));
+    let mut types=Vec::new();let mut constants=Vec::new();
+    let result=constant.fold_with(&mut BottomUpFolder {interner:cx,
+        ty_op:|t|{types.push(t);t},lt_op:|r|r,ct_op:|c|{constants.push(c);c}});
+    assert_eq!(result,constant);assert_eq!(types,vec![boolean]);assert_eq!(constants,vec![constant]);
+    assert!(cx.services().ready(cx).is_err(),"folder transport grants no missing opaque source/bounds readiness");
 }

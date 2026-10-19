@@ -37,14 +37,6 @@ pub(crate) struct SolverClients<'db> {
         ParamEnv<'db>,
         Term<'db>,
     ) -> Option<Vec<Goal<DbInterner<'db>, Predicate<'db>>>>,
-    pub(crate) hidden_type_bounds: fn(
-        &InferenceContext<'db>,
-        DefinitionId,
-        Args<'db>,
-        ParamEnv<'db>,
-        Ty<'db>,
-        &mut Vec<Goal<DbInterner<'db>, Predicate<'db>>>,
-    ),
     pub(crate) eligible_assoc_item: fn(
         &InferenceContext<'db>,
         ty::TraitRef<DbInterner<'db>>,
@@ -189,9 +181,8 @@ impl<'db> SolverDelegate for SolverContext<'db> {
         hidden: Ty<'db>,
         goals: &mut Vec<Goal<Self::Interner, Predicate<'db>>>,
     ) {
-        (self.interner.services().solver_clients().hidden_type_bounds)(
-            &self.0, id, args, env, hidden, goals,
-        )
+        self.0
+            .add_item_bounds_for_hidden_type(id, args, env, hidden, goals)
     }
     fn fetch_eligible_assoc_item(
         &self,
