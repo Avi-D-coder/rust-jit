@@ -4,6 +4,7 @@
 //! See `README.md`.
 
 use std::iter;
+mod leak_check;
 use std::ops::Range;
 use std::{cmp, fmt, mem};
 
@@ -198,6 +199,7 @@ impl Constraint<'_> {
 #[derive(Debug, Clone)]
 pub struct Verify<'db> {
     pub kind: GenericKind<'db>,
+    pub origin: Span,
     pub region: Region<'db>,
     pub bound: VerifyBound<'db>,
 }
@@ -334,7 +336,6 @@ pub(crate) enum UndoLog<'db> {
     AddConstraint(usize),
 
     /// We added the given `verify`.
-    #[expect(dead_code, reason = "this is used in rustc")]
     AddVerify(usize),
 
     /// We added a GLB/LUB "combination variable".
@@ -915,5 +916,37 @@ impl<'db> Rollback<UndoLog<'db>> for RegionConstraintStorage<'db> {
                 self.lubs.remove(regions);
             }
         }
+    }
+}
+
+impl<'db, 'a> RegionConstraintCollector<'db, 'a> {
+    fn add_verify(&mut self, verify: Verify<'db>) {
+        // cannot add verifys once regions are resolved
+        debug!("RegionConstraintCollector: add_verify({:?})", verify);
+
+        // skip no-op cases known to be satisfied
+        if let VerifyBound::AllBounds(ref bs) = verify.bound
+            && bs.is_empty()
+        {
+            return;
+        }
+
+        let index = self.storage.data.verifys.len();
+        self.storage.data.verifys.push(verify);
+        self.undo_log.push(AddVerify(index));
+    }
+    pub(super) fn verify_generic_bound(
+        &mut self,
+        origin: Span,
+        kind: GenericKind<'db>,
+        sub: Region<'db>,
+        bound: VerifyBound<'db>,
+    ) {
+        self.add_verify(Verify {
+            kind,
+            origin,
+            region: sub,
+            bound,
+        });
     }
 }

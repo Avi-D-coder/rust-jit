@@ -1,0 +1,32 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Actual pinned graph/SCC-based leak checker with accepted/rejected, visibility/universe/snapshot/equality/transitive/Verify-origin controls on actual unchanged-source contexts. Host components, no trait root or stock runtime acceptance.",
+  "controls": [
+    "traits::upstream::graph::iterate::tests::dfs",
+    "traits::upstream::graph::iterate::tests::dfs_debug",
+    "traits::upstream::graph::iterate::tests::diamond_post_order",
+    "traits::upstream::graph::iterate::tests::is_cyclic",
+    "traits::upstream::graph::scc::tests::diamond",
+    "traits::upstream::graph::scc::tests::test_big_scc",
+    "traits::upstream::graph::scc::tests::test_bug_max_leak",
+    "traits::upstream::graph::scc::tests::test_bug_max_leak_minimised",
+    "traits::upstream::graph::scc::tests::test_bug_max_zero_stick_shape",
+    "traits::upstream::graph::scc::tests::test_bug_minimised",
+    "traits::upstream::graph::scc::tests::test_deep_linear",
+    "traits::upstream::graph::scc::tests::test_double_cycle_max",
+    "traits::upstream::graph::scc::tests::test_find_state_2",
+    "traits::upstream::graph::scc::tests::test_find_state_3",
+    "traits::upstream::graph::scc::tests::test_max_branch",
+    "traits::upstream::graph::scc::tests::test_max_self_loop",
+    "traits::upstream::graph::scc::tests::test_min_max_in",
+    "traits::upstream::graph::scc::tests::test_single_cycle_max",
+    "traits::upstream::graph::scc::tests::test_three_sccs",
+    "traits::upstream::graph::vec_graph::tests::dfs",
+    "traits::upstream::graph::vec_graph::tests::num_nodes",
+    "traits::upstream::graph::vec_graph::tests::predecessors",
+    "traits::upstream::graph::vec_graph::tests::successors",
+    "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+    "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+    "traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind"
+  ]
+}

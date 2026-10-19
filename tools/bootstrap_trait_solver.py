@@ -52,6 +52,16 @@ SUPPORT_SOURCES = (
     'compiler/rustc_infer/src/infer/outlives/obligations.rs',
     'compiler/rustc_infer/src/infer/relate/higher_ranked.rs',
     'compiler/rustc_infer/src/infer/region_constraints/mod.rs',
+    'compiler/rustc_data_structures/src/graph/mod.rs',
+    'compiler/rustc_data_structures/src/graph/reference.rs',
+    'compiler/rustc_data_structures/src/graph/reversed.rs',
+    'compiler/rustc_data_structures/src/graph/tests.rs',
+    'compiler/rustc_data_structures/src/graph/iterate/mod.rs',
+    'compiler/rustc_data_structures/src/graph/iterate/tests.rs',
+    'compiler/rustc_data_structures/src/graph/scc/mod.rs',
+    'compiler/rustc_data_structures/src/graph/scc/tests.rs',
+    'compiler/rustc_data_structures/src/graph/vec_graph/mod.rs',
+    'compiler/rustc_data_structures/src/graph/vec_graph/tests.rs',
 ) + stable.SUPPORT_SOURCES
 
 
@@ -143,7 +153,7 @@ def source_inventory(originals, installed):
         "schema": 3, "repository": "https://github.com/rust-lang/rust.git",
         "commit": COMMIT, "crates": list(CRATES), "files": rows,
         "support_sources": list(SUPPORT_SOURCES),
-        "packaging": "stable-shared-v2: retain all originals; registered stable-region-assumptions-v1 compiler-helper projections; retain upstream manifests; omit optional compiler-only dependencies; disable default/nightly feature activation",
+        "packaging": "stable-shared-v2: retain all originals; registered " + stable.ADAPTATION + " compiler-helper projections; retain upstream manifests; omit optional compiler-only dependencies; disable default/nightly feature activation",
         "rust_adaptation": stable.ADAPTATION,
         "supported_features": "default-features=false; no compiler-only/nightly/randomize features",
     }

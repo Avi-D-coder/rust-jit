@@ -10,6 +10,7 @@ pub(crate) fn check_actual_storage<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, sp
     check_placeholder_assumptions(cx, actual, span);
     check_solver_region_transactions(cx, span);
     check_current_region_collector(cx, span);
+    check_actual_leak_checker(cx, span);
     check_variable_resolution(cx, actual, span);
     let storage = InferenceStorage::new();
     let root = ty::UniverseIndex::ROOT;
@@ -453,4 +454,101 @@ fn check_current_region_collector<'cx>(cx: DbInterner<'cx>, span: Span) {
     assert_eq!(regions.shallow_resolve_region_var(cx, first_vid), first);
     assert_eq!(regions.shallow_resolve_region_var(cx, second_vid), second);
     assert!(cx.services().ready(cx).is_err(), "collection grants no source facts/root or leak-check readiness");
+}
+
+/// Supplemental actual compiler leak-check controls; real Cx/Span, explicit host
+/// region IR. No fake delegate/source facts and no stock HRTB runtime claim.
+fn check_actual_leak_checker<'cx>(cx: DbInterner<'cx>, span: Span) {
+    use super::InferenceContext;
+    use ty::solve::VisibleForLeakCheck::{Yes, No};
+    fn check<'cx>(context: &InferenceContext<'cx>, outer: ty::UniverseIndex,
+        snapshot: Option<&super::snapshot::CombinedSnapshot>)
+        -> Result<(), ty::error::TypeError<DbInterner<'cx>>> {
+        context.inner.borrow_mut().unwrap_region_constraints()
+            .leak_check(context.interner, outer, context.universe(), snapshot)
+    }
+    fn setup<'cx>(cx: DbInterner<'cx>, span: Span)
+        -> (InferenceContext<'cx>, Region<'cx>, Region<'cx>, [Region<'cx>;2]) {
+        let context = InferenceContext::new(cx, ty::TypingMode::PostAnalysis);
+        let outer = context.next_region_var(span);
+        let universe = context.create_next_universe();
+        let inner = context.next_region_var(span);
+        let placeholders = [0,1].map(|index| cx.intern_region(ty::RegionKind::RePlaceholder(
+            ty::PlaceholderRegion::new_anon(universe, ty::BoundVar::from_u32(index)))));
+        (context, outer, inner, placeholders)
+    }
+    let root = ty::UniverseIndex::ROOT;
+    // Old-universe region outliving a placeholder is permitted (static works),
+    // while a placeholder outliving an unnameable old-universe region is not.
+    let (context, outer, _, p) = setup(cx, span);
+    context.inner.borrow_mut().unwrap_region_constraints().make_subregion(span, p[0], outer, Yes);
+    assert!(check(&context, root, None).is_ok());
+    let (context, outer, _, p) = setup(cx, span);
+    context.inner.borrow_mut().unwrap_region_constraints().make_subregion(span, outer, p[0], Yes);
+    let error = check(&context, root, None).unwrap_err();
+    assert!(matches!(error, ty::error::TypeError::RegionsInsufficientlyPolymorphic(bound, region)
+        if bound.var == ty::BoundVar::from_u32(0) && region == outer));
+    // Keep the existing outside failure, but do not let it poison a snapshot-only demand.
+    let snapshot = context.start_snapshot();
+    assert!(check(&context, root, Some(&snapshot)).is_ok());
+    context.inner.borrow_mut().unwrap_region_constraints().make_subregion(span, outer, p[0], No);
+    assert!(check(&context, root, Some(&snapshot)).is_ok());
+    context.inner.borrow_mut().unwrap_region_constraints().make_subregion(span, p[1], p[0], Yes);
+    assert!(matches!(check(&context, root, Some(&snapshot)),
+        Err(ty::error::TypeError::RegionsInsufficientlyPolymorphic(..))));
+    context.rollback_to(snapshot);
+    assert!(check(&context, root, None).is_err());
+    // Nameable universes and self/static outlives follow exact upstream directions.
+    let (context, _, inner, p) = setup(cx, span);
+    {
+        let mut owner = context.inner.borrow_mut(); let mut regions = owner.unwrap_region_constraints();
+        regions.make_subregion(span, inner, p[0], Yes);
+        regions.make_subregion(span, p[0], p[0], Yes);
+        regions.make_subregion(span, p[0], Region::new_static(cx), Yes);
+    }
+    assert!(check(&context, root, None).is_ok());
+    let (context, _, _, p) = setup(cx, span);
+    context.inner.borrow_mut().unwrap_region_constraints().make_subregion(span, Region::new_static(cx), p[0], Yes);
+    assert!(check(&context, root, None).is_err());
+    // Direct equality and a path via another SCC must both retain genuine failures.
+    let (context, outer, _, p) = setup(cx, span);
+    context.inner.borrow_mut().unwrap_region_constraints().make_eqregion(span, outer, p[0], Yes);
+    assert!(check(&context, root, None).is_err());
+    let (context, _, _, p) = setup(cx, span);
+    context.inner.borrow_mut().unwrap_region_constraints().make_eqregion(span, p[0], p[1], Yes);
+    assert!(check(&context, root, None).is_err());
+    let (context, outer, inner, p) = setup(cx, span);
+    {
+        let mut owner = context.inner.borrow_mut(); let mut regions = owner.unwrap_region_constraints();
+        regions.make_subregion(span, inner, p[0], Yes);
+        regions.make_subregion(span, outer, inner, Yes);
+    }
+    assert!(check(&context, root, None).is_err());
+    let (context, outer, inner, p) = setup(cx, span);
+    {
+        let mut owner = context.inner.borrow_mut(); let mut regions = owner.unwrap_region_constraints();
+        regions.make_subregion(span, inner, p[0], Yes);
+        regions.make_subregion(span, outer, inner, No);
+    }
+    assert!(check(&context, root, None).is_ok());
+    // Actual Verify insertion preserves source origin and shares the same undo log.
+    let snapshot = context.start_snapshot();
+    {
+        let mut owner = context.inner.borrow_mut(); let mut regions = owner.unwrap_region_constraints();
+        let kind = super::region_constraints::GenericKind::Placeholder(ty::PlaceholderType::new(
+            context.universe(), ty::BoundTy {var: ty::BoundVar::from_u32(0), kind: ty::BoundTyKind::Anon}));
+        regions.verify_generic_bound(span, kind.clone(), inner, super::region_constraints::VerifyBound::AllBounds(vec![]));
+        assert!(regions.data().verifys.is_empty());
+        regions.verify_generic_bound(span, kind, inner, super::region_constraints::VerifyBound::OutlivedBy(p[0]));
+        assert_eq!(regions.data().verifys.len(), 1);
+        assert_eq!(regions.data().verifys[0].origin, span);
+    }
+    // Calling snapshot leak-check with a Verify is an upstream invariant violation;
+    // do not fake success. Its panic branch is source-reviewed, not executed here.
+    context.rollback_to(snapshot);
+    assert!(context.inner.borrow_mut().unwrap_region_constraints().data().verifys.is_empty());
+    assert!(check(&context, root, None).is_ok());
+    let fresh = InferenceContext::new(cx, ty::TypingMode::PostAnalysis);
+    assert!(check(&fresh, root, None).is_ok());
+    assert!(cx.services().ready(cx).is_err(), "leak checking grants no source facts/root readiness");
 }

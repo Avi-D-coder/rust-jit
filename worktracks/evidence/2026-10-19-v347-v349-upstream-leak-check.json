@@ -1,0 +1,1003 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "recorded_at": "2026-10-19T20:55:23.787308+00:00",
+  "parent": "a62de2ccd1e2170725adea44760eab5700280712",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "integration_status": "held_component_validated",
+  "architecture_record": "worktracks/05-trait-goal-engine/2026-10-19-upstream-leak-check.md",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-19-upstream-leak-check-review.md",
+  "new_distinct_stock_runtime_gains": 0,
+  "refreshed_suite_total": null,
+  "root_solver_evaluations": 0,
+  "attempts": {
+    "347": {
+      "sessions": {
+        "lib": 1327
+      },
+      "terminal_exits": {
+        "lib": 101
+      },
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T20:43:55.286897+00:00",
+          "head": "a62de2ccd1e2170725adea44760eab5700280712",
+          "file_count": 8574,
+          "source_sha256": "923bae6bd698d6dd20918abc56a6b0d7e8cd7b7e875a8e5abb32b566636a3eba",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T20:44:45.046175+00:00",
+          "head": "a62de2ccd1e2170725adea44760eab5700280712",
+          "file_count": 8574,
+          "source_sha256": "923bae6bd698d6dd20918abc56a6b0d7e8cd7b7e875a8e5abb32b566636a3eba",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "build_terminals": {
+        "lib": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 26 previous errors; 37 warnings emitted\n"
+      },
+      "local_directory": "artifacts/validation-current-v347",
+      "scope": "Compile failure: compiler index macro stable-client option missing; empty-slice ambiguity from serde_json PartialEq. No controls executed.",
+      "errors": [
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of unstable library feature `pattern_type_macro`\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:352:1\n    |\n352 | / rustc_index::newtype_index! {\n353 | |     #[orderable]\n354 | |     #[debug_format = \"LeakCheckNode({})\"]\n355 | |     struct LeakCheckNode {}\n356 | | }\n    | |_^\n    |\n    = note: see issue #123646 <https://github.com/rust-lang/rust/issues/123646> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of unstable library feature `pattern_type_macro`\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:358:1\n    |\n358 | / rustc_index::newtype_index! {\n359 | |     #[orderable]\n360 | |     #[debug_format = \"LeakCheckScc({})\"]\n361 | |     struct LeakCheckScc {}\n362 | | }\n    | |_^\n    |\n    = note: see issue #123646 <https://github.com/rust-lang/rust/issues/123646> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: pattern types are unstable\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:352:1\n    |\n352 | / rustc_index::newtype_index! {\n353 | |     #[orderable]\n354 | |     #[debug_format = \"LeakCheckNode({})\"]\n355 | |     struct LeakCheckNode {}\n356 | | }\n    | |_^\n    |\n    = note: see issue #123646 <https://github.com/rust-lang/rust/issues/123646> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: pattern types are unstable\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:352:1\n    |\n352 | / rustc_index::newtype_index! {\n353 | |     #[orderable]\n354 | |     #[debug_format = \"LeakCheckNode({})\"]\n355 | |     struct LeakCheckNode {}\n356 | | }\n    | |_^\n    |\n    = note: see issue #123646 <https://github.com/rust-lang/rust/issues/123646> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: pattern types are unstable\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:358:1\n    |\n358 | / rustc_index::newtype_index! {\n359 | |     #[orderable]\n360 | |     #[debug_format = \"LeakCheckScc({})\"]\n361 | |     struct LeakCheckScc {}\n362 | | }\n    | |_^\n    |\n    = note: see issue #123646 <https://github.com/rust-lang/rust/issues/123646> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: pattern types are unstable\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:358:1\n    |\n358 | / rustc_index::newtype_index! {\n359 | |     #[orderable]\n360 | |     #[debug_format = \"LeakCheckScc({})\"]\n361 | |     struct LeakCheckScc {}\n362 | | }\n    | |_^\n    |\n    = note: see issue #123646 <https://github.com/rust-lang/rust/issues/123646> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of an internal attribute\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:352:1\n    |\n352 | / rustc_index::newtype_index! {\n353 | |     #[orderable]\n354 | |     #[debug_format = \"LeakCheckNode({})\"]\n355 | |     struct LeakCheckNode {}\n356 | | }\n    | |_^\n    |\n    = note: the `rustc_pass_by_value` attribute is an internal implementation detail that will never be stable\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of an internal attribute\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:358:1\n    |\n358 | / rustc_index::newtype_index! {\n359 | |     #[orderable]\n360 | |     #[debug_format = \"LeakCheckScc({})\"]\n361 | |     struct LeakCheckScc {}\n362 | | }\n    | |_^\n    |\n    = note: the `rustc_pass_by_value` attribute is an internal implementation detail that will never be stable\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of unstable library feature `step_trait`\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:352:1\n    |\n352 | / rustc_index::newtype_index! {\n353 | |     #[orderable]\n354 | |     #[debug_format = \"LeakCheckNode({})\"]\n355 | |     struct LeakCheckNode {}\n356 | | }\n    | |_^\n    |\n    = note: see issue #42168 <https://github.com/rust-lang/rust/issues/42168> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of unstable library feature `step_trait`\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:352:1\n    |\n352 | / rustc_index::newtype_index! {\n353 | |     #[orderable]\n354 | |     #[debug_format = \"LeakCheckNode({})\"]\n355 | |     struct LeakCheckNode {}\n356 | | }\n    | |_^\n    |\n    = note: see issue #42168 <https://github.com/rust-lang/rust/issues/42168> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of unstable library feature `step_trait`\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:352:1\n    |\n352 | / rustc_index::newtype_index! {\n353 | |     #[orderable]\n354 | |     #[debug_format = \"LeakCheckNode({})\"]\n355 | |     struct LeakCheckNode {}\n356 | | }\n    | |_^\n    |\n    = note: see issue #42168 <https://github.com/rust-lang/rust/issues/42168> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of unstable library feature `step_trait`\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:352:1\n    |\n352 | / rustc_index::newtype_index! {\n353 | |     #[orderable]\n354 | |     #[debug_format = \"LeakCheckNode({})\"]\n355 | |     struct LeakCheckNode {}\n356 | | }\n    | |_^\n    |\n    = note: see issue #42168 <https://github.com/rust-lang/rust/issues/42168> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of unstable library feature `step_trait`\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:352:1\n    |\n352 | / rustc_index::newtype_index! {\n353 | |     #[orderable]\n354 | |     #[debug_format = \"LeakCheckNode({})\"]\n355 | |     struct LeakCheckNode {}\n356 | | }\n    | |_^\n    |\n    = note: see issue #42168 <https://github.com/rust-lang/rust/issues/42168> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of unstable library feature `step_trait`\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:352:1\n    |\n352 | / rustc_index::newtype_index! {\n353 | |     #[orderable]\n354 | |     #[debug_format = \"LeakCheckNode({})\"]\n355 | |     struct LeakCheckNode {}\n356 | | }\n    | |_^\n    |\n    = note: see issue #42168 <https://github.com/rust-lang/rust/issues/42168> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of unstable library feature `structural_match`\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:352:1\n    |\n352 | / rustc_index::newtype_index! {\n353 | |     #[orderable]\n354 | |     #[debug_format = \"LeakCheckNode({})\"]\n355 | |     struct LeakCheckNode {}\n356 | | }\n    | |_^\n    |\n    = note: see issue #31434 <https://github.com/rust-lang/rust/issues/31434> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of unstable library feature `step_trait`\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:358:1\n    |\n358 | / rustc_index::newtype_index! {\n359 | |     #[orderable]\n360 | |     #[debug_format = \"LeakCheckScc({})\"]\n361 | |     struct LeakCheckScc {}\n362 | | }\n    | |_^\n    |\n    = note: see issue #42168 <https://github.com/rust-lang/rust/issues/42168> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of unstable library feature `step_trait`\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:358:1\n    |\n358 | / rustc_index::newtype_index! {\n359 | |     #[orderable]\n360 | |     #[debug_format = \"LeakCheckScc({})\"]\n361 | |     struct LeakCheckScc {}\n362 | | }\n    | |_^\n    |\n    = note: see issue #42168 <https://github.com/rust-lang/rust/issues/42168> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of unstable library feature `step_trait`\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:358:1\n    |\n358 | / rustc_index::newtype_index! {\n359 | |     #[orderable]\n360 | |     #[debug_format = \"LeakCheckScc({})\"]\n361 | |     struct LeakCheckScc {}\n362 | | }\n    | |_^\n    |\n    = note: see issue #42168 <https://github.com/rust-lang/rust/issues/42168> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of unstable library feature `step_trait`\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:358:1\n    |\n358 | / rustc_index::newtype_index! {\n359 | |     #[orderable]\n360 | |     #[debug_format = \"LeakCheckScc({})\"]\n361 | |     struct LeakCheckScc {}\n362 | | }\n    | |_^\n    |\n    = note: see issue #42168 <https://github.com/rust-lang/rust/issues/42168> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of unstable library feature `step_trait`\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:358:1\n    |\n358 | / rustc_index::newtype_index! {\n359 | |     #[orderable]\n360 | |     #[debug_format = \"LeakCheckScc({})\"]\n361 | |     struct LeakCheckScc {}\n362 | | }\n    | |_^\n    |\n    = note: see issue #42168 <https://github.com/rust-lang/rust/issues/42168> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of unstable library feature `step_trait`\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:358:1\n    |\n358 | / rustc_index::newtype_index! {\n359 | |     #[orderable]\n360 | |     #[debug_format = \"LeakCheckScc({})\"]\n361 | |     struct LeakCheckScc {}\n362 | | }\n    | |_^\n    |\n    = note: see issue #42168 <https://github.com/rust-lang/rust/issues/42168> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0658",
+            "explanation": "An unstable feature was used.\n\nErroneous code example:\n\n```compile_fail,E0658\nuse std::intrinsics; // error: use of unstable library feature `core_intrinsics`\n```\n\nIf you're using a stable or a beta version of rustc, you won't be able to use\nany unstable features. In order to do so, please switch to a nightly version of\nrustc (by using [rustup]).\n\nIf you're using a nightly version of rustc, just add the corresponding feature\nto be able to use it:\n\n```\n#![feature(core_intrinsics)]\n\nuse std::intrinsics; // ok!\n```\n\n[rustup]: https://rust-lang.github.io/rustup/concepts/channels.html\n"
+          },
+          "rendered": "error[E0658]: use of unstable library feature `structural_match`\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/leak_check.rs:358:1\n    |\n358 | / rustc_index::newtype_index! {\n359 | |     #[orderable]\n360 | |     #[debug_format = \"LeakCheckScc({})\"]\n361 | |     struct LeakCheckScc {}\n362 | | }\n    | |_^\n    |\n    = note: see issue #31434 <https://github.com/rust-lang/rust/issues/31434> for more information\n    = note: this error originates in the macro `rustc_index::newtype_index` (in Nightly builds, run with -Z macro-backtrace for more info)\n\n"
+        },
+        {
+          "code": {
+            "code": "E0282",
+            "explanation": "The compiler could not infer a type and asked for a type annotation.\n\nErroneous code example:\n\n```compile_fail,E0282\nlet x = Vec::new();\n```\n\nThis error indicates that type inference did not result in one unique possible\ntype, and extra information is required. In most cases this can be provided\nby adding a type annotation. Sometimes you need to specify a generic type\nparameter manually.\n\nIn the example above, type `Vec` has a type parameter `T`. When calling\n`Vec::new`, barring any other later usage of the variable `x` that allows the\ncompiler to infer what type `T` is, the compiler needs to be told what it is.\n\nThe type can be specified on the variable:\n\n```\nlet x: Vec<i32> = Vec::new();\n```\n\nThe type can also be specified in the path of the expression:\n\n```\nlet x = Vec::<i32>::new();\n```\n\nIn cases with more complex types, it is not necessary to annotate the full\ntype. Once the ambiguity is resolved, the compiler can infer the rest:\n\n```\nlet x: Vec<_> = \"hello\".chars().rev().collect();\n```\n\nAnother way to provide the compiler with enough information, is to specify the\ngeneric type parameter:\n\n```\nlet x = \"hello\".chars().rev().collect::<Vec<char>>();\n```\n\nAgain, you need not specify the full type if the compiler can infer it:\n\n```\nlet x = \"hello\".chars().rev().collect::<Vec<_>>();\n```\n\nApart from a method or function with a generic type parameter, this error can\noccur when a type parameter of a struct or trait cannot be inferred. In that\ncase it is not always possible to use a type annotation, because all candidates\nhave the same return type. For instance:\n\n```compile_fail,E0282\nstruct Foo<T> {\n    num: T,\n}\n\nimpl<T> Foo<T> {\n    fn bar() -> i32 {\n        0\n    }\n\n    fn baz() {\n        let number = Foo::bar();\n    }\n}\n```\n\nThis will fail because the compiler does not know which instance of `Foo` to\ncall `bar` on. Change `Foo::bar()` to `Foo::<T>::bar()` to resolve the error.\n"
+          },
+          "rendered": "error[E0282]: type annotations needed\n  --> crates/lrr/src/traits/upstream/graph/vec_graph/tests.rs:61:5\n   |\n61 |     assert_eq!(graph.predecessors(0), &[]);\n   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot infer type\n\n"
+        },
+        {
+          "code": {
+            "code": "E0283",
+            "explanation": "The compiler could not infer a type and asked for a type annotation.\n\nErroneous code example:\n\n```compile_fail,E0283\nlet x = \"hello\".chars().rev().collect();\n```\n\nThis error indicates that type inference did not result in one unique possible\ntype, and extra information is required. In most cases this can be provided\nby adding a type annotation. Sometimes you need to specify a generic type\nparameter manually.\n\nA common example is the `collect` method on `Iterator`. It has a generic type\nparameter with a `FromIterator` bound, which for a `char` iterator is\nimplemented by `Vec` and `String` among others. Consider the following snippet\nthat reverses the characters of a string:\n\nIn the first code example, the compiler cannot infer what the type of `x` should\nbe: `Vec<char>` and `String` are both suitable candidates. To specify which type\nto use, you can use a type annotation on `x`:\n\n```\nlet x: Vec<char> = \"hello\".chars().rev().collect();\n```\n\nIt is not necessary to annotate the full type. Once the ambiguity is resolved,\nthe compiler can infer the rest:\n\n```\nlet x: Vec<_> = \"hello\".chars().rev().collect();\n```\n\nAnother way to provide the compiler with enough information, is to specify the\ngeneric type parameter:\n\n```\nlet x = \"hello\".chars().rev().collect::<Vec<char>>();\n```\n\nAgain, you need not specify the full type if the compiler can infer it:\n\n```\nlet x = \"hello\".chars().rev().collect::<Vec<_>>();\n```\n\nWe can see a self-contained example below:\n\n```compile_fail,E0283\nstruct Foo;\n\nimpl Into<u32> for Foo {\n    fn into(self) -> u32 { 1 }\n}\n\nlet foo = Foo;\nlet bar: u32 = foo.into() * 1u32;\n```\n\nThis error can be solved by adding type annotations that provide the missing\ninformation to the compiler. In this case, the solution is to specify the\ntrait's type parameter:\n\n```\nstruct Foo;\n\nimpl Into<u32> for Foo {\n    fn into(self) -> u32 { 1 }\n}\n\nlet foo = Foo;\nlet bar: u32 = Into::<u32>::into(foo) * 1u32;\n```\n"
+          },
+          "rendered": "error[E0283]: type annotations needed\n  --> crates/lrr/src/traits/upstream/graph/vec_graph/tests.rs:61:5\n   |\n61 |     assert_eq!(graph.predecessors(0), &[]);\n   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot infer type\n   |\n   = note: multiple `impl`s satisfying `usize: std::cmp::PartialEq<_>` found in the following crates: `core`, `serde_json`:\n           - impl std::cmp::PartialEq for usize;\n           - impl std::cmp::PartialEq<serde_json::Value> for usize;\n   = note: required for `[usize]` to implement `std::cmp::PartialEq<[_; 0]>`\n   = note: 1 redundant requirement hidden\n   = note: required for `&[usize]` to implement `std::cmp::PartialEq<&[_; 0]>`\n\n"
+        },
+        {
+          "code": {
+            "code": "E0283",
+            "explanation": "The compiler could not infer a type and asked for a type annotation.\n\nErroneous code example:\n\n```compile_fail,E0283\nlet x = \"hello\".chars().rev().collect();\n```\n\nThis error indicates that type inference did not result in one unique possible\ntype, and extra information is required. In most cases this can be provided\nby adding a type annotation. Sometimes you need to specify a generic type\nparameter manually.\n\nA common example is the `collect` method on `Iterator`. It has a generic type\nparameter with a `FromIterator` bound, which for a `char` iterator is\nimplemented by `Vec` and `String` among others. Consider the following snippet\nthat reverses the characters of a string:\n\nIn the first code example, the compiler cannot infer what the type of `x` should\nbe: `Vec<char>` and `String` are both suitable candidates. To specify which type\nto use, you can use a type annotation on `x`:\n\n```\nlet x: Vec<char> = \"hello\".chars().rev().collect();\n```\n\nIt is not necessary to annotate the full type. Once the ambiguity is resolved,\nthe compiler can infer the rest:\n\n```\nlet x: Vec<_> = \"hello\".chars().rev().collect();\n```\n\nAnother way to provide the compiler with enough information, is to specify the\ngeneric type parameter:\n\n```\nlet x = \"hello\".chars().rev().collect::<Vec<char>>();\n```\n\nAgain, you need not specify the full type if the compiler can infer it:\n\n```\nlet x = \"hello\".chars().rev().collect::<Vec<_>>();\n```\n\nWe can see a self-contained example below:\n\n```compile_fail,E0283\nstruct Foo;\n\nimpl Into<u32> for Foo {\n    fn into(self) -> u32 { 1 }\n}\n\nlet foo = Foo;\nlet bar: u32 = foo.into() * 1u32;\n```\n\nThis error can be solved by adding type annotations that provide the missing\ninformation to the compiler. In this case, the solution is to specify the\ntrait's type parameter:\n\n```\nstruct Foo;\n\nimpl Into<u32> for Foo {\n    fn into(self) -> u32 { 1 }\n}\n\nlet foo = Foo;\nlet bar: u32 = Into::<u32>::into(foo) * 1u32;\n```\n"
+          },
+          "rendered": "error[E0283]: type annotations needed\n  --> crates/lrr/src/traits/upstream/graph/vec_graph/tests.rs:66:5\n   |\n66 |     assert_eq!(graph.predecessors(5), &[]);\n   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot infer type\n   |\n   = note: multiple `impl`s satisfying `usize: std::cmp::PartialEq<_>` found in the following crates: `core`, `serde_json`:\n           - impl std::cmp::PartialEq for usize;\n           - impl std::cmp::PartialEq<serde_json::Value> for usize;\n   = note: required for `[usize]` to implement `std::cmp::PartialEq<[_; 0]>`\n   = note: 1 redundant requirement hidden\n   = note: required for `&[usize]` to implement `std::cmp::PartialEq<&[_; 0]>`\n\n"
+        },
+        {
+          "code": {
+            "code": "E0283",
+            "explanation": "The compiler could not infer a type and asked for a type annotation.\n\nErroneous code example:\n\n```compile_fail,E0283\nlet x = \"hello\".chars().rev().collect();\n```\n\nThis error indicates that type inference did not result in one unique possible\ntype, and extra information is required. In most cases this can be provided\nby adding a type annotation. Sometimes you need to specify a generic type\nparameter manually.\n\nA common example is the `collect` method on `Iterator`. It has a generic type\nparameter with a `FromIterator` bound, which for a `char` iterator is\nimplemented by `Vec` and `String` among others. Consider the following snippet\nthat reverses the characters of a string:\n\nIn the first code example, the compiler cannot infer what the type of `x` should\nbe: `Vec<char>` and `String` are both suitable candidates. To specify which type\nto use, you can use a type annotation on `x`:\n\n```\nlet x: Vec<char> = \"hello\".chars().rev().collect();\n```\n\nIt is not necessary to annotate the full type. Once the ambiguity is resolved,\nthe compiler can infer the rest:\n\n```\nlet x: Vec<_> = \"hello\".chars().rev().collect();\n```\n\nAnother way to provide the compiler with enough information, is to specify the\ngeneric type parameter:\n\n```\nlet x = \"hello\".chars().rev().collect::<Vec<char>>();\n```\n\nAgain, you need not specify the full type if the compiler can infer it:\n\n```\nlet x = \"hello\".chars().rev().collect::<Vec<_>>();\n```\n\nWe can see a self-contained example below:\n\n```compile_fail,E0283\nstruct Foo;\n\nimpl Into<u32> for Foo {\n    fn into(self) -> u32 { 1 }\n}\n\nlet foo = Foo;\nlet bar: u32 = foo.into() * 1u32;\n```\n\nThis error can be solved by adding type annotations that provide the missing\ninformation to the compiler. In this case, the solution is to specify the\ntrait's type parameter:\n\n```\nstruct Foo;\n\nimpl Into<u32> for Foo {\n    fn into(self) -> u32 { 1 }\n}\n\nlet foo = Foo;\nlet bar: u32 = Into::<u32>::into(foo) * 1u32;\n```\n"
+          },
+          "rendered": "error[E0283]: type annotations needed\n  --> crates/lrr/src/traits/upstream/graph/vec_graph/tests.rs:67:5\n   |\n67 |     assert_eq!(graph.predecessors(6), &[]);\n   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot infer type\n   |\n   = note: multiple `impl`s satisfying `usize: std::cmp::PartialEq<_>` found in the following crates: `core`, `serde_json`:\n           - impl std::cmp::PartialEq for usize;\n           - impl std::cmp::PartialEq<serde_json::Value> for usize;\n   = note: required for `[usize]` to implement `std::cmp::PartialEq<[_; 0]>`\n   = note: 1 redundant requirement hidden\n   = note: required for `&[usize]` to implement `std::cmp::PartialEq<&[_; 0]>`\n\n"
+        }
+      ]
+    },
+    "348": {
+      "sessions": {
+        "lib": 36325
+      },
+      "terminal_exits": {
+        "lib": 0
+      },
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T20:45:20.538949+00:00",
+          "head": "a62de2ccd1e2170725adea44760eab5700280712",
+          "file_count": 8574,
+          "source_sha256": "12f036ecf2eb98510791cd196fd505b809089cdff711c9cf096901fd9b65f7ac",
+          "binaries": {}
+        }
+      },
+      "build_terminals": {
+        "lib": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 40.91s\n"
+      },
+      "local_directory": "artifacts/validation-current-v348",
+      "scope": "Build-only. End-of-build/source-runtime guards not captured. Source review found local macro-generated unsafe; exact index declarations moved into the shared dependency before final validation. Never promoted to acceptance.",
+      "end_guard_missing": true
+    },
+    "349": {
+      "sessions": {
+        "lib": 38522,
+        "cli": 53326,
+        "provenance": 44703,
+        "controls": 69970
+      },
+      "terminal_exits": {
+        "lib": 0,
+        "cli": 0,
+        "provenance": 0,
+        "controls": 0
+      },
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T20:47:53.669534+00:00",
+          "head": "a62de2ccd1e2170725adea44760eab5700280712",
+          "file_count": 8575,
+          "source_sha256": "70761d76dcd74bd5dd99a4b7434913eccb9084b2a322fdfdd7df51b9f571918e",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T20:50:07.053197+00:00",
+          "head": "a62de2ccd1e2170725adea44760eab5700280712",
+          "file_count": 8575,
+          "source_sha256": "70761d76dcd74bd5dd99a4b7434913eccb9084b2a322fdfdd7df51b9f571918e",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+              "sha256": "cf3908b9cd68caf62166e71a8db5fd7779db37af4d885d774f9137eb6b4160dd"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "033ba99c51b6221bf2d27f73785c5f4fe36578b763070a31b13b80f849846b55"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T20:55:23.585872+00:00",
+          "head": "a62de2ccd1e2170725adea44760eab5700280712",
+          "file_count": 8575,
+          "source_sha256": "70761d76dcd74bd5dd99a4b7434913eccb9084b2a322fdfdd7df51b9f571918e",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+              "sha256": "cf3908b9cd68caf62166e71a8db5fd7779db37af4d885d774f9137eb6b4160dd"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "033ba99c51b6221bf2d27f73785c5f4fe36578b763070a31b13b80f849846b55"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "build_terminals": {
+        "lib": "   Compiling rustc_type_ir v0.0.0 (/Users/avi/Code/rust-jit/vendor/rustc-trait-solver/compiler/rustc_type_ir)\n   Compiling rustc_next_trait_solver v0.0.0 (/Users/avi/Code/rust-jit/vendor/rustc-trait-solver/compiler/rustc_next_trait_solver)\n   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 32.44s\n",
+        "cli": "   Compiling rustc_type_ir v0.0.0 (/Users/avi/Code/rust-jit/vendor/rustc-trait-solver/compiler/rustc_type_ir)\n   Compiling rustc_next_trait_solver v0.0.0 (/Users/avi/Code/rust-jit/vendor/rustc-trait-solver/compiler/rustc_next_trait_solver)\n   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 29.22s\n"
+      },
+      "local_directory": "artifacts/validation-current-v349",
+      "scope": "Both builds,23adapted upstream graph bodies and3source-context controls pass. Actual compiler checker execution, no trait root or stock runtime execution.",
+      "controls": [
+        {
+          "selector": "traits::upstream::graph::iterate::tests::dfs",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::iterate::tests::dfs",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.377,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "traits::upstream::graph::iterate::tests::dfs_debug",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::iterate::tests::dfs_debug",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.372,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "traits::upstream::graph::iterate::tests::diamond_post_order",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::iterate::tests::diamond_post_order",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.375,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "traits::upstream::graph::iterate::tests::is_cyclic",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::iterate::tests::is_cyclic",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.375,
+          "log": "control-3.log"
+        },
+        {
+          "selector": "traits::upstream::graph::scc::tests::diamond",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::scc::tests::diamond",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.373,
+          "log": "control-4.log"
+        },
+        {
+          "selector": "traits::upstream::graph::scc::tests::test_big_scc",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::scc::tests::test_big_scc",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.373,
+          "log": "control-5.log"
+        },
+        {
+          "selector": "traits::upstream::graph::scc::tests::test_bug_max_leak",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::scc::tests::test_bug_max_leak",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.373,
+          "log": "control-6.log"
+        },
+        {
+          "selector": "traits::upstream::graph::scc::tests::test_bug_max_leak_minimised",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::scc::tests::test_bug_max_leak_minimised",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.375,
+          "log": "control-7.log"
+        },
+        {
+          "selector": "traits::upstream::graph::scc::tests::test_bug_max_zero_stick_shape",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::scc::tests::test_bug_max_zero_stick_shape",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.378,
+          "log": "control-8.log"
+        },
+        {
+          "selector": "traits::upstream::graph::scc::tests::test_bug_minimised",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::scc::tests::test_bug_minimised",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.373,
+          "log": "control-9.log"
+        },
+        {
+          "selector": "traits::upstream::graph::scc::tests::test_deep_linear",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::scc::tests::test_deep_linear",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.387,
+          "log": "control-10.log"
+        },
+        {
+          "selector": "traits::upstream::graph::scc::tests::test_double_cycle_max",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::scc::tests::test_double_cycle_max",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.374,
+          "log": "control-11.log"
+        },
+        {
+          "selector": "traits::upstream::graph::scc::tests::test_find_state_2",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::scc::tests::test_find_state_2",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.373,
+          "log": "control-12.log"
+        },
+        {
+          "selector": "traits::upstream::graph::scc::tests::test_find_state_3",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::scc::tests::test_find_state_3",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.372,
+          "log": "control-13.log"
+        },
+        {
+          "selector": "traits::upstream::graph::scc::tests::test_max_branch",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::scc::tests::test_max_branch",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.373,
+          "log": "control-14.log"
+        },
+        {
+          "selector": "traits::upstream::graph::scc::tests::test_max_self_loop",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::scc::tests::test_max_self_loop",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.374,
+          "log": "control-15.log"
+        },
+        {
+          "selector": "traits::upstream::graph::scc::tests::test_min_max_in",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::scc::tests::test_min_max_in",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.374,
+          "log": "control-16.log"
+        },
+        {
+          "selector": "traits::upstream::graph::scc::tests::test_single_cycle_max",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::scc::tests::test_single_cycle_max",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.373,
+          "log": "control-17.log"
+        },
+        {
+          "selector": "traits::upstream::graph::scc::tests::test_three_sccs",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::scc::tests::test_three_sccs",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.399,
+          "log": "control-18.log"
+        },
+        {
+          "selector": "traits::upstream::graph::vec_graph::tests::dfs",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::vec_graph::tests::dfs",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.373,
+          "log": "control-19.log"
+        },
+        {
+          "selector": "traits::upstream::graph::vec_graph::tests::num_nodes",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::vec_graph::tests::num_nodes",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.375,
+          "log": "control-20.log"
+        },
+        {
+          "selector": "traits::upstream::graph::vec_graph::tests::predecessors",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::vec_graph::tests::predecessors",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.372,
+          "log": "control-21.log"
+        },
+        {
+          "selector": "traits::upstream::graph::vec_graph::tests::successors",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::graph::vec_graph::tests::successors",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.374,
+          "log": "control-22.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 118.848,
+          "log": "control-23.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 47.415,
+          "log": "control-24.log"
+        },
+        {
+          "selector": "traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.377,
+          "log": "control-25.log"
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "fresh_import_identical": true,
+    "audit": {
+      "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "crates": 8,
+      "files": 170,
+      "source_bytes": 2406805,
+      "rust_source_changes": 5,
+      "retained_original_rust_changes": 0,
+      "registered_rust_adaptation": "stable-region-assumptions-v2-leak-indexes",
+      "upstream_git_objects_verified": true
+    },
+    "hash_updated_index_edit_rejected": "registered stable Rust projection differs: compiler/rustc_type_ir/src/data_structures/leak_check_indexes.rs"
+  },
+  "registered_dependency_projections": [
+    {
+      "path": "compiler/rustc_type_ir/src/data_structures/frozen.rs",
+      "bytes": 1836,
+      "sha256": "a9925463dedcd8c08e18bec8079ca3102c9c02f67bd886175d7bb032577016e0",
+      "upstream": "compiler/rustc_data_structures/src/frozen.rs",
+      "upstream_sha256": "09a4a7d611ad449efbdb89bf30da347050c363bbbcf198fc80784df19c65e3c1",
+      "mechanical_adapter": "stable-region-assumptions-v2-leak-indexes"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/data_structures/leak_check_indexes.rs",
+      "bytes": 398,
+      "sha256": "45ef9e4ed0bc5242547ce759a48564d34476a7ae3926598c72c1dfc5220408d9",
+      "upstream": "compiler/rustc_infer/src/infer/region_constraints/leak_check.rs",
+      "upstream_sha256": "14eb7aeafc432c5058d7176b2d34889879c84584d568311d773cb13a93683d42",
+      "mechanical_adapter": "stable-region-assumptions-v2-leak-indexes"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/data_structures/mod.rs",
+      "bytes": 964,
+      "sha256": "b92ff430dfa3fb4e1268dc9fcf7f09fb1e218e77ee83572b0e8fcc31591d53fd",
+      "upstream": "compiler/rustc_type_ir/src/data_structures/mod.rs",
+      "upstream_sha256": "60d0030b0a4f7d4ff7440d0ad608eee0e9212469829e1aab8c5aa613686cd690",
+      "mechanical_adapter": "stable-region-assumptions-v2-leak-indexes"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/data_structures/transitive_relation.rs",
+      "bytes": 15285,
+      "sha256": "b80099aafe22b504ad123ad62bf6b67a942f73dee5f07549d0fe518c7c4c792e",
+      "upstream": "compiler/rustc_data_structures/src/transitive_relation.rs",
+      "upstream_sha256": "f549d6c82b78d3e9fe2e838040dc8941fef6e70f0fa2ba09a23cb8e63803ff4f",
+      "mechanical_adapter": "stable-region-assumptions-v2-leak-indexes"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/data_structures/transitive_relation/tests.rs",
+      "bytes": 11465,
+      "sha256": "a0b9f92d4c889a033a915cbd6d83b5b8a6e87555a3bcd19a43db032c49dabc74",
+      "upstream": "compiler/rustc_data_structures/src/transitive_relation/tests.rs",
+      "upstream_sha256": "a0b9f92d4c889a033a915cbd6d83b5b8a6e87555a3bcd19a43db032c49dabc74",
+      "mechanical_adapter": "stable-region-assumptions-v2-leak-indexes"
+    },
+    {
+      "path": "compiler/rustc_type_ir/src/region_constraint.rs",
+      "bytes": 49426,
+      "sha256": "8666a58d6d8795131f2eb38028161b77e491a2fbddccc45652d5d3c76d8954c1",
+      "upstream": "compiler/rustc_type_ir/src/region_constraint.rs",
+      "upstream_sha256": "444abc494b01d457e246f59d8430c72ce088ded95c81cc60e48af5974ee76a91",
+      "mechanical_adapter": "stable-region-assumptions-v2-leak-indexes"
+    }
+  ],
+  "upstream_graph_tests": {
+    "bodies": 23,
+    "selectors": [
+      "traits::upstream::graph::iterate::tests::dfs",
+      "traits::upstream::graph::iterate::tests::dfs_debug",
+      "traits::upstream::graph::iterate::tests::diamond_post_order",
+      "traits::upstream::graph::iterate::tests::is_cyclic",
+      "traits::upstream::graph::scc::tests::diamond",
+      "traits::upstream::graph::scc::tests::test_big_scc",
+      "traits::upstream::graph::scc::tests::test_bug_max_leak",
+      "traits::upstream::graph::scc::tests::test_bug_max_leak_minimised",
+      "traits::upstream::graph::scc::tests::test_bug_max_zero_stick_shape",
+      "traits::upstream::graph::scc::tests::test_bug_minimised",
+      "traits::upstream::graph::scc::tests::test_deep_linear",
+      "traits::upstream::graph::scc::tests::test_double_cycle_max",
+      "traits::upstream::graph::scc::tests::test_find_state_2",
+      "traits::upstream::graph::scc::tests::test_find_state_3",
+      "traits::upstream::graph::scc::tests::test_max_branch",
+      "traits::upstream::graph::scc::tests::test_max_self_loop",
+      "traits::upstream::graph::scc::tests::test_min_max_in",
+      "traits::upstream::graph::scc::tests::test_single_cycle_max",
+      "traits::upstream::graph::scc::tests::test_three_sccs",
+      "traits::upstream::graph::vec_graph::tests::dfs",
+      "traits::upstream::graph::vec_graph::tests::num_nodes",
+      "traits::upstream::graph::vec_graph::tests::predecessors",
+      "traits::upstream::graph::vec_graph::tests::successors"
+    ],
+    "scope": "Adapted compiler host components; all #[test] cases retained, import paths/stable invariant spelling/three explicit usize slice annotations; one benchmark cfg-excluded. Not unchanged full-module, benchmark or guest runtime acceptance.",
+    "original_files": [
+      {
+        "path": "compiler/rustc_data_structures/src/graph/iterate/mod.rs",
+        "bytes": 12478,
+        "sha256": "5515172855a4ced57f1b00b0db2aa59f7f2c5561c5799cacea3bce8b7470e971",
+        "upstream": "compiler/rustc_data_structures/src/graph/iterate/mod.rs",
+        "upstream_sha256": "5515172855a4ced57f1b00b0db2aa59f7f2c5561c5799cacea3bce8b7470e971"
+      },
+      {
+        "path": "compiler/rustc_data_structures/src/graph/iterate/tests.rs",
+        "bytes": 1049,
+        "sha256": "bab78a225bdfe2a56ea270c7328979a31ca4dbb5082b1e3d17d9f6e795536bde",
+        "upstream": "compiler/rustc_data_structures/src/graph/iterate/tests.rs",
+        "upstream_sha256": "bab78a225bdfe2a56ea270c7328979a31ca4dbb5082b1e3d17d9f6e795536bde"
+      },
+      {
+        "path": "compiler/rustc_data_structures/src/graph/mod.rs",
+        "bytes": 2849,
+        "sha256": "13eacc316d822069c30f3364cde0852c14e40a14d7c5447735def594ecb6da4b",
+        "upstream": "compiler/rustc_data_structures/src/graph/mod.rs",
+        "upstream_sha256": "13eacc316d822069c30f3364cde0852c14e40a14d7c5447735def594ecb6da4b"
+      },
+      {
+        "path": "compiler/rustc_data_structures/src/graph/reference.rs",
+        "bytes": 673,
+        "sha256": "b10fe50c260e472c0d8cea7b4af12dd367c2040c28f8dee6ad56ab6a5357d6b3",
+        "upstream": "compiler/rustc_data_structures/src/graph/reference.rs",
+        "upstream_sha256": "b10fe50c260e472c0d8cea7b4af12dd367c2040c28f8dee6ad56ab6a5357d6b3"
+      },
+      {
+        "path": "compiler/rustc_data_structures/src/graph/reversed.rs",
+        "bytes": 1313,
+        "sha256": "867228a6a49bb0e922b0f25157d3cd9d70a43c58d34685a361750c30e9de2b99",
+        "upstream": "compiler/rustc_data_structures/src/graph/reversed.rs",
+        "upstream_sha256": "867228a6a49bb0e922b0f25157d3cd9d70a43c58d34685a361750c30e9de2b99"
+      },
+      {
+        "path": "compiler/rustc_data_structures/src/graph/scc/mod.rs",
+        "bytes": 29817,
+        "sha256": "1c4ec37560e3f657cb32781855d630939ffe3cf11b63dd80cd9c5f2dce3565b9",
+        "upstream": "compiler/rustc_data_structures/src/graph/scc/mod.rs",
+        "upstream_sha256": "1c4ec37560e3f657cb32781855d630939ffe3cf11b63dd80cd9c5f2dce3565b9"
+      },
+      {
+        "path": "compiler/rustc_data_structures/src/graph/scc/tests.rs",
+        "bytes": 12522,
+        "sha256": "8635a8400b34013d67f7c4636d4ff6dbb4c533a659ee6141aec90b04d8a3004e",
+        "upstream": "compiler/rustc_data_structures/src/graph/scc/tests.rs",
+        "upstream_sha256": "8635a8400b34013d67f7c4636d4ff6dbb4c533a659ee6141aec90b04d8a3004e"
+      },
+      {
+        "path": "compiler/rustc_data_structures/src/graph/tests.rs",
+        "bytes": 1597,
+        "sha256": "86b19cdbfb5a9a8212e231ca24561a07d216e40705744beaa405393d7fdc74dd",
+        "upstream": "compiler/rustc_data_structures/src/graph/tests.rs",
+        "upstream_sha256": "86b19cdbfb5a9a8212e231ca24561a07d216e40705744beaa405393d7fdc74dd"
+      },
+      {
+        "path": "compiler/rustc_data_structures/src/graph/vec_graph/mod.rs",
+        "bytes": 9595,
+        "sha256": "5f4b8ec94e6cfccb59edb90650639afdc24744010ad52e2efcc148cf1377ef9d",
+        "upstream": "compiler/rustc_data_structures/src/graph/vec_graph/mod.rs",
+        "upstream_sha256": "5f4b8ec94e6cfccb59edb90650639afdc24744010ad52e2efcc148cf1377ef9d"
+      },
+      {
+        "path": "compiler/rustc_data_structures/src/graph/vec_graph/tests.rs",
+        "bytes": 2172,
+        "sha256": "8483b13073eab355c556c5cbe44196de8ca73a13bb9f2111f2a328d4d704106d",
+        "upstream": "compiler/rustc_data_structures/src/graph/vec_graph/tests.rs",
+        "upstream_sha256": "8483b13073eab355c556c5cbe44196de8ca73a13bb9f2111f2a328d4d704106d"
+      }
+    ]
+  },
+  "selection": {
+    "path": "worktracks/05-trait-goal-engine/2026-10-19-upstream-leak-check-controls.json",
+    "sha256": "1bc80d3dc4cbd108c87a49d658a5cc22bd3bafc12be875728028e973df70506b"
+  },
+  "source_contracts": {
+    "actual_impl_source_worlds": 48,
+    "actual_type_heads": 140,
+    "actual_guarded_trait_refs": 136,
+    "actual_generic_declaration_worlds": 20,
+    "actual_generic_rows": 48,
+    "actual_const_rows": 36,
+    "actual_early_region_rows": 24,
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "origins": [
+      "original",
+      "user macro",
+      "wrapper"
+    ],
+    "original_main_execution": "unexecuted by these host matrices",
+    "new_controls": [
+      "Actual upstream insufficient-polymorphism error identifies original bound and unnameable region",
+      "Old region outliving placeholder accepted; reverse rejected; nameable universes/self/static directions retained",
+      "Snapshot-only checker excludes preexisting outside failure, includes new visible failure, excludes No edges; rollback preserves only old failure",
+      "Direct var/placeholder and distinct-placeholder equality failures via actual current equality expansion",
+      "Transitive failure through another SCC and visible/No edge distinction",
+      "Actual Verify origin/insertion/no-op/undo behavior; forbidden Verify snapshot panic source-reviewed but unexecuted",
+      "Fresh-context no-new-universe fast path and existing source/generic/binder/region/snapshot/cleanup controls"
+    ]
+  },
+  "audits": {
+    "source_review_fingerprint": "70761d76dcd74bd5dd99a4b7434913eccb9084b2a322fdfdd7df51b9f571918e",
+    "original_git_objects": "verified;8sharedcrates/170files/2406805bytes;0retained-original Rust edits;5registered dependency compiled-file changes",
+    "inference_graph_checker_Verify_port": "pass",
+    "inference_context_port": "pass",
+    "local_explicit_unsafe_and_index_macro_invocations": "none in graph/checker; actual index primitive declarations compile in upstream shared dependency",
+    "git_diff_check": "pass",
+    "worktracks_check": "pass;12tracks/60items/49claims",
+    "spec_consistency": "pass;documents only"
+  },
+  "reproduce": [
+    "python3.12 tools/bootstrap_trait_solver.py --verify-upstream",
+    "python3.12 tools/sync_upstream_inference.py",
+    "python3.12 tools/sync_upstream_inference_context.py",
+    "python3.12 tools/validation/source_manifest.py artifacts/validation-reproduction before",
+    "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json > artifacts/validation-reproduction/lib-build.jsonl 2> artifacts/validation-reproduction/lib-build.log",
+    "cargo +1.99.0 build --offline --locked -p lrr --bin lrr",
+    "python3.12 tools/validation/source_manifest.py artifacts/validation-reproduction after-build --cargo-messages artifacts/validation-reproduction/lib-build.jsonl --cli-binary target/debug/lrr",
+    "python3.12 tools/validation/run_controls.py artifacts/validation-reproduction worktracks/05-trait-goal-engine/2026-10-19-upstream-leak-check-controls.json",
+    "python3.12 tools/validation/source_manifest.py artifacts/validation-reproduction after-runtime"
+  ],
+  "reproduction_constraints": "Fresh output directory, direct checkout, asynchronous phases, single Cargo owner, frozen source/tools/fixtures/HEAD/binaries through terminal. No historical artifact/source snapshot required; optional upstream checkout only for Git-object comparison/fresh import.",
+  "holds": [
+    "No full InferCtxtLike/SolverDelegate or real trait root/ordinary runtime join",
+    "Owner skip/configuration flags, source function binders/named/nested/opaque/full region matrices incomplete",
+    "Full compiler diagnostic-origin classifications/type-outlives/member migration absent; actual current Verify/constraint Span is retained",
+    "Generalizer/relations/canonical responses and full source facts/IDs/ParamEnv/lang-items/currentness producer incomplete",
+    "Dictionary/member/VM continuation integration and held custom consumers removal incomplete",
+    "All23graph #[test] cases adapted; one benchmark unexecuted; no full module/benchmark acceptance",
+    "Forbidden Verify-in-HRTB snapshot panic source-reviewed but unexecuted; no success substitute",
+    "Full source/generated/standard-macro/runtime/cleanup/suspension/invalidation matrices incomplete",
+    "No M020/milestone/interpreter/JIT/Linux/performance/diagnostic gate closure or refreshed suite result"
+  ],
+  "post_validation_nonsemantic_normalization": {
+    "scope": "Post-validation EOF-only normalization; no test rerun. V349 execution/guards remain attached to their original fingerprint. Final compiled Rust input differs by exactly one trailing LF after the closing macro delimiter; all significant tokens and their positions are unchanged. Generator adds rstrip/newline and inventory records exact normalized bytes. No runtime conclusion needs rechecking for this whitespace change; default source-byte stamp is changed and recorded.",
+    "old_source_sha256": "70761d76dcd74bd5dd99a4b7434913eccb9084b2a322fdfdd7df51b9f571918e",
+    "final_source_sha256": "f1451d4d2f5c4479781ce50ebf21bcd79efbd88626ddc322b7b19b56bf72d2c5",
+    "changed_sources": [
+      "tools/upstream_solver_stable.py",
+      "vendor/rustc-trait-solver.files.json",
+      "vendor/rustc-trait-solver/compiler/rustc_type_ir/src/data_structures/leak_check_indexes.rs"
+    ],
+    "index_sha256_before": "45ef9e4ed0bc5242547ce759a48564d34476a7ae3926598c72c1dfc5220408d9",
+    "index_sha256_after": "76fe347c1f406cd3a6738f1f7d1613fa8b778c9676d771e84fd6068b4b47cbbe",
+    "exact_transform": "old ending }\\n\\n -> }\\n; new == old[:-1] asserted",
+    "final_provenance": {
+      "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "crates": 8,
+      "files": 170,
+      "source_bytes": 2406804,
+      "rust_source_changes": 5,
+      "retained_original_rust_changes": 0,
+      "registered_rust_adaptation": "stable-region-assumptions-v2-leak-indexes",
+      "upstream_git_objects_verified": true
+    },
+    "final_source_runtime_reexecuted": false
+  }
+}

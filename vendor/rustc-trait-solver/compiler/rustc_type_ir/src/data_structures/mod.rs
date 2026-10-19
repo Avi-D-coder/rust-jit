@@ -29,3 +29,4 @@ pub use frozen::Frozen;
 mod transitive_relation;
 #[cfg(not(feature = "nightly"))]
 pub use transitive_relation::{TransitiveRelation, TransitiveRelationBuilder};
+pub mod leak_check_indexes;

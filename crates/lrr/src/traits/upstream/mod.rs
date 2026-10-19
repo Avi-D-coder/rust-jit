@@ -15,6 +15,7 @@ use rustc_type_ir::{
 };
 
 pub(crate) mod infer;
+pub(crate) mod graph;
 mod generic_args;
 mod abstract_consts;
 mod binders;
