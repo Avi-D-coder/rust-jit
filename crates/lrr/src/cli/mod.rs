@@ -217,7 +217,8 @@ fn standalone_captured(
         )?,
     };
     let stage = crate::core::timing::Span::enter(|| "stage discovery".into());
-    compiler.discover_diagnostic_with(&mut discovery, &mut db, snapshot, procedural.as_mut())?;
+    compiler.discover_diagnostic_with(&mut discovery, &mut db, snapshot,
+        procedural.as_mut().map(|run| run as &mut dyn crate::service::source_preparation::SourceExpansionExecutor))?;
     drop(stage);
     let stage = crate::core::timing::Span::enter(|| "stage runtime macros+publish".into());
     let macros =
@@ -439,7 +440,8 @@ fn test_source_captured(
             compiler.catalog.clone(),
         )?,
     };
-    compiler.discover_diagnostic_with(&mut discovery, &mut db, snapshot, procedural.as_mut())?;
+    compiler.discover_diagnostic_with(&mut discovery, &mut db, snapshot,
+        procedural.as_mut().map(|run| run as &mut dyn crate::service::source_preparation::SourceExpansionExecutor))?;
     match procedural.as_mut() {
         Some(run) => run.publish(&mut db, &mut discovery)?,
         None => discovery.publish(&mut db)?,

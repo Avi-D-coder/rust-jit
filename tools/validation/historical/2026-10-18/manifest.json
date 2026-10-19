@@ -1,0 +1,10 @@
+{
+  "schema": "lrr/historical-validation-recipes/v1",
+  "files_sha256": {
+    "run-controls.py": "992c66e988c000eed3447c1092eccab0d1c883419e01af6b1b65e0c0618b0208",
+    "run_targeted_snapshot.py": "44ee162020c4b84306c77212d8ab5c8035da367b7d790fa885e19bba4bbaaf3e",
+    "selected-controls.json": "1d5b20d632ac7c6006e635330b186866d661f60888b096140d6be73b15712575",
+    "source_manifest.py": "fd8b98e9dc4aeba1fe07c2b6d2c4fcc3b20914ae5778aab270244757fffb244b"
+  },
+  "scope": "Verbatim local recipes retained for historical evidence; not the maintained upstream acceptance harness. Stock runner labels are historical observations, not independently validated full-fixture acceptance."
+}

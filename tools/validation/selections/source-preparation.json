@@ -1,0 +1,20 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "M007/M011 source preparation regression selection; not a complete milestone or upstream gate",
+  "controls": [
+    "cli::proc_macros::tests::all_procedural_forms_expand_once_through_the_ordinary_pipeline",
+    "cli::proc_macros::tests::noprelude_procedural_crate_is_reached_through_extern_crate",
+    "cli::proc_macros::tests::procedural_macro_panic_is_a_macro_fault_not_a_guest_panic",
+    "cli::tests::rustc_include_discovery_failure_keeps_admitted_parent_capture_and_primary_fault",
+    "cli::tests::rustc_include_single_expression_failure_retains_original_invocation",
+    "cli::tests::rustc_included_function_fault_preserves_validated_include_ancestry"
+  ],
+  "runtime_cases": [
+    "tests/ui/macros/syntax-extension-source-utils.rs",
+    "tests/ui/macros/concat-rpass.rs",
+    "tests/ui/macros/concat-bytes.rs",
+    "tests/ui/generics/empty-generic-brackets-equiv.rs",
+    "tests/ui/derives/clone-copy/derive-clone-basic.rs"
+  ],
+  "definition_namespace_probe": "frontend::library_macros::tests::actual_library_definition_value_namespace_requires_source_module_closure"
+}

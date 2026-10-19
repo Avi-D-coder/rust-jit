@@ -1,0 +1,59 @@
+{
+  "schema": "lrr/artifact-retention/v1",
+  "at": "2026-10-19T06:03:43.060875+00:00",
+  "before_allocated_kib": 220595760,
+  "after_allocated_kib": 39709080,
+  "reduction_allocated_kib": 180886680,
+  "removed_items": 147818,
+  "initial_cleanup_error": [
+    {
+      "path": "/Users/avi/Code/rust-jit/artifacts/macos-first/t025-rust-shift-fallback-v3/current-main-milestone-v1-continuation/accepted-cli/lrr",
+      "error": "[Errno 1] Operation not permitted: '/Users/avi/Code/rust-jit/artifacts/macos-first/t025-rust-shift-fallback-v3/current-main-milestone-v1-continuation/accepted-cli/lrr'"
+    }
+  ],
+  "initial_error_resolution": "The one historical accepted-cli/lrr binary had the macOS uchg flag. Cleared uchg and removed it successfully; no unresolved deletion error.",
+  "removed_kinds": {
+    "generated_test_run_directories": 106020,
+    "standalone_compiled_binaries": 37495,
+    "cargo_build_directories": 4303
+  },
+  "preserved": [
+    "current validation raw outputs",
+    "named logs/reports and source snapshots",
+    "registered Git worktrees",
+    "25 nested Git reproduction directories",
+    "main target and source checkout"
+  ],
+  "remaining_legacy_folder_disposable": false,
+  "remaining_reason": "Historical source snapshots and Git repositories were conservatively preserved; unique source/history must be reconciled before a full wipe.",
+  "git_owned_inputs": [
+    "tools/validation/source_manifest.py",
+    "tools/validation/run_controls.py",
+    "tools/validation/selections/source-preparation.json",
+    "tools/validation/historical/2026-10-18/manifest.json",
+    "tools/validation/README.md"
+  ],
+  "maintained_upstream_harness": "tools/rustc_checkout_runtime.py",
+  "utility_validation": {
+    "python_syntax": true,
+    "archive_hashes": true,
+    "six_controls_resolved_without_execution": true,
+    "source_guard_mismatch_exit": 1,
+    "overwrite_refusal_exit": 2,
+    "missing_exact_control_exit": 2,
+    "changed_binary_refused_before_execution_exit": 2,
+    "language_tests_executed": 0
+  },
+  "utility_source_sha256": {
+    "tools/validation/source_manifest.py": "0e521d5a822d57d7a0d85cc9c8fbd6301d91d079faeddd27459d6b6b8582737d",
+    "tools/validation/run_controls.py": "da115d8b097c54c7ae9de5c673ff475fbee0efabd5fea8e57db7c5b4ac08eae9"
+  },
+  "validation_inputs_sha256": "2923ea96f1207d7c5d75d411c65337bc9dba9c6560316028300663b19d48a599",
+  "documentation_changed_after_utility_check": "Provisioning instructions only; utility source files unchanged. No fresh-machine bootstrap or language test acceptance claimed.",
+  "upstream_external_input": {
+    "repository": "https://github.com/rust-lang/rust.git",
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "local_checkout_verified_clean": true
+  },
+  "scope": "Workspace retention and reproducibility only; no language feature, runtime or JIT gate closure."
+}

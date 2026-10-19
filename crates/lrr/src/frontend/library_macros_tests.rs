@@ -117,73 +117,108 @@ fn edition_panic_macros_resolve_from_another_crate() {
 fn actual_library_definition_value_namespace_requires_source_module_closure() {
     use crate::{
         db::memo::Database,
-        expand::{source_discovery::SourceDiscovery, source_declarative},
-        frontend::compile_input_catalog::CompileInputCatalog,
+        expand::{source_declarative, source_discovery::SourceDiscovery},
         source::manifest::Namespace,
     };
     let profile = ProfileIdentity::current();
     let library = LibraryMacros::for_profile(&profile).unwrap();
     let definition = library.resolve_path("core", &["cmp", "PartialEq"]).unwrap();
-    let owner = library.providers().iter().find(|provider| {
-        provider.macro_index().definition(definition.identity).is_some()
-    }).unwrap();
-    let declaration = owner.module_source().outline().items.iter().find(|item| {
-        item.def_key.fingerprint() == definition.identity
-    }).unwrap();
+    let owner = library
+        .providers()
+        .iter()
+        .find(|provider| {
+            provider
+                .macro_index()
+                .definition(definition.identity)
+                .is_some()
+        })
+        .unwrap();
+    let declaration = owner
+        .module_source()
+        .outline()
+        .items
+        .iter()
+        .find(|item| item.def_key.fingerprint() == definition.identity)
+        .unwrap();
     let tree = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rustc/rust/library");
     let snapshot = crate::source::loader::SourceLoader::in_source_tree(
-        &tree, SourcePath::new("core/src/lib.rs").unwrap(),
-        owner.module_source().selection().outline.parse.profile.clone(),
-    ).unwrap().capture().expect("actual cfg-selected core module capture");
+        &tree,
+        SourcePath::new("core/src/lib.rs").unwrap(),
+        owner
+            .module_source()
+            .selection()
+            .outline
+            .parse
+            .profile
+            .clone(),
+    )
+    .unwrap()
+    .capture()
+    .expect("actual cfg-selected core module capture");
     let mut units = Vec::new();
     let mut selections = Vec::new();
     crate::source::module_tree::capture_inputs(
-        snapshot.files(), &snapshot.project().root_source, definition.defining_unit,
+        snapshot.files(),
+        &snapshot.project().root_source,
+        definition.defining_unit,
         &owner.module_source().selection().outline.parse.profile,
-        owner.module_source().captured_macro_cfg().unwrap(), &mut units, &mut selections,
-    ).unwrap();
+        owner.module_source().captured_macro_cfg().unwrap(),
+        &mut units,
+        &mut selections,
+    )
+    .unwrap();
     let inputs = PreparedSourceInputs::refresh(None, units, BTreeMap::new()).unwrap();
-    let sources = selections.iter().map(|selection| {
-        let SourceSelectionOutcome::Selected(source) = inputs.select(selection).unwrap() else { panic!() };
-        let policy = source.macro_prelude_policy().unwrap();
-        assert!(policy.no_core && !policy.standard, "actual core modules inherit their root");
-        source
-    }).collect();
+    let sources: Vec<_> = selections
+        .iter()
+        .map(|selection| {
+            let SourceSelectionOutcome::Selected(source) = inputs.select(selection).unwrap() else {
+                panic!()
+            };
+            let policy = source.macro_prelude_policy().unwrap();
+            assert!(
+                policy.no_core && !policy.standard,
+                "actual core modules inherit their root"
+            );
+            source
+        })
+        .collect();
+    let root = sources
+        .iter()
+        .find(|source| {
+            source.selection().path == snapshot.project().root_source
+                && source.outline().root_scope.module_path.is_empty()
+        })
+        .unwrap()
+        .share();
+    let (compiler, inputs, _, sources) =
+        crate::service::source_preparation::PreparedCompileInputs::prepare_in_source_tree(
+            &tree, inputs, root, sources, None,
+        )
+        .expect("same source-tree compiler-input preparation as ordinary source");
     // This metadata preparation owns a separate publication, never guest facade
     // definitions or a second runtime interpreter.
     let mut metadata = Database::default();
     inputs.publish(&mut metadata).unwrap();
     metadata.begin_expansion_epoch(1).unwrap();
     let discovery = SourceDiscovery::new_deferred_imports(
-        sources, declaration.scope.clone(), Namespace::Value,
-        Digest::of_bytes(b"actual library definition source namespace"), 1,
-    ).unwrap();
-    let mut discovery = discovery.with_declarative_compiler(
-        Digest::of_bytes(b"actual library definition compile context"),
-        source_declarative::engine_version(),
-        Arc::new(CompileInputCatalog::standalone(&profile).unwrap()),
-    ).expect("real library definition namespace source/module preparation");
-    // Construction alone is not a namespace receipt. Drive the ordinary
-    // preparation coordinator; missing dependencies remain real failures.
-    loop {
-        use crate::expand::source_discovery::SourceDiscoveryStep;
-        match discovery.poll().expect("actual library definition namespace discovery") {
-            SourceDiscoveryStep::Sealed(_) => {
-                discovery.publish(&mut metadata).unwrap();
-                break;
-            }
-            SourceDiscoveryStep::NeedExpansion { request } => {
-                let record = request.expand().expect("actual library source macro expansion");
-                discovery.admit_expansion(Arc::new(record)).unwrap();
-            }
-            SourceDiscoveryStep::NeedGeneratedExpansion { request } => {
-                let record = request.expand().expect("actual library generated macro expansion");
-                discovery.admit_expansion(Arc::new(record)).unwrap();
-            }
-            SourceDiscoveryStep::Incomplete { diagnostic, blocked } => {
-                panic!("actual library namespace incomplete: {diagnostic:?}; {blocked:?}");
-            }
-            _ => panic!("actual library namespace needs an unestablished preparation dependency"),
-        }
-    }
+        sources,
+        declaration.scope.clone(),
+        Namespace::Value,
+        Digest::of_bytes(b"actual library definition source namespace"),
+        1,
+    )
+    .unwrap();
+    let mut discovery = discovery
+        .with_declarative_compiler(
+            compiler.environment_identity(),
+            source_declarative::engine_version(),
+            Arc::clone(&compiler.catalog),
+        )
+        .expect("real library definition namespace source/module preparation");
+    // The same explicit capture/adoption coordinator serves normal runs and
+    // this separate metadata world. A next dependency is still a real failure.
+    compiler
+        .discover(&mut discovery, &mut metadata)
+        .expect("actual library definition namespace through common preparation coordinator");
+    discovery.publish(&mut metadata).unwrap();
 }

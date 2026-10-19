@@ -5,6 +5,7 @@ pub mod item_macro_inputs;
 pub mod item_macro_requests;
 pub mod macro_session;
 pub mod source_capture;
+pub(crate) mod source_preparation;
 
 pub mod eager_compile_inputs;
 

@@ -97,7 +97,8 @@ pub(super) fn prepare(
     // Existing coordinator owns compiler include/env/module request adoption,
     // matched facets and diagnostic sources; procedural steps execute only
     // through the request's prepared macro run.
-    compiler.discover_diagnostic_with(&mut discovery, db, snapshot, procedural.as_deref_mut())?;
+    compiler.discover_diagnostic_with(&mut discovery, db, snapshot,
+        procedural.as_deref_mut().map(|run| run as &mut dyn crate::service::source_preparation::SourceExpansionExecutor))?;
     match procedural {
         Some(run) => run.publish(db, &mut discovery)?,
         None => discovery.publish(db)?,

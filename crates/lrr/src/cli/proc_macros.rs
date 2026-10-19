@@ -656,3 +656,14 @@ impl<'a> ProceduralRun<'a> {
 #[cfg(test)]
 #[path = "proc_macros_tests.rs"]
 mod tests;
+
+impl crate::service::source_preparation::SourceExpansionExecutor for ProceduralRun<'_> {
+    fn step(
+        &mut self,
+        db: &mut crate::db::memo::Database,
+        discovery: &mut crate::expand::source_discovery::SourceDiscovery,
+        step: crate::expand::source_discovery::SourceDiscoveryStep,
+    ) -> Result<Option<crate::expand::source_discovery::SourceDiscoveryStep>, Diagnostic> {
+        ProceduralRun::step(self, db, discovery, step)
+    }
+}
