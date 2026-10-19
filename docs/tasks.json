@@ -20055,10 +20055,13 @@
       "title": "Impl and trait header lowering",
       "acceptance_contract": "TR006 and indexed-versus-full-catalog property model. Depends: M018.",
       "release_complete": false,
-      "latest_component_scope": "V91 solo held M019 source component: Q60 retains actual selected Trait declaration kind through shared ParseFile/direct syntax_at and original/generated source/epoch dependencies. source_types::projection_trait now requires that receipt for every ordinary bound/projection caller; Sized shares it, removing its separate declaration-row scan. Generated Trait owners join the existing declaration Type/origin service. Both builds and11/11focused controls pass, including13actual declaration worlds (original/emit/wrapper all4editions plus non-trait-bound metadata), cache/source/epoch/no-body and existing26Sized worlds/source lifetime controls. Selected unchanged upstream runtime contracts pass3/4: deferred1, via-bound-in-where and issue17718 with its actual auxiliary; conditional deferred2 still faults LRR-E-NAME-AMBIGUOUS after partial execution and remains a runtime blocker. Source/HEAD/generator frozen; V89 test API compile failure and V90 client-only review correction preserved. Zero new distinct runtime/full-fixture gains verified, no refreshed suite total. M018 SourceView propagation, full trait schemas/catalog/oracle, canonical transactions/tabled fulfillment and runtime selection remain incomplete; no M018/M019/interpreter/JIT gate closes.",
+      "latest_component_scope": "V232/V233 partial M019 -> M020 source-fact transport: the existing actual TraitDeclaration memo now retains written generics, supertraits, predicates, attributes, auto/unsafe/alias syntax and actual source ranges, borrowing its retained parser/source/scope. Both builds and2/2source controls pass:13original/emit/wrapper/metadata worlds plus8auto/unsafe worlds across all4editions, with memo sharing, missing/non-trait headers, namespace/epoch and no-body assertions. Source/HEAD/binary guards pass; prior host-test shadowing build failure preserved. No concrete upstream SourceFacts provider, inference/delegate or root goal, new stock runtime gain, full M019/M020 or interpreter/JIT closure.",
       "source_baseline": "dcd056e542c86605f6a282470566952b2aea3c79",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
-      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope."
+      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
+      "artifacts": [
+        "worktracks/evidence/2026-10-19-v232-v233-source-trait-headers.json"
+      ]
     },
     {
       "id": "M020",

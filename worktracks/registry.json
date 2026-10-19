@@ -311,8 +311,10 @@
             "worktracks/evidence/2026-10-18-interpreter-v82-v83-impl-head-types.json",
             "worktracks/evidence/2026-10-18-interpreter-v84-v85-predicate-requirements.json",
             "worktracks/evidence/2026-10-18-interpreter-v86-v88-sized-predicates.json",
-            "worktracks/evidence/2026-10-18-interpreter-v89-v91-trait-declarations.json"
-          ]
+            "worktracks/evidence/2026-10-18-interpreter-v89-v91-trait-declarations.json",
+            "worktracks/evidence/2026-10-19-v232-v233-source-trait-headers.json"
+          ],
+          "latest_component_scope": "V232/V233 partial M019 -> M020 source-fact transport: the existing actual TraitDeclaration memo now retains written generics, supertraits, predicates, attributes, auto/unsafe/alias syntax and actual source ranges, borrowing its retained parser/source/scope. Both builds and2/2source controls pass:13original/emit/wrapper/metadata worlds plus8auto/unsafe worlds across all4editions, with memo sharing, missing/non-trait headers, namespace/epoch and no-body assertions. Source/HEAD/binary guards pass; prior host-test shadowing build failure preserved. No concrete upstream SourceFacts provider, inference/delegate or root goal, new stock runtime gain, full M019/M020 or interpreter/JIT closure."
         },
         {
           "id": "WT05-02",
@@ -359,7 +361,7 @@
         "worktracks/evidence/2026-10-19-v227-v229-upstream-interner-core.json"
       ],
       "solver_policy": "Pinned upstream next-generation rustc solver; E-R5-014. Adapter integration not implemented.",
-      "latest_component_scope": "V230/V231 pinned compiler binder-client algorithms now replace SourceFacts anonymization/supertrait hooks. Both builds pass; exact licensed originals and mechanical port audited. Two unchanged upstream upcasting runtime contracts still fail in inherited generic type handling; no new runtime gains. No concrete provider/inference/delegate/root goal or M020/M024/interpreter/JIT closure."
+      "latest_component_scope": "V232/V233 partial M019 -> M020 source-fact transport: the existing actual TraitDeclaration memo now retains written generics, supertraits, predicates, attributes, auto/unsafe/alias syntax and actual source ranges, borrowing its retained parser/source/scope. Both builds and2/2source controls pass:13original/emit/wrapper/metadata worlds plus8auto/unsafe worlds across all4editions, with memo sharing, missing/non-trait headers, namespace/epoch and no-body assertions. Source/HEAD/binary guards pass; prior host-test shadowing build failure preserved. No concrete upstream SourceFacts provider, inference/delegate or root goal, new stock runtime gain, full M019/M020 or interpreter/JIT closure."
     },
     {
       "id": "WT06",

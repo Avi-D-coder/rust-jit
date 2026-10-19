@@ -954,6 +954,7 @@ fn unchanged_trait_declarations_share_actual_parser_and_namespace_across_origins
                     panic!()
                 };
                 assert_eq!(declaration.definition(), definition);
+                assert_eq!(declaration.header().is_some(), is_trait);
                 assert_eq!(
                     declaration.result(),
                     if is_trait {
@@ -964,6 +965,26 @@ fn unchanged_trait_declarations_share_actual_parser_and_namespace_across_origins
                     "{name} {edition} origin{origin}"
                 );
                 if is_trait {
+                    let facts = declaration.header().unwrap();
+                    assert!(!facts.is_auto() && !facts.is_unsafe() && !facts.is_alias());
+                    assert!(facts.predicates().is_empty());
+                    assert!(facts.attributes().is_empty());
+                    let expected_generics: &[&str] = match name {
+                        "T1" | "T2" => &[],
+                        "T3" | "T4" | "T8" | "T9" => &["X"],
+                        "T6" => &["Y", "X"],
+                        "T5" | "T7" => &["X", "Y"],
+                        _ => unreachable!(),
+                    };
+                    assert_eq!(facts.generics().iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), expected_generics);
+                    assert_eq!(facts.generic_ranges().len(), expected_generics.len());
+                    assert_eq!(facts.supertraits_range().is_some(), name == "T3");
+                    assert!(facts.predicates_range().is_none());
+                    assert!(facts.attribute_ranges().is_empty());
+                    assert_eq!(facts.supertraits().iter().map(|t| t.text.as_str()).collect::<String>(), if name == "T3" { "T2" } else { "" });
+                    if name == "T3" {
+                        assert_eq!(facts.generics()[0].bounds.iter().map(|t| t.text.as_str()).collect::<String>(), "T1");
+                    }
                     let parse = db.input(&InputKey::DefinitionSource(definition)).unwrap();
                     let header = db.input(&InputKey::DefinitionHeader(definition)).unwrap();
                     let context = db.input(&InputKey::DeclarationContext(definition)).unwrap();
@@ -976,6 +997,9 @@ fn unchanged_trait_declarations_share_actual_parser_and_namespace_across_origins
                         panic!()
                     };
                     assert!(declaration.matches_owner(definition, parse, header, &context.scope));
+                    assert_eq!(declaration.source(), Some(parse));
+                    assert_eq!(declaration.scope(), Some(&context.scope));
+                    assert_eq!(declaration.parsed().unwrap().key(), *parse);
                     let lookup = ready(lookup_declaration_name(
                         &mut db,
                         SourceTypeOwner {
@@ -1040,7 +1064,7 @@ fn unchanged_trait_declarations_share_actual_parser_and_namespace_across_origins
                 QueryKey::TraitDeclaration(Digest::of_bytes(b"unpublished-trait-kind")),
             ));
             assert!(
-                matches!(absent.value.as_ref(), QueryValue::TraitDeclaration(declaration) if declaration.result() == TraitDeclarationResult::MetadataPending)
+                matches!(absent.value.as_ref(), QueryValue::TraitDeclaration(declaration) if declaration.result() == TraitDeclarationResult::MetadataPending && declaration.header().is_none())
             );
             assert!(db.trace.events[start..].iter().all(|event| !matches!(
                 event.key,
@@ -1057,6 +1081,59 @@ fn unchanged_trait_declarations_share_actual_parser_and_namespace_across_origins
                 QueryPoll::Ready(Err(_)) if origin == 1 || origin == 2 => {}
                 other => panic!("trait source epoch {edition} origin{origin}: {other:?}"),
             }
+        }
+    }
+}
+
+#[test]
+fn unchanged_auto_and_unsafe_trait_headers_keep_actual_modifiers_without_body_preparation() {
+    use crate::{
+        core::digest::StableEncode,
+        db::{key::QueryKey, poll::QueryPoll, provider::SyntaxProvider, value::QueryValue},
+        frontend::names::NameLookup,
+        source::manifest::Namespace,
+        syntax::imports::ImportSegment,
+    };
+    fn ready<T>(value: QueryPoll<T>) -> T {
+        match value {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => panic!("{error}"),
+            QueryPoll::NeedInput(input) => panic!("{input:?}"),
+        }
+    }
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");
+    for edition in [2015, 2018, 2021, 2024] {
+        for (case, expected) in [
+            ("tests/ui/auto-traits/auto-traits.rs", &[("Auto", true, false), ("AutoUnsafe", true, true)][..]),
+            ("tests/ui/traits/safety-ok.rs", &[("Foo", false, true)][..]),
+        ] {
+            let (mut db, seal, scope) = prepared_impl_header_world(&root.join(case), edition);
+            let inventory = ready(db.fetch(&SyntaxProvider, QueryKey::PreparedScopeImplHeaders(seal)));
+            let QueryValue::PreparedScopeImplHeaders(inventory) = inventory.value.as_ref() else { panic!() };
+            let environment = inventory.inventory_root().environment().unwrap();
+            db.trace.detailed = true;
+            let start = db.trace.events.len();
+            for (name, auto_trait, unsafe_trait) in expected {
+                let NameLookup::Defined(selected) = environment.names().lookup_source_path(
+                    Namespace::Type, &[ImportSegment::Name((*name).into())], false, &scope, edition,
+                ).unwrap() else { panic!("actual upstream trait absent") };
+                let key = QueryKey::TraitDeclaration(selected.identity);
+                let first = ready(db.fetch(&SyntaxProvider, key.clone()));
+                let second = ready(db.fetch(&SyntaxProvider, key));
+                assert!(std::sync::Arc::ptr_eq(&first.value, &second.value));
+                let QueryValue::TraitDeclaration(declaration) = first.value.as_ref() else { panic!() };
+                let header = declaration.header().unwrap();
+                assert_eq!(header.is_auto(), *auto_trait);
+                assert_eq!(header.is_unsafe(), *unsafe_trait);
+                assert!(!header.is_alias());
+                assert!(header.generics().is_empty());
+                assert!(header.supertraits().is_empty());
+                assert!(header.predicates().is_empty());
+                assert_eq!(header.fingerprint(), declaration.header().unwrap().fingerprint());
+            }
+            assert!(db.trace.events[start..].iter().all(|event| !matches!(
+                event.key, QueryKey::BodyStructure(_) | QueryKey::Thunk(_) | QueryKey::PatternPlan(_) | QueryKey::FunctionSignature(_)
+            )));
         }
     }
 }

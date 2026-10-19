@@ -148,7 +148,7 @@ impl ParsedFile {
     }
     /// The selected declaration's own and immediate associated owner's
     /// generic syntax, using the same source binder as ordinary functions.
-    fn declaration_generics(
+    pub(crate) fn declaration_generics(
         &self,
         declaration: &SyntaxNode,
     ) -> Result<(Vec<DefinitionParameter>, GenericSourceLayout), Diagnostic> {
@@ -159,7 +159,7 @@ impl ParsedFile {
     }
     /// Own and immediate impl/trait where clauses belong to the same
     /// declared Type scope. This prepares signature facts, never a body.
-    fn declaration_predicates(
+    pub(crate) fn declaration_predicates(
         &self,
         declaration: &SyntaxNode,
     ) -> Result<Vec<TokenRecipe>, Diagnostic> {

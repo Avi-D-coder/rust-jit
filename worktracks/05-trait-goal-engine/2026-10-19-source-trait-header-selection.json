@@ -1,0 +1,7 @@
+{
+  "scope": "Actual source trait header transport, origin/edition/currentness and no-body controls only; no solver invocation or stock runtime acceptance",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_trait_declarations_share_actual_parser_and_namespace_across_origins",
+    "cli::preentry_loader_tests::unchanged_auto_and_unsafe_trait_headers_keep_actual_modifiers_without_body_preparation"
+  ]
+}

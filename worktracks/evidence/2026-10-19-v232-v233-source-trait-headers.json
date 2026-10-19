@@ -1,0 +1,180 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "at": "2026-10-19T10:36:05.193052+00:00",
+  "parent": "f65724cc6feac267ecc1f0aad1e394ecabc41ee0",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "scope": "V232/V233 partial M019 -> M020 source-fact transport: the existing actual TraitDeclaration memo now retains written generics, supertraits, predicates, attributes, auto/unsafe/alias syntax and actual source ranges, borrowing its retained parser/source/scope. Both builds and2/2source controls pass:13original/emit/wrapper/metadata worlds plus8auto/unsafe worlds across all4editions, with memo sharing, missing/non-trait headers, namespace/epoch and no-body assertions. Source/HEAD/binary guards pass; prior host-test shadowing build failure preserved. No concrete upstream SourceFacts provider, inference/delegate or root goal, new stock runtime gain, full M019/M020 or interpreter/JIT closure.",
+  "precode": "worktracks/05-trait-goal-engine/2026-10-19-upstream-context.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-19-source-trait-header-selection.json",
+  "cohorts": {
+    "232": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T10:26:06.976235+00:00",
+          "head": "f65724cc6feac267ecc1f0aad1e394ecabc41ee0",
+          "file_count": 8459,
+          "source_sha256": "2ea936ab67a02e1f067ac28fa93624fa93c8bd2ac3bb39aff626e2333dab94b7",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T10:26:43.944390+00:00",
+          "head": "f65724cc6feac267ecc1f0aad1e394ecabc41ee0",
+          "file_count": 8459,
+          "source_sha256": "2ea936ab67a02e1f067ac28fa93624fa93c8bd2ac3bb39aff626e2333dab94b7",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "session": 4508,
+        "exit": 101,
+        "diagnostics": 1,
+        "cause": "New test variable expected shadows an existing Digest; not a production error, no runtime."
+      }
+    },
+    "233": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T10:27:12.847687+00:00",
+          "head": "f65724cc6feac267ecc1f0aad1e394ecabc41ee0",
+          "file_count": 8459,
+          "source_sha256": "563777a659743dea71bafbfcbfdee9b42f9e51e55c557e8430279d2f319c8d8d",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T10:28:40.980623+00:00",
+          "head": "f65724cc6feac267ecc1f0aad1e394ecabc41ee0",
+          "file_count": 8459,
+          "source_sha256": "563777a659743dea71bafbfcbfdee9b42f9e51e55c557e8430279d2f319c8d8d",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-c589b5df93981725",
+              "sha256": "bddd82849c797ffda7bb284590965b83e6ec6845bdf6e3d1e41586a379c10e5c"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "7276fe9e01bf261667ea6f964e206a2bd52e7b1dd1199fdf38e878d1de865ba1"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T10:29:50.021160+00:00",
+          "head": "f65724cc6feac267ecc1f0aad1e394ecabc41ee0",
+          "file_count": 8459,
+          "source_sha256": "563777a659743dea71bafbfcbfdee9b42f9e51e55c557e8430279d2f319c8d8d",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-c589b5df93981725",
+              "sha256": "bddd82849c797ffda7bb284590965b83e6ec6845bdf6e3d1e41586a379c10e5c"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "7276fe9e01bf261667ea6f964e206a2bd52e7b1dd1199fdf38e878d1de865ba1"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build": {
+        "session": 36318,
+        "exit": 0
+      },
+      "cli_build": {
+        "session": 81260,
+        "exit": 0
+      },
+      "controls_session": 47155,
+      "controls_exit": 0,
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_trait_declarations_share_actual_parser_and_namespace_across_origins",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-c589b5df93981725",
+            "cli::preentry_loader_tests::unchanged_trait_declarations_share_actual_parser_and_namespace_across_origins",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 33.878,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_auto_and_unsafe_trait_headers_keep_actual_modifiers_without_body_preparation",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-c589b5df93981725",
+            "cli::preentry_loader_tests::unchanged_auto_and_unsafe_trait_headers_keep_actual_modifiers_without_body_preparation",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 19.911,
+          "log": "control-1.log"
+        }
+      ]
+    }
+  },
+  "actual_source_witnesses": [
+    "tests/ui/unsized/unsized.rs",
+    "tests/ui/auto-traits/auto-traits.rs",
+    "tests/ui/traits/safety-ok.rs"
+  ],
+  "actual_shared_routes": [
+    "SyntaxProvider::TraitDeclaration -> TraitDeclaration::prepare -> existing ParseFile/DefinitionSource/Header/DeclarationContext",
+    "ParsedFile::declaration_generics/declaration_predicates/type_tokens shared with ordinary function headers",
+    "TraitHeader accessors and TraitDeclaration source/scope/parsed borrow the retained immutable receipt"
+  ],
+  "source_review": {
+    "sha256": "563777a659743dea71bafbfcbfdee9b42f9e51e55c557e8430279d2f319c8d8d",
+    "all_eight_modes": "Recorded separately in bounded context document. No runtime semantic route added; inherited custom consumers stay held.",
+    "cost": "New capture walks header metadata once per memo and shares Arc owners. Existing tokens(declaration, excluded) equality guard still traverses trait tokens and filters the associated-list range; this is cold source inspection, not method-body lowering or a claimed O(header-only) parser performance result.",
+    "new_range_transport": "Actual generic/supertrait/where/attribute source ranges preserve the owning parser token-context and edition route; no display-text reconstruction."
+  },
+  "commands": {
+    "lib": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+    "cli": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr",
+    "controls": "LRR_EMBEDDED_FACADE=1 python3.12 tools/validation/run_controls.py artifacts/validation-current-v233 worktracks/05-trait-goal-engine/2026-10-19-source-trait-header-selection.json"
+  },
+  "acceptance": {
+    "source_header_controls": "2/2;21asserted source worlds across4editions; source transport only",
+    "positive_auto_unsafe_flags": "actual unchanged upstream declarations across8worlds",
+    "positive_alias_where_attribute_matrix": "unexecuted; raw fields captured but not behaviorally accepted",
+    "source_kind_namespace_cache_epoch_controls": "13actual original/emit/wrapper/metadata worlds",
+    "actual_upstream_goal_invocation": false,
+    "source_fact_provider_implementations": 0,
+    "runtime_tests_repeated": false,
+    "runtime_baseline": "V231 two selected unchanged upcasting contracts still fail; retain its separate source identity",
+    "new_distinct_stock_gains": 0,
+    "full_fixture_passes_claimed": 0,
+    "M019_complete": false,
+    "M020_complete": false,
+    "upstream_runtime_acceptance": "incomplete",
+    "diagnostic_compatibility": "unassessed",
+    "compiler_tooling_compatibility": "unassessed",
+    "full_suite_compatibility": "incomplete",
+    "interpreter_gate": "incomplete",
+    "guest_jit_gate": "runtime prerequisite incomplete"
+  }
+}
