@@ -182,7 +182,7 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
         }
         QueryKey::DiscoverySeal(_) | QueryKey::ScopeDeclarationInventory(_)
         | QueryKey::PreparedScopeImplHeaders(_) | QueryKey::ImplHeaderSyntax(_) | QueryKey::ImplHeadTypes(_) | QueryKey::ImplTraitIdentity(_) | QueryKey::ImplTraitCatalog(_) | QueryKey::SolverConfiguration(_) | QueryKey::ImplSourceTypes(_)
-                | QueryKey::ImplPredicates(_) | QueryKey::TraitDeclaration(_) => {}
+                | QueryKey::ImplPredicates(_) | QueryKey::TraitDeclaration(_) | QueryKey::DeclarationGenerics(_) => {}
         QueryKey::ConstructorPlan(_)
         | QueryKey::BoundRecordConstructor(_)
         | QueryKey::QualifiedBodyType(_)

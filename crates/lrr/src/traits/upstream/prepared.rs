@@ -75,6 +75,11 @@ impl DefinitionReceipt {
             || ast::Enum::can_cast(node.kind()) || ast::Union::can_cast(node.kind())).map(|node| node.is_some())
     }
     pub(super) fn is_trait(&self) -> bool { self.trait_declaration }
+    pub(super) fn matches_generics(&self, generics: &crate::frontend::declaration_generics::DeclarationGenerics) -> bool {
+        let (InputValue::DefinitionSource(parse), InputValue::DefinitionHeader(header), InputValue::DeclarationContext(context)) =
+            (self.source.as_ref(), self.header.as_ref(), self.context.as_ref()) else { return false; };
+        generics.definition() == self.definition && generics.matches_metadata(parse, header, context)
+    }
     pub(super) fn observe(db: &mut Database, definition: Digest) -> QueryPoll<Option<Self>> {
         let source = db.input(&InputKey::DefinitionSource(definition));
         let header = db.input(&InputKey::DefinitionHeader(definition));
@@ -129,6 +134,7 @@ impl DefinitionReceipt {
 /// (default128 and crate override); the producer must honor that configuration.
 pub(super) struct Settings<'cx> {
     pub(super) catalog: &'cx DiscoveryInput,
+    pub(super) construction_generics: Option<&'cx super::source_generics::SourceGenericLayouts>,
     pub(super) recursion_limit: usize,
     pub(super) features: FeatureSet<'cx>,
     pub(super) assumptions_on_binders: bool,
@@ -453,6 +459,12 @@ impl<'cx> PreparedProvider<'cx> {
         }
         let world = self.world;
         for (id, row) in &facts.definitions {
+            if let Some(generics) = self.settings.construction_generics.and_then(|source| source.get(*id)) {
+                if !row.receipt.matches_generics(generics)
+                    || !generics.argument_kinds().is_some_and(|source| source.iter().copied().eq(row.generics.parameters.iter().map(parameter_kind))) {
+                    return Err(fault("typed generics differ from actual constructor metadata"));
+                }
+            }
             if id.world() != world || id.source() != row.receipt.definition {
                 return Err(fault("prepared source declaration identity differs"));
             }
@@ -708,15 +720,12 @@ impl<'cx> PreparedProvider<'cx> {
         layout.next().is_none()
     }
     fn ordinary_layout(self, id: DefinitionId) -> impl Iterator<Item = BoundKind> + 'cx {
-        self.definition(id)
-            .generics
-            .parameters
-            .iter()
-            .map(|p| match p {
-                GenericParameter::Type(_) => BoundKind::Type,
-                GenericParameter::Region(_) => BoundKind::Region,
-                GenericParameter::Const(_, _) => BoundKind::Const,
-            })
+        assert_eq!(id.world(), self.world, "foreign constructor definition world");
+        let source = self.settings.construction_generics.and_then(|layouts| layouts.get(id));
+        let source = source.map(|generics| generics.argument_kinds().expect("actual generic layout pending"));
+        let typed = source.is_none().then(|| self.definition(id).generics.parameters);
+        source.into_iter().flat_map(|kinds| kinds.iter().copied())
+            .chain(typed.into_iter().flat_map(|parameters| parameters.iter().map(parameter_kind)))
     }
     fn report(self, span: Span, message: String) -> ErrorToken {
         let mut e = StableEncoder::new("lrr/v1/upstream-client-error");
@@ -728,6 +737,10 @@ impl<'cx> PreparedProvider<'cx> {
         self.diagnostics.borrow_mut().push((span, message));
         token
     }
+}
+fn parameter_kind<'cx, F: SourceFacts<'cx>>(parameter: GenericParameter<'cx, F>) -> BoundKind {
+    match parameter { GenericParameter::Type(_) => BoundKind::Type,
+        GenericParameter::Region(_) => BoundKind::Region, GenericParameter::Const(_, _) => BoundKind::Const }
 }
 fn alias_definition(kind: AliasTermKind<Cx<'_>>) -> DefinitionId {
     match kind {

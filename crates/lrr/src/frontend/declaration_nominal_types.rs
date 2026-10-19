@@ -101,7 +101,8 @@ impl SchemaNames<'_> {
                 self.graph,
                 sources,
                 &declaration,
-                &path
+                &path,
+                &TyTerm::Param(key)
             )) else {
                 return QueryPoll::Ready(Ok(None));
             };

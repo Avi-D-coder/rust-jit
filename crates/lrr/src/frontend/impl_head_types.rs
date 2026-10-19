@@ -254,7 +254,8 @@ impl PreparedImplHeadTypes {
                     environment.names(),
                     &sources,
                     &declaration,
-                    &path
+                    &path,
+                    &self_type
                 )) else {
                     pending!(TraitType)
                 };

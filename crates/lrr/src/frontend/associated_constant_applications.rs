@@ -749,7 +749,8 @@ fn parameter_member_traits(
             completed.names(),
             &views,
             &declaration,
-            &path
+            &path,
+            &TyTerm::Param(parameter)
         ));
         let (identity, arguments) = selected.map_or((None, Vec::new()), |(identity, arguments)| {
             (members.is_trait(identity).then_some(identity), arguments)

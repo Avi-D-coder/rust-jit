@@ -10650,6 +10650,18 @@
       "bytes": 150
     },
     {
+      "path": "tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs",
+      "git_blob": "cc93794e8fcdc1ab5642df7811d7d00d1e3a7d68",
+      "sha256": "71a7428b95f223b94eeffc3b4b9b4fe6024e694ff0fa38d350b66a7e6e5357df",
+      "bytes": 751
+    },
+    {
+      "path": "tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.stderr",
+      "git_blob": "3739829455bde8143a188f41696c3222e3aafa7e",
+      "sha256": "d99e9220ae186e1da2cd4e1c9baddded767d34ef7359b85c44707dd80e0a4910",
+      "bytes": 652
+    },
+    {
       "path": "tests/ui/generics/issue-94923.rs",
       "git_blob": "686725dfe3ba63378a199a768b4fa9cbe15d5529",
       "sha256": "df85ac9c30d908aeabde7e9d015f42ef767852fd72f906fc1089cf19167c3e47",
@@ -31286,6 +31298,12 @@
       "directives": [
         "//@ run-pass"
       ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs",
+      "directives": [],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"
     },

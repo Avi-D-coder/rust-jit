@@ -1,0 +1,702 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "recorded_at": "2026-10-19T18:29:32.197316+00:00",
+  "parent": "e5d461c4302a69b92783bb86acc8e8451efdd99c",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "integration_status": "held",
+  "scope": "V324-V327 HELD M019/M020 actual source generics and upstream guarded TraitRefs. New pure DeclarationGenerics query uses actual source/header/context, retained pinned parser and existing declaration-generics service. Ordinary TraitHeader and source bridge share its Arc. Private SourceGenericLayouts supplies genuine per-definition namespace/arity metadata before complete typed facts freeze, preserving upstream TraitRef::new_from_args checks and full ReadyProvider holds. V326 exposed a real omitted trait-default bug (PartialEq Rhs=Self); shared projection_trait/resolve_actual_type now prepare missing defaults from actual retained trait TypeParam syntax, own source scope and subject. All seven changed impl/projection/bound/equation/constant/nominal consumers use the common path. Final macOS Rust1.99.0 library/CLI builds and12/12focused controls pass:140actual impl head Types and136actual guarded upstream TraitRefs in48original/user-macro/wrapper edition worlds, including unchanged multiple trait argument lists and user Self/[Self] defaults. Negative constructor namespace, memo/root-cfg/epoch/foreign-catalog/no-body/no-source-query checks pass; existing997membership/32head/source settings/local main/12Copy runtime regressions and projection/cold-body/parameter-order controls pass. New compile-fail library is only a source-type witness, not E0277 diagnostic or runtime/full-fixture acceptance. V324 compile failure, V325 build-only source and V3267/8controls remain attached to their own sources. Full typed source fact/parameter/binder/const/ADT/ParamEnv/lang-item producer, inference/delegate/transitive closure, ReadyProvider/root evaluation and runtime migration remain incomplete. Zero new distinct stock runtime gains or refreshed suite total; M019/M020/interpreter/JIT and Linux gates remain open.",
+  "architecture_record": "worktracks/05-trait-goal-engine/2026-10-19-source-generic-construction.md",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-19-source-generic-construction-review.md",
+  "new_distinct_stock_runtime_gains": 0,
+  "refreshed_suite_total": null,
+  "source_contracts": {
+    "actual_type_heads": 140,
+    "actual_guarded_trait_refs": 136,
+    "actual_worlds": 48,
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "root_solver_evaluations": 0
+  },
+  "attempts": {
+    "324": {
+      "scope": "Library compile fails on inner-doc placement and mechanical copied-iterator/Vec/TraitRef field API errors; no runtime.",
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T18:12:48.470476+00:00",
+          "head": "e5d461c4302a69b92783bb86acc8e8451efdd99c",
+          "file_count": 8497,
+          "source_sha256": "8c10c2d0763a04db9173dc439dc7288ee6e9c744728d5bd58566f8d81236dec9",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T18:13:33.426353+00:00",
+          "head": "e5d461c4302a69b92783bb86acc8e8451efdd99c",
+          "file_count": 8497,
+          "source_sha256": "8c10c2d0763a04db9173dc439dc7288ee6e9c744728d5bd58566f8d81236dec9",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 29943,
+          "exit": 101,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": false
+          },
+          "messages_sha256": "23a090090d8b95c7cb5c02bcfa83c692646a345fb74cd712deaffad9bf8eb1f3",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 12 previous errors; 32 warnings emitted\n",
+          "errors": [
+            "error[E0753]: expected outer doc comment\n --> crates/lrr/src/traits/upstream/mod.rs:2:1\n  |\n2 | //! The shared solver's ordinary root-goal entry; no alternate solver.\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: inner doc comments like this (starting with `//!` or `/*!`) can only appear before items\nhelp: you might have meant to write a regular comment\n  |\n2 - //! The shared solver's ordinary root-goal entry; no alternate solver.\n2 + // The shared solver's ordinary root-goal entry; no alternate solver.\n  |\n\n",
+            "error[E0753]: expected outer doc comment\n --> crates/lrr/src/traits/upstream/mod.rs:3:1\n  |\n3 | //!\n  | ^^^\n  |\n  = note: inner doc comments like this (starting with `//!` or `/*!`) can only appear before items\nhelp: you might have meant to write a regular comment\n  |\n3 - //!\n3 + //\n  |\n\n",
+            "error[E0753]: expected outer doc comment\n --> crates/lrr/src/traits/upstream/mod.rs:4:1\n  |\n4 | //! This is the typed integration boundary, not yet a concrete LRR Interner or\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: inner doc comments like this (starting with `//!` or `/*!`) can only appear before items\nhelp: you might have meant to write a regular comment\n  |\n4 - //! This is the typed integration boundary, not yet a concrete LRR Interner or\n4 + // This is the typed integration boundary, not yet a concrete LRR Interner or\n  |\n\n",
+            "error[E0753]: expected outer doc comment\n --> crates/lrr/src/traits/upstream/mod.rs:5:1\n  |\n5 | //! SolverDelegate. Source/header/ParamEnv transport, demand suspension and\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: inner doc comments like this (starting with `//!` or `/*!`) can only appear before items\nhelp: you might have meant to write a regular comment\n  |\n5 - //! SolverDelegate. Source/header/ParamEnv transport, demand suspension and\n5 + // SolverDelegate. Source/header/ParamEnv transport, demand suspension and\n  |\n\n",
+            "error[E0753]: expected outer doc comment\n  --> crates/lrr/src/traits/upstream/mod.rs:6:1\n   |\n 6 |   //! selected-impl witness mapping must join before any runtime acceptance.\n   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n 7 | / use rustc_next_trait_solver::{\n 8 | |     delegate::SolverDelegate,\n 9 | |     solve::{GoalEvaluation, SolverDelegateEvalExt},\n10 | | };\n   | |__- the inner doc comment doesn't annotate this `use` import\n   |\nhelp: to annotate the `use` import, change the doc comment from inner to outer style\n   |\n 6 - //! selected-impl witness mapping must join before any runtime acceptance.\n 6 + /// selected-impl witness mapping must join before any runtime acceptance.\n   |\n\n",
+            "error[E0631]: type mismatch in function arguments\n   --> crates/lrr/src/traits/upstream/prepared.rs:728:82\n    |\n728 |             .chain(typed.into_iter().flat_map(|parameters| parameters.iter().map(parameter_kind)))\n    |                                                                              --- ^^^^^^^^^^^^^^ expected due to this\n    |                                                                              |\n    |                                                                              required by a bound introduced by this call\n...\n741 | fn parameter_kind<'cx, F: SourceFacts<'cx>>(parameter: &GenericParameter<'cx, F>) -> BoundKind {\n    | ---------------------------------------------------------------------------------------------- found signature defined here\n    |\n    = note: expected function signature `fn(GenericParameter<'_, PreparedProvider<'_>>) -> _`\n               found function signature `fn(&GenericParameter<'_, _>) -> _`\nnote: required by a bound in `std::iter::Iterator::map`\n   --> /Users/avi/.rustup/toolchains/1.99.0-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/iter/traits/iterator.rs:834:12\n    |\n831 |     fn map<B, F>(self, f: F) -> Map<Self, F>\n    |        --- required by a bound in this associated function\n...\n834 |         F: FnMut(Self::Item) -> B,\n    |            ^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Iterator::map`\nhelp: consider wrapping the function in a closure\n    |\n728 |             .chain(typed.into_iter().flat_map(|parameters| parameters.iter().map(|parameter: model::GenericParameter<'_, PreparedProvider<'_>>| parameter_kind(&parameter))))\n    |                                                                                  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++               ++++++++++++\nhelp: consider adjusting the signature so it does not borrow its argument\n    |\n741 - fn parameter_kind<'cx, F: SourceFacts<'cx>>(parameter: &GenericParameter<'cx, F>) -> BoundKind {\n741 + fn parameter_kind<'cx, F: SourceFacts<'cx>>(parameter: GenericParameter<'cx, F>) -> BoundKind {\n    |\n\n",
+            "error[E0631]: type mismatch in function arguments\n    --> crates/lrr/src/traits/upstream/prepared.rs:728:38\n     |\n 728 |             .chain(typed.into_iter().flat_map(|parameters| parameters.iter().map(parameter_kind)))\n     |                                      ^^^^^^^^ expected due to this\n...\n 741 | fn parameter_kind<'cx, F: SourceFacts<'cx>>(parameter: &GenericParameter<'cx, F>) -> BoundKind {\n     | ---------------------------------------------------------------------------------------------- found signature defined here\n     |\n     = note: expected function signature `fn(GenericParameter<'_, PreparedProvider<'_>>) -> _`\n                found function signature `fn(&GenericParameter<'_, _>) -> _`\n     = note: required for `Map<Copied<Iter<'_, GenericParameter<'_, PreparedProvider<'_>>>>, _>` to implement `std::iter::Iterator`\n     = note: required for `Map<Copied<Iter<'_, GenericParameter<'_, PreparedProvider<'_>>>>, _>` to implement `IntoIterator`\nnote: required by a bound in `flat_map`\n    --> /Users/avi/.rustup/toolchains/1.99.0-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/iter/traits/iterator.rs:1536:12\n     |\n1533 |     fn flat_map<U, F>(self, f: F) -> FlatMap<Self, U, F>\n     |        -------- required by a bound in this associated function\n...\n1536 |         U: IntoIterator,\n     |            ^^^^^^^^^^^^ required by this bound in `Iterator::flat_map`\n     = note: the full name for the type has been written to '/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672.long-type-9008710336047855841.txt'\n     = note: consider using `--verbose` to print the full type name to the console\nhelp: consider adjusting the signature so it does not borrow its argument\n     |\n 741 - fn parameter_kind<'cx, F: SourceFacts<'cx>>(parameter: &GenericParameter<'cx, F>) -> BoundKind {\n 741 + fn parameter_kind<'cx, F: SourceFacts<'cx>>(parameter: GenericParameter<'cx, F>) -> BoundKind {\n     |\n\n",
+            "error[E0631]: type mismatch in function arguments\n   --> crates/lrr/src/traits/upstream/prepared.rs:728:20\n    |\n728 |             .chain(typed.into_iter().flat_map(|parameters| parameters.iter().map(parameter_kind)))\n    |              ----- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected due to this\n    |              |\n    |              required by a bound introduced by this call\n...\n741 | fn parameter_kind<'cx, F: SourceFacts<'cx>>(parameter: &GenericParameter<'cx, F>) -> BoundKind {\n    | ---------------------------------------------------------------------------------------------- found signature defined here\n    |\n    = note: expected function signature `fn(GenericParameter<'_, PreparedProvider<'_>>) -> _`\n               found function signature `fn(&GenericParameter<'_, _>) -> _`\n    = note: required for `Map<Copied<Iter<'_, GenericParameter<'_, PreparedProvider<'_>>>>, _>` to implement `std::iter::Iterator`\nnote: required by a bound in `std::iter::Iterator::chain`\n   --> /Users/avi/.rustup/toolchains/1.99.0-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/iter/traits/iterator.rs:513:33\n    |\n510 |     fn chain<U>(self, other: U) -> Chain<Self, U::IntoIter>\n    |        ----- required by a bound in this associated function\n...\n513 |         U: [const] IntoIterator<Item = Self::Item>,\n    |                                 ^^^^^^^^^^^^^^^^^ required by this bound in `Iterator::chain`\n    = note: the full name for the type has been written to '/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672.long-type-9008710336047855841.txt'\n    = note: consider using `--verbose` to print the full type name to the console\nhelp: consider adjusting the signature so it does not borrow its argument\n    |\n741 - fn parameter_kind<'cx, F: SourceFacts<'cx>>(parameter: &GenericParameter<'cx, F>) -> BoundKind {\n741 + fn parameter_kind<'cx, F: SourceFacts<'cx>>(parameter: GenericParameter<'cx, F>) -> BoundKind {\n    |\n\n",
+            "error[E0599]: no method named `def_id` found for struct `rustc_type_ir::TraitRef<I>` in the current scope\n   --> crates/lrr/src/traits/upstream/source_terms.rs:290:42\n    |\n290 |                     assert_eq!(reference.def_id(), definition);\n    |                                          ^^^^^^-- help: remove the arguments\n    |                                          |\n    |                                          field, not a method\n\n",
+            "error[E0308]: mismatched types\n   --> crates/lrr/src/traits/upstream/source_terms.rs:294:43\n    |\n294 |                         let bad = cx.list([Arg::Region(cx.intern_region(RegionKind::ReStatic))]);\n    |                                      ---- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Vec<_>`, found `[Arg<'_, PreparedProvider<'_>>; 1]`\n    |                                      |\n    |                                      arguments to this method are incorrect\n    |\n    = note: expected struct `Vec<_>`\n                found array `[model::Arg<'_, PreparedProvider<'_>>; 1]`\nnote: method defined here\n   --> crates/lrr/src/traits/upstream/model.rs:67:8\n    |\n 67 |     fn list(self, values: Vec<T>) -> List<'cx, T>;\n    |        ^^^^       ------\nhelp: try using a conversion method\n    |\n294 |                         let bad = cx.list([Arg::Region(cx.intern_region(RegionKind::ReStatic))].to_vec());\n    |                                                                                                +++++++++\n\n",
+            "error[E0631]: type mismatch in function arguments\n   --> crates/lrr/src/traits/upstream/prepared.rs:464:133\n    |\n464 |                     || !generics.argument_kinds().is_some_and(|source| source.iter().copied().eq(row.generics.parameters.iter().map(parameter_kind))) {\n    |                                                                                                                                 --- ^^^^^^^^^^^^^^ expected due to this\n    |                                                                                                                                 |\n    |                                                                                                                                 required by a bound introduced by this call\n...\n741 | fn parameter_kind<'cx, F: SourceFacts<'cx>>(parameter: &GenericParameter<'cx, F>) -> BoundKind {\n    | ---------------------------------------------------------------------------------------------- found signature defined here\n    |\n    = note: expected function signature `fn(GenericParameter<'cx, PreparedProvider<'cx>>) -> _`\n               found function signature `fn(&GenericParameter<'_, _>) -> _`\nnote: required by a bound in `std::iter::Iterator::map`\n   --> /Users/avi/.rustup/toolchains/1.99.0-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/iter/traits/iterator.rs:834:12\n    |\n831 |     fn map<B, F>(self, f: F) -> Map<Self, F>\n    |        --- required by a bound in this associated function\n...\n834 |         F: FnMut(Self::Item) -> B,\n    |            ^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Iterator::map`\nhelp: consider wrapping the function in a closure\n    |\n464 |                     || !generics.argument_kinds().is_some_and(|source| source.iter().copied().eq(row.generics.parameters.iter().map(|parameter: model::GenericParameter<'cx, PreparedProvider<'cx>>| parameter_kind(&parameter)))) {\n    |                                                                                                                                     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++               ++++++++++++\nhelp: consider adjusting the signature so it does not borrow its argument\n    |\n741 - fn parameter_kind<'cx, F: SourceFacts<'cx>>(parameter: &GenericParameter<'cx, F>) -> BoundKind {\n741 + fn parameter_kind<'cx, F: SourceFacts<'cx>>(parameter: GenericParameter<'cx, F>) -> BoundKind {\n    |\n\n",
+            "error[E0631]: type mismatch in function arguments\n   --> crates/lrr/src/traits/upstream/prepared.rs:464:72\n    |\n464 |                     || !generics.argument_kinds().is_some_and(|source| source.iter().copied().eq(row.generics.parameters.iter().map(parameter_kind))) {\n    |                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected due to this\n...\n741 | fn parameter_kind<'cx, F: SourceFacts<'cx>>(parameter: &GenericParameter<'cx, F>) -> BoundKind {\n    | ---------------------------------------------------------------------------------------------- found signature defined here\n    |\n    = note: expected function signature `fn(GenericParameter<'cx, PreparedProvider<'cx>>) -> _`\n               found function signature `fn(&GenericParameter<'_, _>) -> _`\n    = note: required for `Map<Copied<Iter<'_, GenericParameter<'cx, PreparedProvider<'cx>>>>, _>` to implement `std::iter::Iterator`\n    = note: the full name for the type has been written to '/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672.long-type-8522497959787880777.txt'\n    = note: consider using `--verbose` to print the full type name to the console\nhelp: consider adjusting the signature so it does not borrow its argument\n    |\n741 - fn parameter_kind<'cx, F: SourceFacts<'cx>>(parameter: &GenericParameter<'cx, F>) -> BoundKind {\n741 + fn parameter_kind<'cx, F: SourceFacts<'cx>>(parameter: GenericParameter<'cx, F>) -> BoundKind {\n    |\n\n"
+          ]
+        }
+      }
+    },
+    "325": {
+      "scope": "Library build succeeds after mechanical fixes. Source-only; no controls run on this cohort.",
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T18:13:33.890386+00:00",
+          "head": "e5d461c4302a69b92783bb86acc8e8451efdd99c",
+          "file_count": 8497,
+          "source_sha256": "491e8475a682475de0d5f4d7aa0312889936bd0ca11e120e93ac4d823663511e",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T18:14:34.486640+00:00",
+          "head": "e5d461c4302a69b92783bb86acc8e8451efdd99c",
+          "file_count": 8497,
+          "source_sha256": "491e8475a682475de0d5f4d7aa0312889936bd0ca11e120e93ac4d823663511e",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "53343bc106ba9d28f466fcf0452b4820764d38f33a0eac32685a3b910f194d64"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 66697,
+          "exit": 0,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": true
+          },
+          "messages_sha256": "6797f16b2266965a5975e877d18d45421d32fe59f1a0151510e5748e242c65cd",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 36.11s\n",
+          "errors": []
+        }
+      }
+    },
+    "326": {
+      "scope": "Both builds succeed;7/8controls pass. Positive actual TraitRef construction fails on unchanged local PartialEq impl because source projection_trait omits real Rhs=Self default. Positive references are outside catch_unwind; no false pass. Earlier two source roots construct genuine guarded references. No runtime gain.",
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T18:15:08.395994+00:00",
+          "head": "e5d461c4302a69b92783bb86acc8e8451efdd99c",
+          "file_count": 8497,
+          "source_sha256": "186aa3645b3e1c9cdb3e8fbbf8e5d3e6ece0dfde7383a45abb109a5c9a18f4e9",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T18:15:43.016859+00:00",
+          "head": "e5d461c4302a69b92783bb86acc8e8451efdd99c",
+          "file_count": 8497,
+          "source_sha256": "186aa3645b3e1c9cdb3e8fbbf8e5d3e6ece0dfde7383a45abb109a5c9a18f4e9",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "894a3db601a9900f505882138df5e45a23c84addd9f79a012e71697e9bca8193"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T18:18:30.851037+00:00",
+          "head": "e5d461c4302a69b92783bb86acc8e8451efdd99c",
+          "file_count": 8497,
+          "source_sha256": "186aa3645b3e1c9cdb3e8fbbf8e5d3e6ece0dfde7383a45abb109a5c9a18f4e9",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "894a3db601a9900f505882138df5e45a23c84addd9f79a012e71697e9bca8193"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 14168,
+          "exit": 0,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": true
+          },
+          "messages_sha256": "2029c0d233732edc12ee4e8f1d9e4f0a54332ebfdc9f3c64bf49a9d0677ab3c4",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.48s\n",
+          "errors": []
+        },
+        "cli": {
+          "session": 43812,
+          "exit": 0,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": true
+          },
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 28.38s\n",
+          "messages_sha256": "b28f1ae005f1176de384d0840776a95d5639cb3ccd36fa7013e0dd4731da8e09",
+          "inputs": {
+            "schema": "lrr/validation-inputs/v2",
+            "time_utc": "2026-10-19T18:20:20.745225+00:00",
+            "head": "e5d461c4302a69b92783bb86acc8e8451efdd99c",
+            "file_count": 8497,
+            "source_sha256": "186aa3645b3e1c9cdb3e8fbbf8e5d3e6ece0dfde7383a45abb109a5c9a18f4e9",
+            "source_matches_before": true,
+            "head_matches_before": true,
+            "binaries": {
+              "cli": {
+                "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+                "sha256": "f6358ec9d79b0b24677e2d07c657fc67430183697f2846fb2c2d85f9068e7696"
+              }
+            }
+          }
+        }
+      },
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_root_solver_settings_use_source_limits_features_and_observed_cfg_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_root_solver_settings_use_source_limits_features_and_observed_cfg_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 5.752,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 101,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": false,
+          "seconds": 8.128,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_unsafe_function_alias_requires_full_source_signature_before_shared_ir",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_unsafe_function_alias_requires_full_source_signature_before_shared_ir",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 9.964,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::root_solver_configuration_uses_common_cfg_attr_without_static_feature_validation",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::root_solver_configuration_uses_common_cfg_attr_without_static_feature_validation",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.909,
+          "log": "control-3.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_whole_catalog_trait_membership_is_complete_without_preparing_impl_types",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_whole_catalog_trait_membership_is_complete_without_preparing_impl_types",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 3.17,
+          "log": "control-4.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 30.742,
+          "log": "control-5.log"
+        },
+        {
+          "selector": "cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.966,
+          "log": "control-6.log"
+        },
+        {
+          "selector": "cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 74.115,
+          "log": "control-7.log"
+        }
+      ],
+      "control_terminal": {
+        "session": 10203,
+        "exit": 1
+      },
+      "control_logs": {
+        "control-0.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_root_solver_settings_use_source_limits_features_and_observed_cfg_all_editions ... actual root settings tests/ui/traits/safety-ok.rs,edition2015:limit128,generic_const_exprsfalse; source-only\nactual root settings tests/ui/traits/method-on-deeply-nested-struct-perf.rs,edition2015:limit1024,generic_const_exprsfalse; source-only\nactual root settings tests/ui/const-generics/ensure_is_evaluatable.rs,edition2015:limit128,generic_const_exprstrue; source-only\nactual root settings tests/ui/traits/safety-ok.rs,edition2018:limit128,generic_const_exprsfalse; source-only\nactual root settings tests/ui/traits/method-on-deeply-nested-struct-perf.rs,edition2018:limit1024,generic_const_exprsfalse; source-only\nactual root settings tests/ui/const-generics/ensure_is_evaluatable.rs,edition2018:limit128,generic_const_exprstrue; source-only\nactual root settings tests/ui/traits/safety-ok.rs,edition2021:limit128,generic_const_exprsfalse; source-only\nactual root settings tests/ui/traits/method-on-deeply-nested-struct-perf.rs,edition2021:limit1024,generic_const_exprsfalse; source-only\nactual root settings tests/ui/const-generics/ensure_is_evaluatable.rs,edition2021:limit128,generic_const_exprstrue; source-only\nactual root settings tests/ui/traits/safety-ok.rs,edition2024:limit128,generic_const_exprsfalse; source-only\nactual root settings tests/ui/traits/method-on-deeply-nested-struct-perf.rs,edition2024:limit1024,generic_const_exprsfalse; source-only\nactual root settings tests/ui/const-generics/ensure_is_evaluatable.rs,edition2024:limit128,generic_const_exprstrue; source-only\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 5.37s\n\n",
+        "control-1.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions ... \nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18142319) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nactual guarded upstream TraitRefs:1; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/traits/safety-ok.rs,edition2015,origin0: 1source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18142319) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18142319) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18142319) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/methods/method-self-arg-trait.rs,edition2015,origin0: 4source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18142319) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18142319) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nFAILED\n\nfailures:\n\nfailures:\n    cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 7.70s\n\n",
+        "control-2.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_unsafe_function_alias_requires_full_source_signature_before_shared_ir ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 9.53s\n\n",
+        "control-3.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::root_solver_configuration_uses_common_cfg_attr_without_static_feature_validation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 0.52s\n\n",
+        "control-4.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_whole_catalog_trait_membership_is_complete_without_preparing_impl_types ... complete raw catalog:997; pending trait memberships:0; no typed impl preparation\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 2.76s\n\n",
+        "control-5.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation ... actual impl head tests/ui/traits/safety-ok.rs edition2015 Digest(aedc0491b815ff7fd54a9a8dce804a5f1e24f68e29feb21ce609666cee52fcc0): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(25bf87ba6fd98877bcd5de90794e66e3c83a550ba630d5d4435381cea8d081af), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(910d60c9d6b6f06a00c2afdd5bb560ffd8f619baa3a4be53acdadb980d18f4b9): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=Some(TraitRef { trait_key: Digest(41f9bcc8ead045479106be6f24172865c01c617cd672aca8218bedbbdbecd2d1), self_ty: Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(c6bf06045b0a05fe25ef9fb51023a9f50eedac16e64c3132c3dc28733bb1b4fc): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(e0c81ff174d5f06717df181f040f02a1e2b1128174eece81aec5e4e6f10f415c): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=Some(TraitRef { trait_key: Digest(2d086e842b7e995b306a4c31f6d2cf52bfad7e085b345bbd1870b9eca092760b), self_ty: Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(ef2f1821235401956b903e6f54ffa5ad6f661d7ff052f499a1ca698c75a63e5f): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=Some(TraitRef { trait_key: Digest(d1cbccf973e385bbcbe0f6699b377439493c7a649e78ad2b788591fd9c2fe39e), self_ty: Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(1e1a5ad456502e65db8e78b846cafb63a94d7c7b20473931a1c54de43ffe2778): Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []); trait=Some(TraitRef { trait_key: Digest(d1cbccf973e385bbcbe0f6699b377439493c7a649e78ad2b788591fd9c2fe39e), self_ty: Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(22f5913eec678d08ec9e03b602f6b5a2abf746742cfcb47847714dd2097b3959): Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []); trait=Some(TraitRef { trait_key: Digest(60e416ea0b916330197fc137be5d5c4077e0afc174e8536ea7ccceb4815fddef), self_ty: Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(ac55fb5c18069a8c02a6a503b6506c1409d24028d63d36a643d077bd3cebd166): Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []); trait=Some(TraitRef { trait_key: Digest(2d086e842b7e995b306a4c31f6d2cf52bfad7e085b345bbd1870b9eca092760b), self_ty: Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2018 Digest(44637c632ec24d5b4a28aa03681d864ffc275e524b153e6a4dbc0e9ebc290d76): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(d82ffa1d5b8cb0e0fed278cfa4e3cd3f0c30d611464a7dd11fa39114d6dd3a02), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(219144d90677f87498cd356888fe05ea9bf64c747fc98293df2daa27c07f9257): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=Some(TraitRef { trait_key: Digest(e73f751ac445fa42ebdfc06316649b397258b276112b3818df4a17a30879110a), self_ty: Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(39fb2661ffdb427c3b9d27101aa7e73e2fb73bb714b99c3097f4532356f70bb1): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(60da2f672ab44b2a880d437037f4b6b70d4e500dbd5e9f6ceb7940b23fa99a82): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=Some(TraitRef { trait_key: Digest(b930ecb553939baf6214ea1ebdde0257f49f81d48adc0e64e26f0cccdef541c6), self_ty: Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(77a852109046e37f624c0938bdf16d3fa600663d90481e8911db3542a6b7327a): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=Some(TraitRef { trait_key: Digest(45189a2b53773bf272e568a794f6af16c9c973910f173c7be79c81c7abf31d19), self_ty: Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(463af1f5ae76b3b494c0e426a539df4894f285ee7555f36f21277fe9741545bd): Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []); trait=Some(TraitRef { trait_key: Digest(e73f751ac445fa42ebdfc06316649b397258b276112b3818df4a17a30879110a), self_ty: Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(7436285e284ec5f71cae2f13a7c398f68dd22a69b07716b2971051e993068f30): Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []); trait=Some(TraitRef { trait_key: Digest(4d92e154b322b126ae6fc4b47f435b3f7f322949a4183aa52c48a15bd6f04261), self_ty: Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(753ada7826a936da32f19c082e2b91649e52ac1b6cf095f75560039162f1833c): Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []); trait=Some(TraitRef { trait_key: Digest(b930ecb553939baf6214ea1ebdde0257f49f81d48adc0e64e26f0cccdef541c6), self_ty: Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2021 Digest(b49e8d0bf0d0f7f2aad25ac76ef37918282e5211ea77965b8c28abc02bc69cd5): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(0b73a4e26b5d482915cf31d0a203a540b4c90f59b36c2c48c987279f96d380b7), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(438e9abe8548e2ffa1b6710d5912ec4ef085dbe91f33ce1ddaac5c042d2115a4): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(49401090e8b6c4c3e8f3f95cce8740b214073537ac0aa81a42ccd549a331da95): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=Some(TraitRef { trait_key: Digest(b64484eff11d3334b50208f6ee4ee5bc57b9a5d52f13de3eccae31d3d09ed0a3), self_ty: Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(a3feee0addc63536237d5dc6bf499fa0746772641cb9279102bc8d141c84d7ce): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=Some(TraitRef { trait_key: Digest(2ee60a9a28493ad81365ce29765a9fe18a441325e0f5e6461f430c1e0c266253), self_ty: Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(ded1fbced0f6a56302453ce6c062b9409214074146090159ed7a646094498d49): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=Some(TraitRef { trait_key: Digest(95c60f6d354f1ab3479680bd4a420128e446fb4ed0dda45191b5671f098cb530), self_ty: Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(c4835278b8cf577a3ac183bd56401be5de0340ef183e38fd3103e6572b29bd59): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(2c81936fa649440b87fb6de1ee0a513a0325e3a8949b51aee3b9ef0fe67965e9), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(e3480015921937d8ea89fc92f6fcc797164da14a86dde60634cb892a4f412ae1): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(95c60f6d354f1ab3479680bd4a420128e446fb4ed0dda45191b5671f098cb530), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(edfd94359449de9f7a6e0f43ba5578fa4d621801a82cfb0e3bc01375fb45e71f): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(2ee60a9a28493ad81365ce29765a9fe18a441325e0f5e6461f430c1e0c266253), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2024 Digest(9988441e530572be0e4f739e5a5480241a74e0efd0502713e14ba6d2e9a30aa4): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(5336e42918d2ff549a56a82b250f8522f5cb5e88a18d5620e52afc796bf3995b), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(2bc53f90fc61a0d8b8ee004f26ff894c9be823dfd643a865a0a76afc58f70173): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(3208c007befcc0b6133bd6bc52156fd9faa6b927079c67697835530954d09f41): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(a0f1f3e950d7ee02b500fc53dbb8ac56b8db2ffb9839e44709da3e40069bb479), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(37b54b88015901fb8b5dd17546b0ac57515b50913717d584f6e3f44c972fafad): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(cd9baa3013eb432a345baa0b7d784cd590a1afe63377f4acd5af23922e3766b6), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(64283107c265ecdfbfeb9ee941971f2018a34c9b9a7ac8683b2faac6b865c9a9): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(cee6cba51c6a2817c9fde9399a12aaf849b5e7634318e6cee5609a859d6b304a), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(055dbbe033151382d34d943f5c35a05f7e169118262bae2ff1fc084871e9cff7): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(cee6cba51c6a2817c9fde9399a12aaf849b5e7634318e6cee5609a859d6b304a), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(87734a595a27b181505ee51270decd547a1b9407ab98d99fdfebd3577d76a58a): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(da62cd5520c48b49ccbd69d7d63a86cae69ef68846a23fadd909cd43ff5e37d7), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(be4a1e7b395eecdf34e8708b154e79b1694347544ea6b83304a8b0f04489ef0d): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(cd9baa3013eb432a345baa0b7d784cd590a1afe63377f4acd5af23922e3766b6), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [] }); no guest execution\nactual catalog head Types: 32/32; pending=[]; no solver or guest execution\nactual generated declaration Type occurrence controls: 16; no guest execution\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 30.31s\n\n",
+        "control-6.log": "\nrunning 1 test\ntest cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions ... unchanged annotated local impl main edition2015: complete through ordinary interpreter\nunchanged annotated local impl main edition2018: complete through ordinary interpreter\nunchanged annotated local impl main edition2021: complete through ordinary interpreter\nunchanged annotated local impl main edition2024: complete through ordinary interpreter\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 0.57s\n\n",
+        "control-7.log": "\nrunning 1 test\ntest cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 73.70s\n\n"
+      }
+    },
+    "327": {
+      "scope": "Shared trait default completion uses retained AST and ordinary Type walk, real subject and explicit earlier Type bindings. Actual guarded TraitRef construction succeeds on the final source; full solver facts/delegate/root evaluation remain unimplemented.",
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T18:22:05.757949+00:00",
+          "head": "e5d461c4302a69b92783bb86acc8e8451efdd99c",
+          "file_count": 8499,
+          "source_sha256": "8c9cb91c847339e32c9050910d6f96e47e865bcb11745d98d6e3960097bad0be",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T18:23:11.173102+00:00",
+          "head": "e5d461c4302a69b92783bb86acc8e8451efdd99c",
+          "file_count": 8499,
+          "source_sha256": "8c9cb91c847339e32c9050910d6f96e47e865bcb11745d98d6e3960097bad0be",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "e7d51fe03f5be1a8453e1180cbd8955303ffecfaeb09a22420002e29d55aadde"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T18:29:31.560025+00:00",
+          "head": "e5d461c4302a69b92783bb86acc8e8451efdd99c",
+          "file_count": 8499,
+          "source_sha256": "8c9cb91c847339e32c9050910d6f96e47e865bcb11745d98d6e3960097bad0be",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "e7d51fe03f5be1a8453e1180cbd8955303ffecfaeb09a22420002e29d55aadde"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 14882,
+          "exit": 0,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": true
+          },
+          "messages_sha256": "c5a9083849e8b69b3217a82b5dbf81775f96e11c80a32c23d42aa8d76a2f6704",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.19s\n",
+          "errors": []
+        },
+        "cli": {
+          "session": 45274,
+          "exit": 0,
+          "cargo_terminal": {
+            "reason": "build-finished",
+            "success": true
+          },
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.48s\n",
+          "messages_sha256": "722c709fc2539cdcebaf640ce10da918845604798abd6b5c6864c70e55602b51",
+          "inputs": {
+            "schema": "lrr/validation-inputs/v2",
+            "time_utc": "2026-10-19T18:29:32.027490+00:00",
+            "head": "e5d461c4302a69b92783bb86acc8e8451efdd99c",
+            "file_count": 8499,
+            "source_sha256": "8c9cb91c847339e32c9050910d6f96e47e865bcb11745d98d6e3960097bad0be",
+            "source_matches_before": true,
+            "head_matches_before": true,
+            "binaries": {
+              "cli": {
+                "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+                "sha256": "70355011096e2d65c5394fb4d1da368f05853fdeb08973e2a0b0b32f650ec343"
+              }
+            },
+            "scope": "Built only; no separate CLI runtime probe"
+          }
+        }
+      },
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_root_solver_settings_use_source_limits_features_and_observed_cfg_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_root_solver_settings_use_source_limits_features_and_observed_cfg_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 5.788,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 119.379,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_unsafe_function_alias_requires_full_source_signature_before_shared_ir",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_unsafe_function_alias_requires_full_source_signature_before_shared_ir",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 9.535,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::root_solver_configuration_uses_common_cfg_attr_without_static_feature_validation",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::root_solver_configuration_uses_common_cfg_attr_without_static_feature_validation",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.856,
+          "log": "control-3.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_whole_catalog_trait_membership_is_complete_without_preparing_impl_types",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_whole_catalog_trait_membership_is_complete_without_preparing_impl_types",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 3.096,
+          "log": "control-4.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 30.062,
+          "log": "control-5.log"
+        },
+        {
+          "selector": "cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.906,
+          "log": "control-6.log"
+        },
+        {
+          "selector": "cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 66.0,
+          "log": "control-7.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_projection_impl_header_queries_retain_every_where_predicate",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_projection_impl_header_queries_retain_every_where_predicate",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 10.395,
+          "log": "control-8.log"
+        },
+        {
+          "selector": "cli::crate_graph::generic_boundary_tests::shorthand_projection_retains_the_declaring_bounds_type_arguments",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::crate_graph::generic_boundary_tests::shorthand_projection_retains_the_declaring_bounds_type_arguments",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 22.68,
+          "log": "control-9.log"
+        },
+        {
+          "selector": "cli::crate_graph::generic_boundary_tests::cold_associated_type_goal_retains_selected_source_without_callee_preparation",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::crate_graph::generic_boundary_tests::cold_associated_type_goal_retains_selected_source_without_callee_preparation",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 57.366,
+          "log": "control-10.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::upstream_parameter_order_preserves_real_impl_trait_and_method_identities",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::upstream_parameter_order_preserves_real_impl_trait_and_method_identities",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.963,
+          "log": "control-11.log"
+        }
+      ],
+      "control_terminal": {
+        "session": 36380,
+        "exit": 0
+      },
+      "control_logs": {
+        "control-0.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_root_solver_settings_use_source_limits_features_and_observed_cfg_all_editions ... actual root settings tests/ui/traits/safety-ok.rs,edition2015:limit128,generic_const_exprsfalse; source-only\nactual root settings tests/ui/traits/method-on-deeply-nested-struct-perf.rs,edition2015:limit1024,generic_const_exprsfalse; source-only\nactual root settings tests/ui/const-generics/ensure_is_evaluatable.rs,edition2015:limit128,generic_const_exprstrue; source-only\nactual root settings tests/ui/traits/safety-ok.rs,edition2018:limit128,generic_const_exprsfalse; source-only\nactual root settings tests/ui/traits/method-on-deeply-nested-struct-perf.rs,edition2018:limit1024,generic_const_exprsfalse; source-only\nactual root settings tests/ui/const-generics/ensure_is_evaluatable.rs,edition2018:limit128,generic_const_exprstrue; source-only\nactual root settings tests/ui/traits/safety-ok.rs,edition2021:limit128,generic_const_exprsfalse; source-only\nactual root settings tests/ui/traits/method-on-deeply-nested-struct-perf.rs,edition2021:limit1024,generic_const_exprsfalse; source-only\nactual root settings tests/ui/const-generics/ensure_is_evaluatable.rs,edition2021:limit128,generic_const_exprstrue; source-only\nactual root settings tests/ui/traits/safety-ok.rs,edition2024:limit128,generic_const_exprsfalse; source-only\nactual root settings tests/ui/traits/method-on-deeply-nested-struct-perf.rs,edition2024:limit1024,generic_const_exprsfalse; source-only\nactual root settings tests/ui/const-generics/ensure_is_evaluatable.rs,edition2024:limit128,generic_const_exprstrue; source-only\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 5.37s\n\n",
+        "control-1.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions ... \nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nactual guarded upstream TraitRefs:1; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/traits/safety-ok.rs,edition2015,origin0: 1source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/methods/method-self-arg-trait.rs,edition2015,origin0: 4source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/coherence/coherence-impl-in-fn.rs,edition2015,origin0: 3source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2015,origin0: 3source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2015,origin1: 3source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2015,origin2: 3source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:4; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/traits/multidispatch1.rs,edition2015,origin0: 4source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:4; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/traits/multidispatch1.rs,edition2015,origin1: 4source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:4; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/traits/multidispatch1.rs,edition2015,origin2: 4source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:2; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs,edition2015,origin0: 2source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:2; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs,edition2015,origin1: 2source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:2; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs,edition2015,origin2: 2source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:1; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/traits/safety-ok.rs,edition2018,origin0: 1source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/methods/method-self-arg-trait.rs,edition2018,origin0: 4source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/coherence/coherence-impl-in-fn.rs,edition2018,origin0: 3source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2018,origin0: 3source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2018,origin1: 3source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2018,origin2: 3source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:4; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/traits/multidispatch1.rs,edition2018,origin0: 4source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:4; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/traits/multidispatch1.rs,edition2018,origin1: 4source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:4; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/traits/multidispatch1.rs,edition2018,origin2: 4source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:2; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs,edition2018,origin0: 2source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:2; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs,edition2018,origin1: 2source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:2; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs,edition2018,origin2: 2source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:1; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/traits/safety-ok.rs,edition2021,origin0: 1source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/methods/method-self-arg-trait.rs,edition2021,origin0: 4source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/coherence/coherence-impl-in-fn.rs,edition2021,origin0: 3source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2021,origin0: 3source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2021,origin1: 3source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2021,origin2: 3source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:4; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/traits/multidispatch1.rs,edition2021,origin0: 4source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:4; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/traits/multidispatch1.rs,edition2021,origin1: 4source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:4; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/traits/multidispatch1.rs,edition2021,origin2: 4source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:2; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs,edition2021,origin0: 2source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:2; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs,edition2021,origin1: 2source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:2; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs,edition2021,origin2: 2source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:1; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/traits/safety-ok.rs,edition2024,origin0: 1source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/methods/method-self-arg-trait.rs,edition2024,origin0: 4source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/coherence/coherence-impl-in-fn.rs,edition2024,origin0: 3source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2024,origin0: 3source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2024,origin1: 3source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:3; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/methods/method-two-trait-defer-resolution-2.rs,edition2024,origin2: 3source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:4; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/traits/multidispatch1.rs,edition2024,origin0: 4source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:4; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/traits/multidispatch1.rs,edition2024,origin1: 4source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:4; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/traits/multidispatch1.rs,edition2024,origin2: 4source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:2; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs,edition2024,origin0: 2source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:2; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs,edition2024,origin1: 2source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18160223) panicked at crates/lrr/src/traits/upstream/prepared.rs:825:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:2; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs,edition2024,origin2: 2source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\nactual shared source heads encoded:140; no typed source-fact publication or upstream solving\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 118.96s\n\n",
+        "control-2.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_unsafe_function_alias_requires_full_source_signature_before_shared_ir ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 9.13s\n\n",
+        "control-3.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::root_solver_configuration_uses_common_cfg_attr_without_static_feature_validation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 0.49s\n\n",
+        "control-4.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_whole_catalog_trait_membership_is_complete_without_preparing_impl_types ... complete raw catalog:997; pending trait memberships:0; no typed impl preparation\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 2.73s\n\n",
+        "control-5.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation ... actual impl head tests/ui/traits/safety-ok.rs edition2015 Digest(aedc0491b815ff7fd54a9a8dce804a5f1e24f68e29feb21ce609666cee52fcc0): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(25bf87ba6fd98877bcd5de90794e66e3c83a550ba630d5d4435381cea8d081af), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(910d60c9d6b6f06a00c2afdd5bb560ffd8f619baa3a4be53acdadb980d18f4b9): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=Some(TraitRef { trait_key: Digest(41f9bcc8ead045479106be6f24172865c01c617cd672aca8218bedbbdbecd2d1), self_ty: Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(c6bf06045b0a05fe25ef9fb51023a9f50eedac16e64c3132c3dc28733bb1b4fc): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(e0c81ff174d5f06717df181f040f02a1e2b1128174eece81aec5e4e6f10f415c): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=Some(TraitRef { trait_key: Digest(2d086e842b7e995b306a4c31f6d2cf52bfad7e085b345bbd1870b9eca092760b), self_ty: Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2015 Digest(ef2f1821235401956b903e6f54ffa5ad6f661d7ff052f499a1ca698c75a63e5f): Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []); trait=Some(TraitRef { trait_key: Digest(d1cbccf973e385bbcbe0f6699b377439493c7a649e78ad2b788591fd9c2fe39e), self_ty: Nominal(Digest(d40a612c9edcc371754cd4700ed5884bc9e0537761f0d8303e9358f2d60f7854), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(1e1a5ad456502e65db8e78b846cafb63a94d7c7b20473931a1c54de43ffe2778): Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []); trait=Some(TraitRef { trait_key: Digest(d1cbccf973e385bbcbe0f6699b377439493c7a649e78ad2b788591fd9c2fe39e), self_ty: Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(22f5913eec678d08ec9e03b602f6b5a2abf746742cfcb47847714dd2097b3959): Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []); trait=Some(TraitRef { trait_key: Digest(60e416ea0b916330197fc137be5d5c4077e0afc174e8536ea7ccceb4815fddef), self_ty: Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []), args: [Type(Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []))] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2015 Digest(ac55fb5c18069a8c02a6a503b6506c1409d24028d63d36a643d077bd3cebd166): Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []); trait=Some(TraitRef { trait_key: Digest(2d086e842b7e995b306a4c31f6d2cf52bfad7e085b345bbd1870b9eca092760b), self_ty: Nominal(Digest(1aacb31d9c993d3b3973e57b60a6d2f2516952232591e66c04873ecca741d3bc), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2018 Digest(44637c632ec24d5b4a28aa03681d864ffc275e524b153e6a4dbc0e9ebc290d76): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(d82ffa1d5b8cb0e0fed278cfa4e3cd3f0c30d611464a7dd11fa39114d6dd3a02), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(219144d90677f87498cd356888fe05ea9bf64c747fc98293df2daa27c07f9257): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=Some(TraitRef { trait_key: Digest(e73f751ac445fa42ebdfc06316649b397258b276112b3818df4a17a30879110a), self_ty: Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(39fb2661ffdb427c3b9d27101aa7e73e2fb73bb714b99c3097f4532356f70bb1): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(60da2f672ab44b2a880d437037f4b6b70d4e500dbd5e9f6ceb7940b23fa99a82): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=Some(TraitRef { trait_key: Digest(b930ecb553939baf6214ea1ebdde0257f49f81d48adc0e64e26f0cccdef541c6), self_ty: Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2018 Digest(77a852109046e37f624c0938bdf16d3fa600663d90481e8911db3542a6b7327a): Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []); trait=Some(TraitRef { trait_key: Digest(45189a2b53773bf272e568a794f6af16c9c973910f173c7be79c81c7abf31d19), self_ty: Nominal(Digest(c91b3947678805adce462aa07abbf3bb8978881820d12cc03bd3ed8966089b2d), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(463af1f5ae76b3b494c0e426a539df4894f285ee7555f36f21277fe9741545bd): Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []); trait=Some(TraitRef { trait_key: Digest(e73f751ac445fa42ebdfc06316649b397258b276112b3818df4a17a30879110a), self_ty: Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(7436285e284ec5f71cae2f13a7c398f68dd22a69b07716b2971051e993068f30): Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []); trait=Some(TraitRef { trait_key: Digest(4d92e154b322b126ae6fc4b47f435b3f7f322949a4183aa52c48a15bd6f04261), self_ty: Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []), args: [Type(Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []))] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2018 Digest(753ada7826a936da32f19c082e2b91649e52ac1b6cf095f75560039162f1833c): Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []); trait=Some(TraitRef { trait_key: Digest(b930ecb553939baf6214ea1ebdde0257f49f81d48adc0e64e26f0cccdef541c6), self_ty: Nominal(Digest(4997e50b28080ccec2120639b77f32be32bca2d22f25a7be6ac0181c02608faf), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2021 Digest(b49e8d0bf0d0f7f2aad25ac76ef37918282e5211ea77965b8c28abc02bc69cd5): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(0b73a4e26b5d482915cf31d0a203a540b4c90f59b36c2c48c987279f96d380b7), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(438e9abe8548e2ffa1b6710d5912ec4ef085dbe91f33ce1ddaac5c042d2115a4): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(49401090e8b6c4c3e8f3f95cce8740b214073537ac0aa81a42ccd549a331da95): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=Some(TraitRef { trait_key: Digest(b64484eff11d3334b50208f6ee4ee5bc57b9a5d52f13de3eccae31d3d09ed0a3), self_ty: Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(a3feee0addc63536237d5dc6bf499fa0746772641cb9279102bc8d141c84d7ce): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=Some(TraitRef { trait_key: Digest(2ee60a9a28493ad81365ce29765a9fe18a441325e0f5e6461f430c1e0c266253), self_ty: Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2021 Digest(ded1fbced0f6a56302453ce6c062b9409214074146090159ed7a646094498d49): Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []); trait=Some(TraitRef { trait_key: Digest(95c60f6d354f1ab3479680bd4a420128e446fb4ed0dda45191b5671f098cb530), self_ty: Nominal(Digest(9de4d408909157e313e9ae26422462b9bebc27c389d7a4abbcab30660b256e72), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(c4835278b8cf577a3ac183bd56401be5de0340ef183e38fd3103e6572b29bd59): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(2c81936fa649440b87fb6de1ee0a513a0325e3a8949b51aee3b9ef0fe67965e9), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [Type(Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []))] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(e3480015921937d8ea89fc92f6fcc797164da14a86dde60634cb892a4f412ae1): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(95c60f6d354f1ab3479680bd4a420128e446fb4ed0dda45191b5671f098cb530), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2021 Digest(edfd94359449de9f7a6e0f43ba5578fa4d621801a82cfb0e3bc01375fb45e71f): Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []); trait=Some(TraitRef { trait_key: Digest(2ee60a9a28493ad81365ce29765a9fe18a441325e0f5e6461f430c1e0c266253), self_ty: Nominal(Digest(97bfa1148cbd13b89f90ab8a518b590a5bda50984ed969fc6084b6e5b6248450), []), args: [] }); no guest execution\nactual impl head tests/ui/traits/safety-ok.rs edition2024 Digest(9988441e530572be0e4f739e5a5480241a74e0efd0502713e14ba6d2e9a30aa4): Primitive(Isize); trait=Some(TraitRef { trait_key: Digest(5336e42918d2ff549a56a82b250f8522f5cb5e88a18d5620e52afc796bf3995b), self_ty: Primitive(Isize), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(2bc53f90fc61a0d8b8ee004f26ff894c9be823dfd643a865a0a76afc58f70173): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=None; no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(3208c007befcc0b6133bd6bc52156fd9faa6b927079c67697835530954d09f41): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(a0f1f3e950d7ee02b500fc53dbb8ac56b8db2ffb9839e44709da3e40069bb479), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(37b54b88015901fb8b5dd17546b0ac57515b50913717d584f6e3f44c972fafad): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(cd9baa3013eb432a345baa0b7d784cd590a1afe63377f4acd5af23922e3766b6), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/methods/method-self-arg-trait.rs edition2024 Digest(64283107c265ecdfbfeb9ee941971f2018a34c9b9a7ac8683b2faac6b865c9a9): Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []); trait=Some(TraitRef { trait_key: Digest(cee6cba51c6a2817c9fde9399a12aaf849b5e7634318e6cee5609a859d6b304a), self_ty: Nominal(Digest(f3f70286384533362a452c585e616591de4013b4e983958e107bfed6806cadb0), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(055dbbe033151382d34d943f5c35a05f7e169118262bae2ff1fc084871e9cff7): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(cee6cba51c6a2817c9fde9399a12aaf849b5e7634318e6cee5609a859d6b304a), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(87734a595a27b181505ee51270decd547a1b9407ab98d99fdfebd3577d76a58a): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(da62cd5520c48b49ccbd69d7d63a86cae69ef68846a23fadd909cd43ff5e37d7), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [Type(Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []))] }); no guest execution\nactual impl head tests/ui/coherence/coherence-impl-in-fn.rs edition2024 Digest(be4a1e7b395eecdf34e8708b154e79b1694347544ea6b83304a8b0f04489ef0d): Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []); trait=Some(TraitRef { trait_key: Digest(cd9baa3013eb432a345baa0b7d784cd590a1afe63377f4acd5af23922e3766b6), self_ty: Nominal(Digest(38de4229dfcc0ddc68bca1b10a1a344024c9b84a95ea6f6736239327a9629904), []), args: [] }); no guest execution\nactual catalog head Types: 32/32; pending=[]; no solver or guest execution\nactual generated declaration Type occurrence controls: 16; no guest execution\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 29.65s\n\n",
+        "control-6.log": "\nrunning 1 test\ntest cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions ... unchanged annotated local impl main edition2015: complete through ordinary interpreter\nunchanged annotated local impl main edition2018: complete through ordinary interpreter\nunchanged annotated local impl main edition2021: complete through ordinary interpreter\nunchanged annotated local impl main edition2024: complete through ordinary interpreter\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 0.53s\n\n",
+        "control-7.log": "\nrunning 1 test\ntest cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 65.59s\n\n",
+        "control-8.log": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_projection_impl_header_queries_retain_every_where_predicate ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 10.01s\n\n",
+        "control-9.log": "\nrunning 1 test\ntest cli::crate_graph::generic_boundary_tests::shorthand_projection_retains_the_declaring_bounds_type_arguments ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 22.27s\n\n",
+        "control-10.log": "\nrunning 1 test\ntest cli::crate_graph::generic_boundary_tests::cold_associated_type_goal_retains_selected_source_without_callee_preparation ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 56.95s\n\n",
+        "control-11.log": "\nrunning 1 test\ntest frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::upstream_parameter_order_preserves_real_impl_trait_and_method_identities ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1757 filtered out; finished in 0.59s\n\n"
+      }
+    }
+  },
+  "new_upstream_witness": {
+    "pin": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "manifest_sha256": "f46079f4d1e79606821e0ee531b52aa934bc0d41de5ae54e4bca6bafa3ec9f66",
+    "files": [
+      {
+        "path": "tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs",
+        "git_blob": "cc93794e8fcdc1ab5642df7811d7d00d1e3a7d68",
+        "sha256": "71a7428b95f223b94eeffc3b4b9b4fe6024e694ff0fa38d350b66a7e6e5357df",
+        "bytes": 751
+      },
+      {
+        "path": "tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.stderr",
+        "git_blob": "3739829455bde8143a188f41696c3222e3aafa7e",
+        "sha256": "d99e9220ae186e1da2cd4e1c9baddded767d34ef7359b85c44707dd80e0a4910",
+        "bytes": 652
+      }
+    ],
+    "case": {
+      "path": "tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    "license": "MIT OR Apache-2.0",
+    "scope": "Unchanged original and expected E0277 diagnostics imported under upstream licenses. Source Type/default/constructor facts only, no original main/rustc/diagnostic/full-fixture pass. Macro/wrapper adaptation removes only crate_type inner attribute outside original; originals unchanged."
+  },
+  "commands": [
+    "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+    "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+    "python3.12 tools/import_rustc_tests.py tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs",
+    "python3.12 tools/validation/source_manifest.py artifacts/validation-current-v327 before",
+    "python3.12 tools/validation/source_manifest.py artifacts/validation-current-v327 after-build --cargo-messages artifacts/validation-current-v327/lib-build.jsonl",
+    "python3.12 tools/validation/run_controls.py artifacts/validation-current-v327 worktracks/05-trait-goal-engine/2026-10-19-source-generic-construction-controls.json",
+    "python3.12 tools/validation/source_manifest.py artifacts/validation-current-v327 after-runtime",
+    "python3.12 worktracks/check.py",
+    "python3.12 tools/spec_consistency_audit.py",
+    "git diff --check"
+  ],
+  "not_established": [
+    "Actual upstream root solving/inference/delegate, complete source/transitive closure or runtime selected-member execution",
+    "Typed generic parameter identity validation/factory, early/late binders, source const Types, ADT/variance/lang-item/ParamEnv/predicate facts",
+    "General const/region/named/default/alias/projection cases not exercised by selected constructor matrix; nominal Type defaults",
+    "Full generated/standard macro/mixed edition/parent/attribute/$crate default matrices",
+    "Per-declaration and transitive fact currentness closure beyond actual tested root/cfg/epoch/catalog guards",
+    "New distinct stock runtime gain, refreshed suite total or compile-fail fixture diagnostic/full-fixture pass",
+    "M019/M020, interpreter correctness/runtime prerequisite, JIT, release, Linux or performance acceptance"
+  ],
+  "document_checks": {
+    "scope": "planning/document/source hygiene only, not runtime acceptance",
+    "session": 69616,
+    "exit": 0,
+    "worktracks_terminal": "Plan integrity: 12 tracks, 60 items, 49 claims; no runtime acceptance claimed.\n",
+    "spec_terminal": "{\n  \"scope\": \"document consistency only\",\n  \"passed\": true,\n  \"errors\": []\n}\n",
+    "initial_planning_conflict_terminal": "LOCAL-049/LOCAL-047: overlapping reserved paths; split claims or reserve a shared interface under one owner\nLOCAL-049/LOCAL-037: overlapping reserved paths; split claims or reserve a shared interface under one owner\nLOCAL-049/LOCAL-047: overlapping reserved paths; split claims or reserve a shared interface under one owner\nLOCAL-049/LOCAL-047: overlapping reserved paths; split claims or reserve a shared interface under one owner\nLOCAL-049/LOCAL-046: overlapping reserved paths; split claims or reserve a shared interface under one owner\n",
+    "resolution": "Removed duplicate exclusive paths under LOCAL-049 and used existing root-owned LOCAL-037/046/047 shared interfaces; no extra agent or ownership transfer",
+    "git_diff_check_exit": 0
+  }
+}

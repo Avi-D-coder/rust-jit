@@ -147,6 +147,7 @@ pub use crate::frontend::constants::query_identity::ConstQueryIdentity as Consta
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum QueryKey {
     TraitDeclaration(Digest),
+    DeclarationGenerics(Digest),
     PreparedBodySyntax(Box<PreparedBodySyntaxKey>),
     ArrayRepeatPlan(crate::source::manifest::PcKey),
     PreparedArrayRepeat(crate::source::manifest::PcKey),
@@ -219,7 +220,7 @@ impl QueryKey {
                     + key.bucket.name.capacity()
             }
             Self::DiscoverySeal(_) | Self::ScopeDeclarationInventory(_)
-            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) | Self::ImplTraitIdentity(_) | Self::ImplTraitCatalog(_) | Self::SolverConfiguration(_) | Self::ImplSourceTypes(_) => 0,
+            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) | Self::DeclarationGenerics(_) | Self::ImplTraitIdentity(_) | Self::ImplTraitCatalog(_) | Self::SolverConfiguration(_) | Self::ImplSourceTypes(_) => 0,
             Self::ExpansionInput(k) | Self::CurrentExpansionInput(k) => {
                 std::mem::size_of_val(k.as_ref()) + crate::expand::record::key_heap_bytes(k)
             }
@@ -277,6 +278,7 @@ impl QueryKey {
             Self::ImplTraitCatalog(_) => "ImplTraitCatalog",
             Self::ImplPredicates(_) => "ImplPredicates",
             Self::TraitDeclaration(_) => "TraitDeclaration",
+            Self::DeclarationGenerics(_) => "DeclarationGenerics",
             Self::AssociatedItemQualifier(_) => "AssociatedItemQualifier",
             Self::AssociatedEquations(_) => "AssociatedEquations",
             Self::NominalMember(_) => "NominalMember",
@@ -337,6 +339,7 @@ impl StableEncode for QueryKey {
             Self::ImplTraitCatalog(key) => { e.u32(66); e.record(key); }
             Self::ImplPredicates(key) => { e.u32(59); e.record(key.as_ref()); }
             Self::TraitDeclaration(key) => { e.u32(60); e.digest(*key); }
+            Self::DeclarationGenerics(key) => { e.u32(69); e.digest(*key); }
             Self::AssociatedItemQualifier(key) => { e.u32(51); e.record(key); }
             Self::AssociatedEquations(key) => {
                 e.u32(50);

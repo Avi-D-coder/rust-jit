@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V317-V323 HELD M020 actual source settings and shared-IR Type construction. New pure SolverConfiguration/ImplSourceTypes queries use actual root attributes/cfg, canonical trait/nominal source receipts and impl parameter ownership. Scoped Context builds real Types and Args without source queries, catalog copies, guessed IDs, dummy callbacks or bypassing upstream generic-layout guards. Final macOS Rust1.99.0 library/CLI builds and8/8focused controls pass:68actual impl heads in24ordinary/user-macro/wrapper source worlds across all4editions;12root settings worlds; common cfg_attr/unknown-feature behavior; unsafe extern alias metadata gap remains explicit all4editions;997raw trait memberships;32head source equivalence; unchanged local main and12Copy origin/edition worlds. Review removed a guessed safe-Rust function constructor: full source ABI/safety/alias metadata remains a FunctionMetadata hold. V322 earlier44head/2control success retains its source; failed compile cohorts and unavailable shell terminals are preserved honestly. Actual typed DefinitionFacts/ParamEnv/ADT/lang-item/transitive closure, compatible inference/delegate, ReadyProvider, actual upstream root evaluation and runtime migration remain unimplemented. Zero new distinct stock runtime gains or refreshed suite total; complete M019/M020/interpreter/JIT and Linux gates remain open.",
+      "scope": "V324-V327 HELD M019/M020 actual source generics and upstream guarded TraitRefs. New pure DeclarationGenerics query uses actual source/header/context, retained pinned parser and existing declaration-generics service. Ordinary TraitHeader and source bridge share its Arc. Private SourceGenericLayouts supplies genuine per-definition namespace/arity metadata before complete typed facts freeze, preserving upstream TraitRef::new_from_args checks and full ReadyProvider holds. V326 exposed a real omitted trait-default bug (PartialEq Rhs=Self); shared projection_trait/resolve_actual_type now prepare missing defaults from actual retained trait TypeParam syntax, own source scope and subject. All seven changed impl/projection/bound/equation/constant/nominal consumers use the common path. Final macOS Rust1.99.0 library/CLI builds and12/12focused controls pass:140actual impl head Types and136actual guarded upstream TraitRefs in48original/user-macro/wrapper edition worlds, including unchanged multiple trait argument lists and user Self/[Self] defaults. Negative constructor namespace, memo/root-cfg/epoch/foreign-catalog/no-body/no-source-query checks pass; existing997membership/32head/source settings/local main/12Copy runtime regressions and projection/cold-body/parameter-order controls pass. New compile-fail library is only a source-type witness, not E0277 diagnostic or runtime/full-fixture acceptance. V324 compile failure, V325 build-only source and V3267/8controls remain attached to their own sources. Full typed source fact/parameter/binder/const/ADT/ParamEnv/lang-item producer, inference/delegate/transitive closure, ReadyProvider/root evaluation and runtime migration remain incomplete. Zero new distinct stock runtime gains or refreshed suite total; M019/M020/interpreter/JIT and Linux gates remain open.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1820,11 +1820,17 @@
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-source-types.md",
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-source-types-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-source-types-probe.json",
-        "crates/lrr/src/syntax/solver_configuration.rs"
+        "crates/lrr/src/syntax/solver_configuration.rs",
+        "crates/lrr/src/frontend/declaration_generics.rs",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-generic-construction.md",
+        "crates/lrr/src/frontend/associated_constant_applications.rs",
+        "worktracks/evidence/2026-10-19-v324-v327-source-generic-construction.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-generic-construction-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-generic-construction-controls.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T18:06:25.762036+00:00",
+      "updated_at": "2026-10-19T18:30:19.506027+00:00",
       "review_after": "2026-10-20T08:52:46.617857+00:00",
       "shared_interfaces": [
         {
@@ -1839,7 +1845,7 @@
             "crates/lrr/src/db/key.rs",
             "crates/lrr/src/db/value.rs"
           ],
-          "scope": "Same implementing owner uses the existing reservation for the V281 catalog/header Type transport slice; no parallel owner or transfer."
+          "scope": "Same solo /root uses the existing reservation for actual source generic metadata and common trait default arguments; one path owner, no concurrent agent or transfer."
         },
         {
           "claim": "LOCAL-044",
@@ -1865,9 +1871,10 @@
             "crates/lrr/src/expand/source_declarative/assembly_seed.rs",
             "crates/lrr/src/frontend/source_body_context.rs",
             "crates/lrr/src/cli/preentry_loader.rs",
-            "crates/lrr/src/service/expansion.rs"
+            "crates/lrr/src/service/expansion.rs",
+            "crates/lrr/src/frontend/declaration_nominal_types.rs"
           ],
-          "scope": "Same implementing owner uses the existing reservation for the V281 catalog/header Type transport slice; no parallel owner or transfer."
+          "scope": "Same solo /root uses the existing reservation for actual source generic metadata and common trait default arguments; one path owner, no concurrent agent or transfer."
         },
         {
           "claim": "LOCAL-047",
@@ -1877,9 +1884,11 @@
             "crates/lrr/src/expand/declaration_fragment.rs",
             "crates/lrr/src/frontend/generated_headers.rs",
             "crates/lrr/src/frontend/impl_head_types.rs",
-            "crates/lrr/src/traits/mod.rs"
+            "crates/lrr/src/traits/mod.rs",
+            "crates/lrr/src/frontend/trait_declarations.rs",
+            "crates/lrr/src/frontend/source_predicates.rs"
           ],
-          "scope": "Same implementing owner uses the existing reservation for the V281 catalog/header Type transport slice; no parallel owner or transfer."
+          "scope": "Same solo /root uses the existing reservation for actual source generic metadata and common trait default arguments; one path owner, no concurrent agent or transfer."
         },
         {
           "claim": "LOCAL-040",
@@ -1902,5 +1911,5 @@
       ]
     }
   ],
-  "updated_at": "2026-10-19T18:06:25.762036+00:00"
+  "updated_at": "2026-10-19T18:30:19.506027+00:00"
 }

@@ -17,7 +17,7 @@ use crate::{
         ast_adapter::{TokenRecipe, tokens},
         outline::{HeaderRecipe, ScopeKey},
         parse::ParseKey,
-        signatures::{DefinitionParameter, GenericKind},
+        signatures::DefinitionParameter,
         spans::SourceRange,
     },
 };
@@ -46,7 +46,7 @@ struct Metadata {
 /// source syntax: these facts do not establish applicability or resolve names.
 #[derive(Debug)]
 pub struct TraitHeader {
-    generics: Vec<DefinitionParameter>,
+    generics: Arc<QueryValue>,
     generic_ranges: Vec<SourceRange>,
     supertraits: Vec<TokenRecipe>,
     supertraits_range: Option<SourceRange>,
@@ -60,7 +60,8 @@ pub struct TraitHeader {
 }
 impl TraitHeader {
     pub fn generics(&self) -> &[DefinitionParameter] {
-        &self.generics
+        let QueryValue::DeclarationGenerics(generics) = self.generics.as_ref() else { unreachable!("retained generic query") };
+        generics.parameters()
     }
     /// Positions in the retained owning parse, preserving token hygiene/edition
     /// for subsequent source-name demands. These are not reconstructed text.
@@ -96,20 +97,10 @@ impl TraitHeader {
     }
 }
 impl StableEncode for TraitHeader {
-    const DOMAIN: &'static str = "lrr/v1/actual-trait-header";
+    const DOMAIN: &'static str = "lrr/v2/actual-trait-header";
     fn encode_fields(&self, e: &mut StableEncoder) {
-        e.sequence(&self.generics, |e, p| {
-            e.u32(p.ordinal);
-            e.u32(match p.kind {
-                GenericKind::Lifetime => 1,
-                GenericKind::Type => 2,
-                GenericKind::Const => 3,
-            });
-            e.string(&p.name);
-            e.sequence(&p.bounds, |e, t| e.record(t));
-            e.sequence(&p.default, |e, t| e.record(t));
-            e.sequence(&p.const_type, |e, t| e.record(t));
-        });
+        let QueryValue::DeclarationGenerics(generics) = self.generics.as_ref() else { unreachable!("retained generic query") };
+        e.record(generics.as_ref());
         e.sequence(&self.supertraits, |e, t| e.record(t));
         e.sequence(&self.predicates, |e, t| e.record(t));
         e.sequence(&self.attributes, |e, a| e.sequence(a, |e, t| e.record(t)));
@@ -147,6 +138,11 @@ impl TraitDeclaration {
     /// None is pending metadata or a non-trait, never an empty source catalog.
     pub fn header(&self) -> Option<&TraitHeader> {
         self.header.as_ref()
+    }
+    pub(crate) fn recipe(&self) -> Option<&HeaderRecipe> {
+        match self.metadata.as_ref()?.header.as_ref() {
+            InputValue::DefinitionHeader(header) => Some(header), _ => unreachable!("checked source header"),
+        }
     }
     pub(crate) fn source(&self) -> Option<&ParseKey> {
         match self.metadata.as_ref()?.source.as_ref() {
@@ -237,10 +233,14 @@ impl TraitDeclaration {
             if tokens(declaration.syntax(), excluded) != header_data.tokens {
                 return QueryPoll::Ready(Err(fault("actual trait declaration header differs")));
             }
-            let (generics, _) = match parsed.declaration_generics(declaration.syntax()) {
-                Ok(value) => value,
-                Err(error) => return QueryPoll::Ready(Err(error)),
+            let generics = match db.fetch(&SyntaxProvider, QueryKey::DeclarationGenerics(definition)) {
+                QueryPoll::Ready(Ok(value)) => value.value,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             };
+            if !matches!(generics.as_ref(), QueryValue::DeclarationGenerics(actual) if actual.layout().is_some()) {
+                return QueryPoll::Ready(Err(fault("actual trait generic metadata absent")));
+            }
             let supertraits = match parsed.type_tokens(
                 declaration
                     .type_bound_list()
@@ -312,7 +312,7 @@ fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-TRAIT-DECLARATION", message.into())
 }
 impl StableEncode for TraitDeclaration {
-    const DOMAIN: &'static str = "lrr/v2/actual-trait-declaration";
+    const DOMAIN: &'static str = "lrr/v3/actual-trait-declaration";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.definition);
         e.u32(match self.result {

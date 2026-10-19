@@ -78,6 +78,15 @@ impl PreparedSolverConfiguration {
     pub(super) fn with_context<R>(&self, db: &mut Database, catalog_input: Arc<InputValue>,
         run: impl for<'cx> FnOnce(super::prepared::Cx<'cx>, PreparedProvider<'cx>) -> R,
     ) -> Result<R, Diagnostic> {
+        self.with_source_context(db, catalog_input, None, run)
+    }
+    pub(super) fn with_source_context<R>(&self, db: &mut Database, catalog_input: Arc<InputValue>,
+        generics: Option<&super::source_generics::SourceGenericLayouts>,
+        run: impl for<'cx> FnOnce(super::prepared::Cx<'cx>, PreparedProvider<'cx>) -> R,
+    ) -> Result<R, Diagnostic> {
+        if generics.is_some_and(|generics| !generics.matches_catalog(&catalog_input)) {
+            return Err(fault("constructor generic metadata belongs to another catalog"));
+        }
         let InputValue::DiscoverySeal(catalog) = catalog_input.as_ref() else {
             return Err(fault("context catalog input variant differs"));
         };
@@ -98,7 +107,7 @@ impl PreparedSolverConfiguration {
         }
         let enabled = self.settings.features.iter().map(|name| Symbol(name.as_str())).collect::<Vec<_>>();
         let settings = Settings {
-            catalog, recursion_limit: self.settings.recursion_limit,
+            catalog, construction_generics: generics, recursion_limit: self.settings.recursion_limit,
             features: FeatureSet {
                 generic_const_exprs: self.settings.features.contains("generic_const_exprs"),
                 gca_const_items: self.settings.features.contains("gca_const_items"),

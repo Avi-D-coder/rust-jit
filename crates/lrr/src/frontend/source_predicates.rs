@@ -204,7 +204,8 @@ pub(crate) fn prepare(
             graph,
             sources,
             declaration,
-            &path
+            &path,
+            &subject
         )) else {
             pending!(TraitName);
         };

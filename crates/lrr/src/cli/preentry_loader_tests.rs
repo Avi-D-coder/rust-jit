@@ -2687,11 +2687,16 @@ fn unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all
     let mut encoded = 0;
     for edition in [2015, 2018, 2021, 2024] {
         for case in ["tests/ui/traits/safety-ok.rs", "tests/ui/methods/method-self-arg-trait.rs",
-            "tests/ui/coherence/coherence-impl-in-fn.rs", "tests/ui/methods/method-two-trait-defer-resolution-2.rs"] {
+            "tests/ui/coherence/coherence-impl-in-fn.rs", "tests/ui/methods/method-two-trait-defer-resolution-2.rs",
+            "tests/ui/traits/multidispatch1.rs",
+            "tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs"] {
             let original = root.join(case);
             let text = std::fs::read_to_string(&original).unwrap();
             let mut paths = vec![original];
-            if case.ends_with("method-two-trait-defer-resolution-2.rs") {
+            if case.ends_with("method-two-trait-defer-resolution-2.rs") || case.ends_with("multidispatch1.rs") || case.ends_with("issue-61631-default-type-param-can-reference-self-in-trait.rs") {
+                // Crate configuration belongs outside an item-emitting macro.
+                // Only the temporary adaptation removes it; original stays unchanged.
+                let text = text.replace("#![crate_type=\"lib\"]", "");
                 paths.push(temporary_source(&format!("shared-types-user-{edition}"),
                     &format!("macro_rules! emit_types {{($($t:tt)*)=>{{$($t)*}}}} emit_types!{{{text}}}")));
                 paths.push(temporary_source(&format!("shared-types-wrap-{edition}"),
@@ -2705,7 +2710,7 @@ fn unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all
             assert!(count > 0); encoded += count;
             assert!(db.trace.events[start..].iter().all(|event| !matches!(event.key,
                 QueryKey::BodyStructure(_) | QueryKey::Thunk(_) | QueryKey::PatternPlan(_) | QueryKey::FunctionSignature(_))));
-            eprintln!("actual shared IR {case},edition{edition},origin{origin}: {count}source heads; intern reuse, canonical/parameter identity and stale/foreign context guards; no solver or guest execution");
+            eprintln!("actual guarded shared IR {case},edition{edition},origin{origin}: {count}source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution");
             }
         }
     }

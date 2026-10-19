@@ -104,6 +104,7 @@ pub struct Bucket {
 #[derive(Debug)]
 pub enum QueryValue {
     TraitDeclaration(Box<crate::frontend::trait_declarations::TraitDeclaration>),
+    DeclarationGenerics(Box<crate::frontend::declaration_generics::DeclarationGenerics>),
     PreparedScopeImplHeaders(Box<crate::traits::index::PreparedScopeImplHeaders>),
     ImplHeaderSyntax(Box<crate::traits::header_syntax::ImplHeaderSyntax>),
     ImplHeadTypes(Box<crate::frontend::impl_head_types::PreparedImplHeadTypes>),
@@ -243,6 +244,7 @@ impl QueryValue {
         if let (Self::ImplSourceTypes(value), QueryKey::ImplSourceTypes(key)) = (self, key) { return value.key() == key.as_ref(); }
         if let (Self::ImplTraitCatalog(value), QueryKey::ImplTraitCatalog(key)) = (self, key) { return value.key() == key; }
         if let (Self::ImplPredicates(value), QueryKey::ImplPredicates(key)) = (self, key) { return value.key() == key.as_ref(); }
+        if let (Self::DeclarationGenerics(value), QueryKey::DeclarationGenerics(key)) = (self, key) { return value.definition() == *key; }
         if let (Self::TraitDeclaration(value), QueryKey::TraitDeclaration(key)) = (self, key) { return value.definition() == *key; }
         if let (Self::ArrayRepeatPlan(value), QueryKey::ArrayRepeatPlan(key)) = (self, key) { return value.key() == key; }
         if let (Self::PreparedArrayRepeat(value), QueryKey::PreparedArrayRepeat(key)) = (self, key) { return value.plan().key() == key; }
@@ -462,6 +464,7 @@ impl QueryValue {
             Self::ImplTraitCatalog(value) => { e.u32(66); e.record(value.as_ref()); }
             Self::ImplPredicates(value) => { e.u32(59); e.record(value.as_ref()); }
             Self::TraitDeclaration(value) => { e.u32(60); e.record(value.as_ref()); }
+            Self::DeclarationGenerics(value) => { e.u32(69); e.record(value.as_ref()); }
             Self::AssociatedItemQualifier(value) => { e.u32(51); e.record(value.as_ref()); }
             Self::AssociatedEquations(value) => {
                 e.u32(50);
@@ -649,7 +652,7 @@ impl QueryValue {
             Self::ConstructorPlan(v) => v.estimated_bytes().unwrap_or(usize::MAX),
             // E006: no new retained-admission memory accounting.
             Self::ArrayRepeatPlan(_) | Self::PreparedArrayRepeat(_) | Self::InitializerOwnerTemplate(_)
-            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) | Self::ImplTraitIdentity(_) | Self::ImplTraitCatalog(_) | Self::SolverConfiguration(_) | Self::ImplSourceTypes(_) => 0,
+            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) | Self::DeclarationGenerics(_) | Self::ImplTraitIdentity(_) | Self::ImplTraitCatalog(_) | Self::SolverConfiguration(_) | Self::ImplSourceTypes(_) => 0,
             Self::AssociatedItemQualifier(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::AssociatedEquations(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::NominalMember(value) => value.metadata_bytes().unwrap_or(usize::MAX),

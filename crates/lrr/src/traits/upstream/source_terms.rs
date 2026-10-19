@@ -27,6 +27,7 @@ pub struct PreparedImplSourceTypes {
     catalog: Arc<InputValue>,
     definitions: BTreeMap<Digest, DefinitionId>,
     receipts: Vec<DefinitionReceipt>,
+    generics: BTreeMap<DefinitionId, Arc<QueryValue>>,
     pending: Option<SourceTypePending>,
 }
 macro_rules! ready {
@@ -37,6 +38,8 @@ macro_rules! ready {
     } };
 }
 impl PreparedImplSourceTypes {
+    pub(super) fn source_generics(&self) -> &BTreeMap<DefinitionId, Arc<QueryValue>> { &self.generics }
+    pub(super) fn catalog_input(&self) -> &Arc<InputValue> { &self.catalog }
     fn catalog(&self) -> &DiscoveryInput {
         let InputValue::DiscoverySeal(catalog) = self.catalog.as_ref() else { unreachable!("captured source catalog") }; catalog
     }
@@ -54,7 +57,7 @@ impl PreparedImplSourceTypes {
         let world = match prepared::catalog_world(catalog) { Ok(world) => world, Err(error) => return QueryPoll::Ready(Err(error)) };
         let local_unit = catalog.impl_catalog.as_ref().expect("checked catalog").root().outline.crate_key;
         let mut plan = Self { key: key.clone(), head, catalog: Arc::clone(&input),
-            definitions: BTreeMap::new(), receipts: Vec::new(), pending: None };
+            definitions: BTreeMap::new(), receipts: Vec::new(), generics: BTreeMap::new(), pending: None };
         let ImplHeadTypeResult::Resolved { self_type, trait_ref } = plan.head().result() else {
             plan.pending = Some(SourceTypePending::HeadTypes); return QueryPoll::Ready(Ok(plan));
         };
@@ -83,7 +86,14 @@ impl PreparedImplSourceTypes {
             };
             let valid = if nominal { match receipt.is_nominal() { Ok(value) => value, Err(error) => return QueryPoll::Ready(Err(error)) } } else { receipt.is_trait() };
             if !valid { plan.pending = Some(SourceTypePending::SourceDefinition); return QueryPoll::Ready(Ok(plan)); }
-            plan.definitions.insert(definition, receipt.definition_id(world, local_unit)); plan.receipts.push(receipt);
+            let generics = ready!(db.fetch(&SyntaxProvider, QueryKey::DeclarationGenerics(definition))).value;
+            let QueryValue::DeclarationGenerics(actual) = generics.as_ref() else { return QueryPoll::Ready(Err(fault("source generic query variant differs"))); };
+            if !receipt.matches_generics(actual) || actual.argument_kinds().is_none() {
+                plan.pending = Some(SourceTypePending::ParameterLayout); return QueryPoll::Ready(Ok(plan));
+            }
+            let id = receipt.definition_id(world, local_unit);
+            plan.generics.insert(id, generics);
+            plan.definitions.insert(definition, id); plan.receipts.push(receipt);
         }
         QueryPoll::Ready(Ok(plan))
     }
@@ -114,6 +124,11 @@ pub(super) struct EncodedImplTypes<'cx> {
 pub(super) struct EncodedTraitArguments<'cx> {
     pub(super) definition: DefinitionId,
     pub(super) args: model::Args<'cx, prepared::PreparedProvider<'cx>>,
+}
+impl<'cx> EncodedTraitArguments<'cx> {
+    pub(super) fn construct(self, cx: Cx<'cx>) -> ty::TraitRef<Cx<'cx>> {
+        ty::TraitRef::new_from_args(cx, self.definition, self.args)
+    }
 }
 struct Encoder<'a, 'cx> { plan: &'a PreparedImplSourceTypes, cx: Cx<'cx>, configuration: &'a PreparedSolverConfiguration }
 impl<'cx> Encoder<'_, 'cx> {
@@ -198,10 +213,11 @@ impl<'cx> Encoder<'_, 'cx> {
 }
 fn fault(message: &str) -> Diagnostic { Diagnostic::new("LRR-E-UPSTREAM-SOLVER-INPUT", message.into()) }
 impl StableEncode for PreparedImplSourceTypes {
-    const DOMAIN: &'static str = "lrr/v1/prepared-impl-source-type-bindings";
+    const DOMAIN: &'static str = "lrr/v2/prepared-impl-source-type-bindings";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key); e.record(self.head()); e.digest(self.catalog().seal.fingerprint());
         e.map(&self.definitions, |e, source, id| { e.digest(*source); e.record(id); });
+        e.map(&self.generics, |e, id, value| { e.record(id); let QueryValue::DeclarationGenerics(generics) = value.as_ref() else { unreachable!() }; e.record(generics.as_ref()); });
         e.option(&self.pending, |e, pending| e.u32(*pending as u32));
     }
 }
@@ -234,9 +250,20 @@ pub(crate) fn check_actual_encodings(db: &mut Database, key: &crate::db::seals::
         let again = match db.fetch(&SyntaxProvider, query) { QueryPoll::Ready(Ok(value)) => value.value, _ => return Err(fault("actual repeated source binding not ready")) };
         assert!(Arc::ptr_eq(&plan, &again)); plans.push(plan);
     }
+    let layouts = super::source_generics::SourceGenericLayouts::from_plans(Arc::clone(&input), &plans)?;
+    for value in &plans {
+        let QueryValue::ImplSourceTypes(plan) = value.as_ref() else { unreachable!() };
+        for (id, actual) in &plan.generics {
+            let again = match db.fetch(&SyntaxProvider, QueryKey::DeclarationGenerics(id.source())) {
+                QueryPoll::Ready(Ok(value)) => value.value, _ => return Err(fault("actual generic memo is unavailable")),
+            };
+            assert!(Arc::ptr_eq(actual, &again), "ordinary trait and constructor clients share the generic query");
+        }
+    }
     let before = db.trace.events.len();
-    let count = configuration.with_context(db, Arc::clone(&input), |cx, _| -> Result<usize, Diagnostic> {
+    let count = configuration.with_source_context(db, Arc::clone(&input), Some(&layouts), |cx, _| -> Result<usize, Diagnostic> {
         let mut count = 0;
+        let mut references = 0;
         for value in &plans {
             let QueryValue::ImplSourceTypes(plan) = value.as_ref() else { return Err(fault("actual source binding variant differs")); };
             assert_eq!(plan.pending(), None);
@@ -258,16 +285,31 @@ pub(crate) fn check_actual_encodings(db: &mut Database, key: &crate::db::seals::
                             _ => panic!("this actual fixture's generic argument shape remains unverified"),
                         }
                     }
+                    let definition = encoded.definition;
+                    let args = encoded.args;
+                    let reference = encoded.construct(cx);
+                    references += 1;
+                    assert_eq!(reference.def_id, definition);
+                    assert_eq!(reference.args, args, "actual upstream TraitRef preserves Self and every source argument");
+                    #[cfg(debug_assertions)]
+                    {
+                        let bad = cx.list(vec![Arg::Region(cx.intern_region(RegionKind::ReStatic))]);
+                        assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(||
+                            ty::TraitRef::new_from_args(cx, definition, bad))).is_err(),
+                            "upstream's actual constructor must still reject a wrong Self namespace");
+                    }
                 }
                 _ => panic!("source trait-argument presence differs"),
             }
             count += 1;
         }
+        eprintln!("actual guarded upstream TraitRefs:{references}; ordinary generic metadata and actual constructor, no ready facts or solver evaluation");
         Ok(count)
     })??;
     assert_eq!(db.trace.events.len(), before, "actual IR encoding performs no source queries");
     let mut foreign = catalog.as_ref().clone(); foreign.sources.clear();
     let foreign = Arc::new(InputValue::DiscoverySeal(Box::new(foreign)));
+    assert!(configuration.with_source_context(db, Arc::clone(&foreign), Some(&layouts), |_, _| ()).is_err());
     assert!(configuration.with_context(db, foreign, |_, _| ()).is_err());
     db.begin_expansion_epoch(key.epoch + 1)?;
     assert!(configuration.with_context(db, input, |_, _| ()).is_err(), "old source world cannot create a fresh live context");
@@ -277,7 +319,11 @@ pub(crate) fn check_actual_encodings(db: &mut Database, key: &crate::db::seals::
 fn check_shape<'cx>(source: &TyTerm, encoded: Ty<'cx, prepared::PreparedProvider<'cx>>) {
     match (source, encoded.kind()) {
         (TyTerm::Primitive(PrimitiveType::Isize), TyKind::Int(IntTy::Isize))
-        | (TyTerm::Primitive(PrimitiveType::I32), TyKind::Int(IntTy::I32)) => {},
+        | (TyTerm::Primitive(PrimitiveType::I32), TyKind::Int(IntTy::I32))
+        | (TyTerm::Primitive(PrimitiveType::Usize), TyKind::Uint(UintTy::Usize))
+        | (TyTerm::Primitive(PrimitiveType::U8), TyKind::Uint(UintTy::U8)) => {},
+        (TyTerm::Primitive(PrimitiveType::Unit), TyKind::Tuple(fields)) => assert!(fields.items().is_empty()),
+        (TyTerm::Slice(source), TyKind::Slice(encoded)) => check_shape(source, encoded),
         (TyTerm::Nominal(definition, args), TyKind::Adt(adt, encoded_args)) => {
             assert_eq!(adt.definition.source(), *definition);
             assert_eq!(args.len(), encoded_args.items().len());

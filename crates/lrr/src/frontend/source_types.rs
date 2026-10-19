@@ -360,6 +360,7 @@ pub(crate) struct WrittenTypeDeclaration<'a> {
     function: Option<&'a FunctionSignature>,
     syntax: Option<&'a ra_ap_syntax::SyntaxNode>,
     impl_self: Option<&'a TyTerm>,
+    type_arguments: Option<&'a std::collections::BTreeMap<crate::traits::term::ParamKey, TyTerm>>,
 }
 impl<'a> WrittenTypeDeclaration<'a> {
     /// A directly written parameter, before alias normalization. Used for
@@ -401,6 +402,7 @@ impl<'a> WrittenTypeDeclaration<'a> {
             function: Some(signature),
             syntax: None,
             impl_self: None,
+            type_arguments: None,
         }
     }
     pub(super) fn function_syntax(
@@ -425,6 +427,7 @@ impl<'a> WrittenTypeDeclaration<'a> {
             function: None,
             syntax: Some(syntax),
             impl_self: None,
+            type_arguments: None,
         }
     }
     pub(crate) fn implementation(
@@ -434,7 +437,10 @@ impl<'a> WrittenTypeDeclaration<'a> {
         impl_self: Option<&'a TyTerm>,
     ) -> Self {
         Self { definition: owner.definition, scope: owner.scope, header: owner.header,
-            generics, predicates: &[], function: None, syntax: Some(syntax), impl_self }
+            generics, predicates: &[], function: None, syntax: Some(syntax), impl_self, type_arguments: None }
+    }
+    fn parameter_type(&self, key: crate::traits::term::ParamKey) -> TyTerm {
+        self.type_arguments.and_then(|arguments| arguments.get(&key)).cloned().unwrap_or(TyTerm::Param(key))
     }
     fn resolve_name(
         &self,
@@ -797,7 +803,7 @@ pub(super) fn resolve_actual_type(
                 QueryPoll::Ready(Ok(match selected {
                     SignatureName::Primitive(primitive) => Some(TyTerm::Primitive(primitive)),
                     SignatureName::Str => Some(TyTerm::Str),
-                    SignatureName::Parameter(key) => Some(TyTerm::Param(key)),
+                    SignatureName::Parameter(key) => Some(signature.parameter_type(key)),
                     SignatureName::Source(found) => {
                         let normalizer = match AliasNormalizer::new(graph, sources) {
                             Ok(normalizer) => normalizer,
@@ -937,21 +943,19 @@ pub(super) fn resolve_actual_type(
             let Some(type_ref) = type_ref else {
                 return QueryPoll::Ready(Ok(None));
             };
+            let self_ty = match walk(db, graph, sources, signature, &type_ref) {
+                QueryPoll::Ready(Ok(Some(ty))) => ty, other => return other,
+            };
             let (trait_key, trait_args) = match trait_ref.and_then(|written| written.path()) {
                 None => (crate::core::digest::Digest([0; 32]), Vec::new()),
-                Some(written) => match projection_trait(db, graph, sources, signature, &written) {
+                Some(written) => match projection_trait(db, graph, sources, signature, &written, &self_ty) {
                     QueryPoll::Ready(Ok(Some(selected))) => selected,
                     QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
                     QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                     QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
                 },
             };
-            return match walk(db, graph, sources, signature, &type_ref) {
-                QueryPoll::Ready(Ok(Some(self_ty))) => {
-                    QueryPoll::Ready(Ok(Some(projection(self_ty, trait_key, trait_args))))
-                }
-                other => other,
-            };
+            return QueryPoll::Ready(Ok(Some(projection(self_ty, trait_key, trait_args))));
         }
         if ra_ap_syntax::ast::HasGenericArgs::generic_arg_list(&base).is_some() {
             return QueryPoll::Ready(Ok(None));
@@ -965,7 +969,7 @@ pub(super) fn resolve_actual_type(
             }
         };
         let self_ty = match signature.resolve_name(db, graph, sources, &base_name) {
-            QueryPoll::Ready(Ok(SignatureName::Parameter(key))) => TyTerm::Param(key),
+            QueryPoll::Ready(Ok(SignatureName::Parameter(key))) => signature.parameter_type(key),
             QueryPoll::Ready(Ok(_)) if base_name == "Self" => {
                 let Some(owner) = signature.scope.owner else {
                     return QueryPoll::Ready(Ok(None));
@@ -993,7 +997,7 @@ pub(super) fn resolve_actual_type(
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
-        let selected = match projection_bound(db, graph, sources, signature, &base_name, &name) {
+        let selected = match projection_bound(db, graph, sources, signature, &base_name, &name, &self_ty) {
             QueryPoll::Ready(Ok(selected)) => selected,
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
@@ -1012,6 +1016,7 @@ pub(super) fn resolve_actual_type(
         signature: &WrittenTypeDeclaration<'_>,
         parameter: &str,
         item: &str,
+        self_type: &TyTerm,
     ) -> QueryPoll<
         Option<(
             crate::core::digest::Digest,
@@ -1147,7 +1152,7 @@ pub(super) fn resolve_actual_type(
             }
             // Do not inspect arguments of unrelated bounds. They may
             // themselves name this projection (Other<T::Item>).
-            let candidate = match projection_trait(db, graph, sources, signature, &path) {
+            let candidate = match projection_trait(db, graph, sources, signature, &path, self_type) {
                 QueryPoll::Ready(Ok(Some(candidate))) => candidate,
                 QueryPoll::Ready(Ok(None)) => continue,
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -1169,6 +1174,7 @@ pub(super) fn projection_trait(
     sources: &[&PreparedSourceView],
     signature: &WrittenTypeDeclaration<'_>,
     path: &ra_ap_syntax::ast::Path,
+    self_type: &TyTerm,
 ) -> QueryPoll<
     Option<(
         crate::core::digest::Digest,
@@ -1206,6 +1212,60 @@ pub(super) fn projection_trait(
                 _ => return QueryPoll::Ready(Ok(None)),
             }
         }
+    }
+    complete_trait_arguments(db, graph, sources, trait_key, self_type, arguments)
+}
+/// Fill only demanded omitted defaults, from actual retained Type occurrences
+/// in the selected declaration's own scope. This uses the ordinary Type walk;
+/// earlier argument bindings are read at its existing parameter leaf service.
+fn complete_trait_arguments(
+    db: &mut Database, graph: &NameNamespaces, sources: &[&PreparedSourceView],
+    trait_key: crate::core::digest::Digest, self_type: &TyTerm,
+    mut arguments: Vec<crate::traits::term::GenericArg>,
+) -> QueryPoll<Option<(crate::core::digest::Digest, Vec<crate::traits::term::GenericArg>)>> {
+    use crate::{syntax::signatures::GenericKind, traits::term::{ParamKey, GenericArg}};
+    use ra_ap_syntax::{AstNode, ast};
+    macro_rules! ready { ($value:expr) => { match $value {
+        QueryPoll::Ready(Ok(value)) => value,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    } }; }
+    let owner = ready!(db.fetch(&SyntaxProvider, QueryKey::TraitDeclaration(trait_key))).value;
+    let QueryValue::TraitDeclaration(trait_declaration) = owner.as_ref() else {
+        return QueryPoll::Ready(Err(fault("trait default declaration query differs")));
+    };
+    let Some(header) = trait_declaration.header() else { return QueryPoll::Ready(Ok(None)); };
+    if header.generics().iter().any(|p| p.kind != GenericKind::Type) || arguments.len() > header.generics().len() {
+        // The old source path erases written lifetimes and does not yet carry
+        // const argument Type metadata. Never turn that into an exact reference.
+        return QueryPoll::Ready(Ok(None));
+    }
+    if arguments.len() == header.generics().len() { return QueryPoll::Ready(Ok(Some((trait_key, arguments)))); }
+    let (Some(scope), Some(recipe), Some(parsed)) =
+        (trait_declaration.scope(), trait_declaration.recipe(), trait_declaration.parsed()) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+    let mut bindings = std::collections::BTreeMap::new();
+    for (index, parameter) in header.generics().iter().enumerate() {
+        let term = if let Some(GenericArg::Type(term)) = arguments.get(index) { term.clone() } else {
+            let Some(range) = header.generic_ranges().get(index) else { return QueryPoll::Ready(Ok(None)); };
+            let node = match parsed.syntax_at(*range, |node| ast::TypeParam::can_cast(node.kind())) {
+                Ok(Some(node)) => node, Ok(None) => return QueryPoll::Ready(Ok(None)),
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+            let Some(default) = ast::TypeParam::cast(node).and_then(|parameter| parameter.default_type()) else {
+                return QueryPoll::Ready(Ok(None));
+            };
+            if symbolic_type_pending(&default).is_some() { return QueryPoll::Ready(Ok(None)); }
+            let declaration = WrittenTypeDeclaration { definition: trait_key, scope, header: recipe,
+                generics: header.generics(), predicates: &[], function: None, syntax: None,
+                impl_self: Some(self_type), type_arguments: Some(&bindings) };
+            let Some(term) = ready!(resolve_actual_type(db, graph, sources, &declaration, &default)) else {
+                return QueryPoll::Ready(Ok(None));
+            };
+            arguments.push(GenericArg::Type(term.clone())); term
+        };
+        bindings.insert(ParamKey { definition: trait_key, ordinal: parameter.ordinal }, term);
     }
     QueryPoll::Ready(Ok(Some((trait_key, arguments))))
 }
@@ -1611,7 +1671,8 @@ pub(super) fn actual_bound_equations(
             graph,
             sources,
             declaration,
-            &candidate.path
+            &candidate.path,
+            &subject
         ));
         if trait_key == crate::core::digest::Digest([0; 32]) {
             return QueryPoll::Ready(Ok(None));
