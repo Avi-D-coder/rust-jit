@@ -918,6 +918,7 @@ dependencies = [
  "lrr-expand-adapter",
  "proptest",
  "ra_ap_syntax",
+ "rustc_index",
  "rustc_next_trait_solver",
  "rustc_type_ir",
  "rustix",

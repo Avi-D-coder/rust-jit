@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "repository": "https://github.com/rust-lang/rust.git",
   "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
   "crates": [
@@ -290,6 +290,13 @@
       "sha256": "d168e6ea5a34f9aaf9e38502cc24c033dce15cdcc10a43cbe5f9f80ff04d6939",
       "upstream": "compiler/rustc_index_macros/src/newtype.rs",
       "upstream_sha256": "d168e6ea5a34f9aaf9e38502cc24c033dce15cdcc10a43cbe5f9f80ff04d6939"
+    },
+    {
+      "path": "compiler/rustc_middle/src/ty/structural_impls.rs",
+      "bytes": 26825,
+      "sha256": "2bac6a97bc8670297081a013cc744b22dbf93cf3455a60e1596ef1d9d5e279db",
+      "upstream": "compiler/rustc_middle/src/ty/structural_impls.rs",
+      "upstream_sha256": "2bac6a97bc8670297081a013cc744b22dbf93cf3455a60e1596ef1d9d5e279db"
     },
     {
       "path": "compiler/rustc_next_trait_solver/Cargo.toml",
@@ -867,5 +874,8 @@
     }
   ],
   "packaging": "stable-shared-v1: unchanged Rust; retain upstream manifests; omit optional compiler-only dependencies; disable default/nightly feature activation",
-  "supported_features": "default-features=false; no compiler-only/nightly/randomize features"
+  "supported_features": "default-features=false; no compiler-only/nightly/randomize features",
+  "support_sources": [
+    "compiler/rustc_middle/src/ty/structural_impls.rs"
+  ]
 }

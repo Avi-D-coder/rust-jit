@@ -20076,7 +20076,8 @@
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-parameter-identity.md",
         "worktracks/evidence/2026-10-19-v221-v224-upstream-parameters.json",
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-context.md",
-        "worktracks/evidence/2026-10-19-v225-v226-upstream-context-storage.json"
+        "worktracks/evidence/2026-10-19-v225-v226-upstream-context-storage.json",
+        "worktracks/evidence/2026-10-19-v227-v229-upstream-interner-core.json"
       ],
       "title": "Pinned upstream solver bridge and transactions",
       "acceptance_contract": "TR007/TR008, source/type/binder round trips, genuine upstream invocation, failed-candidate isolation and cold-body/unused-bound controls. Depends: M019.",
@@ -20084,7 +20085,7 @@
       "implementation_contract": "Files: traits/upstream/, traits/term.rs, frontend/source_view.rs, Cargo.toml and provenance manifests. Build the pinned shared solver on macOS Rust1.99.0; adapt actual source Types/ParamEnv/headers, upstream inference transactions and canonical responses to LRR queries. Migrate custom inference/canonicalization consumers and remove superseded algorithms with explicit holds until verified.",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
-      "latest_component_scope": "V225/V226 partial M020 context storage/source identity: InternPool shares immutable structurally interned nodes in typed-arena2.0.2 with context-owned destruction; DefinitionId keeps source/context/local identities and explicit portable encoding. Both builds and3/3focused controls pass, including12actual edition/origin header worlds and host sharing/isolation/destruction controls. One selected existing unchanged stock runtime contract passes; zero new distinct gains or suite total. V225 private upstream module import failure preserved; public reexports used without upstream changes. Complete concrete type family/Interner, prepared source-fact provider, inference/delegate and actual upstream goal execution remain absent. No M020/interpreter/JIT closure."
+      "latest_component_scope": "V227–V229 partial M020 generic interner core: Context<F>:rustc_type_ir::Interner and immutable type/argument/region/constant/predicate family compile against the actual pinned API. Exhaustive Ty traversal is an audited mechanical port from retained licensed pinned compiler source (8sharedcrates,123files/1706190bytes,zero upstream Rust changes); rustc_middle itself is not compiled. Both builds and3existingstorage/headercontrols pass, including12sourceedition/origin worlds, plus1existingunchangedstockruntime regression. New family is not instantiated by those controls: no SourceFacts implementation, inference/delegate or actual upstream goal invocation exists; functional/roundtrip/source-currentness matrix unexecuted. Zero new distinct stock gains or suite total. V227 compile failure preserved. No M020/interpreter/JIT closure."
     },
     {
       "id": "M021",

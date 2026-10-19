@@ -4,7 +4,7 @@ Integrate the pinned next-generation rustc trait solver with LRR's demand-driven
 
 ## Current boundary
 
-Owned symbolic terms, partial source headers and custom transaction foundations exist. The required upstream adapter is not implemented; full header indexing, goal solving, projections and trait dispatch remain incomplete. Historical custom canonical/table candidates are held and must not be promoted as the new solver.
+Owned symbolic terms, partial source headers and custom transaction foundations exist. The generic upstream Interner/type-family core now compiles, but has no actual source-facts provider or inference/delegate integration; the complete upstream adapter is not implemented; full header indexing, goal solving, projections and trait dispatch remain incomplete. Historical custom canonical/table candidates are held and must not be promoted as the new solver.
 
 This is an ownership/work-planning track, not a new task order or a feature-completion claim. Follow revision 5 Section 57 and the [contribution workflow](../README.md).
 

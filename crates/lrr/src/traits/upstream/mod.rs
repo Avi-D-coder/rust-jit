@@ -12,9 +12,16 @@ use rustc_type_ir::{
     Interner,
 };
 
+mod constructors;
+pub(crate) mod context;
+pub(crate) mod facts;
 pub(crate) mod identity;
+pub(crate) mod model;
 pub(crate) mod parameters;
+mod predicates;
+mod printing;
 pub(crate) mod storage;
+mod traversal;
 
 pub(crate) const SOURCE_REVISION: &str = "ae0fe511b15ab760d7e963b13389d1bc2ab42b18";
 

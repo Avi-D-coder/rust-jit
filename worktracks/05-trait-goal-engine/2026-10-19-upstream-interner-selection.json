@@ -1,0 +1,12 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "V228 generic Interner API compilation plus existing storage/header regression controls; no F provider or type-family semantic execution",
+  "controls": [
+    "traits::upstream::storage::tests::nodes_share_by_structure_and_owned_context_drops_every_payload",
+    "traits::upstream::storage::tests::handles_are_context_local_and_implement_the_actual_upstream_interned_api",
+    "frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::upstream_parameter_order_preserves_real_impl_trait_and_method_identities"
+  ],
+  "runtime_cases": [
+    "tests/ui/methods/method-self-arg-trait.rs"
+  ]
+}

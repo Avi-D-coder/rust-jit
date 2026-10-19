@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19T09:36:46.596087+00:00",
+  "updated_at": "2026-10-19T10:09:40.871138+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -318,14 +318,15 @@
           "id": "WT05-02",
           "title": "Pinned upstream solver bridge and transactions",
           "status": "in_progress",
-          "acceptance_scope": "V225/V226 partial M020 context storage/source identity: InternPool shares immutable structurally interned nodes in typed-arena2.0.2 with context-owned destruction; DefinitionId keeps source/context/local identities and explicit portable encoding. Both builds and3/3focused controls pass, including12actual edition/origin header worlds and host sharing/isolation/destruction controls. One selected existing unchanged stock runtime contract passes; zero new distinct gains or suite total. V225 private upstream module import failure preserved; public reexports used without upstream changes. Complete concrete type family/Interner, prepared source-fact provider, inference/delegate and actual upstream goal execution remain absent. No M020/interpreter/JIT closure.",
+          "acceptance_scope": "V227–V229 partial M020 generic interner core: Context<F>:rustc_type_ir::Interner and immutable type/argument/region/constant/predicate family compile against the actual pinned API. Exhaustive Ty traversal is an audited mechanical port from retained licensed pinned compiler source (8sharedcrates,123files/1706190bytes,zero upstream Rust changes); rustc_middle itself is not compiled. Both builds and3existingstorage/headercontrols pass, including12sourceedition/origin worlds, plus1existingunchangedstockruntime regression. New family is not instantiated by those controls: no SourceFacts implementation, inference/delegate or actual upstream goal invocation exists; functional/roundtrip/source-currentness matrix unexecuted. Zero new distinct stock gains or suite total. V227 compile failure preserved. No M020/interpreter/JIT closure.",
           "historical_candidate": "artifacts/macos-first/sol-canonical-candidate-transactions-v1/HANDOFF.md",
           "historical_acceptance_scope": "frozen source-only exact replay/fmt/provenance;10 Rust controls uncompiled; actual source-goal and normalization prerequisites incomplete",
           "candidate": "worktracks/05-trait-goal-engine/2026-10-19-upstream-solver-bootstrap.md",
           "evidence": [
             "worktracks/evidence/2026-10-19-v217-v220-upstream-solver-trait-self.json",
             "worktracks/evidence/2026-10-19-v221-v224-upstream-parameters.json",
-            "worktracks/evidence/2026-10-19-v225-v226-upstream-context-storage.json"
+            "worktracks/evidence/2026-10-19-v225-v226-upstream-context-storage.json",
+            "worktracks/evidence/2026-10-19-v227-v229-upstream-interner-core.json"
           ]
         },
         {
@@ -352,7 +353,8 @@
         "worktracks/evidence/2026-10-19-v209-v215-reference-receiver-probe.json",
         "worktracks/evidence/2026-10-19-v217-v220-upstream-solver-trait-self.json",
         "worktracks/evidence/2026-10-19-v221-v224-upstream-parameters.json",
-        "worktracks/evidence/2026-10-19-v225-v226-upstream-context-storage.json"
+        "worktracks/evidence/2026-10-19-v225-v226-upstream-context-storage.json",
+        "worktracks/evidence/2026-10-19-v227-v229-upstream-interner-core.json"
       ],
       "solver_policy": "Pinned upstream next-generation rustc solver; E-R5-014. Adapter integration not implemented."
     },

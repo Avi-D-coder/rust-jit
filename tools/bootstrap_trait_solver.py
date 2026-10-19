@@ -21,6 +21,7 @@ CRATES = (
     "rustc_index", "rustc_index_macros", "rustc_abi", "rustc_ast_ir", "rustc_hashes",
 )
 LICENSES = ("LICENSE-MIT", "LICENSE-APACHE", "COPYRIGHT")
+SUPPORT_SOURCES = ("compiler/rustc_middle/src/ty/structural_impls.rs",)
 
 
 def digest(data):
@@ -88,7 +89,8 @@ def import_sources(checkout):
         raise ValueError("source tree/inventory exists; audit it, never overwrite local work")
     git(checkout, "cat-file", "-e", COMMIT + "^{commit}")
     paths = git(checkout, "ls-tree", "-r", "--name-only", COMMIT, "--",
-                *("compiler/" + name for name in CRATES), *LICENSES).decode().splitlines()
+                *("compiler/" + name for name in CRATES), *LICENSES,
+                *SUPPORT_SOURCES).decode().splitlines()
     originals = {}
     for path in paths:
         raw = git(checkout, "show", COMMIT + ":" + path)
@@ -111,8 +113,9 @@ def import_sources(checkout):
             row.update(upstream=upstream, upstream_sha256=digest(originals[upstream]))
         rows.append(row)
     MANIFEST.write_text(json.dumps({
-        "schema": 1, "repository": "https://github.com/rust-lang/rust.git",
+        "schema": 2, "repository": "https://github.com/rust-lang/rust.git",
         "commit": COMMIT, "crates": list(CRATES), "files": rows,
+        "support_sources": list(SUPPORT_SOURCES),
         "packaging": "stable-shared-v1: unchanged Rust; retain upstream manifests; omit optional compiler-only dependencies; disable default/nightly feature activation",
         "supported_features": "default-features=false; no compiler-only/nightly/randomize features",
     }, indent=2) + "\n")
@@ -120,8 +123,9 @@ def import_sources(checkout):
 
 def audit(checkout=None):
     inventory = json.loads(MANIFEST.read_text())
-    if (inventory["schema"] != 1 or inventory["commit"] != COMMIT
-            or inventory["crates"] != list(CRATES)):
+    if (inventory["schema"] != 2 or inventory["commit"] != COMMIT
+            or inventory["crates"] != list(CRATES)
+            or inventory.get("support_sources") != list(SUPPORT_SOURCES)):
         raise ValueError("solver inventory pin/closure differs")
     expected = set()
     total = 0
