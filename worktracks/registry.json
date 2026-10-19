@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19T02:19:33.853891+00:00",
+  "updated_at": "2026-10-19T02:20:16.875846+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -759,7 +759,7 @@
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
     "new_whole_upstream_runtime_passes_verified_this_resumption": 30,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": false,
+    "source_checkpoint_pushed": true,
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired.",
     "latest_targeted_evidence": "worktracks/evidence/2026-10-18-interpreter-v129-v133-hygienic-captures.json",
     "evidence": [
@@ -771,7 +771,7 @@
       "worktracks/evidence/2026-10-18-interpreter-v114-v116-no-core-prelude.json",
       "worktracks/evidence/2026-10-18-interpreter-v129-v133-hygienic-captures.json"
     ],
-    "source_checkpoint_commit": "fbc09ab909650ebae7b85cb1996a1c2b5ac6a8d0",
-    "source_checkpoint_note": "V133 validated source WIP prepared for publication; last published source commit remains recorded until the new push terminal. No integration/milestone/runtime-gate acceptance."
+    "source_checkpoint_commit": "cd95febdac75de7724a839499152e453c6700e42",
+    "source_checkpoint_note": "V133 validated source WIP pushed to codex/lrr-implementation (12221/254631/0). Curated source/review/evidence only. Full capture/macro/currentness/library/interpreter/JIT gates remain incomplete."
   }
 }

@@ -1846,5 +1846,12 @@
     "Other macro-specific legacy production routes outside this bounded repair.",
     "Complete upstream_runtime_acceptance, interpreter correctness, diagnostic/tooling/full_suite compatibility and guest JIT gates remain incomplete."
   ],
-  "acceptance_scope": "Source WIP checkpoint only. No integration/milestone/release/JIT completion, Linux or performance claim. No new cap, sandbox, static checker, parser/evaluator or native execution mechanism."
+  "acceptance_scope": "Source WIP checkpoint only. No integration/milestone/release/JIT completion, Linux or performance claim. No new cap, sandbox, static checker, parser/evaluator or native execution mechanism.",
+  "publication": {
+    "source_commit": "cd95febdac75de7724a839499152e453c6700e42",
+    "branch": "codex/lrr-implementation",
+    "remote": "https://github.com/Avi-D-coder/rust-jit.git",
+    "push_terminal": "12221/254631/0",
+    "scope": "source WIP only; no integration or gate closure"
+  }
 }
