@@ -1697,10 +1697,43 @@ fn unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origi
                             .is_err(),
                         "one appended output cannot complete a two-occurrence group"
                     );
+                    assert!(parent.completed_original_annotation(&source, &group, &proof).is_err(),
+                        "adopted outputs do not replace actual group completion");
+                    assert!(fresh_parent.completed_original_annotation(&source, &group, &proof).is_err(),
+                        "an unadopted parent cannot mint a declaration completion");
                     parent
                         .complete_original_annotation_group(&source, &group, &proof)
                         .unwrap();
                     assert!(parent.is_complete());
+                    let receipt = parent.completed_original_annotation(&source, &group, &proof).unwrap();
+                    let crate::frontend::associated_declarations::AssociatedDeclarationsPreparation::Original(prepared) =
+                        crate::frontend::associated_declarations::PreparedOriginalAssociatedDeclarations::prepare(&source).unwrap()
+                        else { panic!("actual original declaration scope absent") };
+                    let scope = prepared.declaration_scopes().find(|scope|
+                        scope.facts().declarations().any(|row| row.item.def_key.fingerprint() == receipt.item())
+                    ).unwrap();
+                    let row = scope.facts().declarations().find(|row|
+                        row.item.def_key.fingerprint() == receipt.item()).unwrap();
+                    let parsed = scope.parsed().unwrap();
+                    receipt.require_local_declaration(parsed, scope.body(), scope.scope(), row).unwrap();
+                    let mut wrong_body = scope.body().clone();
+                    wrong_body.def_key = Digest([0; 32]);
+                    assert!(receipt.require_local_declaration(parsed, &wrong_body, scope.scope(), row).is_err());
+                    let mut wrong_scope = scope.scope().clone();
+                    wrong_scope.owner = Some(Digest([0; 32]));
+                    assert!(receipt.require_local_declaration(parsed, scope.body(), &wrong_scope, row).is_err());
+                    let other = scope.facts().declarations().find(|other|
+                        other.item.def_key.fingerprint() != receipt.item()).unwrap();
+                    assert!(receipt.require_local_declaration(parsed, scope.body(), scope.scope(), other).is_err());
+                    assert!(matches!(db.publish_captured_declaration(&scope, receipt.item()),
+                        crate::db::poll::QueryPoll::Ready(Ok(crate::db::memo::LocalDeclarationPublication::NeedsProducer(_)))),
+                        "the shared publisher still refuses an annotated row without its actual receipt");
+                    assert!(matches!(db.publish_captured_declaration_with_completion(&scope, &receipt),
+                        crate::db::poll::QueryPoll::Ready(Ok(crate::db::memo::LocalDeclarationPublication::Published(id)))
+                            if id == receipt.item()));
+                    assert!(matches!(db.publish_captured_declaration_with_completion(&scope, &receipt),
+                        crate::db::poll::QueryPoll::Ready(Ok(crate::db::memo::LocalDeclarationPublication::Published(id)))
+                            if id == receipt.item()), "immutable declaration publication replays consistently");
                     assert!(parent.derive_prefix_view(producer.identity).is_err());
                     assert!(
                         parent
@@ -1780,6 +1813,62 @@ fn configured_impl_catalog_world(
     }
     discovery.publish(&mut db)?;
     Ok((db, discovery.key().clone(), root))
+}
+
+#[test]
+fn unchanged_catalog_completed_annotations_publish_actual_local_declarations() {
+    use crate::{
+        core::digest::StableEncode,
+        db::{dependency::{InputKey, InputValue}, key::QueryKey, poll::QueryPoll, provider::SyntaxProvider, value::QueryValue},
+        frontend::associated_declarations::{AssociatedDeclarationsPreparation, PreparedOriginalAssociatedDeclarations},
+        source::manifest::ItemKind,
+    };
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/upstream/rustc-checkout/tests/ui/coherence/coherence-impl-in-fn.rs");
+    for edition in [2015, 2018, 2021, 2024] {
+        let (mut db, seal, root_scope) = configured_impl_catalog_world(&path, edition).unwrap();
+        db.trace.detailed = true;
+        let start = db.trace.events.len();
+        let input = db.input(&InputKey::DiscoverySeal(seal.clone())).unwrap();
+        let InputValue::DiscoverySeal(publication) = input.as_ref() else { panic!() };
+        let selection = publication.sources.iter().find(|selection|
+            selection.outline.crate_key == root_scope.crate_key).unwrap();
+        let source = db.prepared_source(selection).unwrap().unwrap();
+        let AssociatedDeclarationsPreparation::Original(prepared) =
+            PreparedOriginalAssociatedDeclarations::prepare(&source).unwrap() else { panic!() };
+        let mut declarations = 0;
+        let mut annotated = 0;
+        for scope in prepared.declaration_scopes() {
+            for row in scope.facts().declarations() {
+                let id = row.item.def_key.fingerprint();
+                assert!(matches!(db.input(&InputKey::LocalDeclarationOwner(id)).as_deref(),
+                    Some(InputValue::LocalDeclarationOwner(body)) if body == &scope.body().key()));
+                assert!(matches!(db.input(&InputKey::DefinitionSource(id)).as_deref(),
+                    Some(InputValue::DefinitionSource(parse)) if parse == &scope.parsed().unwrap().key()));
+                assert!(matches!(db.input(&InputKey::DefinitionHeader(id)).as_deref(),
+                    Some(InputValue::DefinitionHeader(header)) if header == &row.item.header));
+                assert!(matches!(db.input(&InputKey::DeclarationContext(id)).as_deref(),
+                    Some(InputValue::DeclarationContext(context))
+                        if context.scope == row.item.scope && context.range == row.item.declaration_span));
+                if row.attribute_input.is_some() {
+                    assert_eq!(row.item.def_key.item_kind, ItemKind::Enum);
+                    annotated += 1;
+                    assert!(matches!(db.publish_captured_declaration(&scope, id),
+                        QueryPoll::Ready(Ok(crate::db::memo::LocalDeclarationPublication::NeedsProducer(_)))),
+                        "metadata alone does not acknowledge an annotation");
+                }
+                declarations += 1;
+            }
+        }
+        assert!(declarations >= 4, "actual enum, impl and both methods are published");
+        assert_eq!(annotated, 1);
+        let key = QueryKey::PreparedScopeImplHeaders(seal);
+        assert!(matches!(db.fetch(&SyntaxProvider, key),
+            QueryPoll::Ready(Ok(ref value)) if matches!(value.value.as_ref(), QueryValue::PreparedScopeImplHeaders(_))));
+        assert!(db.trace.events[start..].iter().all(|event| !matches!(event.key,
+            QueryKey::BodyStructure(_) | QueryKey::Thunk(_) | QueryKey::PatternPlan(_) | QueryKey::FunctionSignature(_))));
+        eprintln!("completed original annotations edition{edition}: {declarations} actual local declaration rows, {annotated} annotated enum; no body preparation or guest execution");
+    }
 }
 
 #[test]

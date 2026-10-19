@@ -108,6 +108,9 @@ pub(crate) struct CapturedDeclarationScope<'a> {
     plan: &'a Arc<crate::syntax::declaration_scope_plan::DeclarationScopePlan>,
 }
 impl CapturedDeclarationScope<'_> {
+    pub(crate) fn source(&self) -> &PreparedSourceView {
+        self.source
+    }
     pub(crate) fn body(&self) -> &crate::syntax::outline::BodyHandle {
         self.plan.body()
     }
@@ -597,6 +600,15 @@ impl<'a> PreparedOriginalAssociatedDeclarations<'a> {
         };
         let (parent, plan) = self.local.scope(location);
         Some(CapturedDeclarationScope {
+            source: self.source,
+            parent: &self.source.outline().items[parent as usize],
+            plan,
+        })
+    }
+    /// Actual retained scopes already captured by this declaration inventory.
+    /// Sharing them never prepares executable bindings or a BodyIndex.
+    pub(crate) fn declaration_scopes(&self) -> impl Iterator<Item = CapturedDeclarationScope<'_>> {
+        self.local.scopes().map(|(parent, plan)| CapturedDeclarationScope {
             source: self.source,
             parent: &self.source.outline().items[parent as usize],
             plan,

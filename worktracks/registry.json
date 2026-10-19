@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19T14:54:01.049771+00:00",
+  "updated_at": "2026-10-19T15:07:06.665550+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -320,9 +320,10 @@
             "worktracks/evidence/2026-10-19-v259-v261-original-annotation-groups.json",
             "worktracks/evidence/2026-10-19-v262-original-annotation-group-identity.json",
             "worktracks/evidence/2026-10-19-v268-original-group-coordinator.json",
-            "worktracks/evidence/2026-10-19-v281-catalog-head-types-held.json"
+            "worktracks/evidence/2026-10-19-v281-catalog-head-types-held.json",
+            "worktracks/evidence/2026-10-19-v282-v283-cold-original-annotations.json"
           ],
-          "latest_component_scope": "V269-V281 HELD M019/M020 source Type transport: real ImplCatalog Type facets, canonical cold declaration metadata and parser-issued generated Type-name occurrence evidence join ordinary source queries; qualified paths preserve actual scope and genuine $crate hygiene. Admitted generated query roots retain local scope and genuine item-query ParseKeys. Final macOS Rust 1.99.0 library/CLI builds pass; 12/13 selected controls pass. Complete unchanged-fixture head control remains failed: 20/32 ready (baseline 0/32), 12 local SelfType pending; eight occurrence proof control worlds pass. Catalog matrix remains 12/12 source worlds; existing Copy interpreter regression remains 12 origin/edition worlds passing. Source/HEAD/binary guards match. Failed builds and V280 parser-key regression retained; bad parser substitution reverted. Zero new distinct stock runtime gains, no refreshed suite total. Common cold local Type prefix and producer completion join are next; full source facts, inference/delegate, genuine upstream solving, M019/M020 and interpreter/JIT gates remain incomplete."
+          "latest_component_scope": "V282/V283 HELD M019/M020 original annotation metadata prerequisite: actual completed DeclarationMacroIndex group/output custody issues an opaque completion receipt; canonical cold local enum/impl/member rows share the existing metadata publisher with entered rows. Bulk scope validation and direct row iteration avoid repeated all-row selection searches. V282 test-only missing StableEncode import compile failure retained. Final macOS Rust1.99.0 library/CLI builds pass; 13/14 selected controls pass. New unchanged local enum metadata control passes all four editions (four canonical rows each), no executable body preparation. Actual component control passes pending/unadopted group, wrong body/scope/item and no-receipt refusals plus positive idempotent publication across all four editions. Real catalog remains 12/12 source worlds; existing Copy interpreter regression remains 12 origin/edition worlds passing. Complete head Type control remains enabled and fails at 20/32, twelve local SelfType pending. Source/HEAD/binaries unchanged. Zero new distinct stock runtime gains, no refreshed suite total or genuine upstream solver execution. Cold lexical Type prefix, complete source facts/inference/delegate/member integration, M019/M020 and interpreter/JIT gates remain incomplete."
         },
         {
           "id": "WT05-02",
@@ -341,9 +342,10 @@
             "worktracks/evidence/2026-10-19-v234-v235-pinned-client-relations.json",
             "worktracks/evidence/2026-10-19-v236-v243-prepared-solver-provider.json",
             "worktracks/evidence/2026-10-19-v268-original-group-coordinator.json",
-            "worktracks/evidence/2026-10-19-v281-catalog-head-types-held.json"
+            "worktracks/evidence/2026-10-19-v281-catalog-head-types-held.json",
+            "worktracks/evidence/2026-10-19-v282-v283-cold-original-annotations.json"
           ],
-          "latest_component_scope": "V269-V281 HELD M019/M020 source Type transport: real ImplCatalog Type facets, canonical cold declaration metadata and parser-issued generated Type-name occurrence evidence join ordinary source queries; qualified paths preserve actual scope and genuine $crate hygiene. Admitted generated query roots retain local scope and genuine item-query ParseKeys. Final macOS Rust 1.99.0 library/CLI builds pass; 12/13 selected controls pass. Complete unchanged-fixture head control remains failed: 20/32 ready (baseline 0/32), 12 local SelfType pending; eight occurrence proof control worlds pass. Catalog matrix remains 12/12 source worlds; existing Copy interpreter regression remains 12 origin/edition worlds passing. Source/HEAD/binary guards match. Failed builds and V280 parser-key regression retained; bad parser substitution reverted. Zero new distinct stock runtime gains, no refreshed suite total. Common cold local Type prefix and producer completion join are next; full source facts, inference/delegate, genuine upstream solving, M019/M020 and interpreter/JIT gates remain incomplete."
+          "latest_component_scope": "V282/V283 HELD M019/M020 original annotation metadata prerequisite: actual completed DeclarationMacroIndex group/output custody issues an opaque completion receipt; canonical cold local enum/impl/member rows share the existing metadata publisher with entered rows. Bulk scope validation and direct row iteration avoid repeated all-row selection searches. V282 test-only missing StableEncode import compile failure retained. Final macOS Rust1.99.0 library/CLI builds pass; 13/14 selected controls pass. New unchanged local enum metadata control passes all four editions (four canonical rows each), no executable body preparation. Actual component control passes pending/unadopted group, wrong body/scope/item and no-receipt refusals plus positive idempotent publication across all four editions. Real catalog remains 12/12 source worlds; existing Copy interpreter regression remains 12 origin/edition worlds passing. Complete head Type control remains enabled and fails at 20/32, twelve local SelfType pending. Source/HEAD/binaries unchanged. Zero new distinct stock runtime gains, no refreshed suite total or genuine upstream solver execution. Cold lexical Type prefix, complete source facts/inference/delegate/member integration, M019/M020 and interpreter/JIT gates remain incomplete."
         },
         {
           "id": "WT05-03",
@@ -382,10 +384,11 @@
         "worktracks/evidence/2026-10-19-v269-v271-catalog-head-types-failed.json",
         "worktracks/evidence/2026-10-19-v272-v275-catalog-type-facets-held.json",
         "worktracks/evidence/2026-10-19-v276-v280-type-occurrences-source-identity.json",
-        "worktracks/evidence/2026-10-19-v281-catalog-head-types-held.json"
+        "worktracks/evidence/2026-10-19-v281-catalog-head-types-held.json",
+        "worktracks/evidence/2026-10-19-v282-v283-cold-original-annotations.json"
       ],
       "solver_policy": "Pinned upstream next-generation rustc solver; E-R5-014. Adapter integration not implemented.",
-      "latest_component_scope": "V269-V281 HELD M019/M020 source Type transport: real ImplCatalog Type facets, canonical cold declaration metadata and parser-issued generated Type-name occurrence evidence join ordinary source queries; qualified paths preserve actual scope and genuine $crate hygiene. Admitted generated query roots retain local scope and genuine item-query ParseKeys. Final macOS Rust 1.99.0 library/CLI builds pass; 12/13 selected controls pass. Complete unchanged-fixture head control remains failed: 20/32 ready (baseline 0/32), 12 local SelfType pending; eight occurrence proof control worlds pass. Catalog matrix remains 12/12 source worlds; existing Copy interpreter regression remains 12 origin/edition worlds passing. Source/HEAD/binary guards match. Failed builds and V280 parser-key regression retained; bad parser substitution reverted. Zero new distinct stock runtime gains, no refreshed suite total. Common cold local Type prefix and producer completion join are next; full source facts, inference/delegate, genuine upstream solving, M019/M020 and interpreter/JIT gates remain incomplete."
+      "latest_component_scope": "V282/V283 HELD M019/M020 original annotation metadata prerequisite: actual completed DeclarationMacroIndex group/output custody issues an opaque completion receipt; canonical cold local enum/impl/member rows share the existing metadata publisher with entered rows. Bulk scope validation and direct row iteration avoid repeated all-row selection searches. V282 test-only missing StableEncode import compile failure retained. Final macOS Rust1.99.0 library/CLI builds pass; 13/14 selected controls pass. New unchanged local enum metadata control passes all four editions (four canonical rows each), no executable body preparation. Actual component control passes pending/unadopted group, wrong body/scope/item and no-receipt refusals plus positive idempotent publication across all four editions. Real catalog remains 12/12 source worlds; existing Copy interpreter regression remains 12 origin/edition worlds passing. Complete head Type control remains enabled and fails at 20/32, twelve local SelfType pending. Source/HEAD/binaries unchanged. Zero new distinct stock runtime gains, no refreshed suite total or genuine upstream solver execution. Cold lexical Type prefix, complete source facts/inference/delegate/member integration, M019/M020 and interpreter/JIT gates remain incomplete."
     },
     {
       "id": "WT06",

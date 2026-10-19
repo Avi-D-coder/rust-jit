@@ -271,25 +271,30 @@ impl SourceDiscovery {
         db: &mut crate::db::memo::Database,
     ) -> Result<(), Diagnostic> {
         use crate::{
-            db::{memo::LocalDeclarationPublication, poll::QueryPoll},
+            db::poll::QueryPoll,
             frontend::associated_declarations::{
                 AssociatedDeclarationsPreparation, PreparedOriginalAssociatedDeclarations,
             },
         };
-        for (_, source) in self.sources.iter().enumerate()
+        for (ordinal, source) in self.sources.iter().enumerate()
             .filter(|(ordinal, _)| !self.macro_export_sources.contains_key(ordinal)) {
             let AssociatedDeclarationsPreparation::Original(prepared) =
                 PreparedOriginalAssociatedDeclarations::prepare(source)? else { continue };
-            for raw in prepared.scan().impls() {
-                let Some(scope) = prepared.declaration_scope(raw.identity) else { continue };
-                let Some(item) = prepared.owner(raw.identity).and_then(|owner| owner.canonical) else { continue };
-                let definition = item.def_key.fingerprint();
-                match db.publish_captured_declaration(&scope, definition) {
-                    QueryPoll::Ready(Ok(LocalDeclarationPublication::Published(actual))) if actual == definition => {}
-                    // The source fact consumer still sees missing metadata;
-                    // producer ownership cannot be bypassed by this publisher.
-                    QueryPoll::Ready(Ok(LocalDeclarationPublication::NeedsProducer(_))) => {}
-                    QueryPoll::Ready(Ok(_)) => return Err(fault("cold catalog declaration identity differs")),
+            let mut completions = std::collections::BTreeMap::new();
+            for state in self.original_groups.values().filter(|state| state.ordinal == ordinal) {
+                let Some(proof) = &state.proof else { continue };
+                let parent = self.nested_sources.get(&ordinal)
+                    .ok_or_else(|| fault("completed annotation declaration parent absent"))?;
+                let receipt = parent.completed_original_annotation(source, &state.group, proof)?;
+                if completions.insert(receipt.item(), receipt).is_some() {
+                    return Err(fault("original annotation declaration completion repeats"));
+                }
+            }
+            // One actual plan per owning body. Its original named items and
+            // associated declarations share the same metadata kernel as entry.
+            for scope in prepared.declaration_scopes() {
+                match db.publish_captured_declarations(&scope, &completions) {
+                    QueryPoll::Ready(Ok(_)) => {}
                     QueryPoll::Ready(Err(error)) => return Err(error),
                     QueryPoll::NeedInput(_) => return Err(fault("cold catalog declaration input remains pending")),
                 }

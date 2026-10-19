@@ -11,6 +11,10 @@ use std::{
     sync::Arc,
 };
 
+#[path = "original_annotation_completion.rs"]
+mod original_annotation_completion;
+pub(crate) use original_annotation_completion::CompletedOriginalAnnotation;
+
 /// Actual immutable syntax owner of a captured scan. A raw scan ParseKey is
 /// not necessarily a globally published file (notably for macro fragments).
 #[derive(Clone)]

@@ -35,6 +35,24 @@ pub(crate) struct OriginalAnnotationGroup {
     annotations: Arc<[Digest]>,
 }
 impl OriginalAnnotationGroup {
+    /// Match the actual canonical row, without interpreting or removing its annotation.
+    pub(crate) fn require_item(
+        &self,
+        parsed: &crate::syntax::parse::ParsedFile,
+        item: &crate::syntax::outline::ItemOutline,
+        producer: Digest,
+    ) -> Result<(), Diagnostic> {
+        if parsed.key() != self.source.outline.parse
+            || item.def_key.fingerprint() != self.item
+            || item.header.fingerprint() != self.header
+            || item.scope != self.call.scope
+            || item.declaration_span != self.call.range
+            || producer != self.call.item_input
+        {
+            return Err(fault("original annotation completion declaration differs"));
+        }
+        Ok(())
+    }
     pub(crate) fn call(&self) -> &crate::syntax::outline::ItemInvocation {
         &self.call
     }
@@ -94,6 +112,12 @@ pub(crate) struct OriginalItemTarget<'a> {
     location: Location<'a>,
 }
 impl OriginalItemTarget<'_> {
+    pub(crate) fn local_plan(&self) -> Option<&Arc<DeclarationScopePlan>> {
+        match &self.location {
+            Location::Local { plan, .. } => Some(plan),
+            Location::Outline(_) => None,
+        }
+    }
     pub(crate) fn source(&self) -> &SourceSelection {
         self.source
     }

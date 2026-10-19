@@ -60,7 +60,7 @@ impl SourceEmptyDeriveProof {
         Ok(Some((proof.item_ordinal, item, proof.dialect)))
     }
 }
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) struct SourceDeriveCompletionProof {
     pub(crate) item: Digest,
     pub(crate) fingerprint: Digest,

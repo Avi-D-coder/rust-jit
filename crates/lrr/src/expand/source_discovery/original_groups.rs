@@ -19,7 +19,7 @@ pub(super) struct OriginalGroupProgress {
     pub(super) group: Arc<OriginalAnnotationGroup>,
     leader: Digest,
     output_job: Option<Digest>,
-    proof: Option<SourceDeriveCompletionProof>,
+    pub(super) proof: Option<SourceDeriveCompletionProof>,
 }
 pub(super) struct OriginalGroupOutput {
     group: Digest,

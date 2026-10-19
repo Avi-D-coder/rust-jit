@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V269-V281 HELD M019/M020 source Type transport: real ImplCatalog Type facets, canonical cold declaration metadata and parser-issued generated Type-name occurrence evidence join ordinary source queries; qualified paths preserve actual scope and genuine $crate hygiene. Admitted generated query roots retain local scope and genuine item-query ParseKeys. Final macOS Rust 1.99.0 library/CLI builds pass; 12/13 selected controls pass. Complete unchanged-fixture head control remains failed: 20/32 ready (baseline 0/32), 12 local SelfType pending; eight occurrence proof control worlds pass. Catalog matrix remains 12/12 source worlds; existing Copy interpreter regression remains 12 origin/edition worlds passing. Source/HEAD/binary guards match. Failed builds and V280 parser-key regression retained; bad parser substitution reverted. Zero new distinct stock runtime gains, no refreshed suite total. Common cold local Type prefix and producer completion join are next; full source facts, inference/delegate, genuine upstream solving, M019/M020 and interpreter/JIT gates remain incomplete.",
+      "scope": "V282/V283 HELD M019/M020 original annotation metadata prerequisite: actual completed DeclarationMacroIndex group/output custody issues an opaque completion receipt; canonical cold local enum/impl/member rows share the existing metadata publisher with entered rows. Bulk scope validation and direct row iteration avoid repeated all-row selection searches. V282 test-only missing StableEncode import compile failure retained. Final macOS Rust1.99.0 library/CLI builds pass; 13/14 selected controls pass. New unchanged local enum metadata control passes all four editions (four canonical rows each), no executable body preparation. Actual component control passes pending/unadopted group, wrong body/scope/item and no-receipt refusals plus positive idempotent publication across all four editions. Real catalog remains 12/12 source worlds; existing Copy interpreter regression remains 12 origin/edition worlds passing. Complete head Type control remains enabled and fails at 20/32, twelve local SelfType pending. Source/HEAD/binaries unchanged. Zero new distinct stock runtime gains, no refreshed suite total or genuine upstream solver execution. Cold lexical Type prefix, complete source facts/inference/delegate/member integration, M019/M020 and interpreter/JIT gates remain incomplete.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1758,11 +1758,16 @@
         "worktracks/evidence/2026-10-19-v269-v271-catalog-head-types-failed.json",
         "worktracks/evidence/2026-10-19-v272-v275-catalog-type-facets-held.json",
         "worktracks/evidence/2026-10-19-v276-v280-type-occurrences-source-identity.json",
-        "worktracks/evidence/2026-10-19-v281-catalog-head-types-held.json"
+        "worktracks/evidence/2026-10-19-v281-catalog-head-types-held.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-cold-original-annotation-publication.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-cold-original-annotation-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-cold-original-annotation-controls.json",
+        "crates/lrr/src/frontend/original_annotation_completion.rs",
+        "worktracks/evidence/2026-10-19-v282-v283-cold-original-annotations.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T14:54:01.049771+00:00",
+      "updated_at": "2026-10-19T15:07:06.665550+00:00",
       "review_after": "2026-10-20T08:52:46.617857+00:00",
       "shared_interfaces": [
         {
@@ -1770,7 +1775,9 @@
           "owner": "/root",
           "paths": [
             "crates/lrr/src/frontend/mod.rs",
-            "crates/lrr/src/frontend/source_types.rs"
+            "crates/lrr/src/frontend/source_types.rs",
+            "crates/lrr/src/frontend/impl_index.rs",
+            "crates/lrr/src/expand/source_derives.rs"
           ],
           "scope": "Same implementing owner uses the existing reservation for the V281 catalog/header Type transport slice; no parallel owner or transfer."
         },
@@ -1799,9 +1806,19 @@
             "crates/lrr/src/frontend/generated_result_namespace.rs"
           ],
           "scope": "Same implementing owner uses the existing reservation for the V281 catalog/header Type transport slice; no parallel owner or transfer."
+        },
+        {
+          "claim": "LOCAL-040",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/frontend/associated_declarations.rs",
+            "crates/lrr/src/frontend/declaration_impl_owners.rs",
+            "crates/lrr/src/db/local_declaration_inputs.rs"
+          ],
+          "scope": "Same implementing owner retains existing reservation for the common original-annotation publication prerequisite; no parallel owner or transfer."
         }
       ]
     }
   ],
-  "updated_at": "2026-10-19T14:54:01.049771+00:00"
+  "updated_at": "2026-10-19T15:07:06.665550+00:00"
 }

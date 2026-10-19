@@ -152,6 +152,9 @@ impl LocalImplOwners {
         }
         Ok(prepared)
     }
+    pub(super) fn scopes(&self) -> impl Iterator<Item = (u32, &Arc<DeclarationScopePlan>)> {
+        self.plans.iter().map(|scope| (scope.parent, &scope.plan))
+    }
     pub(super) fn owner(&self, range: SourceRange) -> Option<LocalDeclarationLocation> {
         self.owners.get(&key(range)).copied()
     }
