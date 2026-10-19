@@ -918,5 +918,13 @@
     "Genuine generic-unit-variant assertion-failure formatting remains a separate interpreter gap. Correct coordinates avoid that wrong failure path, not repair formatting.",
     "Other legacy macro-specific production routes and full interpreter correctness/runtime acceptance remain open; guest JIT is still gated."
   ],
-  "acceptance_scope": "Source WIP only, no task/milestone/integration/release/JIT closure, Linux acceptance or performance claim. No new resource cap, static checker, sandbox or runtime evaluator."
+  "acceptance_scope": "Source WIP only, no task/milestone/integration/release/JIT closure, Linux acceptance or performance claim. No new resource cap, static checker, sandbox or runtime evaluator.",
+  "publication": {
+    "source_commit": "2b599608cc400c5bb19ba158abaa50ab3d1d6353",
+    "branch": "codex/lrr-implementation",
+    "remote": "https://github.com/Avi-D-coder/rust-jit.git",
+    "push_terminal": "57208/d05dd9/0",
+    "source_guard_terminal": "66279/1c3c40/0",
+    "scope": "source WIP only; no integration or release gate closure"
+  }
 }
