@@ -114,10 +114,11 @@ impl SourceAttributeSelection {
                 selected_attribute_producer(item).is_some_and(|call| call.item_input == producer)
             })
             .ok_or_else(|| fault("source attribute producer absent"))?;
-        let parsed = crate::syntax::parse::ParsedFile::parse(
-            source.captured_macro_blob()?,
-            source.outline().profile.clone(),
-        )?;
+        let target = source
+            .original_item_at(item.declaration_span)?
+            .ok_or_else(|| fault("source attribute canonical item target absent"))?;
+        let item = target.item();
+        let parsed = source.retained_declaration_parser()?.as_ref();
         let facts =
             parsed.attribute_inputs_at(item.declaration_span, source.captured_macro_cfg()?)?;
         if !facts.enabled {
@@ -316,10 +317,7 @@ impl SourceAttributeSelection {
             .iter()
             .find(|row| row.identity == producer)
             .ok_or_else(|| fault("cold attribute attachment absent"))?;
-        let parsed = crate::syntax::parse::ParsedFile::parse(
-            source.captured_macro_blob()?,
-            source.outline().profile.clone(),
-        )?;
+        let parsed = source.retained_declaration_parser()?.as_ref();
         let range = parsed
             .attribute_item_range_at(row.range)?
             .ok_or_else(|| fault("cold attribute owning item absent"))?;

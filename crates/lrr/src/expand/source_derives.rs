@@ -300,10 +300,11 @@ pub(crate) fn prepare_empty_with_annotations(
     ) {
         return Ok(None);
     }
-    let parsed = ParsedFile::parse(
-        source.captured_macro_blob()?,
-        source.outline().profile.clone(),
-    )?;
+    let target = source
+        .original_item_at(item.declaration_span)?
+        .ok_or_else(|| fault("source derive canonical item target absent"))?;
+    let item = target.item();
+    let parsed = source.retained_declaration_parser()?.as_ref();
     let facts =
         parsed.derive_item_inputs_at(item.declaration_span, source.captured_macro_cfg()?)?;
     if !facts.item.enabled {
@@ -543,9 +544,15 @@ impl SourceGroups<'_> {
             let site = crate::syntax::token_wire::Key(path.last_span.0);
             // A library `#[rustc_builtin_macro]` derive: compiler-owned helper
             // metadata, expanded in process by the pinned adapter.
-            if let Some(export) = self.compiler
-                .map(|compiler| super::builtin_derives::BuiltinDeriveExport::select(compiler, &selected, occurrence))
-                .transpose()?.flatten()
+            if let Some(export) = self
+                .compiler
+                .map(|compiler| {
+                    super::builtin_derives::BuiltinDeriveExport::select(
+                        compiler, &selected, occurrence,
+                    )
+                })
+                .transpose()?
+                .flatten()
             {
                 rows.push(SourceRow {
                     kind: SourceRowKind::Builtin {
@@ -564,12 +571,7 @@ impl SourceGroups<'_> {
             };
             let Some(request) =
                 crate::frontend::generated_derive_exports::DeriveDeclarationRequest::from_source(
-                    source,
-                    item,
-                    producer,
-                    occurrence,
-                    selected,
-                    catalog,
+                    source, item, producer, occurrence, selected, catalog,
                 )?
             else {
                 return Ok(SourceRowsPoll::Pending);
@@ -782,10 +784,11 @@ pub(crate) fn prepare_group(
     ) {
         return Ok(SourceDerivePoll::Pending);
     }
-    let parsed = ParsedFile::parse(
-        source.captured_macro_blob()?,
-        source.outline().profile.clone(),
-    )?;
+    let target = source
+        .original_item_at(item.declaration_span)?
+        .ok_or_else(|| fault("source derive canonical item target absent"))?;
+    let item = target.item();
+    let parsed = source.retained_declaration_parser()?.as_ref();
     let inputs =
         parsed.derive_item_inputs_at(item.declaration_span, source.captured_macro_cfg()?)?;
     let facts = &inputs.item;

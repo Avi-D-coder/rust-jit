@@ -20059,12 +20059,17 @@
         "worktracks/05-trait-goal-engine/2026-10-19-configured-catalog-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-configured-catalog-controls.json",
         "worktracks/05-trait-goal-engine/2026-10-19-configured-catalog-debug.json",
-        "worktracks/evidence/2026-10-19-v249-v254-configured-catalog-held.json"
+        "worktracks/evidence/2026-10-19-v249-v254-configured-catalog-held.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-original-local-annotation-targets.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-original-local-annotation-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-original-local-annotation-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-original-local-annotation-final-controls.json",
+        "worktracks/evidence/2026-10-19-v255-v256-original-local-annotation-targets.json"
       ],
       "title": "Impl and trait header lowering",
       "acceptance_contract": "TR006 and indexed-versus-full-catalog property model. Depends: M018.",
       "release_complete": false,
-      "latest_component_scope": "V249\u2013V254 HELD partial M019/M020 source-catalog candidate: actual standalone compiler/source-world binding, fresh common global discovery and private full-payload completion receipt now publish genuine source catalogs through the ordinary inventory/locator memo. Root compiler input is bound before ledger completion and rechecked at publication. Final library/CLI builds pass; controls pass 4/5. The unchanged global source matrix is FAILED with 8/12 source worlds successful: safety-ok and method-self-arg-trait in all four editions; coherence-impl-in-fn fails all four on the local enum derive producer. No fixture is excluded or counted passed from partial execution. Required next repair is the common retained original local-item annotation target/append route, not a Copy/Clone shortcut. Foreign source, changed compiler input, cold macro/cfg/unentered-call and prior Scope controls pass. Source/HEAD/binary guards pass. Zero new runtime/full-fixture passes; full M019/M020, origin/milestone/interpreter/JIT gates remain open.",
+      "latest_component_scope": "V255/V256 HELD M019/M020 prerequisite: original module/local annotation targets now retain actual Outline or canonical lexical plan rows, with all-four-edition source/entry identity and shared Arc controls. The ordinary collector retains immutable plans and direct pinned deferred-binding locations; four alternate original derive/attribute full-source parses are removed. V255 library/CLI builds pass and 9/10 controls pass, including the existing unchanged copy contract direct/user-macro/wrapper across all four editions (12 runtime worlds, no new distinct stock gain). Its complete global source matrix still fails on coherence-impl-in-fn in all four editions, while eight other source worlds succeed. V256 tightens exact Meta attachment; both builds and 4/4 targeted controls pass. V255 runtime/catalog evidence stays attached to V255 fingerprint. Guards match. Local derive grouping/origin/append/completion, local container target gaps, existing O(body) identity validation, full catalog/solver/runtime/milestone/JIT gates remain incomplete.",
       "source_baseline": "dcd056e542c86605f6a282470566952b2aea3c79",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
@@ -20093,7 +20098,12 @@
         "worktracks/05-trait-goal-engine/2026-10-19-prepared-solver-provider.md",
         "worktracks/05-trait-goal-engine/2026-10-19-prepared-provider-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-prepared-provider-controls.json",
-        "worktracks/evidence/2026-10-19-v236-v243-prepared-solver-provider.json"
+        "worktracks/evidence/2026-10-19-v236-v243-prepared-solver-provider.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-original-local-annotation-targets.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-original-local-annotation-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-original-local-annotation-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-original-local-annotation-final-controls.json",
+        "worktracks/evidence/2026-10-19-v255-v256-original-local-annotation-targets.json"
       ],
       "title": "Pinned upstream solver bridge and transactions",
       "acceptance_contract": "TR007/TR008, source/type/binder round trips, genuine upstream invocation, failed-candidate isolation and cold-body/unused-bound controls. Depends: M019.",
@@ -20101,7 +20111,7 @@
       "implementation_contract": "Files: traits/upstream/, traits/term.rs, frontend/source_view.rs, Cargo.toml and provenance manifests. Build the pinned shared solver on macOS Rust1.99.0; adapt actual source Types/ParamEnv/headers, upstream inference transactions and canonical responses to LRR queries. Migrate custom inference/canonicalization consumers and remove superseded algorithms with explicit holds until verified.",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
-      "latest_component_scope": "V236\u2013V243 partial M019/M020: concrete immutable SourceFacts reader, exact retained source receipts, complete-catalog publication checks and derived pinned relevant-impl indexes. Actual scoped provider/context factory now type-checks after repairing the real ThinVec cache-drop lifetime failure with safe scoped cleanup. Final library/CLI builds and 2/2 host controls pass: normal/unwind cleanup and 8 source worlds (7,972 actual impl receipt observations) across all 4 editions, with parse-owner sharing, missing inputs, no body queries and real Scope certificate rejection. No complete M019 producer, positive source-backed ready instance, actual inference/delegate/root-goal execution, stock runtime gain or interpreter/JIT closure.",
+      "latest_component_scope": "V255/V256 HELD M019/M020 prerequisite: original module/local annotation targets now retain actual Outline or canonical lexical plan rows, with all-four-edition source/entry identity and shared Arc controls. The ordinary collector retains immutable plans and direct pinned deferred-binding locations; four alternate original derive/attribute full-source parses are removed. V255 library/CLI builds pass and 9/10 controls pass, including the existing unchanged copy contract direct/user-macro/wrapper across all four editions (12 runtime worlds, no new distinct stock gain). Its complete global source matrix still fails on coherence-impl-in-fn in all four editions, while eight other source worlds succeed. V256 tightens exact Meta attachment; both builds and 4/4 targeted controls pass. V255 runtime/catalog evidence stays attached to V255 fingerprint. Guards match. Local derive grouping/origin/append/completion, local container target gaps, existing O(body) identity validation, full catalog/solver/runtime/milestone/JIT gates remain incomplete.",
       "artifacts": [
         "worktracks/evidence/2026-10-19-v230-v231-pinned-binder-client.json",
         "worktracks/evidence/2026-10-19-v234-v235-pinned-client-relations.json",

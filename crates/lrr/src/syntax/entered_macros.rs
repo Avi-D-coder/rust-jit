@@ -113,7 +113,7 @@ impl ParsedFile {
         body: &BodyHandle,
         cfg: &CfgSet,
         containing: &super::outline::ScopeKey,
-    ) -> Result<DeclarationScopePlan, Diagnostic> {
+    ) -> Result<Arc<DeclarationScopePlan>, Diagnostic> {
         body.require_entry()?;
         let root = self
             .entered_body_root(body)
@@ -170,7 +170,21 @@ impl ParsedFile {
         cfg: &CfgSet,
         containing: &super::outline::ScopeKey,
         header_context: &[super::ast_adapter::TokenRecipe],
-    ) -> Result<DeclarationScopePlan, Diagnostic> {
+    ) -> Result<Arc<DeclarationScopePlan>, Diagnostic> {
+        let key = DeclarationScopePlan::key(
+            &self.key(),
+            body,
+            cfg.fingerprint(),
+            containing,
+            header_context,
+        );
+        let mut plans = self
+            .declaration_plans
+            .lock()
+            .map_err(|_| error("canonical declaration plan cache poisoned"))?;
+        if let Some(plan) = plans.get(&key) {
+            return Ok(Arc::clone(plan));
+        }
         let mut facts = DeclarationFacts {
             items: vec![],
             members: vec![],
@@ -251,7 +265,8 @@ impl ParsedFile {
                     .any(|clause| matches!(clause, ast::Expr::LetExpr(_)))
                 {
                     let nested_depth = depth
-                        .checked_add(1)                        .ok_or_else(|| error("body macro scope depth exceeded"))?;
+                        .checked_add(1)
+                        .ok_or_else(|| error("body macro scope depth exceeded"))?;
                     let ordinal = u32::try_from(facts.scopes.len())
                         .map_err(|_| error("body macro scope ordinal overflow"))?;
                     let range = SourceRange::checked(
@@ -321,7 +336,8 @@ impl ParsedFile {
                 deferred.match_arm(arm.clone())?;
                 let pattern = arm.pat();
                 depth = depth
-                    .checked_add(1)                    .ok_or_else(|| error("body macro scope depth exceeded"))?;
+                    .checked_add(1)
+                    .ok_or_else(|| error("body macro scope depth exceeded"))?;
                 let ordinal = u32::try_from(facts.scopes.len())
                     .map_err(|_| error("body macro scope ordinal overflow"))?;
                 facts
@@ -357,7 +373,8 @@ impl ParsedFile {
             // its own call frame executes as ordinary body syntax.
             if let Some(closure) = ast::ClosureExpr::cast(node.clone()) {
                 depth = depth
-                    .checked_add(1)                    .ok_or_else(|| error("body macro scope depth exceeded"))?;
+                    .checked_add(1)
+                    .ok_or_else(|| error("body macro scope depth exceeded"))?;
                 let ordinal = u32::try_from(facts.scopes.len())
                     .map_err(|_| error("body macro scope ordinal overflow"))?;
                 facts
@@ -527,7 +544,8 @@ impl ParsedFile {
                         )?;
                         // A block-local enum's non-literal discriminants are
                         // declarations of anonymous constants (E-R5-013).
-                        let rows = member_budget.collect_discriminants(&item, &header, self, cfg)?;
+                        let rows =
+                            member_budget.collect_discriminants(&item, &header, self, cfg)?;
                         facts
                             .members
                             .try_reserve(rows.len())
@@ -596,7 +614,8 @@ impl ParsedFile {
             }
             if ast::BlockExpr::can_cast(node.kind()) {
                 depth = depth
-                    .checked_add(1)                    .ok_or_else(|| error("body macro scope depth exceeded"))?;
+                    .checked_add(1)
+                    .ok_or_else(|| error("body macro scope depth exceeded"))?;
                 let ordinal = u32::try_from(facts.scopes.len())
                     .map_err(|_| error("body macro scope ordinal overflow"))?;
                 facts
@@ -654,15 +673,17 @@ impl ParsedFile {
             children.reverse();
             stack.extend(children);
         }
-        DeclarationScopePlan::new(
-            self.key(),
+        let plan = Arc::new(DeclarationScopePlan::new(
+            self,
             body.clone(),
             cfg.fingerprint(),
             containing.clone(),
             header_context,
             facts,
             deferred,
-        )
+        )?);
+        plans.insert(key, Arc::clone(&plan));
+        Ok(plan)
     }
 }
 fn pattern_producers(

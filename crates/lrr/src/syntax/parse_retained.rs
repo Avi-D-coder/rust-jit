@@ -265,6 +265,7 @@ impl ParsedFile {
             generated_origin: Some(identity),
             declaration_grammar: Some(crate::expand::identity::GrammarSlot::Items),
             estimated_bytes,
+            declaration_plans: Default::default(),
             token_contexts: None,
             pinned_hygiene: None,
             retained_syntax: None,

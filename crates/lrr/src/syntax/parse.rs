@@ -81,7 +81,9 @@ fn final_method_modifier_error(
     };
     at.kind() == ra_ap_syntax::SyntaxKind::FINAL_KW
         && at.text_range().start() == range.start()
-        && at.parent().is_some_and(|parent| is_final_method_modifier(&parent))
+        && at
+            .parent()
+            .is_some_and(|parent| is_final_method_modifier(&parent))
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
@@ -111,6 +113,14 @@ pub struct ParsedFile {
     pub(crate) generated_origin: Option<Digest>,
     pub(crate) declaration_grammar: Option<crate::expand::identity::GrammarSlot>,
     estimated_bytes: usize,
+    /// Pure lexical declarations, shared by cold source readers and entry.
+    /// The key includes real cfg/body/scope/header context; no runtime state.
+    pub(super) declaration_plans: std::sync::Mutex<
+        std::collections::BTreeMap<
+            Digest,
+            std::sync::Arc<super::declaration_scope_plan::DeclarationScopePlan>,
+        >,
+    >,
     token_contexts: Option<Vec<TokenContext>>,
     pinned_hygiene: Option<std::sync::Arc<crate::frontend::hygiene::HygieneFacts>>,
     retained_syntax: Option<retained::RetainedSyntax>,
@@ -203,6 +213,7 @@ impl ParsedFile {
             errors,
             parsed,
             estimated_bytes,
+            declaration_plans: Default::default(),
             token_contexts: None,
             pinned_hygiene: None,
             generated_origin: None,
@@ -283,6 +294,7 @@ impl ParsedFile {
             errors: Vec::new(),
             parsed,
             estimated_bytes,
+            declaration_plans: Default::default(),
             token_contexts: None,
             pinned_hygiene: None,
             generated_origin: Some(items.record().descriptor().fingerprint()),
@@ -332,9 +344,7 @@ impl ParsedFile {
                     {
                         return Err(fail());
                     }
-                    depth = depth
-                        .checked_add(1)
-                        .ok_or_else(fail)?;
+                    depth = depth.checked_add(1).ok_or_else(fail)?;
                     builder.start_node(ra_ap_syntax::SyntaxKind::from(*raw));
                 }
                 SyntaxEvent::Token { kind, text } => {
@@ -377,6 +387,7 @@ impl ParsedFile {
             errors: Vec::new(),
             parsed,
             estimated_bytes,
+            declaration_plans: Default::default(),
             token_contexts: None,
             pinned_hygiene: None,
             generated_origin: Some(identity),
@@ -595,14 +606,22 @@ mod tests {
                     .unwrap();
             assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
             let outline = parsed
-                .outline(crate::core::digest::Digest([7; 32]), vec![], &crate::source::snapshot::CfgSet::guest_default())
+                .outline(
+                    crate::core::digest::Digest([7; 32]),
+                    vec![],
+                    &crate::source::snapshot::CfgSet::guest_default(),
+                )
                 .unwrap();
-            assert!(outline.items.iter().any(|item| item.def_key.declared_name == "size_hint"));
-            assert!(outline.scopes.values().all(|scope| {
-                scope
-                    .blockers
+            assert!(
+                outline
+                    .items
                     .iter()
-                    .all(|blocker| blocker.kind != crate::syntax::outline::BlockerKind::ParseBoundary)
+                    .any(|item| item.def_key.declared_name == "size_hint")
+            );
+            assert!(outline.scopes.values().all(|scope| {
+                scope.blockers.iter().all(|blocker| {
+                    blocker.kind != crate::syntax::outline::BlockerKind::ParseBoundary
+                })
             }));
         }
         // Only the exact modifier position is admitted.
@@ -762,11 +781,8 @@ impl ParsedFile {
         {
             let mut depth = 0usize;
             for ancestor in node.ancestors().skip(1) {
-                depth = depth
-                    .checked_add(1)                    .ok_or_else(limit)?;
-                work = work
-                    .checked_add(1)
-                    .ok_or_else(limit)?;
+                depth = depth.checked_add(1).ok_or_else(limit)?;
+                work = work.checked_add(1).ok_or_else(limit)?;
                 if ra_ap_syntax::ast::Fn::can_cast(ancestor.kind()) {
                     return Ok(true);
                 }

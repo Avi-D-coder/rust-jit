@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V249\u2013V254 HELD partial M019/M020 source-catalog candidate: actual standalone compiler/source-world binding, fresh common global discovery and private full-payload completion receipt now publish genuine source catalogs through the ordinary inventory/locator memo. Root compiler input is bound before ledger completion and rechecked at publication. Final library/CLI builds pass; controls pass 4/5. The unchanged global source matrix is FAILED with 8/12 source worlds successful: safety-ok and method-self-arg-trait in all four editions; coherence-impl-in-fn fails all four on the local enum derive producer. No fixture is excluded or counted passed from partial execution. Required next repair is the common retained original local-item annotation target/append route, not a Copy/Clone shortcut. Foreign source, changed compiler input, cold macro/cfg/unentered-call and prior Scope controls pass. Source/HEAD/binary guards pass. Zero new runtime/full-fixture passes; full M019/M020, origin/milestone/interpreter/JIT gates remain open. Solo root is the only writer; source_preparation/provider/traits-index interfaces remain reserved under LOCAL-037/044/047, SourceDiscovery/preentry under existing root claims.",
+      "scope": "V255/V256 HELD M019/M020 prerequisite: original module/local annotation targets now retain actual Outline or canonical lexical plan rows, with all-four-edition source/entry identity and shared Arc controls. The ordinary collector retains immutable plans and direct pinned deferred-binding locations; four alternate original derive/attribute full-source parses are removed. V255 library/CLI builds pass and 9/10 controls pass, including the existing unchanged copy contract direct/user-macro/wrapper across all four editions (12 runtime worlds, no new distinct stock gain). Its complete global source matrix still fails on coherence-impl-in-fn in all four editions, while eight other source worlds succeed. V256 tightens exact Meta attachment; both builds and 4/4 targeted controls pass. V255 runtime/catalog evidence stays attached to V255 fingerprint. Guards match. Local derive grouping/origin/append/completion, local container target gaps, existing O(body) identity validation, full catalog/solver/runtime/milestone/JIT gates remain incomplete. Solo root remains the only writer; existing shared syntax/derive/discovery interfaces remain under their root-owned reservations.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1723,11 +1723,18 @@
         "worktracks/05-trait-goal-engine/2026-10-19-configured-impl-catalog.md",
         "worktracks/05-trait-goal-engine/2026-10-19-configured-catalog-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-configured-catalog-controls.json",
-        "worktracks/05-trait-goal-engine/2026-10-19-configured-catalog-debug.json"
+        "worktracks/05-trait-goal-engine/2026-10-19-configured-catalog-debug.json",
+        "crates/lrr/src/source/original_items.rs",
+        "crates/lrr/src/source/mod.rs",
+        "crates/lrr/src/syntax/parse.rs",
+        "worktracks/05-trait-goal-engine/2026-10-19-original-local-annotation-targets.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-original-local-annotation-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-original-local-annotation-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-original-local-annotation-final-controls.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T12:32:14.208084+00:00",
+      "updated_at": "2026-10-19T12:49:16.479532+00:00",
       "review_after": "2026-10-20T08:52:46.617857+00:00"
     }
   ],

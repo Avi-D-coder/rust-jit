@@ -26,3 +26,5 @@ pub mod macro_export_module;
 pub mod embedded_crates;
 
 pub(crate) mod module_tree;
+
+pub(crate) mod original_items;

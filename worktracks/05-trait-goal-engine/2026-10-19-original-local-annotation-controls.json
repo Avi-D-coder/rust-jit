@@ -1,0 +1,16 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Shared retained canonical declaration plans and original module/local annotation identity; catalog/runtime gates stay incomplete",
+  "controls": [
+    "source::original_items::tests::unchanged_local_derive_target_reuses_the_entered_canonical_declarations",
+    "source::original_items::tests::unchanged_module_derive_target_keeps_the_real_outline_row",
+    "syntax::declaration_scope_plan::tests::unchanged_local_drop_headers_keep_canonical_identity_without_binding_preparation",
+    "expand::source_declarative::macro_exports::tests::compiler_attribute_preparation_tests::wrong_source_and_changed_cfg_cannot_reuse_candidate_preparation",
+    "cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions",
+    "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+    "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+    "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+    "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+    "cli::preentry_loader_tests::unchanged_impl_receipts_reuse_actual_parse_inputs_without_claiming_solver_readiness"
+  ]
+}

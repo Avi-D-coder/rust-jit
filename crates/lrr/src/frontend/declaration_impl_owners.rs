@@ -65,7 +65,7 @@ impl LocalImplOwners {
                 *index
             } else {
                 publication(source, function)?;
-                let plan = Arc::new(parsed.declaration_scope_plan(body, cfg, &function.scope)?);
+                let plan = parsed.declaration_scope_plan(body, cfg, &function.scope)?;
                 if plan.parse() != scan.parse()
                     || plan.body() != body
                     || plan.scope() != &function.scope

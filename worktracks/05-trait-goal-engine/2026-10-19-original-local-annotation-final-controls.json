@@ -1,0 +1,10 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "V256 exact original Meta attachment and shared lexical identity; broad V255 evidence remains attached to its original fingerprint",
+  "controls": [
+    "source::original_items::tests::unchanged_local_derive_target_reuses_the_entered_canonical_declarations",
+    "source::original_items::tests::unchanged_module_derive_target_keeps_the_real_outline_row",
+    "syntax::declaration_scope_plan::tests::unchanged_local_drop_headers_keep_canonical_identity_without_binding_preparation",
+    "expand::source_declarative::macro_exports::tests::compiler_attribute_preparation_tests::wrong_source_and_changed_cfg_cannot_reuse_candidate_preparation"
+  ]
+}
