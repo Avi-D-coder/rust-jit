@@ -21,7 +21,11 @@ CRATES = (
     "rustc_index", "rustc_index_macros", "rustc_abi", "rustc_ast_ir", "rustc_hashes",
 )
 LICENSES = ("LICENSE-MIT", "LICENSE-APACHE", "COPYRIGHT")
-SUPPORT_SOURCES = ("compiler/rustc_middle/src/ty/structural_impls.rs",)
+SUPPORT_SOURCES = (
+    "compiler/rustc_middle/src/ty/structural_impls.rs",
+    "compiler/rustc_middle/src/ty/fold.rs",
+    "compiler/rustc_middle/src/ty/predicate.rs",
+)
 
 
 def digest(data):

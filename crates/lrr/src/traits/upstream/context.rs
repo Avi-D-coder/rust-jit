@@ -106,6 +106,13 @@ impl<'cx, F: SourceFacts<'cx>> Context<'cx, F> {
     pub(crate) fn services(self) -> F {
         self.state.services
     }
+    /// Compiler-client spelling for the actual shared BoundVarKinds allocator.
+    pub(super) fn mk_bound_variable_kinds_from_iter(
+        self,
+        kinds: impl IntoIterator<Item = BoundVariableKind<Self>>,
+    ) -> List<'cx, BoundVariableKind<Self>> {
+        List::from_vars(self, kinds)
+    }
     pub(crate) fn ty(self, kind: TyKind<Self>) -> Ty<'cx, F> {
         let flags = FlagComputation::for_kind(&kind);
         Ty(self.state.types.intern(WithCachedTypeInfo {
@@ -704,7 +711,7 @@ impl<'cx, F: SourceFacts<'cx>> ty::Interner for Context<'cx, F> {
         self,
         binder: ty::Binder<Self, T>,
     ) -> ty::Binder<Self, T> {
-        self.services().anonymize_bound_vars(self, binder)
+        self.anonymize_bound_vars(binder)
     }
     fn opaque_types_defined_by(self, defining_anchor: Self::LocalDefId) -> Self::LocalDefIds {
         self.services()

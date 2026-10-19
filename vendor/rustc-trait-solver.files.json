@@ -292,6 +292,20 @@
       "upstream_sha256": "d168e6ea5a34f9aaf9e38502cc24c033dce15cdcc10a43cbe5f9f80ff04d6939"
     },
     {
+      "path": "compiler/rustc_middle/src/ty/fold.rs",
+      "bytes": 14258,
+      "sha256": "e07cb2d26e76490d9a5cb6af659d993f5a95e4ccc99088ed90f233e2842f50b4",
+      "upstream": "compiler/rustc_middle/src/ty/fold.rs",
+      "upstream_sha256": "e07cb2d26e76490d9a5cb6af659d993f5a95e4ccc99088ed90f233e2842f50b4"
+    },
+    {
+      "path": "compiler/rustc_middle/src/ty/predicate.rs",
+      "bytes": 26508,
+      "sha256": "181d0e2a00bf8ff81fb367990c6d1e405fc0ab8f8f6be3e35141e48466c7272e",
+      "upstream": "compiler/rustc_middle/src/ty/predicate.rs",
+      "upstream_sha256": "181d0e2a00bf8ff81fb367990c6d1e405fc0ab8f8f6be3e35141e48466c7272e"
+    },
+    {
       "path": "compiler/rustc_middle/src/ty/structural_impls.rs",
       "bytes": 26825,
       "sha256": "2bac6a97bc8670297081a013cc744b22dbf93cf3455a60e1596ef1d9d5e279db",
@@ -876,6 +890,8 @@
   "packaging": "stable-shared-v1: unchanged Rust; retain upstream manifests; omit optional compiler-only dependencies; disable default/nightly feature activation",
   "supported_features": "default-features=false; no compiler-only/nightly/randomize features",
   "support_sources": [
-    "compiler/rustc_middle/src/ty/structural_impls.rs"
+    "compiler/rustc_middle/src/ty/structural_impls.rs",
+    "compiler/rustc_middle/src/ty/fold.rs",
+    "compiler/rustc_middle/src/ty/predicate.rs"
   ]
 }

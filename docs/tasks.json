@@ -20085,7 +20085,10 @@
       "implementation_contract": "Files: traits/upstream/, traits/term.rs, frontend/source_view.rs, Cargo.toml and provenance manifests. Build the pinned shared solver on macOS Rust1.99.0; adapt actual source Types/ParamEnv/headers, upstream inference transactions and canonical responses to LRR queries. Migrate custom inference/canonicalization consumers and remove superseded algorithms with explicit holds until verified.",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
-      "latest_component_scope": "V227–V229 partial M020 generic interner core: Context<F>:rustc_type_ir::Interner and immutable type/argument/region/constant/predicate family compile against the actual pinned API. Exhaustive Ty traversal is an audited mechanical port from retained licensed pinned compiler source (8sharedcrates,123files/1706190bytes,zero upstream Rust changes); rustc_middle itself is not compiled. Both builds and3existingstorage/headercontrols pass, including12sourceedition/origin worlds, plus1existingunchangedstockruntime regression. New family is not instantiated by those controls: no SourceFacts implementation, inference/delegate or actual upstream goal invocation exists; functional/roundtrip/source-currentness matrix unexecuted. Zero new distinct stock gains or suite total. V227 compile failure preserved. No M020/interpreter/JIT closure."
+      "latest_component_scope": "V230/V231 pinned compiler binder-client algorithms now replace SourceFacts anonymization/supertrait hooks. Both builds pass; exact licensed originals and mechanical port audited. Two unchanged upstream upcasting runtime contracts still fail in inherited generic type handling; no new runtime gains. No concrete provider/inference/delegate/root goal or M020/M024/interpreter/JIT closure.",
+      "artifacts": [
+        "worktracks/evidence/2026-10-19-v230-v231-pinned-binder-client.json"
+      ]
     },
     {
       "id": "M021",

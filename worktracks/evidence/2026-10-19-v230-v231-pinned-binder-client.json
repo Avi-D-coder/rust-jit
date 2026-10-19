@@ -1,0 +1,240 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "at": "2026-10-19T10:23:01.655655+00:00",
+  "parent": "f26ee0c370c83d6b9e79ef78653d39bb20db8af8",
+  "scope": "M020/M024 pinned compiler binder-client port, compilation and honest upstream runtime baseline; no concrete provider/inference/root-goal evaluation",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "precode": "worktracks/05-trait-goal-engine/2026-10-19-upstream-context.md",
+  "cohorts": {
+    "230": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T10:19:35.221579+00:00",
+          "head": "f26ee0c370c83d6b9e79ef78653d39bb20db8af8",
+          "file_count": 8459,
+          "source_sha256": "160fdd2ba58a00c88b572ee4f39a6267db2b7e9402db3a6fc77ffa0c6c51899d",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T10:20:05.968859+00:00",
+          "head": "f26ee0c370c83d6b9e79ef78653d39bb20db8af8",
+          "file_count": 8459,
+          "source_sha256": "160fdd2ba58a00c88b572ee4f39a6267db2b7e9402db3a6fc77ffa0c6c51899d",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "session": 26291,
+        "exit": 101,
+        "diagnostics": 7,
+        "cause": "Mechanical compiler-client spellings: Clauses alias, trait Ty import, BoundVarKinds allocation and predicate clause accessor. No runtime."
+      }
+    },
+    "231": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T10:20:33.908818+00:00",
+          "head": "f26ee0c370c83d6b9e79ef78653d39bb20db8af8",
+          "file_count": 8459,
+          "source_sha256": "69d13e96663050c2fd5f4c18ab2d67f35b35253da3447ac241d0d8997453aafc",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T10:21:15.123488+00:00",
+          "head": "f26ee0c370c83d6b9e79ef78653d39bb20db8af8",
+          "file_count": 8459,
+          "source_sha256": "69d13e96663050c2fd5f4c18ab2d67f35b35253da3447ac241d0d8997453aafc",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-c589b5df93981725",
+              "sha256": "3b6c0ad799256cb391933dc9c4eadfe11b441d99e6c07084a8a8456b9da6e6e6"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "36b6e01fa3c9155adf3f221a84c68856d90975fb76445e19e5654331c0f27d08"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T10:21:42.707900+00:00",
+          "head": "f26ee0c370c83d6b9e79ef78653d39bb20db8af8",
+          "file_count": 8459,
+          "source_sha256": "69d13e96663050c2fd5f4c18ab2d67f35b35253da3447ac241d0d8997453aafc",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-c589b5df93981725",
+              "sha256": "3b6c0ad799256cb391933dc9c4eadfe11b441d99e6c07084a8a8456b9da6e6e6"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "36b6e01fa3c9155adf3f221a84c68856d90975fb76445e19e5654331c0f27d08"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build": {
+        "session": 95911,
+        "exit": 0
+      },
+      "cli_build": {
+        "session": 51800,
+        "exit": 0
+      },
+      "stock_session": 41003,
+      "stock_exit": 1,
+      "stock": {
+        "counts": {
+          "interpreter_failure": 2
+        },
+        "input_guard": "all_imported_originals_manifest_and_binary_unchanged",
+        "native_execution": false,
+        "cases": [
+          {
+            "case": "tests/ui/traits/trait-upcasting/supertraits-modulo-inner-binder.rs",
+            "status": "interpreter_failure",
+            "mode": "run-pass",
+            "edition": 2015,
+            "directives": [
+              "//@ run-pass"
+            ],
+            "source_sha256": "4a0322115372e9511b393c85503be910bb53b926087895a6d2093f381ecff3b6",
+            "observation": {
+              "argv": [
+                "/Users/avi/Code/rust-jit/target/debug/lrr",
+                "--edition",
+                "2015",
+                "run",
+                "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/traits/trait-upcasting/supertraits-modulo-inner-binder.rs",
+                "--runtime-capture",
+                "--capture-context",
+                "7a4ed2e94fd5fe5df94c49412a79f97f603f0cf94e6ab6d85221f4f06f208337"
+              ],
+              "timed_out": false,
+              "output_limited": false,
+              "exit_code": 2,
+              "pid": 26011,
+              "elapsed_seconds": 4.524842499988154,
+              "stdout_bytes": 3024,
+              "stdout_sha256": "72ccbc8290d8fde044c3a29f3e9c32735b01af8705e6206dc21adcfd861a53b7",
+              "stderr_bytes": 0,
+              "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "terminal": {
+              "code": "LRR-E-GENERIC-BINDING"
+            },
+            "message": "structural constructor result requires its source type binding"
+          },
+          {
+            "case": "tests/ui/traits/trait-upcasting/correct-supertrait-substitution.rs",
+            "status": "interpreter_failure",
+            "mode": "run-pass",
+            "edition": 2015,
+            "directives": [
+              "//@ run-pass"
+            ],
+            "source_sha256": "e53d92a64ad5048ad15fa987631ccddabd39c7928837e62270205a0ce28c2775",
+            "observation": {
+              "argv": [
+                "/Users/avi/Code/rust-jit/target/debug/lrr",
+                "--edition",
+                "2015",
+                "run",
+                "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/traits/trait-upcasting/correct-supertrait-substitution.rs",
+                "--runtime-capture",
+                "--capture-context",
+                "460ee0b0620ab2ef016e22d8e46f603f99fe18204c1ceacb4895f2c55a39b3a6"
+              ],
+              "timed_out": false,
+              "output_limited": false,
+              "exit_code": 2,
+              "pid": 26020,
+              "elapsed_seconds": 3.937145374948159,
+              "stdout_bytes": 6689,
+              "stdout_sha256": "d1a81ef162a957632c0eb1c8660bac40c438c765b18c670e7ece96025cac10f6",
+              "stderr_bytes": 0,
+              "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "terminal": {
+              "code": "LRR-E-TYPE-CONTEXT"
+            },
+            "message": "generic parameter `T` has no reached binding for its path call"
+          }
+        ]
+      }
+    }
+  },
+  "port": {
+    "pin": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "algorithm_sources": [
+      "compiler/rustc_middle/src/ty/fold.rs",
+      "compiler/rustc_middle/src/ty/predicate.rs"
+    ],
+    "original_hashes": {
+      "fold.rs": "e07cb2d26e76490d9a5cb6af659d993f5a95e4ccc99088ed90f233e2842f50b4",
+      "predicate.rs": "181d0e2a00bf8ff81fb367990c6d1e405fc0ab8f8f6be3e35141e48466c7272e"
+    },
+    "audit": "python3.12 tools/sync_upstream_binders.py",
+    "audit_exit": 0,
+    "vendor_git_object_audit_exit": 0,
+    "crates": 8,
+    "retained_files": 125,
+    "bytes": 1746956,
+    "upstream_Rust_changes": 0,
+    "no_rustc_middle_crate_dependency": true,
+    "shared_entry_points": [
+      "Context::anonymize_bound_vars",
+      "Context::replace_bound_vars_uncached",
+      "Context::shift_bound_var_indices",
+      "Clause::instantiate_supertrait_upstream"
+    ],
+    "removed_alternate_interfaces": [
+      "SourceFacts::anonymize_bound_vars",
+      "SourceFacts::instantiate_supertrait"
+    ],
+    "mechanical_adaptations": [
+      "LRR generic Context/type-handle and lifetime spellings",
+      "kind Copy access",
+      "actual BoundVarKinds allocator wrapper",
+      "predicate structural interning and actual as_clause accessor",
+      "upstream inherent trait imports",
+      "method visibility/name and Rust1.99.0 formatting"
+    ]
+  },
+  "commands": {
+    "lib": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+    "cli": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr",
+    "stock": "LRR_EMBEDDED_FACADE=1 python3.12 tools/rustc_checkout_runtime.py --lrr target/debug/lrr --source-digester target/debug/examples/lrr_source_digests --report-dir /private/tmp/lrr-v231-stock --case tests/ui/traits/trait-upcasting/supertraits-modulo-inner-binder.rs --case tests/ui/traits/trait-upcasting/correct-supertrait-substitution.rs"
+  },
+  "acceptance": {
+    "compiler_binder_port": "generic build and provenance audit only; concrete source-backed functional binder matrix unexecuted",
+    "actual_upstream_goal_invocation": false,
+    "source_fact_provider_implementations": 0,
+    "runtime_contract_passes": 0,
+    "selected_runtime_failures": 2,
+    "new_distinct_stock_gains": 0,
+    "M020_complete": false,
+    "M024_complete": false,
+    "interpreter_gate": "incomplete",
+    "guest_jit_gate": "blocked by runtime prerequisite",
+    "diagnostic_compatibility": "unassessed",
+    "compiler_tooling_compatibility": "unassessed",
+    "full_suite_compatibility": "incomplete"
+  }
+}

@@ -12,6 +12,7 @@ use rustc_type_ir::{
     Interner,
 };
 
+mod binders;
 mod constructors;
 pub(crate) mod context;
 pub(crate) mod facts;

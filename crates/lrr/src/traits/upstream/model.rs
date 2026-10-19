@@ -611,7 +611,7 @@ impl<'cx, F: SourceFacts<'cx>> ty::inherent::Clause<Context<'cx, F>> for Clause<
         cx: Context<'cx, F>,
         r: Binder<Context<'cx, F>, TraitRef<Context<'cx, F>>>,
     ) -> Self {
-        cx.services().instantiate_supertrait(cx, self, r)
+        self.instantiate_supertrait_upstream(cx, r)
     }
 }
 impl<'cx, F: SourceFacts<'cx>> SliceLike for Clauses<'cx, F> {

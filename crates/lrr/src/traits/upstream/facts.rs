@@ -289,11 +289,6 @@ pub(crate) trait SourceFacts<'cx>:
         cx: Context<'cx, Self>,
         adt_def_id: DefinitionId,
     ) -> &'cx DenseBitSet<u32>;
-    fn anonymize_bound_vars<T: TypeFoldable<Context<'cx, Self>>>(
-        self,
-        cx: Context<'cx, Self>,
-        binder: ty::Binder<Context<'cx, Self>, T>,
-    ) -> ty::Binder<Context<'cx, Self>, T>;
     fn opaque_types_defined_by(
         self,
         cx: Context<'cx, Self>,
@@ -345,12 +340,6 @@ pub(crate) trait SourceFacts<'cx>:
         args: Args<'cx, Self>,
     ) -> Option<FieldInfo<Context<'cx, Self>>>;
     fn discriminant_type(self, cx: Context<'cx, Self>, ty: Ty<'cx, Self>) -> Ty<'cx, Self>;
-    fn instantiate_supertrait(
-        self,
-        cx: Context<'cx, Self>,
-        clause: Clause<'cx, Self>,
-        trait_ref: Binder<Context<'cx, Self>, TraitRef<Context<'cx, Self>>>,
-    ) -> Clause<'cx, Self>;
     fn relate_const_expression<R: TypeRelation<Context<'cx, Self>>>(
         self,
         cx: Context<'cx, Self>,
