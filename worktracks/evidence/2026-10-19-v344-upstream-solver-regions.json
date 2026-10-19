@@ -1,0 +1,215 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "recorded_at": "2026-10-19T20:27:23.735370+00:00",
+  "parent": "65c56a235b782ec511a758e74d7daa4d7c646cc0",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "integration_status": "held_component_validated",
+  "architecture_record": "worktracks/05-trait-goal-engine/2026-10-19-upstream-solver-regions.md",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-19-upstream-solver-regions-review.md",
+  "new_distinct_stock_runtime_gains": 0,
+  "refreshed_suite_total": null,
+  "root_solver_evaluations": 0,
+  "attempts": {
+    "344": {
+      "scope": "Both builds and3/3focused source-context controls pass on exact source. Actual compiler solver-region storage and combined undo plus shared forall operations; no actual trait root or stock main execution.",
+      "sessions": {
+        "lib": 83856,
+        "cli": 23301,
+        "controls": 20930
+      },
+      "terminal_exits": {
+        "lib": 0,
+        "cli": 0,
+        "controls": 0
+      },
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T20:21:49.637485+00:00",
+          "head": "65c56a235b782ec511a758e74d7daa4d7c646cc0",
+          "file_count": 8549,
+          "source_sha256": "d57e3423a205c5d6b239547f4638be308b4e34bd2554c32512e197bc67896114",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T20:23:19.902017+00:00",
+          "head": "65c56a235b782ec511a758e74d7daa4d7c646cc0",
+          "file_count": 8549,
+          "source_sha256": "d57e3423a205c5d6b239547f4638be308b4e34bd2554c32512e197bc67896114",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+              "sha256": "da42d95b544d3f819ff4fd288a742ed88b076acdf113372bdc01dc0628285678"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "10aece5eab5520eb6b3a77d5747c948b4b03ea578da237362216a4f39fcacc33"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T20:27:23.534600+00:00",
+          "head": "65c56a235b782ec511a758e74d7daa4d7c646cc0",
+          "file_count": 8549,
+          "source_sha256": "d57e3423a205c5d6b239547f4638be308b4e34bd2554c32512e197bc67896114",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+              "sha256": "da42d95b544d3f819ff4fd288a742ed88b076acdf113372bdc01dc0628285678"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "10aece5eab5520eb6b3a77d5747c948b4b03ea578da237362216a4f39fcacc33"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 120.147,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 47.497,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.397,
+          "log": "control-2.log"
+        }
+      ],
+      "build_terminals": {
+        "lib": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 19.80s\n",
+        "cli": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.39s\n"
+      },
+      "local_directory": "artifacts/validation-current-v344"
+    }
+  },
+  "provenance": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "crates": 8,
+    "files": 157,
+    "source_bytes": 2282895,
+    "rust_source_changes": 4,
+    "retained_original_rust_changes": 0,
+    "registered_rust_adaptation": "stable-region-assumptions-v1",
+    "upstream_git_objects_verified": true
+  },
+  "selection": {
+    "path": "worktracks/05-trait-goal-engine/2026-10-19-upstream-solver-regions-controls.json",
+    "sha256": "e8c9c1d5d1da65e76edb6c37a5c69cdc0b095b257c866568af4ce77914932460"
+  },
+  "source_contracts": {
+    "actual_impl_source_worlds": 48,
+    "actual_type_heads": 140,
+    "actual_guarded_trait_refs": 136,
+    "actual_generic_declaration_worlds": 20,
+    "actual_generic_rows": 48,
+    "actual_const_rows": 36,
+    "actual_early_region_rows": 24,
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "origins": [
+      "original",
+      "user macro",
+      "wrapper"
+    ],
+    "original_main_execution": "unexecuted by these host matrices",
+    "supplemental_controls": [
+      "Actual compiler None/true initial region formula, register/build_and with source spans and region leaves",
+      "Nested failed transaction (explicit closure Err control), region allocation/universe rollback, inner successful commit undone by outer, probe restore, root commit persistence",
+      "Leaf dedup independent of span, reflexive leaf elimination, spans preserved and round-trip, isolated fresh inference owner",
+      "Exact compiler forall bodies via shared FnMutDelegate/BoundVarReplacer; mixed Ty/Region/Const placeholders carry actual new universe and bound indexes",
+      "Callback invoked once and repeated forall gets distinct placeholders; no-bound fast path preserves universe; no new inference variables from rigid instantiation",
+      "Existing fresh argument/numeric/root/taint/generic ordering/currentness/cache cleanup controls remain passing"
+    ],
+    "adapted_upstream_unit_witness": {
+      "original": "vendor/rustc-trait-solver/compiler/rustc_infer/src/infer/solver_region_constraints/tests.rs",
+      "sha256": "2fef381b0f32fc297062afaf413bb78cce4f4f94391e17715add1acca0ba949a",
+      "adapter": "crates/lrr/src/traits/upstream/infer/solver_region_constraints_tests.rs",
+      "scope": "Original assertion body with TyCtxt -> actual Cx alias and actual source Span setup outside original. Supplemental adapted compiler component execution, not an unchanged original test or guest runtime pass."
+    }
+  },
+  "audits": {
+    "source_review_fingerprint": "d57e3423a205c5d6b239547f4638be308b4e34bd2554c32512e197bc67896114",
+    "original_git_objects": "verified;8sharedcrates/157files/2282895bytes;0retained-original Rust changes;4existing registered vendor compiled-file projections",
+    "inference_storage_region_and_forall_port": "pass",
+    "inference_context_port": "pass",
+    "git_diff_check": "pass",
+    "worktracks_check": "pass;12tracks/60items/49claims",
+    "spec_consistency": "pass;documents only"
+  },
+  "reproduce": [
+    "python3.12 tools/bootstrap_trait_solver.py --verify-upstream",
+    "python3.12 tools/sync_upstream_inference.py",
+    "python3.12 tools/sync_upstream_inference_context.py",
+    "python3.12 tools/validation/source_manifest.py artifacts/validation-reproduction before",
+    "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json > artifacts/validation-reproduction/lib-build.jsonl 2> artifacts/validation-reproduction/lib-build.log",
+    "cargo +1.99.0 build --offline --locked -p lrr --bin lrr",
+    "python3.12 tools/validation/source_manifest.py artifacts/validation-reproduction after-build --cargo-messages artifacts/validation-reproduction/lib-build.jsonl --cli-binary target/debug/lrr",
+    "python3.12 tools/validation/run_controls.py artifacts/validation-reproduction worktracks/05-trait-goal-engine/2026-10-19-upstream-solver-regions-controls.json",
+    "python3.12 tools/validation/source_manifest.py artifacts/validation-reproduction after-runtime"
+  ],
+  "reproduction_constraints": "Use fresh output directory; asynchronous phases with one Cargo owner and frozen source/tools/fixtures/HEAD/binaries through terminal. No previous artifact/source snapshot is needed; retained originals and projections are Git-owned.",
+  "holds": [
+    "No full InferCtxtLike or SolverDelegate, actual root evaluation or new stock runtime execution",
+    "Source function binder classification, unused/nested/source HRTB/opaque and full region/const matrices incomplete",
+    "Region visibility/leak checks, actual type-outlives origin transport and generalizer/relations/canonical responses remain prerequisites",
+    "Full typed source facts/parameter IDs/ADT/predicates/ParamEnv/lang-items/currentness publication absent",
+    "Assumptions map remains outside snapshots as pinned compiler; forall method itself intentionally does not enforce placeholder escape",
+    "Source-selected dictionary/member/VM join and held custom consumers removal incomplete",
+    "Arbitrary procedural/generated function binders, applicable standard-macro operation matrix and full runtime/cleanup/invalidation evidence unexecuted",
+    "No M020/milestone/interpreter/JIT/Linux/performance gate closure or refreshed full-suite result"
+  ]
+}

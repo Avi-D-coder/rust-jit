@@ -46,6 +46,11 @@ SUPPORT_SOURCES = (
     'compiler/rustc_infer/src/infer/type_variable.rs',
     'compiler/rustc_infer/src/infer/resolve.rs',
     'compiler/rustc_middle/src/ty/generic_args.rs',
+    'compiler/rustc_infer/src/infer/solver_region_constraints.rs',
+    'compiler/rustc_infer/src/infer/solver_region_constraints/tests.rs',
+    'compiler/rustc_infer/src/infer/snapshot/undo_log.rs',
+    'compiler/rustc_infer/src/infer/outlives/obligations.rs',
+    'compiler/rustc_infer/src/infer/relate/higher_ranked.rs',
 ) + stable.SUPPORT_SOURCES
 
 

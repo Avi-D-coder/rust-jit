@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V342-V343 HELD M020 placeholder-assumptions prerequisite. Actual stable panic reproduced in source context, then replaced with exact pinned compiler TransitiveRelation/Frozen via registered mechanical imports/module binding. All originals retained; audit and byte-identical fresh import verify8sharedcrates/152files/2238379bytes,0retained-original Rust changes,4compiled-file projections. Hash-updated arbitrary Rust projection edit is rejected. Compiler insert/get/has assumptions accessors now share actual InferenceContext map ownership. Both macOS1.99.0 builds,18unchanged upstream compiler helper tests and5/5source-context controls pass with exact source/HEAD/binary guards.140actual Type heads/136TraitRefs/48original/user-macro/wrapper edition worlds exercise actual empty/nonempty/directional/transitive/inverse/cloned assumptions and universe presence/isolation.20generic worlds/48rows/36consts/24early regions and existing source/order/cleanup controls pass. Host data only; no source HRTB/complete region transaction claim. Full facts/InferCtxtLike/delegate/region/forall/generalizer/canonical/root/member/currentness/runtime migration and legacy removal remain incomplete. Zero new distinct stock runtime gain or refreshed suite total; no M020/milestone/interpreter/JIT/Linux/performance acceptance.",
+      "scope": "V344 HELD M020 compiler solver-region/forall client. Exact compiler formula storage, get/overwrite/register, field/constructor and undo variant/reverse arm share the one existing inference owner and combined snapshot engine. No second transaction/formula engine. Actual enter_forall_and_leak_universe/enter_forall reuse existing FnMutDelegate/BoundVarReplacer; no local binder walker or leak rule. Five additional original compiler support files retained and verified;8sharedcrates/157files/2282895bytes,0retained-original Rust edits and4existing vendor mechanical projections. Both macOS1.99.0 builds and3/3source-context controls pass with exact source/HEAD/binary guards.140Type heads/136TraitRefs/48original/user-macro/wrapper edition worlds exercise nested formula rollback/commit/probe, spans, dedup/reflexivity/fresh-owner isolation and mixed/no-bound rigid placeholders/universes/no fresh inference variables.20generic worlds/48rows/36consts/24early regions and existing cleanup pass. One compiler ambiguity unit assertion body runs with an explicit actual Cx/span adapter; not an unchanged-test or runtime pass. Full source binders/region visibility/leak/type-outlives origin/generalizer/relations/canonical/InferCtxtLike/delegate/full facts/root/member/currentness/runtime migration and legacy removal remain incomplete. Zero new distinct stock runtime gain or refreshed suite total; no M020/milestone/interpreter/JIT/Linux/performance acceptance.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1849,11 +1849,16 @@
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-region-assumptions.md",
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-region-assumptions-controls.json",
         "worktracks/evidence/2026-10-19-v342-v343-upstream-region-assumptions.json",
-        "worktracks/05-trait-goal-engine/2026-10-19-upstream-region-assumptions-review.md"
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-region-assumptions-review.md",
+        "tools/upstream_solver_regions.py",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-solver-regions.md",
+        "worktracks/evidence/2026-10-19-v344-upstream-solver-regions.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-solver-regions-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-solver-regions-controls.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T20:16:28.587372+00:00",
+      "updated_at": "2026-10-19T20:27:23.735370+00:00",
       "review_after": "2026-10-20T08:52:46.617857+00:00",
       "shared_interfaces": [
         {

@@ -4,6 +4,8 @@ Integrate the pinned next-generation rustc trait solver with LRR's demand-driven
 
 ## Current boundary
 
+Latest held M020 component: V344 adds exact compiler region-formula storage/undo to the existing context and reuses compiler forall through the shared binder folder. Both builds and3source-context controls pass with guards. Full inference/delegate/root and runtime migration remain open; zero new stock runtime gains. [Evidence](../evidence/2026-10-19-v344-upstream-solver-regions.json).
+
 Latest held M020 component: V343 removes the stable assumptions relation panic by reusing the pinned compiler helper. Both builds,18unchanged helper tests and5source-context controls pass with exact guards. Actual map/data access is available; full inference/delegate/root and runtime migration remain open. Zero new stock runtime gains. [Evidence](../evidence/2026-10-19-v342-v343-upstream-region-assumptions.json).
 
 The pinned upstream next-generation solver builds and links; its generic Interner/type family, pinned client ports and concrete immutable source-fact reader compile. It is not yet invoked by interpreter goals. The real source-fact producer, compatible inference/delegate and runtime dispatch migration remain incomplete.

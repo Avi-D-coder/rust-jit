@@ -320,11 +320,46 @@
       "upstream_sha256": "0e3d962f0dae5a19ae4293de73a606c692e222eae08043bc1beb9d0cd0f6f327"
     },
     {
+      "path": "compiler/rustc_infer/src/infer/outlives/obligations.rs",
+      "bytes": 30335,
+      "sha256": "30b0ed80442caa513768a5b25a28310d3c37370d3f1f588cd3e3a6f210ca2dae",
+      "upstream": "compiler/rustc_infer/src/infer/outlives/obligations.rs",
+      "upstream_sha256": "30b0ed80442caa513768a5b25a28310d3c37370d3f1f588cd3e3a6f210ca2dae"
+    },
+    {
+      "path": "compiler/rustc_infer/src/infer/relate/higher_ranked.rs",
+      "bytes": 4660,
+      "sha256": "ff3ebc86ca7ced60b52a92d3c761ed12e72ea6a233f69ae2b1fde0afae159589",
+      "upstream": "compiler/rustc_infer/src/infer/relate/higher_ranked.rs",
+      "upstream_sha256": "ff3ebc86ca7ced60b52a92d3c761ed12e72ea6a233f69ae2b1fde0afae159589"
+    },
+    {
       "path": "compiler/rustc_infer/src/infer/resolve.rs",
       "bytes": 5320,
       "sha256": "7ce8d8532e4357552be548f1a66e81b3c89aff0c8f934785c0492daa6282dcac",
       "upstream": "compiler/rustc_infer/src/infer/resolve.rs",
       "upstream_sha256": "7ce8d8532e4357552be548f1a66e81b3c89aff0c8f934785c0492daa6282dcac"
+    },
+    {
+      "path": "compiler/rustc_infer/src/infer/snapshot/undo_log.rs",
+      "bytes": 8045,
+      "sha256": "3a39097df268547440ada1daac05ed4eeace02b1655d9fd4def77f1bd90fa5fa",
+      "upstream": "compiler/rustc_infer/src/infer/snapshot/undo_log.rs",
+      "upstream_sha256": "3a39097df268547440ada1daac05ed4eeace02b1655d9fd4def77f1bd90fa5fa"
+    },
+    {
+      "path": "compiler/rustc_infer/src/infer/solver_region_constraints.rs",
+      "bytes": 825,
+      "sha256": "54d9d1f2af43c310ad4c0974506ae29bc6c988b7d1990371100e045408110b63",
+      "upstream": "compiler/rustc_infer/src/infer/solver_region_constraints.rs",
+      "upstream_sha256": "54d9d1f2af43c310ad4c0974506ae29bc6c988b7d1990371100e045408110b63"
+    },
+    {
+      "path": "compiler/rustc_infer/src/infer/solver_region_constraints/tests.rs",
+      "bytes": 651,
+      "sha256": "2fef381b0f32fc297062afaf413bb78cce4f4f94391e17715add1acca0ba949a",
+      "upstream": "compiler/rustc_infer/src/infer/solver_region_constraints/tests.rs",
+      "upstream_sha256": "2fef381b0f32fc297062afaf413bb78cce4f4f94391e17715add1acca0ba949a"
     },
     {
       "path": "compiler/rustc_infer/src/infer/type_variable.rs",
@@ -1104,6 +1139,11 @@
     "compiler/rustc_infer/src/infer/type_variable.rs",
     "compiler/rustc_infer/src/infer/resolve.rs",
     "compiler/rustc_middle/src/ty/generic_args.rs",
+    "compiler/rustc_infer/src/infer/solver_region_constraints.rs",
+    "compiler/rustc_infer/src/infer/solver_region_constraints/tests.rs",
+    "compiler/rustc_infer/src/infer/snapshot/undo_log.rs",
+    "compiler/rustc_infer/src/infer/outlives/obligations.rs",
+    "compiler/rustc_infer/src/infer/relate/higher_ranked.rs",
     "compiler/rustc_data_structures/src/frozen.rs",
     "compiler/rustc_data_structures/src/transitive_relation.rs",
     "compiler/rustc_data_structures/src/transitive_relation/tests.rs"

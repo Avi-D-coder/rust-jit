@@ -25,9 +25,12 @@ pub(crate) type OpaqueTypeKey<'db> = rustc_type_ir::OpaqueTypeKey<DbInterner<'db
 pub(crate) type ArgOutlivesPredicate<'db> =
     rustc_type_ir::OutlivesClause<DbInterner<'db>, super::model::Arg<'db, PreparedProvider<'db>>>;
 pub(crate) type FxIndexMap<K, V> = indexmap::IndexMap<K, V, rustc_hash::FxBuildHasher>;
+mod higher_ranked;
 pub(crate) mod opaque_types;
 pub(crate) mod region_constraints;
 pub(crate) mod snapshot;
+pub(crate) mod solver_region_constraints;
+use solver_region_constraints::SolverRegionConstraintStorage;
 mod span;
 pub(crate) mod type_variable;
 pub(crate) mod unify_key;
@@ -80,6 +83,8 @@ pub struct InferCtxtInner<'db> {
     /// -- further attempts to perform unification, etc., may fail if new
     /// region constraints would've been added.
     pub(crate) region_constraint_storage: Option<RegionConstraintStorage<'db>>,
+
+    pub(crate) solver_region_constraint_storage: SolverRegionConstraintStorage<'db>,
 
     /// A set of constraints that regionck must validate.
     ///
@@ -136,6 +141,7 @@ impl<'db> InferCtxtInner<'db> {
             int_unification_storage: Default::default(),
             float_unification_storage: Default::default(),
             region_constraint_storage: Some(Default::default()),
+            solver_region_constraint_storage: SolverRegionConstraintStorage::new(),
             region_obligations: vec![],
             region_assumptions: Default::default(),
             opaque_type_storage: Default::default(),
@@ -229,5 +235,8 @@ impl<'db> InferenceStorage<'db> {
 
 mod context;
 pub(crate) use context::InferenceContext;
-mod variables;
 mod resolve;
+mod variables;
+
+#[cfg(test)]
+mod solver_region_constraints_tests;

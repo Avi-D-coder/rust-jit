@@ -8,6 +8,7 @@ use rustc_type_ir::{self as ty, Interner, inherent::IntoKind};
 pub(crate) fn check_actual_storage<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, span: Span) {
     assert!(!span.is_dummy(), "actual retained declaration range supplies inference origin");
     check_placeholder_assumptions(cx, actual, span);
+    check_solver_region_transactions(cx, span);
     check_variable_resolution(cx, actual, span);
     let storage = InferenceStorage::new();
     let root = ty::UniverseIndex::ROOT;
@@ -156,6 +157,34 @@ pub(crate) fn check_variable_resolution<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx
     let bound_value = cx.ty(ty::TyKind::Tuple(cx.list(vec![bound_ty,
         cx.ty(ty::TyKind::Ref(bound_region, actual, ty::Mutability::Not)), cx.ty(ty::TyKind::Array(actual, bound_const))])));
     let binder = ty::Binder::bind_with_vars(bound_value, vars);
+    // Compiler forall uses the same shared binder folder, with rigid placeholders
+    // in a new universe rather than allocating fresh inference variables.
+    let universe = context.universe();
+    let ty_vars = context.num_ty_vars();
+    let rigid = context.enter_forall_and_leak_universe(binder);
+    let rigid_universe = universe.next_universe();
+    assert_eq!(context.universe(), rigid_universe);
+    assert_eq!(context.num_ty_vars(), ty_vars);
+    let ty::TyKind::Tuple(fields) = rigid.kind() else { panic!() };
+    let ty::TyKind::Placeholder(p) = fields.items()[0].kind() else { panic!() };
+    assert_eq!(p.universe, rigid_universe); assert_eq!(p.bound.var, ty::BoundVar::from_u32(0));
+    let ty::TyKind::Ref(r, inner, _) = fields.items()[1].kind() else { panic!() };
+    assert_eq!(inner, actual);
+    let ty::RegionKind::RePlaceholder(p) = r.kind() else { panic!() };
+    assert_eq!(p.universe, rigid_universe); assert_eq!(p.bound.var, ty::BoundVar::from_u32(1));
+    let ty::TyKind::Array(inner, c) = fields.items()[2].kind() else { panic!() };
+    assert_eq!(inner, actual);
+    let ty::ConstKind::Placeholder(p) = c.kind() else { panic!() };
+    assert_eq!(p.universe, rigid_universe); assert_eq!(p.bound.var, ty::BoundVar::from_u32(2));
+    let entered = std::cell::Cell::new(0);
+    let again = context.enter_forall(binder, |value| { entered.set(entered.get() + 1); value });
+    assert_eq!(entered.get(), 1);
+    assert_ne!(again, rigid);
+    let last_universe = context.universe();
+    assert_eq!(last_universe, rigid_universe.next_universe());
+    assert_eq!(context.enter_forall(ty::Binder::dummy(actual), |value| value), actual);
+    assert_eq!(context.universe(), last_universe);
+    assert_eq!(context.num_ty_vars(), ty_vars);
     let before = context.num_ty_vars();
     let fresh = context.instantiate_binder_with_fresh_vars(span, super::variables::BoundRegionConversionTime::HigherRankedType, binder);
     assert_eq!(context.num_ty_vars(), before + 1);
@@ -259,4 +288,78 @@ pub(crate) fn check_placeholder_assumptions<'cx>(cx: DbInterner<'cx>, actual: Ty
     assert!(context.get_placeholder_assumptions(second_universe).region_outlives.base_edges().next().is_none());
     assert!(!span.is_dummy());
     assert!(cx.services().ready(cx).is_err(), "assumptions grant no source facts/root readiness");
+}
+
+/// Supplemental transaction/span controls, using actual source Cx and regions.
+/// These verify the compiler's shared storage and combined undo path; they do
+/// not solve an outlives goal or reproduce borrow checking.
+fn check_solver_region_transactions<'cx>(cx: DbInterner<'cx>, span: Span) {
+    use super::solver_region_constraints::SolverRegionConstraint;
+    use ty::region_constraint::LeafRegionConstraint;
+    let context = super::InferenceContext::new(cx, ty::TypingMode::PostAnalysis);
+    assert!(context.get_solver_region_constraint().is_true());
+    let first = context.next_region_var(span);
+    let second = context.next_region_var(span);
+    let third = context.next_region_var(span);
+    let original = SolverRegionConstraint::new_leaf(
+        LeafRegionConstraint::RegionOutlives(first, second, span));
+    context.register_solver_region_constraint(original.clone());
+    assert_eq!(context.get_solver_region_constraint(), original);
+    assert!(!context.in_snapshot());
+    let outer = context.start_snapshot();
+    let next = SolverRegionConstraint::new_leaf(
+        LeafRegionConstraint::RegionOutlives(second, third, span));
+    context.register_solver_region_constraint(next);
+    let combined = context.get_solver_region_constraint();
+    assert_eq!(combined.and_constraint.0.len(), 2);
+    assert!(combined.and_constraint.0.iter().any(|leaf| matches!(leaf,
+        LeafRegionConstraint::RegionOutlives(a,b,s) if *a == first && *b == second && *s == span)));
+    assert!(combined.and_constraint.0.iter().any(|leaf| matches!(leaf,
+        LeafRegionConstraint::RegionOutlives(a,b,s) if *a == second && *b == third && *s == span)));
+    let root = context.universe();
+    let failed: Result<(), ()> = context.commit_if_ok(|_| {
+        context.overwrite_solver_region_constraint(SolverRegionConstraint::new_false());
+        context.register_solver_region_constraint(SolverRegionConstraint::new_ambig(span));
+        context.create_next_universe();
+        context.next_region_var(span);
+        assert!(context.get_solver_region_constraint().is_false());
+        Err(())
+    });
+    assert!(failed.is_err());
+    assert_eq!(context.universe(), root);
+    assert_eq!(context.num_region_vars(), 3);
+    assert_eq!(context.get_solver_region_constraint(), combined);
+    // A committed inner mutation is still owned by its enclosing snapshot.
+    context.commit_if_ok::<(), (), _>(|_| {
+        context.overwrite_solver_region_constraint(SolverRegionConstraint::new_false());
+        Ok(())
+    }).unwrap();
+    assert!(context.get_solver_region_constraint().is_false());
+    context.rollback_to(outer);
+    assert_eq!(context.get_solver_region_constraint(), original);
+    assert!(!context.in_snapshot());
+    context.probe(|_| {
+        context.overwrite_solver_region_constraint(SolverRegionConstraint::new_false());
+    });
+    assert_eq!(context.get_solver_region_constraint(), original);
+    // Upstream canonicalization deduplicates a repeated leaf independent of span.
+    let other_span = Span { origin: span.origin, start: span.end, end: span.end };
+    context.register_solver_region_constraint(SolverRegionConstraint::new_leaf(
+        LeafRegionConstraint::RegionOutlives(first, second, other_span)));
+    assert_eq!(context.get_solver_region_constraint().and_constraint.0.len(), 1);
+    context.register_solver_region_constraint(SolverRegionConstraint::new_leaf(
+        LeafRegionConstraint::RegionOutlives(first, first, span)));
+    assert_eq!(context.get_solver_region_constraint().and_constraint.0.len(), 1);
+    super::solver_region_constraints_tests::canonicalization_preserves_only_one_ambiguity(cx, span, other_span);
+    context.commit_if_ok::<(), (), _>(|_| {
+        context.overwrite_solver_region_constraint(SolverRegionConstraint::new_ambig(span));
+        Ok(())
+    }).unwrap();
+    assert!(context.get_solver_region_constraint().is_ambig());
+    let constraint = context.get_solver_region_constraint();
+    assert_eq!(constraint.and_constraint.0[0].span(), span);
+    assert_eq!(constraint.clone().without_spans().with_spans(span), constraint);
+    assert!(super::InferenceContext::new(cx, ty::TypingMode::PostAnalysis)
+        .get_solver_region_constraint().is_true());
+    assert!(cx.services().ready(cx).is_err(), "region state grants no source facts/root readiness");
 }

@@ -3,6 +3,7 @@
 //! Registered mechanical port: tools/sync_upstream_inference.py.
 //! Snapshotting in the infer ctxt of the next-trait-solver.
 
+use super::super::solver_region_constraints::SolverRegionConstraint;
 use ena::snapshot_vec as sv;
 use ena::undo_log::{Rollback, UndoLogs};
 use ena::unify as ut;
@@ -31,6 +32,9 @@ pub(crate) enum UndoLog<'db> {
     FloatUnificationTable(sv::UndoLog<ut::Delegate<FloatVid>>),
     RegionConstraintCollector(region_constraints::UndoLog<'db>),
     RegionUnificationTable(sv::UndoLog<ut::Delegate<RegionVidKey<'db>>>),
+    OverwriteSolverRegionConstraint {
+        old_constraint: SolverRegionConstraint<'db>,
+    },
     PushTypeOutlivesConstraint,
     PushRegionAssumption,
 }
@@ -83,6 +87,10 @@ impl<'db> Rollback<UndoLog<'db>> for InferCtxtInner<'db> {
                 .unwrap()
                 .unification_table
                 .reverse(undo),
+            UndoLog::OverwriteSolverRegionConstraint { old_constraint } => {
+                self.solver_region_constraint_storage
+                    .overwrite(old_constraint);
+            }
             UndoLog::PushTypeOutlivesConstraint => {
                 let popped = self.region_obligations.pop();
                 assert!(

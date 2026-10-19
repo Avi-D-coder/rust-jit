@@ -9,6 +9,7 @@ import hashlib
 from pathlib import Path
 from sync_upstream_binders import method
 import subprocess
+from upstream_solver_regions import extend_storage
 
 ROOT = Path(__file__).resolve().parents[1]
 PIN = 'ae0fe511b15ab760d7e963b13389d1bc2ab42b18'
@@ -129,6 +130,7 @@ impl Span {
     outputs['mod.rs'] = rustfmt(outputs['mod.rs'].decode().replace('pub(crate) mod type_variable;', 'mod span;\npub(crate) mod type_variable;'))
     outputs['type_variable.rs'] += b'\ninclude!(\"root_probe.rs\");\n'
     outputs['mod.rs'] += b'\nmod context;\npub(crate) use context::InferenceContext;\nmod variables;\nmod resolve;\n'
+    extend_storage(outputs, header, rustfmt)
     return outputs
 
 
