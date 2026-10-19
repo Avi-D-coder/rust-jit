@@ -1,0 +1,14 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Actual original local derive coordinator and generated item catalog ownership; source-catalog evidence distinct from unchanged existing runtime regression. Full solver, interpreter and JIT gates open.",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+    "cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin",
+    "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+    "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+    "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+    "source::original_items::tests::unchanged_multiple_annotations_share_one_original_item_group",
+    "expand::source_declarative::assembly::tests::repeated_origin_keys_keep_distinct_generated_invocation_occurrences",
+    "cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions"
+  ]
+}

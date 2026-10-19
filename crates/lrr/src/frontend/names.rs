@@ -1265,6 +1265,15 @@ impl NameNamespaces {
         declaration: Arc<DeclaredItemName>,
         module: bool,
     ) -> Result<(), Diagnostic> {
+        // This table publishes module paths. Local declarations must retain
+        // their owner through ordinary body-source publication; flattening
+        // them to a module path would expose them outside their lexical scope.
+        if declaration.scope().owner.is_some() {
+            return Err(Diagnostic::new(
+                "LRR-E-NAME-CONTEXT",
+                "local declaration requires ordinary body-source publication".into(),
+            ));
+        }
         self.import_generation = self.import_generation.wrapping_add(1);
         // ModulePaths currently certifies root-class prefixes. Retaining a
         // declaration in another class does not certify descendants there.
@@ -2728,9 +2737,8 @@ impl NameNamespaces {
             .checked_add(scope.heap_bytes())
             .and_then(|n| n.checked_add(192))
             .ok_or_else(fail)?;
-        if scope.owner.is_some() {
-            return Err(fail());
-        }
+        // Frontiers are keyed by the complete lexical ScopeKey, including a
+        // local owner. This does not publish a declaration as a module name.
         self.frontiers.entry(scope).or_default().insert(producer);
         self.generated_frontier_bytes = bytes;
         Ok(())

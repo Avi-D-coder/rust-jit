@@ -1483,6 +1483,11 @@ fn unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origi
             SourceCompilerPreparation::Ready(discovery) => discovery,
             SourceCompilerPreparation::NeedModule { .. } => panic!("actual source module pending"),
         };
+        // Retain the actual original parent for the independent adoption
+        // controls before the coordinator can complete its annotation group.
+        let mut parent = (*discovery
+            .original_declaration_parent_for_control(source.selection())
+            .unwrap()).clone();
         // Drive the real configured preparation, retaining its actual result.
         // This control validates selection/admission, never treats incomplete
         // catalog discovery as a runtime or full source-contract pass.
@@ -1494,6 +1499,7 @@ fn unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origi
                 Err(error) => error.code,
             }
         );
+        catalog.unwrap();
         let scan = source.declaration_inventory(Default::default()).unwrap();
         let producer = scan
             .producers()
@@ -1525,13 +1531,10 @@ fn unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origi
             .unwrap()
             .unwrap();
         assert!(std::sync::Arc::ptr_eq(&group, &canonical));
-        let mut parent = (*discovery
-            .original_declaration_parent_for_control(source.selection())
-            .unwrap())
-        .clone();
         let mut completed = std::collections::BTreeMap::new();
         let fresh_parent = parent.clone();
         let mut first_prefix = None;
+        let mut first_declarations: Option<std::sync::Arc<GeneratedDeclarations>> = None;
         let origin = DeriveDeclarationOrigin::Source {
             selection: source.selection().clone(),
             producer: producer.identity,
@@ -1588,6 +1591,21 @@ fn unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origi
                     assert_eq!(declarations.parent_inventory(), scan.fingerprint());
                     assert_eq!(declarations.parent_invocation(), producer.identity);
                     assert_eq!(declarations.scan().scope(), &item.scope);
+                    let cfg = source.captured_macro_cfg().unwrap();
+                    let catalog = crate::frontend::generated_macros::GeneratedMacroCatalog::for_admitted_output(
+                        &generated, &declarations, cfg, 1,
+                    ).unwrap();
+                    assert_eq!(catalog.owner(), &item.scope);
+                    assert!(catalog.require_captured_owner(&generated, &source.outline().root_scope, cfg, 1).is_err());
+                    assert!(catalog.child_for_discovery(&generated).is_err(), "no actual child request is pending");
+                    assert!(crate::frontend::generated_macros::GeneratedMacroCatalog::for_admitted_output(
+                        &generated, &declarations, cfg, 2,
+                    ).is_err(), "an old epoch cannot admit this output");
+                    if let Some(first) = &first_declarations {
+                        assert!(crate::frontend::generated_macros::GeneratedMacroCatalog::for_admitted_output(
+                            &generated, first, cfg, 1,
+                        ).is_err(), "a sibling output's receipt does not own this record");
+                    } else { first_declarations = Some(declarations.clone()); }
                     assert!(
                         GeneratedHeaderPlan::prepare(
                             &generated,

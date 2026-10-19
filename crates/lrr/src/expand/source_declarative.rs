@@ -60,6 +60,7 @@ pub struct SourceDeclarative {
     // Each append replays against its preceding source prefix, excluding itself
     // and later outputs. The original producer stays pending in the live index.
     derive_prefixes: std::collections::BTreeMap<Digest, (u64, std::sync::Arc<Self>)>,
+    declaration_prefix: Option<(crate::syntax::outline::ScopeKey, crate::frontend::macro_boundary::RetainedMacroScope)>,
     source_modules: std::collections::BTreeMap<Digest, std::sync::Arc<Self>>,
     generated: std::collections::BTreeMap<
         Digest,
@@ -271,6 +272,12 @@ impl<'a> CapturedMacroContext<'a> {
     ) -> Result<super::body_macro_boundary::RetainedBoundaryParents, Diagnostic> {
         self.source_scope_count()?;
         let mut retained = super::body_macro_boundary::RetainedBoundaryParents::new()?;
+        if let Some((owner, prefix)) = &self.provider.declaration_prefix {
+            if scope != owner {
+                return Err(fault("LRR-E-MACRO-SCOPE", "retained declaration prefix owner differs"));
+            }
+            retained.scopes.push(prefix.clone());
+        } else {
         let outer = self.provider.index.outer_scope(scope, self.before)?;
         retained.scopes.push(
             self.provider
@@ -278,6 +285,7 @@ impl<'a> CapturedMacroContext<'a> {
                 .retain_outer(outer)?
                 .ok_or_else(|| fault("LRR-E-MACRO-SCOPE", "captured source outer root differs"))?,
         );
+        }
         retained.sources.push(self.provider.source.share());
         for (ordinal, input) in &self.provider.parents {
             let parent = self
@@ -303,7 +311,7 @@ impl<'a> CapturedMacroContext<'a> {
                 }
                 if selected.is_none() {
                     for source in &parent.sources {
-                        if let Some(root) = source.index.retain_outer(*outer)? {
+                        if let Some(root) = source.retain_captured_outer(*outer)? {
                             selected = Some(root);
                             break;
                         }
@@ -343,7 +351,16 @@ impl<'a> CapturedMacroContext<'a> {
         ancestry: &mut crate::frontend::macro_origins::ExpansionAncestry,
         outers: &mut Vec<crate::frontend::macro_scopes::OuterMacroScope<'a>>,
     ) -> Result<(), Diagnostic> {
-        outers.push(self.provider.index.outer_scope(scope, self.before)?);
+        if let Some((owner, prefix)) = &self.provider.declaration_prefix {
+            if scope != owner {
+                return Err(fault("LRR-E-MACRO-SCOPE", "captured declaration prefix owner differs"));
+            }
+            facts.extend(prefix.facts())?;
+            ancestry.extend(prefix.ancestry())?;
+            outers.push(prefix.outer());
+        } else {
+            outers.push(self.provider.index.outer_scope(scope, self.before)?);
+        }
         for (ordinal, input) in &self.provider.parents {
             let parent = self.owners.get(*ordinal).ok_or_else(|| {
                 fault(
@@ -914,6 +931,7 @@ impl SourceDeclarative {
             generated: std::collections::BTreeMap::new(),
             catalogs: std::collections::BTreeMap::new(),
             derive_prefixes: std::collections::BTreeMap::new(),
+            declaration_prefix: None,
             source_modules: std::collections::BTreeMap::new(),
             owned_forest: Default::default(),
             original_routes: Default::default(),
@@ -1201,6 +1219,59 @@ impl SourceDeclarative {
             .index = index;
         Ok(snapshot)
     }
+    /// Retain a completed cold declaration catalog for real definition/body
+    /// lookup. Its lexical bindings publish in DeclarationMacroIndex, never in
+    /// this provider's module SourceMacroIndex.
+    pub(crate) fn retain_declaration_derive_catalog(
+        &mut self,
+        catalog: std::sync::Arc<crate::frontend::generated_macros::GeneratedMacroCatalog>,
+        prefix: std::sync::Arc<Self>,
+    ) -> Result<(), Diagnostic> {
+        let identity = catalog.record_identity();
+        if !catalog.ready_for_outward() || self.catalogs.contains_key(&identity)
+            || !prefix.source.same_publication(&self.source)
+            || prefix.declaration_prefix.as_ref().is_none_or(|(scope, _)| scope != catalog.owner()) {
+            return Err(fault("LRR-E-EXPANSION-INPUT", "cold derive catalog is incomplete or already retained"));
+        }
+        for entry in catalog.outward() {
+            if self.generated.contains_key(&entry.definition.identity) {
+                return Err(fault("LRR-E-EXPANSION-INPUT", "cold derive definition already retained"));
+            }
+        }
+        for entry in catalog.outward() {
+            self.generated.insert(entry.definition.identity, catalog.clone());
+        }
+        let before = prefix.declaration_prefix.as_ref()
+            .ok_or_else(|| fault("LRR-E-MACRO-SCOPE", "cold derive prefix absent"))?.1.outer().before;
+        self.derive_prefixes.insert(identity, (before, prefix));
+        self.catalogs.insert(identity, catalog);
+        Ok(())
+    }
+    pub(crate) fn declaration_prefix_snapshot(
+        &self,
+        group: &crate::source::original_items::OriginalAnnotationGroup,
+        parent: &crate::frontend::impl_index::DeclarationMacroIndex,
+    ) -> Result<std::sync::Arc<Self>, Diagnostic> {
+        group.require_source(&self.source)?;
+        let boundary = parent.retain_original_derive_prefix(group)?;
+        let mut snapshot = self.module_snapshot()?;
+        std::sync::Arc::get_mut(&mut snapshot)
+            .ok_or_else(|| fault("LRR-E-EXPANSION-INPUT", "declaration snapshot already shared"))?
+            .declaration_prefix = Some((group.call().scope.clone(), boundary));
+        Ok(snapshot)
+    }
+    fn retain_captured_outer(
+        &self, outer: crate::frontend::macro_scopes::OuterMacroScope<'_>,
+    ) -> Result<Option<crate::frontend::macro_boundary::RetainedMacroScope>, Diagnostic> {
+        if let Some((_, root)) = &self.declaration_prefix {
+            let retained = root.outer();
+            if std::ptr::eq(outer.scopes, retained.scopes)
+                && std::ptr::eq(outer.declarations, retained.declarations) {
+                return root.at(outer.scope, outer.before).map(Some);
+            }
+        }
+        self.index.retain_outer(outer)
+    }
     pub(crate) fn publish_derive_bindings(
         &mut self,
         call: &crate::syntax::outline::ItemInvocation,
@@ -1338,6 +1409,7 @@ impl SourceDeclarative {
             parents: self.parents.clone(),
             catalogs: self.catalogs.clone(),
             derive_prefixes: self.derive_prefixes.clone(),
+            declaration_prefix: self.declaration_prefix.clone(),
             source_modules: self.source_modules.clone(),
             generated: self.generated.clone(),
             owned_forest: self.owned_forest.clone(),

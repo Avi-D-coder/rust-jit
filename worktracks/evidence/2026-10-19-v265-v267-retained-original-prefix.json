@@ -1,0 +1,252 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "parent": "c0878d52871e6bfcd0070eabb38d8e3d88635e16",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "integration_status": "held",
+  "new_distinct_stock_runtime_gains": 0,
+  "scope": "V265-V267 retained real declaration-prefix context. V265 library build failed on two mechanical uses of as_outer instead of the actual RetainedMacroScope::outer API. V266 both builds pass and actual global catalog matrix newly12/12source worlds (previous8/12), while4/5controls pass: old component inspector improperly requested mutable access to a sealed graph. V267 repairs only test inspection to read the real final namespace snapshot, strengthens actual catalog/receipt negatives, and retains the actual prefix position; both builds pass, no runtime/controls launched before subsequent source-review fallback correction. No new distinct runtime stock gain or solver/interpreter/JIT completion.",
+  "cohorts": {
+    "265": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:01:50.174669+00:00",
+          "head": "c0878d52871e6bfcd0070eabb38d8e3d88635e16",
+          "file_count": 8477,
+          "source_sha256": "87a1b7a4c55231802ffbf20958d77514e7f674a073a4067cf52571c1c6c83b3b",
+          "binaries": {}
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 56113,
+          "exit": 101,
+          "messages_sha256": "c81ca932addf707ddfada2b3ebf7e9796787143960560597cdbf6a1d09f7a10f",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 2 previous errors; 29 warnings emitted\n",
+          "errors": [
+            "error[E0599]: no method named `as_outer` found for reference `&macro_boundary::RetainedMacroScope` in the current scope\n   --> crates/lrr/src/expand/source_declarative.rs:360:32\n    |\n360 |             outers.push(prefix.as_outer());\n    |                                ^^^^^^^^\n    |\nhelp: there is a method `outer` with a similar name\n    |\n360 -             outers.push(prefix.as_outer());\n360 +             outers.push(prefix.outer());\n    |\n\n",
+            "error[E0599]: no method named `as_outer` found for reference `&macro_boundary::RetainedMacroScope` in the current scope\n    --> crates/lrr/src/expand/source_declarative.rs:1265:33\n     |\n1265 |             let retained = root.as_outer();\n     |                                 ^^^^^^^^\n     |\nhelp: there is a method `outer` with a similar name\n     |\n1265 -             let retained = root.as_outer();\n1265 +             let retained = root.outer();\n     |\n\n"
+          ]
+        }
+      }
+    },
+    "266": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:02:11.376334+00:00",
+          "head": "c0878d52871e6bfcd0070eabb38d8e3d88635e16",
+          "file_count": 8477,
+          "source_sha256": "c523726b33d8fa862656dcf4cdf48880e076b0307e4b01dca8aa79b1c8b693ee",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:03:22.210461+00:00",
+          "head": "c0878d52871e6bfcd0070eabb38d8e3d88635e16",
+          "file_count": 8477,
+          "source_sha256": "c523726b33d8fa862656dcf4cdf48880e076b0307e4b01dca8aa79b1c8b693ee",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "48daaa81c2b8d7c30645dd9f8ac879b03f994590b9ba5e6563fe9a0724ce3a69"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "28984de0005fa1510a98e9757ccd7166d72dfa08c35c01505f7e3b244dc5bbdb"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:04:17.268490+00:00",
+          "head": "c0878d52871e6bfcd0070eabb38d8e3d88635e16",
+          "file_count": 8477,
+          "source_sha256": "c523726b33d8fa862656dcf4cdf48880e076b0307e4b01dca8aa79b1c8b693ee",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "48daaa81c2b8d7c30645dd9f8ac879b03f994590b9ba5e6563fe9a0724ce3a69"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "28984de0005fa1510a98e9757ccd7166d72dfa08c35c01505f7e3b244dc5bbdb"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 38987,
+          "exit": 0,
+          "messages_sha256": "f07fae895367899b138462df5c88c996af6307315ff39f101e0d0150dae8de5f",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 21.63s\n",
+          "errors": []
+        },
+        "cli": {
+          "session": 39153,
+          "exit": 0,
+          "messages_sha256": "0f76c89c556e11f6bc9cb7e33b3e25bbdc9b3ec7181f67f3c2e4a7a090886a8a",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 16.41s\n",
+          "errors": []
+        }
+      },
+      "control_session": 30659,
+      "control_exit": 1,
+      "control_results": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 29.145,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 101,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": false,
+          "seconds": 2.733,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 1.172,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 2.464,
+          "log": "control-3.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+            "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 7.323,
+          "log": "control-4.log"
+        }
+      ],
+      "catalog_terminal": [
+        "test cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries ... global source catalog tests/ui/traits/safety-ok.rs, edition2015: 995 headers; original1/generated0/nested0; no guest execution",
+        "global source catalog tests/ui/methods/method-self-arg-trait.rs, edition2015: 998 headers; original2/generated2/nested0; no guest execution",
+        "global source catalog tests/ui/coherence/coherence-impl-in-fn.rs, edition2015: 997 headers; original1/generated2/nested1; no guest execution",
+        "global source catalog tests/ui/traits/safety-ok.rs, edition2018: 995 headers; original1/generated0/nested0; no guest execution",
+        "global source catalog tests/ui/methods/method-self-arg-trait.rs, edition2018: 998 headers; original2/generated2/nested0; no guest execution",
+        "global source catalog tests/ui/coherence/coherence-impl-in-fn.rs, edition2018: 997 headers; original1/generated2/nested1; no guest execution",
+        "global source catalog tests/ui/traits/safety-ok.rs, edition2021: 995 headers; original1/generated0/nested0; no guest execution",
+        "global source catalog tests/ui/methods/method-self-arg-trait.rs, edition2021: 998 headers; original2/generated2/nested0; no guest execution",
+        "global source catalog tests/ui/coherence/coherence-impl-in-fn.rs, edition2021: 997 headers; original1/generated2/nested1; no guest execution",
+        "global source catalog tests/ui/traits/safety-ok.rs, edition2024: 995 headers; original1/generated0/nested0; no guest execution",
+        "global source catalog tests/ui/methods/method-self-arg-trait.rs, edition2024: 998 headers; original2/generated2/nested0; no guest execution",
+        "global source catalog tests/ui/coherence/coherence-impl-in-fn.rs, edition2024: 997 headers; original1/generated2/nested1; no guest execution",
+        "global source matrix: 12/12 source worlds; failed=[]; no guest runtime acceptance"
+      ],
+      "failed_control_terminal": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin ... local derive component edition2015: catalog preparation ready\n\nthread 'cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin' (17676547) panicked at crates/lrr/src/cli/preentry_loader_tests.rs:1570:18:\ncalled `Result::unwrap()` on an `Err` value: Diagnostic { code: \"LRR-E-CATALOG-INCOMPLETE\", message: \"completed source namespace graph is immutable\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nFAILED\n\nfailures:\n\nfailures:\n    cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1743 filtered out; finished in 2.37s\n\n"
+    },
+    "267": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:04:52.801674+00:00",
+          "head": "c0878d52871e6bfcd0070eabb38d8e3d88635e16",
+          "file_count": 8477,
+          "source_sha256": "5e4ba15eb23bd94bd5e5db5971db36ce70280337193b1355001bd6e616dcef5c",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T14:06:00.719850+00:00",
+          "head": "c0878d52871e6bfcd0070eabb38d8e3d88635e16",
+          "file_count": 8477,
+          "source_sha256": "5e4ba15eb23bd94bd5e5db5971db36ce70280337193b1355001bd6e616dcef5c",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "1f312422f9766d8e292bf155ecda1d2b90bb3b3eb1836d29adf304b063fa9f9e"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "3203453ea7caeb06bb1902d8dc9508558b8baa3f17cb87c8c37b880a3681b7be"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "builds": {
+        "lib": {
+          "session": 41158,
+          "exit": 0,
+          "messages_sha256": "345b4bf7e495944e82d5ce3425015d72968cb1987be15816f96f46a8464c8b70",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.30s\n",
+          "errors": []
+        },
+        "cli": {
+          "session": 43795,
+          "exit": 0,
+          "messages_sha256": "de8c9a827bd9c128fecfb89a43049836cf2db61ccdce148e2926dae8365ae21a",
+          "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.85s\n",
+          "errors": []
+        }
+      }
+    }
+  }
+}

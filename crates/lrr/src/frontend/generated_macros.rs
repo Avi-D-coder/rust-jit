@@ -386,7 +386,8 @@ fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-EXPANSION-INPUT", message.into())
 }
 fn contained_scope(scope: &SourceScope, owner: &SourceScope) -> bool {
-    scope.owner.is_none()
+    (scope.owner == owner.owner
+        || scope.owner.is_none() && scope.module_path.len() > owner.module_path.len())
         && scope.crate_key == owner.crate_key
         && scope.module_path.starts_with(&owner.module_path)
 }
@@ -461,6 +462,38 @@ impl GeneratedMacroCatalog {
     ) -> Result<Self, Diagnostic> {
         Self::prepare(items, owner, owner_context, cfg, epoch, true)
     }
+    /// Root item output at its actual admitted insertion scope, including a
+    /// block owner. It uses the same catalog and output producer closure.
+    pub(crate) fn for_admitted_output(
+        items: &GeneratedItems,
+        declarations: &crate::expand::generated_declarations::GeneratedDeclarations,
+        cfg: &CfgSet,
+        epoch: u64,
+    ) -> Result<Self, Diagnostic> {
+        let context = Key(items.record().key().parent_context.0);
+        Self::prepare_owned(items, declarations.scan().scope().clone(), context,
+            context, cfg, epoch, true, None, Some(declarations))
+    }
+    pub(crate) fn require_captured_owner(
+        &self, items: &GeneratedItems, scope: &SourceScope, cfg: &CfgSet, epoch: u64,
+    ) -> Result<(), Diagnostic> {
+        if self.items.record().descriptor().fingerprint() != items.record().descriptor().fingerprint()
+            || &self.owner != scope || self.cfg != *cfg
+            || self.items.epoch() != epoch || items.epoch() != epoch {
+            return Err(fault("generated catalog insertion receipt differs"));
+        }
+        Ok(())
+    }
+    pub(crate) fn require_pending_owner(
+        &self, items: &GeneratedItems, scope: &SourceScope, cfg: &CfgSet, epoch: u64,
+    ) -> Result<(), Diagnostic> {
+        if self.pending_scope()? != scope || self.cfg != *cfg
+            || self.items.epoch() != epoch || items.epoch() != epoch
+            || !self.pending.as_ref().is_some_and(|request| request.key() == items.record().key()) {
+            return Err(fault("generated child actual pending insertion differs"));
+        }
+        Ok(())
+    }
     pub(crate) fn inherit_original_helpers(
         &mut self,
         helpers: Arc<super::generated_derive_helpers::OriginalDeriveHelpers>,
@@ -507,6 +540,7 @@ impl GeneratedMacroCatalog {
             cfg,
             epoch,
             allow_calls,
+            None,
             None,
         )
     }
@@ -675,6 +709,7 @@ impl GeneratedMacroCatalog {
             self.items.epoch(),
             true,
             Some(self),
+            None,
         )
     }
     #[allow(clippy::too_many_arguments)]
@@ -687,6 +722,7 @@ impl GeneratedMacroCatalog {
         epoch: u64,
         allow_calls: bool,
         parent: Option<&Self>,
+        admitted: Option<&crate::expand::generated_declarations::GeneratedDeclarations>,
     ) -> Result<Self, Diagnostic> {
         if epoch != items.epoch() {
             return Err(Diagnostic::new(
@@ -694,7 +730,15 @@ impl GeneratedMacroCatalog {
                 "generated macro catalog epoch differs".into(),
             ));
         }
-        if owner.owner.is_some() || items.record().key().parent_context != Digest(call_context.0) {
+        if let Some(declarations) = admitted {
+            if declarations.record().descriptor().fingerprint() != items.record().descriptor().fingerprint()
+                || declarations.scan().scope() != &owner || declarations.scan().cfg() != cfg.fingerprint()
+                || declarations.epoch() != epoch {
+                return Err(fault("generated macro admitted insertion differs"));
+            }
+        }
+        if owner.owner.is_some() && admitted.is_none() && parent.is_none()
+            || items.record().key().parent_context != Digest(call_context.0) {
             return Err(fault("generated macro owner scope/context differs"));
         }
         let context = if let Some(parent) = parent {
@@ -740,7 +784,11 @@ impl GeneratedMacroCatalog {
             context.clone()
         };
         let parsed = ParsedFile::from_generated_items(items)?;
-        let outline = parsed.outline(owner.crate_key, owner.module_path.clone(), cfg)?;
+        let outline = if admitted.is_some() || parent.is_some() {
+            parsed.outline_item_fragment(&owner, cfg)?
+        } else {
+            parsed.outline(owner.crate_key, owner.module_path.clone(), cfg)?
+        };
         let permitted = outline
             .item_invocations
             .iter()
@@ -759,22 +807,26 @@ impl GeneratedMacroCatalog {
             .items
             .iter()
             .filter_map(|item| {
-                crate::syntax::outline::potential_attribute_producer(item)
+                outline.item_attribute_producer(item)
                     .map(|call| (call.item_input, call.frontier))
             })
             .collect::<BTreeMap<_, _>>();
         if allow_calls {
             frontiers.extend(attributes.values().copied());
         }
-        let module_plan =
+        let module_plan = if let Some(declarations) = admitted {
+            super::generated_headers::GeneratedHeaderPlan::prepare_admitted_with_root(
+                items, declarations, call_context, &context, cfg, epoch,
+            )?
+        } else if let Some(parent) = parent {
+            super::generated_headers::GeneratedHeaderPlan::prepare_pending_child(
+                items, owner.clone(), call_context, &context, cfg, epoch, parent,
+            )?
+        } else {
             super::generated_headers::GeneratedHeaderPlan::prepare_with_captured_root(
-                items,
-                owner.clone(),
-                call_context,
-                &context,
-                cfg,
-                epoch,
-            )?;
+                items, owner.clone(), call_context, &context, cfg, epoch,
+            )?
+        };
         let mut module_scopes_allowed = module_plan
             .module_sources()
             .iter()
@@ -782,7 +834,7 @@ impl GeneratedMacroCatalog {
             .collect::<BTreeSet<_>>();
         for item in &outline.items {
             if item.def_key.item_kind == ItemKind::Module
-                && crate::syntax::outline::potential_attribute_producer(item).is_some()
+                && outline.item_attribute_producer(item).is_some()
             {
                 let mut child = item.scope.clone();
                 child.module_path.push(item.def_key.declared_name.clone());
@@ -967,7 +1019,7 @@ impl GeneratedMacroCatalog {
         for item in &outline.items {
             if !contained_scope(&item.scope, &owner)
                 || item.def_key.item_kind != ItemKind::Macro
-                || crate::syntax::outline::potential_attribute_producer(item).is_some()
+                || outline.item_attribute_producer(item).is_some()
             {
                 continue;
             }
@@ -1065,7 +1117,7 @@ impl GeneratedMacroCatalog {
         let mut test_registration_candidates = BTreeMap::new();
         let mut test_registration_candidate_bytes = 0usize;
         for item in &outline.items {
-            if !allow_calls || crate::syntax::outline::potential_attribute_producer(item).is_none()
+            if !allow_calls || outline.item_attribute_producer(item).is_none()
             {
                 continue;
             }
@@ -3836,11 +3888,7 @@ impl GeneratedMacroCatalog {
             return Err(fault("generated macro routes require completed calls"));
         }
         let parsed = ParsedFile::from_generated_items(&self.items)?;
-        let outline = parsed.outline(
-            self.owner.crate_key,
-            self.owner.module_path.clone(),
-            &self.cfg,
-        )?;
+        let outline = parsed.outline_item_fragment(&self.owner, &self.cfg)?;
         let plan = super::generated_headers::GeneratedHeaderPlan::prepare_catalog(self)?;
         let headers = self
             .items
@@ -4200,11 +4248,7 @@ impl GeneratedMacroCatalog {
             .get(&call_scope)
             .ok_or_else(|| fault("completed generated lexical scope absent"))?;
         let parsed = ParsedFile::from_generated_items(&items)?;
-        let outline = parsed.outline(
-            call_scope.crate_key,
-            call_scope.module_path.clone(),
-            &self.cfg,
-        )?;
+        let outline = parsed.outline_item_fragment(&call_scope, &self.cfg)?;
         if child.is_none()
             && (!outline.imports.is_empty()
                 || outline.scopes.values().any(|s| !s.blockers.is_empty())

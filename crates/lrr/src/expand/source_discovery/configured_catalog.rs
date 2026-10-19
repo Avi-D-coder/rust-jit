@@ -306,14 +306,18 @@ impl SourceDiscovery {
             .declarative
             .as_ref()
             .ok_or_else(|| fault("derive control actual compiler preparation absent"))?;
-        let names = Self::install_macro_routes_with_modules(
-            crate::expand::source_discovery::unique_graph(&mut self.graph)?,
-            providers,
-            &self.module_routes,
-            &self.nested_sources,
-            &self.nested_inert_proofs,
-            &mut self.route_install,
-        )?;
+        let names = if self.seal.is_some() {
+            // Completed discovery retains the actual final namespace snapshot.
+            // Inspection must not request mutable access to its sealed graph.
+            self.route_install.namespaces.clone()
+                .ok_or_else(|| fault("sealed derive control namespace snapshot absent"))?
+        } else {
+            Self::install_macro_routes_with_modules(
+                crate::expand::source_discovery::unique_graph(&mut self.graph)?,
+                providers, &self.module_routes, &self.nested_sources,
+                &self.nested_inert_proofs, &mut self.route_install,
+            )?
+        };
         let poll = crate::expand::source_derives::prepare_group(
             &self.sources[ordinal],
             &providers[ordinal],
@@ -357,14 +361,18 @@ impl SourceDiscovery {
             .declarative
             .as_ref()
             .ok_or_else(|| fault("derive control compiler preparation absent"))?;
-        let names = Self::install_macro_routes_with_modules(
-            crate::expand::source_discovery::unique_graph(&mut self.graph)?,
-            providers,
-            &self.module_routes,
-            &self.nested_sources,
-            &self.nested_inert_proofs,
-            &mut self.route_install,
-        )?;
+        let names = if self.seal.is_some() {
+            // Completed discovery retains the actual final namespace snapshot.
+            // Inspection must not request mutable access to its sealed graph.
+            self.route_install.namespaces.clone()
+                .ok_or_else(|| fault("sealed derive control namespace snapshot absent"))?
+        } else {
+            Self::install_macro_routes_with_modules(
+                crate::expand::source_discovery::unique_graph(&mut self.graph)?,
+                providers, &self.module_routes, &self.nested_sources,
+                &self.nested_inert_proofs, &mut self.route_install,
+            )?
+        };
         let mut fragment =
             crate::expand::declaration_fragment::DeclarationFragment::from_item_output(
                 parent,

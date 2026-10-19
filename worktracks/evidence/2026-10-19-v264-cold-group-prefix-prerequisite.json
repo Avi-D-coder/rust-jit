@@ -1,0 +1,170 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "parent": "c0878d52871e6bfcd0070eabb38d8e3d88635e16",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "integration_status": "held",
+  "scope": "V264 preserves full local ScopeKey in the common frontier map and retains explicit module-name publication refusal for local named declarations. Real coordinator advances to retained catalog replay, which still assumes a module source producer and fails all four local worlds. Both builds pass,4/5focused controls pass; global source matrix8/12. No runtime execution in this probe and zero new distinct stock runtime gains.",
+  "prior_evidence": "worktracks/evidence/2026-10-19-v263-cold-group-coordinator.json",
+  "new_distinct_stock_runtime_gains": 0,
+  "refreshed_suite_total": null,
+  "manifests": {
+    "before": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-19T13:58:20.868676+00:00",
+      "head": "c0878d52871e6bfcd0070eabb38d8e3d88635e16",
+      "file_count": 8477,
+      "source_sha256": "2e6e4d2af95be1ae564045f7a6f8720f5b400419da8589ee91e2391a42f89b48",
+      "binaries": {}
+    },
+    "after-build": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-19T13:59:20.789712+00:00",
+      "head": "c0878d52871e6bfcd0070eabb38d8e3d88635e16",
+      "file_count": 8477,
+      "source_sha256": "2e6e4d2af95be1ae564045f7a6f8720f5b400419da8589ee91e2391a42f89b48",
+      "binaries": {
+        "test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+          "sha256": "26c0c1f4c8263a5a77773d863518bf284a0468c7383fd23732a672a1a3eefa06"
+        },
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "2e90d23a7983e4d40dc3a0bcac3cb6468cafa95d8d27bec480f5d2e74e116e3f"
+        }
+      },
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": []
+    },
+    "after-runtime": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-19T14:00:39.585479+00:00",
+      "head": "c0878d52871e6bfcd0070eabb38d8e3d88635e16",
+      "file_count": 8477,
+      "source_sha256": "2e6e4d2af95be1ae564045f7a6f8720f5b400419da8589ee91e2391a42f89b48",
+      "binaries": {
+        "test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+          "sha256": "26c0c1f4c8263a5a77773d863518bf284a0468c7383fd23732a672a1a3eefa06"
+        },
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "2e90d23a7983e4d40dc3a0bcac3cb6468cafa95d8d27bec480f5d2e74e116e3f"
+        }
+      },
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": [],
+      "binaries_match_build": true
+    }
+  },
+  "builds": {
+    "lib": {
+      "session": 19902,
+      "exit": 0,
+      "success": true,
+      "messages_sha256": "76d5f243d51354317bd0e116c710eb073bcb842f53c89e667b5e2c6a473d02f0",
+      "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.40s\n"
+    },
+    "cli": {
+      "session": 70343,
+      "exit": 0,
+      "success": true,
+      "messages_sha256": "1cc07ea961de713dc65f024f80fcc27fe621e2a42de8cdcb3adc89e9001eb820",
+      "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.53s\n"
+    }
+  },
+  "control_session": 81891,
+  "control_exit": 1,
+  "control_results": [
+    {
+      "selector": "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 101,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": false,
+      "seconds": 24.283,
+      "log": "control-0.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 101,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": false,
+      "seconds": 1.413,
+      "log": "control-1.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 1.177,
+      "log": "control-2.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 2.447,
+      "log": "control-3.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 7.336,
+      "log": "control-4.log"
+    }
+  ],
+  "catalog_terminal": [
+    "FAILED global source catalog tests/ui/coherence/coherence-impl-in-fn.rs, edition2015: LRR-E-EXPANSION-INPUT: catalogue source producer absent",
+    "FAILED global source catalog tests/ui/coherence/coherence-impl-in-fn.rs, edition2018: LRR-E-EXPANSION-INPUT: catalogue source producer absent",
+    "FAILED global source catalog tests/ui/coherence/coherence-impl-in-fn.rs, edition2021: LRR-E-EXPANSION-INPUT: catalogue source producer absent",
+    "FAILED global source catalog tests/ui/coherence/coherence-impl-in-fn.rs, edition2024: LRR-E-EXPANSION-INPUT: catalogue source producer absent",
+    "global source matrix: 8/12 source worlds; failed=[(\"tests/ui/coherence/coherence-impl-in-fn.rs\", 2015, \"LRR-E-EXPANSION-INPUT\"), (\"tests/ui/coherence/coherence-impl-in-fn.rs\", 2018, \"LRR-E-EXPANSION-INPUT\"), (\"tests/ui/coherence/coherence-impl-in-fn.rs\", 2021, \"LRR-E-EXPANSION-INPUT\"), (\"tests/ui/coherence/coherence-impl-in-fn.rs\", 2024, \"LRR-E-EXPANSION-INPUT\")]; no guest runtime acceptance"
+  ]
+}

@@ -527,6 +527,34 @@ impl DeclarationMacroIndex {
         self.retained_bytes = publication.retained_bytes;
         Ok(())
     }
+    pub(crate) fn require_pending_original_group(
+        &self,
+        source: &crate::source::changes::PreparedSourceView,
+        group: &crate::source::original_items::OriginalAnnotationGroup,
+    ) -> Result<(), Diagnostic> {
+        group.require_source(source)?;
+        if group.scan_identity() != self.scan.fingerprint() || group.annotations().is_empty()
+            || group.annotations().iter().any(|id| !self.pending.contains(id)) {
+            return Err(fault());
+        }
+        Ok(())
+    }
+    pub(crate) fn retain_original_derive_prefix(
+        &self,
+        group: &crate::source::original_items::OriginalAnnotationGroup,
+    ) -> Result<super::macro_boundary::RetainedMacroScope, Diagnostic> {
+        let invocation = *group.annotations().first().ok_or_else(fault)?;
+        if self.scan.fingerprint() != group.scan_identity()
+            || self.derive_prefix != Some(invocation) || !self.pending.contains(&invocation) {
+            return Err(fault());
+        }
+        let producer = self.producer(invocation)?;
+        super::macro_boundary::RetainedMacroScope::new(
+            Arc::new(self.scopes.clone()), Arc::new(self.declarations.clone()),
+            Arc::new(self.facts.clone()), Arc::new(self.ancestry.clone()),
+            producer.lexical_scope, u64::from(producer.range.start).checked_add(1).ok_or_else(fault)?,
+        )
+    }
     /// Retire only the actual scan annotations owned by a fully replayed
     /// original item group. Appended definitions survive pending retirement.
     pub(crate) fn complete_original_annotation_group(

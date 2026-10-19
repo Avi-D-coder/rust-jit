@@ -177,7 +177,7 @@ impl GeneratedDeclarations {
         }
         let target = selection.original_item_target(source)?;
         let parent = source.declaration_inventory(Default::default())?;
-        let producer = parent
+        let selected = parent
             .producers()
             .iter()
             .find(|p| {
@@ -191,6 +191,20 @@ impl GeneratedDeclarations {
                     "source derive declaration producer absent",
                 )
             })?;
+        let group = source.original_annotation_group(target.annotation_invocation()
+            .ok_or_else(|| fault("LRR-E-EXPANSION-INPUT", "source derive group owner absent"))?.item_input)?
+            .ok_or_else(|| fault("LRR-E-EXPANSION-INPUT", "source derive group absent"))?;
+        group.require_source(source)?;
+        if !group.annotations().contains(&selected.identity) {
+            return Err(fault("LRR-E-EXPANSION-INPUT", "selected derive Meta is outside its source group"));
+        }
+        // All outputs append after the same real item group. Its first Meta
+        // is the retained textual anchor; the selected occurrence/site above
+        // remains the actual derive path for input and diagnostic provenance.
+        let anchor = *group.annotations().first()
+            .ok_or_else(|| fault("LRR-E-EXPANSION-INPUT", "source group has no annotation anchor"))?;
+        let producer = parent.producers().iter().find(|row| row.identity == anchor)
+            .ok_or_else(|| fault("LRR-E-EXPANSION-INPUT", "source group anchor absent"))?;
         Self::admit_attached(
             &key,
             record,

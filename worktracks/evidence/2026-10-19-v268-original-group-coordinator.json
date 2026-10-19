@@ -1,0 +1,243 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "at": "2026-10-19T14:09:52.847907+00:00",
+  "parent": "c0878d52871e6bfcd0070eabb38d8e3d88635e16",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "integration_status": "held",
+  "scope": "V263-V268 HELD M019/M020 coordinator integration: real original local annotation groups drive the existing generated item and declaration jobs; acknowledge occurrences only after actual completed-child adoption, then exact-custody group completion and replay. Admitted catalog/header roots preserve real local owners and pending child requests; retained source replay uses the actual declaration-prefix boundary. Final macOS1.99.0 library/CLI builds and8/8selected controls pass. Global source catalog matrix newly12/12selected worlds across all4editions (previous8/12), including997headers and2real generated local impls for unchanged coherence-impl-in-fn. Existing Copy runtime regression12origin/edition worlds passes. Wrong scope/epoch/sibling receipt/no pending child and zero/partial/duplicate completion controls pass; source/HEAD/binary guards match. Zero new distinct stock runtime gains, no refreshed suite total. Local named body-source publication, mixed replacing/procedural/associated/arbitrary-output matrices, complete M019, typed SourceFacts production, inference/delegate and genuine upstream root solving remain required; full interpreter and JIT gates open. Earlier failures and unexecuted build-only sources remain evidence-bound.",
+  "upstream_pin": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "precode": "worktracks/05-trait-goal-engine/2026-10-19-cold-group-coordinator.md",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-19-cold-group-coordinator-review.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-19-cold-group-coordinator-controls.json",
+  "new_distinct_stock_runtime_gains": 0,
+  "existing_copy_runtime_worlds": 12,
+  "refreshed_suite_total": null,
+  "upstream_runtime_acceptance": "incomplete",
+  "diagnostic_compatibility": "separate, incomplete and not exercised",
+  "compiler_tooling_compatibility": "separate, incomplete and not exercised",
+  "full_suite_compatibility": "incomplete",
+  "guest_jit_gate": "closed pending complete applicable interpreter runtime and correctness acceptance",
+  "manifests": {
+    "before": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-19T14:06:01.424951+00:00",
+      "head": "c0878d52871e6bfcd0070eabb38d8e3d88635e16",
+      "file_count": 8477,
+      "source_sha256": "7c3193d6d3fdb8b9b78e602081eb84a435e662c4c33bd2b10776cf01bc9e2891",
+      "binaries": {}
+    },
+    "after-build": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-19T14:06:59.859857+00:00",
+      "head": "c0878d52871e6bfcd0070eabb38d8e3d88635e16",
+      "file_count": 8477,
+      "source_sha256": "7c3193d6d3fdb8b9b78e602081eb84a435e662c4c33bd2b10776cf01bc9e2891",
+      "binaries": {
+        "test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+          "sha256": "301677645b18790514564b03afe1442dc991033366ae15161606cdf1d6b782ca"
+        },
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "5756c5866e1ee28fe7f4d9379134348f0d8e679da89b2c5c0dd45145fbab5042"
+        }
+      },
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": []
+    },
+    "after-runtime": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-19T14:09:05.305477+00:00",
+      "head": "c0878d52871e6bfcd0070eabb38d8e3d88635e16",
+      "file_count": 8477,
+      "source_sha256": "7c3193d6d3fdb8b9b78e602081eb84a435e662c4c33bd2b10776cf01bc9e2891",
+      "binaries": {
+        "test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+          "sha256": "301677645b18790514564b03afe1442dc991033366ae15161606cdf1d6b782ca"
+        },
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "5756c5866e1ee28fe7f4d9379134348f0d8e679da89b2c5c0dd45145fbab5042"
+        }
+      },
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": [],
+      "binaries_match_build": true
+    }
+  },
+  "builds": {
+    "lib": {
+      "session": 36281,
+      "exit": 0,
+      "success": true,
+      "messages_sha256": "6ef8b3d83407d30375c9dde77d1a787b470730ae9f701cbf64022a72900d68f2",
+      "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.53s\n"
+    },
+    "cli": {
+      "session": 73621,
+      "exit": 0,
+      "success": true,
+      "messages_sha256": "a3bf021c597eaf281c6671c0a552ad7234365a347772e6e9867f1a871b5756a2",
+      "terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.55s\n"
+    }
+  },
+  "control_session": 43481,
+  "control_exit": 0,
+  "control_results": [
+    {
+      "selector": "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 27.958,
+      "log": "control-0.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 9.74,
+      "log": "control-1.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 1.173,
+      "log": "control-2.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 2.458,
+      "log": "control-3.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 7.123,
+      "log": "control-4.log"
+    },
+    {
+      "selector": "source::original_items::tests::unchanged_multiple_annotations_share_one_original_item_group",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "source::original_items::tests::unchanged_multiple_annotations_share_one_original_item_group",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 0.365,
+      "log": "control-5.log"
+    },
+    {
+      "selector": "expand::source_declarative::assembly::tests::repeated_origin_keys_keep_distinct_generated_invocation_occurrences",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "expand::source_declarative::assembly::tests::repeated_origin_keys_keep_distinct_generated_invocation_occurrences",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 0.442,
+      "log": "control-6.log"
+    },
+    {
+      "selector": "cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 63.695,
+      "log": "control-7.log"
+    }
+  ],
+  "prior_evidence": [
+    "worktracks/evidence/2026-10-19-v263-cold-group-coordinator.json",
+    "worktracks/evidence/2026-10-19-v264-cold-group-prefix-prerequisite.json",
+    "worktracks/evidence/2026-10-19-v265-v267-retained-original-prefix.json"
+  ],
+  "catalog_terminal": [
+    "test cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries ... global source catalog tests/ui/traits/safety-ok.rs, edition2015: 995 headers; original1/generated0/nested0; no guest execution",
+    "global source catalog tests/ui/methods/method-self-arg-trait.rs, edition2015: 998 headers; original2/generated2/nested0; no guest execution",
+    "global source catalog tests/ui/coherence/coherence-impl-in-fn.rs, edition2015: 997 headers; original1/generated2/nested1; no guest execution",
+    "global source catalog tests/ui/traits/safety-ok.rs, edition2018: 995 headers; original1/generated0/nested0; no guest execution",
+    "global source catalog tests/ui/methods/method-self-arg-trait.rs, edition2018: 998 headers; original2/generated2/nested0; no guest execution",
+    "global source catalog tests/ui/coherence/coherence-impl-in-fn.rs, edition2018: 997 headers; original1/generated2/nested1; no guest execution",
+    "global source catalog tests/ui/traits/safety-ok.rs, edition2021: 995 headers; original1/generated0/nested0; no guest execution",
+    "global source catalog tests/ui/methods/method-self-arg-trait.rs, edition2021: 998 headers; original2/generated2/nested0; no guest execution",
+    "global source catalog tests/ui/coherence/coherence-impl-in-fn.rs, edition2021: 997 headers; original1/generated2/nested1; no guest execution",
+    "global source catalog tests/ui/traits/safety-ok.rs, edition2024: 995 headers; original1/generated0/nested0; no guest execution",
+    "global source catalog tests/ui/methods/method-self-arg-trait.rs, edition2024: 998 headers; original2/generated2/nested0; no guest execution",
+    "global source catalog tests/ui/coherence/coherence-impl-in-fn.rs, edition2024: 997 headers; original1/generated2/nested1; no guest execution",
+    "global source matrix: 12/12 source worlds; failed=[]; no guest runtime acceptance"
+  ],
+  "component_terminal": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin ... local derive component edition2015: catalog preparation ready\nlocal derive component edition2015: 2 real outputs appended and the item group completed; no coordinator publication or guest execution\nlocal derive component edition2018: catalog preparation ready\nlocal derive component edition2018: 2 real outputs appended and the item group completed; no coordinator publication or guest execution\nlocal derive component edition2021: catalog preparation ready\nlocal derive component edition2021: 2 real outputs appended and the item group completed; no coordinator publication or guest execution\nlocal derive component edition2024: catalog preparation ready\nlocal derive component edition2024: 2 real outputs appended and the item group completed; no coordinator publication or guest execution\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1743 filtered out; finished in 9.38s\n\n",
+  "runtime_regression_terminal": "\nrunning 1 test\ntest cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1743 filtered out; finished in 63.29s\n\n"
+}

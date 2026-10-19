@@ -472,6 +472,19 @@ pub struct Outline {
     pub content: Digest,
     pub profile: ProfileIdentity,
 }
+impl Outline {
+    /// Whole-item annotations at this actual item root, including an admitted
+    /// block owner. Associated child owners keep their separate item grammar.
+    pub(crate) fn item_attribute_producer(&self, item: &ItemOutline) -> Option<ItemInvocation> {
+        if item.scope.owner.is_some() && item.scope != self.root_scope {
+            return None;
+        }
+        if item.header.attributes.iter().any(|attribute| matches!(attribute.class,
+            AttributeClass::TransformUnsupported | AttributeClass::Derive | AttributeClass::Test)) {
+            attribute_invocation(item)
+        } else { None }
+    }
+}
 impl ItemOutline {
     /// Whether this row is an enum variant's anonymous discriminant constant
     /// (E-R5-013) rather than a source item: its declaration syntax is the
@@ -1125,6 +1138,8 @@ impl ParsedFile {
                 continue;
             }
             let node = item.syntax();
+            let free_item = scope.owner.is_none()
+                || scope == initial && self.declaration_grammar == Some(crate::expand::identity::GrammarSlot::Items);
             let mut container: Option<SyntaxNode> = None;
             let mut executable: Option<SyntaxNode> = None;
             let mut blocked = false;
@@ -1247,7 +1262,7 @@ impl ParsedFile {
                         // A generated or assembled source may contain original
                         // macro 2.0 items; the generated-dialect refusal belongs to
                         // definition capture when one is actually selected.
-                        if scope.owner.is_some() {
+                        if !free_item {
                             return Err(fault(
                                 "LRR-E-MACRO2-SOURCE",
                                 "macro2 declaration inside an impl/trait owner is not admitted",
@@ -1292,7 +1307,7 @@ impl ParsedFile {
                     ast::Item::MacroCall(_) | ast::Item::AsmExpr(_) => {
                         // Associated invocation slots belong to the retained
                         // declaration scan, never the module-item publisher.
-                        if scope.owner.is_some() {
+                        if !free_item {
                             continue;
                         }
                         let ts = tokens(node, None);
@@ -1513,7 +1528,7 @@ impl ParsedFile {
                         .push(definition);
                 }
             }
-            if scope.owner.is_none()
+            if free_item
                 && header
                     .attributes
                     .iter()
@@ -1536,7 +1551,7 @@ impl ParsedFile {
                 None
             };
             let span = range(node.text_range());
-            let transform = scope.owner.is_none()
+            let transform = free_item
                 && header.attributes.iter().any(|a| {
                     matches!(
                         a.class,

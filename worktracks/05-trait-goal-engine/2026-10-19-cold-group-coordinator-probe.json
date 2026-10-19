@@ -1,0 +1,11 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Focused actual catalog/group and negative source-currentness checks during coordinator integration; separate prior runtime evidence",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+    "cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin",
+    "cli::preentry_loader_tests::global_catalog_rejects_a_foreign_prepared_source_publication_before_expansion",
+    "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+    "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies"
+  ]
+}

@@ -97,6 +97,12 @@ fn contained_scope(scope: &ScopeKey, owner: &ScopeKey) -> bool {
 fn fault(code: &'static str, message: &str) -> Diagnostic {
     Diagnostic::new(code, message.into())
 }
+enum HeaderOwnership<'a> {
+    Module,
+    Declarations(&'a crate::expand::generated_declarations::GeneratedDeclarations),
+    Catalog(&'a super::generated_macros::GeneratedMacroCatalog),
+    PendingParent(&'a super::generated_macros::GeneratedMacroCatalog),
+}
 impl GeneratedHeaderPlan {
     pub fn prepare(
         items: &GeneratedItems,
@@ -126,8 +132,32 @@ impl GeneratedHeaderPlan {
             epoch,
             None,
             &BTreeSet::new(),
-            Some(declarations),
+            HeaderOwnership::Declarations(declarations),
         )
+    }
+    pub(crate) fn prepare_admitted_with_root(
+        items: &GeneratedItems,
+        declarations: &crate::expand::generated_declarations::GeneratedDeclarations,
+        call_context: Key,
+        root: &crate::syntax::token_wire::ContextRecord,
+        cfg: &CfgSet,
+        epoch: u64,
+    ) -> Result<Self, Diagnostic> {
+        Self::prepare_using(items, declarations.scan().scope().clone(), call_context,
+            root.key(), cfg, epoch, Some(root), &BTreeSet::new(),
+            HeaderOwnership::Declarations(declarations))
+    }
+    pub(crate) fn prepare_pending_child(
+        items: &GeneratedItems,
+        scope: ScopeKey,
+        call_context: Key,
+        root: &crate::syntax::token_wire::ContextRecord,
+        cfg: &CfgSet,
+        epoch: u64,
+        parent: &super::generated_macros::GeneratedMacroCatalog,
+    ) -> Result<Self, Diagnostic> {
+        Self::prepare_using(items, scope, call_context, root.key(), cfg, epoch,
+            Some(root), &BTreeSet::new(), HeaderOwnership::PendingParent(parent))
     }
     /// The caller scope comes from its captured parent fragment, never from a hygiene mark.
     pub(crate) fn prepare_owned(
@@ -147,7 +177,7 @@ impl GeneratedHeaderPlan {
             epoch,
             None,
             &BTreeSet::new(),
-            None,
+            HeaderOwnership::Module,
         )
     }
     pub(crate) fn prepare_with_captured_root(
@@ -167,7 +197,7 @@ impl GeneratedHeaderPlan {
             epoch,
             Some(root),
             &BTreeSet::new(),
-            None,
+            HeaderOwnership::Module,
         )
     }
     pub(crate) fn prepare_catalog(
@@ -183,7 +213,7 @@ impl GeneratedHeaderPlan {
             items.epoch(),
             Some(root),
             catalog.settled_derive_items(),
-            None,
+            HeaderOwnership::Catalog(catalog),
         )
     }
     pub(crate) fn settled_originals(
@@ -214,7 +244,7 @@ impl GeneratedHeaderPlan {
         epoch: u64,
         captured_root: Option<&crate::syntax::token_wire::ContextRecord>,
         settled_derives: &BTreeSet<Digest>,
-        admitted: Option<&crate::expand::generated_declarations::GeneratedDeclarations>,
+        ownership: HeaderOwnership<'_>,
     ) -> Result<Self, Diagnostic> {
         if epoch != items.epoch() {
             return Err(fault(
@@ -222,26 +252,28 @@ impl GeneratedHeaderPlan {
                 "generated header publication epoch differs",
             ));
         }
-        if let Some(declarations) = admitted {
-            if declarations.record().descriptor().fingerprint()
-                != items.record().descriptor().fingerprint()
-                || declarations.epoch() != epoch
-                || declarations.scan().cfg() != cfg.fingerprint()
-                || declarations.scan().scope() != &scope
-            {
-                return Err(fault(
-                    "LRR-E-EXPANSION-INPUT",
-                    "generated header admitted insertion differs",
-                ));
+        let verified_local = match ownership {
+            HeaderOwnership::Module => false,
+            HeaderOwnership::Declarations(declarations) => {
+                if declarations.record().descriptor().fingerprint() != items.record().descriptor().fingerprint()
+                    || declarations.epoch() != epoch || declarations.scan().cfg() != cfg.fingerprint()
+                    || declarations.scan().scope() != &scope {
+                    return Err(fault("LRR-E-EXPANSION-INPUT", "generated header admitted insertion differs"));
+                }
+                true
             }
-        }
-        if scope.owner.is_some() && admitted.is_none()
-            || items.record().key().parent_context != Digest(call_context.0)
-        {
-            return Err(fault(
-                "LRR-E-EXPANSION-INPUT",
-                "generated header parent scope/context differs",
-            ));
+            HeaderOwnership::Catalog(catalog) => {
+                catalog.require_captured_owner(items, &scope, cfg, epoch)?;
+                true
+            }
+            HeaderOwnership::PendingParent(parent) => {
+                parent.require_pending_owner(items, &scope, cfg, epoch)?;
+                true
+            }
+        };
+        if scope.owner.is_some() && !verified_local
+            || items.record().key().parent_context != Digest(call_context.0) {
+            return Err(fault("LRR-E-EXPANSION-INPUT", "generated header parent scope/context differs"));
         }
         let contexts = items.tokens().contexts();
         let owner = captured_root
@@ -284,7 +316,7 @@ impl GeneratedHeaderPlan {
         let edition = items.record().key().call_edition;
         let parsed = ParsedFile::from_generated_items(items)?;
         let source_parse = parsed.key();
-        let outline = if admitted.is_some() {
+        let outline = if verified_local {
             parsed.outline_item_fragment(&scope, cfg)?
         } else {
             parsed.outline(scope.crate_key, scope.module_path.clone(), cfg)?
@@ -315,7 +347,7 @@ impl GeneratedHeaderPlan {
             .items
             .iter()
             .filter(|item| settled(item.declaration_span.start, item.declaration_span.end))
-            .filter_map(crate::syntax::outline::potential_attribute_producer)
+            .filter_map(|item| outline.item_attribute_producer(item))
             .map(|call| items.frontier_identity(call.frontier))
             .collect::<BTreeSet<_>>();
         let definitions = outline
@@ -327,7 +359,7 @@ impl GeneratedHeaderPlan {
         let attributes = outline
             .items
             .iter()
-            .filter_map(crate::syntax::outline::potential_attribute_producer)
+            .filter_map(|item| outline.item_attribute_producer(item))
             .map(|call| items.frontier_identity(call.frontier))
             .filter(|id| !retired.contains(id))
             .collect::<BTreeSet<_>>();
@@ -492,7 +524,7 @@ impl GeneratedHeaderPlan {
                 })?;
             // A replacing attribute owns the declaration until its output is adopted.
             // Its original external module must not request source before replacement.
-            if crate::syntax::outline::potential_attribute_producer(item).is_some()
+            if outline.item_attribute_producer(item).is_some()
                 && !settled(item.declaration_span.start, item.declaration_span.end)
             {
                 continue;
@@ -673,7 +705,7 @@ impl GeneratedHeaderPlan {
                             "generated candidate header absent",
                         )
                     })?;
-                    if (crate::syntax::outline::potential_attribute_producer(item).is_some()
+                    if (outline.item_attribute_producer(item).is_some()
                         && !settled(item.declaration_span.start, item.declaration_span.end))
                         || matches!(item.def_key.item_kind, ItemKind::Macro | ItemKind::Impl)
                     {

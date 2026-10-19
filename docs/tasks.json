@@ -20079,12 +20079,15 @@
       "title": "Impl and trait header lowering",
       "acceptance_contract": "TR006 and indexed-versus-full-catalog property model. Depends: M018.",
       "release_complete": false,
-      "latest_component_scope": "V259-V262 HELD M019/M020 original item group/prefix prerequisite. Genuine module/body item producers now own ordered scan Meta aliases; prepare_group normalizes them to one real producer. Source parents share the existing declaration publication/prefix mechanism, retain actual adopted occurrence custody and reject zero/partial-output, duplicate append and repeated completion. Real two-output local group closure passes across four editions with ordinary declaration fragments and no guest execution. V261 builds and 11/12 broad controls pass; full catalog remains FAILED on all four nested-derive worlds (8/12 other source worlds successful). V262 source review fixes the affected replacing-attribute grammar lookup to use actual input Meta range instead of searching for a canonical group ID in raw scan IDs. Final builds and 4/4 relevant controls pass; procedural attribute execution remains unexercised. V261 runtime/catalog evidence stays attached to V261. Coordinator work/call/frontier/catalog/body-name integration remains open, with zero new distinct stock gains and no full solver/interpreter/JIT acceptance. Source/HEAD/binary guards match.",
+      "latest_component_scope": "V263-V268 HELD M019/M020 coordinator integration: real original local annotation groups drive the existing generated item and declaration jobs; acknowledge occurrences only after actual completed-child adoption, then exact-custody group completion and replay. Admitted catalog/header roots preserve real local owners and pending child requests; retained source replay uses the actual declaration-prefix boundary. Final macOS1.99.0 library/CLI builds and8/8selected controls pass. Global source catalog matrix newly12/12selected worlds across all4editions (previous8/12), including997headers and2real generated local impls for unchanged coherence-impl-in-fn. Existing Copy runtime regression12origin/edition worlds passes. Wrong scope/epoch/sibling receipt/no pending child and zero/partial/duplicate completion controls pass; source/HEAD/binary guards match. Zero new distinct stock runtime gains, no refreshed suite total. Local named body-source publication, mixed replacing/procedural/associated/arbitrary-output matrices, complete M019, typed SourceFacts production, inference/delegate and genuine upstream root solving remain required; full interpreter and JIT gates open. Earlier failures and unexecuted build-only sources remain evidence-bound.",
       "source_baseline": "dcd056e542c86605f6a282470566952b2aea3c79",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
       "artifacts": [
         "worktracks/evidence/2026-10-19-v232-v233-source-trait-headers.json"
+      ],
+      "evidence": [
+        "worktracks/evidence/2026-10-19-v268-original-group-coordinator.json"
       ]
     },
     {
@@ -20131,7 +20134,7 @@
       "implementation_contract": "Files: traits/upstream/, traits/term.rs, frontend/source_view.rs, Cargo.toml and provenance manifests. Build the pinned shared solver on macOS Rust1.99.0; adapt actual source Types/ParamEnv/headers, upstream inference transactions and canonical responses to LRR queries. Migrate custom inference/canonicalization consumers and remove superseded algorithms with explicit holds until verified.",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
-      "latest_component_scope": "V259-V262 HELD M019/M020 original item group/prefix prerequisite. Genuine module/body item producers now own ordered scan Meta aliases; prepare_group normalizes them to one real producer. Source parents share the existing declaration publication/prefix mechanism, retain actual adopted occurrence custody and reject zero/partial-output, duplicate append and repeated completion. Real two-output local group closure passes across four editions with ordinary declaration fragments and no guest execution. V261 builds and 11/12 broad controls pass; full catalog remains FAILED on all four nested-derive worlds (8/12 other source worlds successful). V262 source review fixes the affected replacing-attribute grammar lookup to use actual input Meta range instead of searching for a canonical group ID in raw scan IDs. Final builds and 4/4 relevant controls pass; procedural attribute execution remains unexercised. V261 runtime/catalog evidence stays attached to V261. Coordinator work/call/frontier/catalog/body-name integration remains open, with zero new distinct stock gains and no full solver/interpreter/JIT acceptance. Source/HEAD/binary guards match.",
+      "latest_component_scope": "V263-V268 HELD M019/M020 coordinator integration: real original local annotation groups drive the existing generated item and declaration jobs; acknowledge occurrences only after actual completed-child adoption, then exact-custody group completion and replay. Admitted catalog/header roots preserve real local owners and pending child requests; retained source replay uses the actual declaration-prefix boundary. Final macOS1.99.0 library/CLI builds and8/8selected controls pass. Global source catalog matrix newly12/12selected worlds across all4editions (previous8/12), including997headers and2real generated local impls for unchanged coherence-impl-in-fn. Existing Copy runtime regression12origin/edition worlds passes. Wrong scope/epoch/sibling receipt/no pending child and zero/partial/duplicate completion controls pass; source/HEAD/binary guards match. Zero new distinct stock runtime gains, no refreshed suite total. Local named body-source publication, mixed replacing/procedural/associated/arbitrary-output matrices, complete M019, typed SourceFacts production, inference/delegate and genuine upstream root solving remain required; full interpreter and JIT gates open. Earlier failures and unexecuted build-only sources remain evidence-bound.",
       "artifacts": [
         "worktracks/evidence/2026-10-19-v230-v231-pinned-binder-client.json",
         "worktracks/evidence/2026-10-19-v234-v235-pinned-client-relations.json",
@@ -20139,6 +20142,9 @@
         "worktracks/05-trait-goal-engine/2026-10-19-prepared-provider-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-prepared-provider-controls.json",
         "worktracks/evidence/2026-10-19-v236-v243-prepared-solver-provider.json"
+      ],
+      "evidence": [
+        "worktracks/evidence/2026-10-19-v268-original-group-coordinator.json"
       ]
     },
     {

@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V259-V262 HELD M019/M020 original item group/prefix prerequisite. Genuine module/body item producers now own ordered scan Meta aliases; prepare_group normalizes them to one real producer. Source parents share the existing declaration publication/prefix mechanism, retain actual adopted occurrence custody and reject zero/partial-output, duplicate append and repeated completion. Real two-output local group closure passes across four editions with ordinary declaration fragments and no guest execution. V261 builds and 11/12 broad controls pass; full catalog remains FAILED on all four nested-derive worlds (8/12 other source worlds successful). V262 source review fixes the affected replacing-attribute grammar lookup to use actual input Meta range instead of searching for a canonical group ID in raw scan IDs. Final builds and 4/4 relevant controls pass; procedural attribute execution remains unexercised. V261 runtime/catalog evidence stays attached to V261. Coordinator work/call/frontier/catalog/body-name integration remains open, with zero new distinct stock gains and no full solver/interpreter/JIT acceptance. Source/HEAD/binary guards match. Solo root only; shared declaration-index/derive/attribute interfaces remain under their existing root-owned reservations.",
+      "scope": "V263-V268 HELD M019/M020 coordinator integration: real original local annotation groups drive the existing generated item and declaration jobs; acknowledge occurrences only after actual completed-child adoption, then exact-custody group completion and replay. Admitted catalog/header roots preserve real local owners and pending child requests; retained source replay uses the actual declaration-prefix boundary. Final macOS1.99.0 library/CLI builds and8/8selected controls pass. Global source catalog matrix newly12/12selected worlds across all4editions (previous8/12), including997headers and2real generated local impls for unchanged coherence-impl-in-fn. Existing Copy runtime regression12origin/edition worlds passes. Wrong scope/epoch/sibling receipt/no pending child and zero/partial/duplicate completion controls pass; source/HEAD/binary guards match. Zero new distinct stock runtime gains, no refreshed suite total. Local named body-source publication, mixed replacing/procedural/associated/arbitrary-output matrices, complete M019, typed SourceFacts production, inference/delegate and genuine upstream root solving remain required; full interpreter and JIT gates open. Earlier failures and unexecuted build-only sources remain evidence-bound. Solo root; existing shared frontend/declaration interfaces retain their root-owned reservations.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1738,11 +1738,16 @@
         "worktracks/05-trait-goal-engine/2026-10-19-original-annotation-groups.md",
         "worktracks/05-trait-goal-engine/2026-10-19-original-annotation-groups-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-original-annotation-groups-controls.json",
-        "worktracks/05-trait-goal-engine/2026-10-19-original-annotation-groups-final-controls.json"
+        "worktracks/05-trait-goal-engine/2026-10-19-original-annotation-groups-final-controls.json",
+        "crates/lrr/src/expand/source_discovery/original_groups.rs",
+        "worktracks/05-trait-goal-engine/2026-10-19-cold-group-coordinator.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-cold-group-coordinator-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-cold-group-coordinator-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-cold-group-coordinator-probe.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T13:34:02.621014+00:00",
+      "updated_at": "2026-10-19T14:09:52.847907+00:00",
       "review_after": "2026-10-20T08:52:46.617857+00:00"
     }
   ],

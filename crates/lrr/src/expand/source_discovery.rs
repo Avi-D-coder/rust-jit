@@ -44,6 +44,8 @@ mod item_impl_children;
 mod item_impl_completion;
 #[path = "source_discovery/original_inert.rs"]
 mod original_inert;
+#[path = "source_discovery/original_groups.rs"]
+mod original_groups;
 #[path = "source_discovery/source_syntax.rs"]
 mod source_syntax;
 pub(crate) use source_syntax::CompletedSourceSyntax;
@@ -251,6 +253,7 @@ struct GeneratedChild {
 }
 struct GeneratedFragment {
     module: Option<Digest>,
+    original_group: Option<Digest>,
     source_derive:
         Option<std::sync::Arc<crate::service::source_derive_requests::SourceDeriveSelection>>,
     source_prefix: Option<std::sync::Arc<super::source_declarative::SourceDeclarative>>,
@@ -750,6 +753,9 @@ pub struct SourceDiscovery {
         std::sync::Arc<crate::service::source_derive_requests::SourceDeriveSelection>,
     >,
     source_derives_inflight: BTreeMap<Digest, Digest>,
+    original_groups: BTreeMap<Digest, original_groups::OriginalGroupProgress>,
+    original_group_aliases: BTreeMap<Digest, Digest>,
+    original_group_outputs: BTreeMap<Digest, original_groups::OriginalGroupOutput>,
     cold_attribute_owners: BTreeMap<Digest, usize>,
     cold_test_bindings: BTreeMap<Digest, (usize, Option<super::scopes::MacroDefinition>)>,
     attribute_selections: BTreeMap<
@@ -1290,6 +1296,8 @@ impl SourceDiscovery {
             }
             nested_sources.insert(ordinal, std::sync::Arc::new(index));
         }
+        let (original_groups, original_group_aliases) =
+            Self::capture_original_derive_groups(&sources, &nested_sources)?;
         let original_modules =
             original_modules::capture_original_modules(&sources, &mut nested_bytes)?;
         let expansion_budget = super::budget::SharedExpansionBudget::new(
@@ -1351,6 +1359,9 @@ impl SourceDiscovery {
             pending_source_derive: None,
             completed_source_derives: BTreeMap::new(),
             source_derives_inflight: BTreeMap::new(),
+            original_groups,
+            original_group_aliases,
+            original_group_outputs: BTreeMap::new(),
             cold_attribute_owners: BTreeMap::new(),
             cold_test_bindings: BTreeMap::new(),
             attribute_selections: BTreeMap::new(),
@@ -2884,12 +2895,16 @@ impl SourceDiscovery {
         record: std::sync::Arc<super::record::ExpansionRecord>,
         source_base: crate::syntax::token_wire::SpanRecord,
     ) -> Result<(), Diagnostic> {
-        let (ordinal, call) = self
-            .calls
-            .get(&ticket.job().identity)
-            .ok_or_else(|| fault("source derive original producer absent"))?;
-        let ordinal = *ordinal;
-        let call = call.clone();
+        let original_group = self.original_group_aliases.get(&ticket.job().identity).copied();
+        let (ordinal, call) = if let Some(group) = original_group {
+            let state = self.original_groups.get(&group)
+                .ok_or_else(|| fault("cold source derive group absent"))?;
+            (state.ordinal, state.group.call().clone())
+        } else {
+            let (ordinal, call) = self.calls.get(&ticket.job().identity)
+                .ok_or_else(|| fault("source derive original producer absent"))?;
+            (*ordinal, call.clone())
+        };
         let id = record.key().fingerprint();
         if self.fragments.contains_key(&id)
             || self.source_derives_inflight.contains_key(&call.item_input)
@@ -2968,23 +2983,27 @@ impl SourceDiscovery {
         {
             return Err(fault("derive impl frontier conflict"));
         }
-        let catalog = crate::frontend::generated_macros::GeneratedMacroCatalog::for_discovery(
-            &items,
-            call.scope.clone(),
-            crate::syntax::token_wire::Key(record.key().parent_context.0),
-            self.sources[ordinal].captured_macro_cfg()?,
-            self.epoch,
+        let catalog = crate::frontend::generated_macros::GeneratedMacroCatalog::for_admitted_output(
+            &items, &declaration, cfg, self.epoch,
         )?;
         let provider = &self
             .declarative
             .as_ref()
             .ok_or_else(|| fault("source derive provider absent"))?
             .2[ordinal];
-        let prefix = provider.derive_prefix_snapshot(&call)?;
+        let group_output = original_group.map(|group| {
+            self.prepare_original_group_output(group, selection.clone(), &declaration)
+        }).transpose()?;
+        let prefix = if let Some(output) = &group_output {
+            let group = &self.original_groups[&original_group.unwrap()].group;
+            Some(provider.declaration_prefix_snapshot(group, &output.parent)?)
+        } else { Some(provider.derive_prefix_snapshot(&call)?) };
+        let prefix_bytes = prefix.as_ref()
+            .map(|prefix| prefix.module_snapshot_bytes()).transpose()?.unwrap_or(0);
         let allocated = self
             .retained_record_bytes
             .checked_add(catalog.metadata_bytes()?)
-            .and_then(|n| n.checked_add(prefix.module_snapshot_bytes().ok()?))
+            .and_then(|n| n.checked_add(prefix_bytes))
             .and_then(|n| n.checked_add(source_base_bytes(&source_base).ok()?))
             .and_then(|n| n.checked_add(call.scope.heap_bytes()))
             .and_then(|n| n.checked_add(1024))
@@ -3077,8 +3096,9 @@ impl SourceDiscovery {
                 id,
                 GeneratedFragment {
                     module: None,
+                    original_group,
                     source_derive: Some(selection),
-                    source_prefix: Some(prefix),
+                    source_prefix: prefix,
                     catalog,
                     children: BTreeMap::new(),
                     child_order: BTreeMap::new(),
@@ -3094,6 +3114,9 @@ impl SourceDiscovery {
             self.nested_jobs.insert(declaration_job, ordinal);
             self.item_declaration_inputs
                 .insert(declaration_job, declaration);
+            if let Some(output) = group_output {
+                self.register_original_group_output(declaration_job, output)?;
+            }
             self.item_root_declarations.insert(id, declaration_job);
             if let Some(frontier) = impl_frontier {
                 self.item_declaration_jobs.insert(
@@ -3886,6 +3909,7 @@ impl SourceDiscovery {
                 identity,
                 GeneratedFragment {
                     module: None,
+                    original_group: None,
                     source_derive: None,
                     source_prefix: None,
                     catalog: catalog.ok_or_else(|| fault("generated fragment catalog absent"))?,
@@ -5408,17 +5432,21 @@ impl SourceDiscovery {
                 {
                     return Err(fault("source derive append completion differs"));
                 }
-                provider.publish_derive_bindings(
-                    &fragment.call,
-                    std::sync::Arc::new(fragment.catalog),
-                    fragment
-                        .source_prefix
-                        .ok_or_else(|| fault("source derive prefix snapshot absent"))?,
-                )?;
-                self.completed_source_derives
-                    .insert(selection.input().identity(), selection);
-                self.source_derives_inflight
-                    .remove(&fragment.call.item_input);
+                if fragment.original_group.is_some() {
+                    provider.retain_declaration_derive_catalog(
+                        std::sync::Arc::new(fragment.catalog), fragment.source_prefix
+                            .ok_or_else(|| fault("cold derive source prefix absent"))?,
+                    )?;
+                } else {
+                    provider.publish_derive_bindings(
+                        &fragment.call,
+                        std::sync::Arc::new(fragment.catalog),
+                        fragment.source_prefix
+                            .ok_or_else(|| fault("source derive prefix snapshot absent"))?,
+                    )?;
+                    self.completed_source_derives.insert(selection.input().identity(), selection);
+                    self.source_derives_inflight.remove(&fragment.call.item_input);
+                }
             } else {
                 provider.complete_generated_bindings(
                     fragment.call.item_input,
@@ -7109,6 +7137,7 @@ impl SourceDiscovery {
                 identity,
                 GeneratedFragment {
                     module: Some(producer),
+                    original_group: None,
                     source_derive: None,
                     source_prefix: None,
                     catalog,
@@ -9577,11 +9606,12 @@ impl SourceDiscovery {
                 return Ok(None);
             }
             let owner = provider.completed_root_catalog(output.record().key().invocation)?;
-            let parent = self
-                .nested_sources
-                .get(&ordinal)
-                .ok_or_else(|| fault("item declaration parent absent"))?
-                .clone();
+            let parent = if let Some(group_output) = self.original_group_outputs.get(&identity) {
+                group_output.parent.clone()
+            } else {
+                self.nested_sources.get(&ordinal)
+                    .ok_or_else(|| fault("item declaration parent absent"))?.clone()
+            };
             let fragment = DeclarationFragment::from_item_output(
                 parent,
                 DeclarationFragmentInput {
@@ -9696,6 +9726,7 @@ impl SourceDiscovery {
                         .map(|(key, value)| (key.fingerprint(), *value)),
                 );
                 self.work.preflight_complete(ticket, &mut update)?;
+                self.complete_original_group_output(identity, &output)?;
                 self.work.complete(ticket, update)?;
                 self.nested_completed.insert(identity, output);
                 self.nested_fragments.remove(&identity);
@@ -9719,6 +9750,9 @@ impl SourceDiscovery {
             .ok_or_else(|| fault("nested producer owner absent"))?;
         if self.item_declaration_inputs.contains_key(&identity) {
             return self.poll_item_declarations(ticket, ordinal);
+        }
+        if let Some(group) = self.original_group_aliases.get(&identity).copied() {
+            return self.poll_original_derive_group(ticket, group);
         }
         let Some((compile_env, engine, providers)) = &self.declarative else {
             self.work.block(ticket, vec![identity])?;
@@ -11149,6 +11183,7 @@ impl SourceDiscovery {
             prepared.revalidate(providers)?;
         }
         super::source_declarative::SourceDeclarative::revalidate_captured_role_parents(providers)?;
+        self.revalidate_original_groups(namespaces)?;
         let mut records = Vec::new();
         self.calls
             .len()
