@@ -1,0 +1,586 @@
+{
+  "schema": "lrr/held-component-evidence/v1",
+  "task_ids": [
+    "M019",
+    "M020"
+  ],
+  "claim_ids": [
+    "LOCAL-049"
+  ],
+  "track": "WT05-02",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "baseline_commit": "e9aef9a7e353eb12fe9f598ba58d247c38234461",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "architecture": "worktracks/05-trait-goal-engine/2026-10-19-retained-opaque-return-headers.md",
+  "review": "worktracks/05-trait-goal-engine/2026-10-19-retained-opaque-return-review.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-19-retained-opaque-return-controls.json",
+  "summary": "V377-V380 HELD M019/M020 retained opaque return headers. DeclarationGenerics now retains actual return-Type opaque positions/parents/bounds/impl-token editions and explicit unresolved MacroType frontiers in its existing source memo. ParsedFile::function_header factors existing Fn header admission for signatures and declaration metadata; no full FunctionSignature/body preparation is added to namespace-only queries. DefinitionReceipt retains the same actual DeclarationGenerics Arc, with no opaque IDs/captures/ParamEnv/fake ready facts. V377/V378 build-only; V379 three host caller compile errors preserved; V380 both macOS1.99.0 builds and4/4source controls pass with exact source/HEAD/test/CLI guards. New controls retain36unchanged source sites and8normal emit/wrapper worlds across all4editions, actual AST locations, memo sharing, real old/new source isolation and unresolved type-macro frontiers; existing140Types/136TraitRefs/48origin-edition and20generic-world matrices remain passing. Runtime2024 generic-fn passes,401VMdispatches/6source calls/exact output/cleanup; nesting remains exit2 LRR-E-TYPE-CONTEXT unbound U,22VMdispatches/2calls/incomplete capture/no cleanup. Runtime parent session terminal was lost to tool output truncation; both actual child exits and input guards are recorded, no parent exit asserted. Old impl/dyn erasure and result_symbolic absence remain held until actual opaque capture/bound/source facts/upstream root/member/VM integration. Four required semantic clients remain open. Zero measured new distinct stock gain/refreshed suite total; no full-fixture/M019/M020/milestone/interpreter/JIT/Linux/performance/diagnostic closure.",
+  "sessions": {
+    "377": {
+      "lib": {
+        "id": 34939,
+        "exit": 0
+      }
+    },
+    "378": {
+      "lib": {
+        "id": 60345,
+        "exit": 0
+      }
+    },
+    "379": {
+      "lib": {
+        "id": 92401,
+        "exit": 101
+      }
+    },
+    "380": {
+      "lib": {
+        "id": 73992,
+        "exit": 0
+      },
+      "cli": {
+        "id": 31268,
+        "exit": 0
+      },
+      "controls": {
+        "id": 55853,
+        "exit": 0
+      },
+      "runtime": {
+        "session": null,
+        "parent_terminal_observed": false,
+        "child_terminals_recorded_in_rows": true
+      }
+    }
+  },
+  "commands": {
+    "lib": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+    "cli": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+    "controls": "python3.12 tools/validation/run_controls.py artifacts/validation-current-v380 worktracks/05-trait-goal-engine/2026-10-19-retained-opaque-return-controls.json",
+    "after_runtime": "python3.12 tools/validation/source_manifest.py artifacts/validation-current-v380 after-runtime"
+  },
+  "cohorts": {
+    "377": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T23:17:17.992419+00:00",
+          "head": "e9aef9a7e353eb12fe9f598ba58d247c38234461",
+          "file_count": 8606,
+          "source_sha256": "5e41e41fb36685d29b82afa58601f10a1b8dcb286f73c2d6de25601f4cb3a5a0",
+          "binaries": {},
+          "slice_files": {
+            "crates/lrr/src/frontend/opaque_return_headers.rs": "dd90f8d700902d063028dd4e822b9451dd962905c6c297cd8701dd790c3a901f",
+            "crates/lrr/src/frontend/declaration_generics.rs": "d7838d852c7a54fee9334fb813809934a5fbedb88f63cf6abe7d5c1754bd46d9",
+            "crates/lrr/src/syntax/signatures.rs": "8f5d15314ce95ba1ff227eb681a0e2fbb34fc47aab74c0ac5f0b5dab485ae367",
+            "crates/lrr/src/traits/upstream/prepared.rs": "1eb4ee8a683d32b9bb93a1016a29d7e2665b5d40d146912caa05d1040a086806",
+            "crates/lrr/src/traits/upstream/mod.rs": "fb7e372c1637ef0c0ef0a0aff4dd0546357c4268d95be109189b9bba72a385cd",
+            "crates/lrr/src/cli/preentry_loader_tests.rs": "14ad6f7ebaa296ae60d229efabaed63f132ad9002a2eb2869c31c4cc2d2481a5"
+          }
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T23:18:32.646930+00:00",
+          "head": "e9aef9a7e353eb12fe9f598ba58d247c38234461",
+          "file_count": 8606,
+          "source_sha256": "5e41e41fb36685d29b82afa58601f10a1b8dcb286f73c2d6de25601f4cb3a5a0",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "219b412768ab5d83c24dab698a3cad2ca12ee93f29f6e7c98691f6b7d01661c3"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "slice_files": {
+            "crates/lrr/src/frontend/opaque_return_headers.rs": "dd90f8d700902d063028dd4e822b9451dd962905c6c297cd8701dd790c3a901f",
+            "crates/lrr/src/frontend/declaration_generics.rs": "d7838d852c7a54fee9334fb813809934a5fbedb88f63cf6abe7d5c1754bd46d9",
+            "crates/lrr/src/syntax/signatures.rs": "8f5d15314ce95ba1ff227eb681a0e2fbb34fc47aab74c0ac5f0b5dab485ae367",
+            "crates/lrr/src/traits/upstream/prepared.rs": "1eb4ee8a683d32b9bb93a1016a29d7e2665b5d40d146912caa05d1040a086806",
+            "crates/lrr/src/traits/upstream/mod.rs": "fb7e372c1637ef0c0ef0a0aff4dd0546357c4268d95be109189b9bba72a385cd",
+            "crates/lrr/src/cli/preentry_loader_tests.rs": "14ad6f7ebaa296ae60d229efabaed63f132ad9002a2eb2869c31c4cc2d2481a5"
+          }
+        }
+      },
+      "compile_errors": [],
+      "controls": []
+    },
+    "378": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T23:18:33.195397+00:00",
+          "head": "e9aef9a7e353eb12fe9f598ba58d247c38234461",
+          "file_count": 8606,
+          "source_sha256": "a6088113e80bf63e067aee960fc71c500c307e98f94495b638b438b74a8e3a70",
+          "binaries": {},
+          "slice_files": {
+            "crates/lrr/src/frontend/opaque_return_headers.rs": "dd90f8d700902d063028dd4e822b9451dd962905c6c297cd8701dd790c3a901f",
+            "crates/lrr/src/frontend/declaration_generics.rs": "d7838d852c7a54fee9334fb813809934a5fbedb88f63cf6abe7d5c1754bd46d9",
+            "crates/lrr/src/syntax/signatures.rs": "8f5d15314ce95ba1ff227eb681a0e2fbb34fc47aab74c0ac5f0b5dab485ae367",
+            "crates/lrr/src/traits/upstream/prepared.rs": "144d0ed15dcfedbd39244b354825e63847c21e97d544ceeb45e227da958ac615",
+            "crates/lrr/src/traits/upstream/mod.rs": "fb7e372c1637ef0c0ef0a0aff4dd0546357c4268d95be109189b9bba72a385cd",
+            "crates/lrr/src/cli/preentry_loader_tests.rs": "14ad6f7ebaa296ae60d229efabaed63f132ad9002a2eb2869c31c4cc2d2481a5"
+          }
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T23:22:03.871036+00:00",
+          "head": "e9aef9a7e353eb12fe9f598ba58d247c38234461",
+          "file_count": 8606,
+          "source_sha256": "a6088113e80bf63e067aee960fc71c500c307e98f94495b638b438b74a8e3a70",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "edeccf7643ea55060f29b752ac825fd98d93c59db01d2cf4d2c4f042c5cd2c35"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "slice_files": {
+            "crates/lrr/src/frontend/opaque_return_headers.rs": "dd90f8d700902d063028dd4e822b9451dd962905c6c297cd8701dd790c3a901f",
+            "crates/lrr/src/frontend/declaration_generics.rs": "d7838d852c7a54fee9334fb813809934a5fbedb88f63cf6abe7d5c1754bd46d9",
+            "crates/lrr/src/syntax/signatures.rs": "8f5d15314ce95ba1ff227eb681a0e2fbb34fc47aab74c0ac5f0b5dab485ae367",
+            "crates/lrr/src/traits/upstream/prepared.rs": "144d0ed15dcfedbd39244b354825e63847c21e97d544ceeb45e227da958ac615",
+            "crates/lrr/src/traits/upstream/mod.rs": "fb7e372c1637ef0c0ef0a0aff4dd0546357c4268d95be109189b9bba72a385cd",
+            "crates/lrr/src/cli/preentry_loader_tests.rs": "14ad6f7ebaa296ae60d229efabaed63f132ad9002a2eb2869c31c4cc2d2481a5"
+          }
+        }
+      },
+      "compile_errors": [],
+      "controls": []
+    },
+    "379": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T23:22:04.441893+00:00",
+          "head": "e9aef9a7e353eb12fe9f598ba58d247c38234461",
+          "file_count": 8606,
+          "source_sha256": "343931ef2170deeff6555548f6cf5e29912c143e286b656984b950a52fcb1627",
+          "binaries": {},
+          "slice_files": {
+            "crates/lrr/src/frontend/opaque_return_headers.rs": "dd90f8d700902d063028dd4e822b9451dd962905c6c297cd8701dd790c3a901f",
+            "crates/lrr/src/frontend/declaration_generics.rs": "d7838d852c7a54fee9334fb813809934a5fbedb88f63cf6abe7d5c1754bd46d9",
+            "crates/lrr/src/syntax/signatures.rs": "8f5d15314ce95ba1ff227eb681a0e2fbb34fc47aab74c0ac5f0b5dab485ae367",
+            "crates/lrr/src/traits/upstream/prepared.rs": "c7cc8ac18e38571c62fb16599da6a5b338c91fe1488b55b5545fe1d625f2998c",
+            "crates/lrr/src/traits/upstream/mod.rs": "07e72c4d1ae8b8625a6806d615d7bfb43c4f5da67146ab26b2596e18faa060d5",
+            "crates/lrr/src/cli/preentry_loader_tests.rs": "35767d5166a375f92c96f5ebc4007c960dff0071e84402f9b58e9dbd0576c7e2"
+          }
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T23:22:59.317274+00:00",
+          "head": "e9aef9a7e353eb12fe9f598ba58d247c38234461",
+          "file_count": 8606,
+          "source_sha256": "343931ef2170deeff6555548f6cf5e29912c143e286b656984b950a52fcb1627",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "slice_files": {
+            "crates/lrr/src/frontend/opaque_return_headers.rs": "dd90f8d700902d063028dd4e822b9451dd962905c6c297cd8701dd790c3a901f",
+            "crates/lrr/src/frontend/declaration_generics.rs": "d7838d852c7a54fee9334fb813809934a5fbedb88f63cf6abe7d5c1754bd46d9",
+            "crates/lrr/src/syntax/signatures.rs": "8f5d15314ce95ba1ff227eb681a0e2fbb34fc47aab74c0ac5f0b5dab485ae367",
+            "crates/lrr/src/traits/upstream/prepared.rs": "c7cc8ac18e38571c62fb16599da6a5b338c91fe1488b55b5545fe1d625f2998c",
+            "crates/lrr/src/traits/upstream/mod.rs": "07e72c4d1ae8b8625a6806d615d7bfb43c4f5da67146ab26b2596e18faa060d5",
+            "crates/lrr/src/cli/preentry_loader_tests.rs": "35767d5166a375f92c96f5ebc4007c960dff0071e84402f9b58e9dbd0576c7e2"
+          }
+        }
+      },
+      "compile_errors": [
+        {
+          "message": "`T` doesn't implement `std::fmt::Debug`",
+          "code": {
+            "code": "E0277",
+            "explanation": "You tried to use a type which doesn't implement some trait in a place which\nexpected that trait.\n\nErroneous code example:\n\n```compile_fail,E0277\n// here we declare the Foo trait with a bar method\ntrait Foo {\n    fn bar(&self);\n}\n\n// we now declare a function which takes an object implementing the Foo trait\nfn some_func<T: Foo>(foo: T) {\n    foo.bar();\n}\n\nfn main() {\n    // we now call the method with the i32 type, which doesn't implement\n    // the Foo trait\n    some_func(5i32); // error: the trait bound `i32 : Foo` is not satisfied\n}\n```\n\nIn order to fix this error, verify that the type you're using does implement\nthe trait. Example:\n\n```\ntrait Foo {\n    fn bar(&self);\n}\n\n// we implement the trait on the i32 type\nimpl Foo for i32 {\n    fn bar(&self) {}\n}\n\nfn some_func<T: Foo>(foo: T) {\n    foo.bar(); // we can now use this method since i32 implements the\n               // Foo trait\n}\n\nfn main() {\n    some_func(5i32); // ok!\n}\n```\n\nOr in a generic context, an erroneous code example would look like:\n\n```compile_fail,E0277\nfn some_func<T>(foo: T) {\n    println!(\"{:?}\", foo); // error: the trait `core::fmt::Debug` is not\n                           //        implemented for the type `T`\n}\n\nfn main() {\n    // We now call the method with the i32 type,\n    // which *does* implement the Debug trait.\n    some_func(5i32);\n}\n```\n\nNote that the error here is in the definition of the generic function. Although\nwe only call it with a parameter that does implement `Debug`, the compiler\nstill rejects the function. It must work with all possible input types. In\norder to make this example compile, we need to restrict the generic type we're\naccepting:\n\n```\nuse std::fmt;\n\n// Restrict the input type to types that implement Debug.\nfn some_func<T: fmt::Debug>(foo: T) {\n    println!(\"{:?}\", foo);\n}\n\nfn main() {\n    // Calling the method is still fine, as i32 implements Debug.\n    some_func(5i32);\n\n    // This would fail to compile now:\n    // struct WithoutDebug;\n    // some_func(WithoutDebug);\n}\n```\n\nRust only looks at the signature of the called function, as such it must\nalready specify all requirements that will be used for every type parameter.\n"
+          },
+          "spans": [
+            {
+              "file_name": "crates/lrr/src/cli/preentry_loader_tests.rs",
+              "line_start": 2839,
+              "line_end": 2839,
+              "is_primary": true
+            }
+          ]
+        },
+        {
+          "message": "no method named `declarations` found for struct `std::sync::Arc<ImplHeaderIndex>` in the current scope",
+          "code": {
+            "code": "E0599",
+            "explanation": "This error occurs when a method is used on a type which doesn't implement it:\n\nErroneous code example:\n\n```compile_fail,E0599\nstruct Mouth;\n\nlet x = Mouth;\nx.chocolate(); // error: no method named `chocolate` found for type `Mouth`\n               //        in the current scope\n```\n\nIn this case, you need to implement the `chocolate` method to fix the error:\n\n```\nstruct Mouth;\n\nimpl Mouth {\n    fn chocolate(&self) { // We implement the `chocolate` method here.\n        println!(\"Hmmm! I love chocolate!\");\n    }\n}\n\nlet x = Mouth;\nx.chocolate(); // ok!\n```\n"
+          },
+          "spans": [
+            {
+              "file_name": "crates/lrr/src/cli/preentry_loader_tests.rs",
+              "line_start": 2922,
+              "line_end": 2922,
+              "is_primary": true
+            }
+          ]
+        },
+        {
+          "message": "`T` doesn't implement `std::fmt::Debug`",
+          "code": {
+            "code": "E0277",
+            "explanation": "You tried to use a type which doesn't implement some trait in a place which\nexpected that trait.\n\nErroneous code example:\n\n```compile_fail,E0277\n// here we declare the Foo trait with a bar method\ntrait Foo {\n    fn bar(&self);\n}\n\n// we now declare a function which takes an object implementing the Foo trait\nfn some_func<T: Foo>(foo: T) {\n    foo.bar();\n}\n\nfn main() {\n    // we now call the method with the i32 type, which doesn't implement\n    // the Foo trait\n    some_func(5i32); // error: the trait bound `i32 : Foo` is not satisfied\n}\n```\n\nIn order to fix this error, verify that the type you're using does implement\nthe trait. Example:\n\n```\ntrait Foo {\n    fn bar(&self);\n}\n\n// we implement the trait on the i32 type\nimpl Foo for i32 {\n    fn bar(&self) {}\n}\n\nfn some_func<T: Foo>(foo: T) {\n    foo.bar(); // we can now use this method since i32 implements the\n               // Foo trait\n}\n\nfn main() {\n    some_func(5i32); // ok!\n}\n```\n\nOr in a generic context, an erroneous code example would look like:\n\n```compile_fail,E0277\nfn some_func<T>(foo: T) {\n    println!(\"{:?}\", foo); // error: the trait `core::fmt::Debug` is not\n                           //        implemented for the type `T`\n}\n\nfn main() {\n    // We now call the method with the i32 type,\n    // which *does* implement the Debug trait.\n    some_func(5i32);\n}\n```\n\nNote that the error here is in the definition of the generic function. Although\nwe only call it with a parameter that does implement `Debug`, the compiler\nstill rejects the function. It must work with all possible input types. In\norder to make this example compile, we need to restrict the generic type we're\naccepting:\n\n```\nuse std::fmt;\n\n// Restrict the input type to types that implement Debug.\nfn some_func<T: fmt::Debug>(foo: T) {\n    println!(\"{:?}\", foo);\n}\n\nfn main() {\n    // Calling the method is still fine, as i32 implements Debug.\n    some_func(5i32);\n\n    // This would fail to compile now:\n    // struct WithoutDebug;\n    // some_func(WithoutDebug);\n}\n```\n\nRust only looks at the signature of the called function, as such it must\nalready specify all requirements that will be used for every type parameter.\n"
+          },
+          "spans": [
+            {
+              "file_name": "crates/lrr/src/cli/preentry_loader_tests.rs",
+              "line_start": 2907,
+              "line_end": 2907,
+              "is_primary": true
+            }
+          ]
+        }
+      ],
+      "controls": []
+    },
+    "380": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T23:22:59.792105+00:00",
+          "head": "e9aef9a7e353eb12fe9f598ba58d247c38234461",
+          "file_count": 8606,
+          "source_sha256": "a93015d901adcc89c21414237f55bdb9c460e60965fab7798d51e79e04c96d9f",
+          "binaries": {},
+          "slice_files": {
+            "crates/lrr/src/frontend/opaque_return_headers.rs": "dd90f8d700902d063028dd4e822b9451dd962905c6c297cd8701dd790c3a901f",
+            "crates/lrr/src/frontend/declaration_generics.rs": "d7838d852c7a54fee9334fb813809934a5fbedb88f63cf6abe7d5c1754bd46d9",
+            "crates/lrr/src/syntax/signatures.rs": "8f5d15314ce95ba1ff227eb681a0e2fbb34fc47aab74c0ac5f0b5dab485ae367",
+            "crates/lrr/src/traits/upstream/prepared.rs": "c7cc8ac18e38571c62fb16599da6a5b338c91fe1488b55b5545fe1d625f2998c",
+            "crates/lrr/src/traits/upstream/mod.rs": "07e72c4d1ae8b8625a6806d615d7bfb43c4f5da67146ab26b2596e18faa060d5",
+            "crates/lrr/src/cli/preentry_loader_tests.rs": "d42900bf7b1622918131a35ac6ad960546323ab18859e6a4fc23516deb9d9c25"
+          }
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T23:26:15.634390+00:00",
+          "head": "e9aef9a7e353eb12fe9f598ba58d247c38234461",
+          "file_count": 8606,
+          "source_sha256": "a93015d901adcc89c21414237f55bdb9c460e60965fab7798d51e79e04c96d9f",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "dcb8181732925c585b27c134eb33e9a410ad79c79664cc4dac979be930a0437e"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "e33a8a216c6125598bfad0a62757277d805ac8c3ef28aec89a44c64bbd37d130"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "slice_files": {
+            "crates/lrr/src/frontend/opaque_return_headers.rs": "dd90f8d700902d063028dd4e822b9451dd962905c6c297cd8701dd790c3a901f",
+            "crates/lrr/src/frontend/declaration_generics.rs": "d7838d852c7a54fee9334fb813809934a5fbedb88f63cf6abe7d5c1754bd46d9",
+            "crates/lrr/src/syntax/signatures.rs": "8f5d15314ce95ba1ff227eb681a0e2fbb34fc47aab74c0ac5f0b5dab485ae367",
+            "crates/lrr/src/traits/upstream/prepared.rs": "c7cc8ac18e38571c62fb16599da6a5b338c91fe1488b55b5545fe1d625f2998c",
+            "crates/lrr/src/traits/upstream/mod.rs": "07e72c4d1ae8b8625a6806d615d7bfb43c4f5da67146ab26b2596e18faa060d5",
+            "crates/lrr/src/cli/preentry_loader_tests.rs": "d42900bf7b1622918131a35ac6ad960546323ab18859e6a4fc23516deb9d9c25"
+          }
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T23:30:07.478585+00:00",
+          "head": "e9aef9a7e353eb12fe9f598ba58d247c38234461",
+          "file_count": 8606,
+          "source_sha256": "a93015d901adcc89c21414237f55bdb9c460e60965fab7798d51e79e04c96d9f",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "dcb8181732925c585b27c134eb33e9a410ad79c79664cc4dac979be930a0437e"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "e33a8a216c6125598bfad0a62757277d805ac8c3ef28aec89a44c64bbd37d130"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true,
+          "slice_files": {
+            "crates/lrr/src/frontend/opaque_return_headers.rs": "dd90f8d700902d063028dd4e822b9451dd962905c6c297cd8701dd790c3a901f",
+            "crates/lrr/src/frontend/declaration_generics.rs": "d7838d852c7a54fee9334fb813809934a5fbedb88f63cf6abe7d5c1754bd46d9",
+            "crates/lrr/src/syntax/signatures.rs": "8f5d15314ce95ba1ff227eb681a0e2fbb34fc47aab74c0ac5f0b5dab485ae367",
+            "crates/lrr/src/traits/upstream/prepared.rs": "c7cc8ac18e38571c62fb16599da6a5b338c91fe1488b55b5545fe1d625f2998c",
+            "crates/lrr/src/traits/upstream/mod.rs": "07e72c4d1ae8b8625a6806d615d7bfb43c4f5da67146ab26b2596e18faa060d5",
+            "crates/lrr/src/cli/preentry_loader_tests.rs": "d42900bf7b1622918131a35ac6ad960546323ab18859e6a4fc23516deb9d9c25"
+          }
+        }
+      },
+      "compile_errors": [],
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_opaque_return_headers_retain_actual_source_and_cold_bodies_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+            "cli::preentry_loader_tests::unchanged_opaque_return_headers_retain_actual_source_and_cold_bodies_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 5.077,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::generated_opaque_headers_share_declaration_query_and_refresh_actual_source_receipts",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+            "cli::preentry_loader_tests::generated_opaque_headers_share_declaration_query_and_refresh_actual_source_receipts",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 22.212,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+            "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 123.485,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+            "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 47.904,
+          "log": "control-3.log"
+        }
+      ]
+    }
+  },
+  "fixtures": [
+    {
+      "path": "tests/ui/impl-trait/nesting.rs",
+      "sha256": "453a7890e9f8a59f60f3650af88831a14070f2cb066ea7515b65a30247ea831d",
+      "matches_upstream": true,
+      "original_modified": false
+    },
+    {
+      "path": "tests/ui/impl-trait/impl_fn_associativity.rs",
+      "sha256": "dc3a44132d555e8177d7657c73fbe49c262b29307dfcc0f2ea35093a0a9bd6c4",
+      "matches_upstream": true,
+      "original_modified": false
+    },
+    {
+      "path": "tests/ui/generics/generic-fn.rs",
+      "sha256": "9c56e0939fb6f62c6943a142b24d2049ca6c2b0ac085515c95fc24b368fc7d5d",
+      "matches_upstream": true,
+      "original_modified": false
+    }
+  ],
+  "runtime_rows": [
+    {
+      "path": "tests/ui/generics/generic-fn.rs",
+      "edition": 2024,
+      "sha256": "9c56e0939fb6f62c6943a142b24d2049ca6c2b0ac085515c95fc24b368fc7d5d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2024",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/generics/generic-fn.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "6f08e64a72f121769567a0fc69ffdcb6111db7d818983172900f4cdfe47fdb9b"
+      ],
+      "environment": {
+        "LRR_EMBEDDED_FACADE": "1"
+      },
+      "exit": 0,
+      "seconds": 7.054,
+      "inputs_unchanged": true,
+      "stdout": "stock-0.stdout",
+      "stderr": "stock-0.stderr",
+      "host_stderr": "",
+      "expected_stdout_bytes": [
+        54,
+        50,
+        10,
+        97,
+        10,
+        54,
+        55,
+        10
+      ],
+      "expected_stderr_bytes": [],
+      "capture": {
+        "complete": true,
+        "scope": "dispatcher_external_effects_only_not_memory_trace",
+        "facts": {
+          "classified_operation_candidates": 728,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 6,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 401,
+          "vm_outcomes": 401
+        },
+        "guest": {
+          "status": "closed_managed_output_observed",
+          "stdout": [
+            54,
+            50,
+            10,
+            97,
+            10,
+            54,
+            55,
+            10
+          ],
+          "stderr": []
+        },
+        "blocker": null
+      },
+      "runtime_contract_pass": true,
+      "terminal_summary": {
+        "status": "completed",
+        "value": {
+          "kind": "unit"
+        },
+        "output": {
+          "stderr": "",
+          "stdout": "62\na\n67\n"
+        }
+      }
+    },
+    {
+      "path": "tests/ui/impl-trait/nesting.rs",
+      "edition": 2024,
+      "sha256": "453a7890e9f8a59f60f3650af88831a14070f2cb066ea7515b65a30247ea831d",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2024",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/impl-trait/nesting.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "8b055cb66eec31eede5a0fd40223f2b6d51b1cdee58783225f48da9be0229ab3"
+      ],
+      "environment": {
+        "LRR_EMBEDDED_FACADE": "1"
+      },
+      "exit": 2,
+      "seconds": 4.195,
+      "inputs_unchanged": true,
+      "stdout": "stock-1.stdout",
+      "stderr": "stock-1.stderr",
+      "host_stderr": "",
+      "expected_stdout_bytes": [
+        91,
+        52,
+        50,
+        93,
+        10,
+        91,
+        57,
+        57,
+        93,
+        10
+      ],
+      "expected_stderr_bytes": [],
+      "capture": {
+        "complete": false,
+        "scope": "dispatcher_external_effects_only_not_memory_trace",
+        "facts": {
+          "classified_operation_candidates": 32,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 2,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 22,
+          "vm_outcomes": 22
+        },
+        "guest": {
+          "status": "unobserved",
+          "stdout": null,
+          "stderr": null
+        },
+        "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer"
+      },
+      "runtime_contract_pass": false,
+      "terminal_summary": {
+        "status": "fault",
+        "phase": "executor",
+        "code": "LRR-E-TYPE-CONTEXT",
+        "message": "generic parameter `U` has no reached binding for its path call"
+      }
+    }
+  ],
+  "runtime_counts": {
+    "rows": 2,
+    "runtime_contract_pass": 1,
+    "runtime_contract_fail": 1,
+    "new_distinct_gains_measured": 0,
+    "refreshed_full_suite_count": false
+  },
+  "remaining": [
+    "actual source opaque identity/capture/bounds/hidden Type facts",
+    "four required compiler clients",
+    "actual upstream solver root/canonical response execution",
+    "source-selected member/dictionary/common VM integration",
+    "remove obsolete impl/dyn erasure and absent symbolic opaque result",
+    "full applicable runtime and interpreter correctness gates before guest JIT"
+  ]
+}

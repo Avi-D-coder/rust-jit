@@ -10,6 +10,10 @@ use crate::{
 use ra_ap_syntax::{AstNode, ast};
 use std::sync::Arc;
 
+#[path = "opaque_return_headers.rs"]
+mod opaque_return_headers;
+pub(crate) use opaque_return_headers::OpaqueReturnHeaders;
+
 #[derive(Debug)]
 pub struct DeclarationGenerics {
     definition: Digest,
@@ -21,6 +25,7 @@ pub struct DeclarationGenerics {
     /// function's inherited Self. Neither changes ordinary source ordinals.
     trait_self: bool,
     function: bool,
+    opaque_returns: Option<OpaqueReturnHeaders>,
     const_types: std::collections::BTreeMap<u32, crate::syntax::spans::SourceRange>,
 }
 impl DeclarationGenerics {
@@ -29,6 +34,13 @@ impl DeclarationGenerics {
     pub fn layout(&self) -> Option<GenericSourceLayout> { self.layout }
     pub(crate) fn has_trait_self(&self) -> bool { self.trait_self }
     pub(crate) fn is_function(&self) -> bool { self.function }
+    pub(crate) fn opaque_returns(&self) -> Option<&OpaqueReturnHeaders> { self.opaque_returns.as_ref() }
+    pub(crate) fn opaque_return_syntax(&self, position: u32) -> Result<Option<ast::ImplTraitType>, Diagnostic> {
+        match (self.opaque_returns.as_ref(), self.source_parts()) {
+            (Some(plan), Some((_, _, _, parsed))) => plan.syntax(parsed, position),
+            _ => Ok(None),
+        }
+    }
     pub(crate) fn source_parts(&self) -> Option<(&ParseKey, &HeaderRecipe, &DeclarationContext, &crate::syntax::parse::ParsedFile)> {
         let [source, header, context] = self.metadata.as_ref()?;
         let (InputValue::DefinitionSource(source), InputValue::DefinitionHeader(header), InputValue::DeclarationContext(context), Some(QueryValue::ParseFile(parsed))) =
@@ -49,7 +61,7 @@ impl DeclarationGenerics {
     }
     pub(crate) fn prepare(db: &mut Database, definition: Digest) -> QueryPoll<Self> {
         let mut result = Self { definition, metadata: None, parsed: None, parameters: Vec::new(),
-            layout: None, trait_self: false, function: false, const_types: std::collections::BTreeMap::new() };
+            layout: None, trait_self: false, function: false, opaque_returns: None, const_types: std::collections::BTreeMap::new() };
         let source = db.input(&InputKey::DefinitionSource(definition));
         let header = db.input(&InputKey::DefinitionHeader(definition));
         let context = db.input(&InputKey::DeclarationContext(definition));
@@ -78,6 +90,14 @@ impl DeclarationGenerics {
         }
         result.trait_self = ast::Trait::can_cast(node.kind());
         result.function = ast::Fn::can_cast(node.kind());
+        if result.function {
+            let function = match tree.function_header(definition, recipe, declaration, None) {
+                Ok(function) => function, Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+            result.opaque_returns = match OpaqueReturnHeaders::capture(tree, definition, &function) {
+                Ok(plan) => plan, Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+        }
         result.const_types = match tree.declaration_const_type_ranges(&node) {
             Ok(ranges) => ranges, Err(error) => return QueryPoll::Ready(Err(error)),
         };
@@ -94,10 +114,11 @@ impl DeclarationGenerics {
 }
 fn fault(message: &str) -> Diagnostic { Diagnostic::new("LRR-E-DECLARATION-GENERICS", message.into()) }
 impl StableEncode for DeclarationGenerics {
-    const DOMAIN: &'static str = "lrr/v2/actual-declaration-generics";
+    const DOMAIN: &'static str = "lrr/v3/actual-declaration-generics";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.definition); e.option(&self.layout, |e, layout| e.record(layout));
         e.bool(self.trait_self); e.bool(self.function);
+        e.option(&self.opaque_returns,|e,plan| e.record(plan));
         e.map(&self.const_types, |e, ordinal, range| { e.u32(*ordinal); e.u32(range.start); e.u32(range.end); });
         e.sequence(&self.parameters, |e, p| {
             e.u32(p.ordinal); e.string(&p.name);

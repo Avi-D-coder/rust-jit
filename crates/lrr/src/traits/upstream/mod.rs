@@ -31,7 +31,7 @@ pub(crate) mod identity;
 pub(crate) mod model;
 pub(crate) mod parameters;
 #[cfg(test)]
-pub(crate) use prepared::{check_scope_receipts, check_completed_source_catalog};
+pub(crate) use prepared::{check_scope_receipts, check_completed_source_catalog, check_opaque_return_receipt};
 mod prepared;
 mod candidates;
 pub(crate) use prepared::{PreparedProvider, ReadyProvider, evaluate_prepared};

@@ -60,6 +60,7 @@ pub(super) struct DefinitionReceipt {
     header: Arc<InputValue>,
     context: Arc<InputValue>,
     parsed: Arc<QueryValue>,
+    generic_declaration: Arc<QueryValue>,
     implementation: Option<bool>,
     trait_declaration: bool,
 }
@@ -73,6 +74,10 @@ impl DefinitionReceipt {
         let QueryValue::ParseFile(parsed) = self.parsed.as_ref() else { unreachable!("captured source parse") };
         parsed.syntax_at(context.range, |node| ast::Struct::can_cast(node.kind())
             || ast::Enum::can_cast(node.kind()) || ast::Union::can_cast(node.kind())).map(|node| node.is_some())
+    }
+    pub(super) fn opaque_returns(&self) -> Option<&crate::frontend::declaration_generics::OpaqueReturnHeaders> {
+        let QueryValue::DeclarationGenerics(generics) = self.generic_declaration.as_ref() else { unreachable!("captured generic declaration query") };
+        generics.opaque_returns()
     }
     pub(super) fn is_trait(&self) -> bool { self.trait_declaration }
     pub(super) fn is_impl(&self) -> bool { self.implementation.is_some() }
@@ -107,6 +112,17 @@ impl DefinitionReceipt {
         let QueryValue::ParseFile(tree) = parsed.as_ref() else {
             return QueryPoll::Ready(Err(fault("definition receipt parser differs")));
         };
+        let generic_declaration = match db.fetch(&SyntaxProvider, QueryKey::DeclarationGenerics(definition)) {
+            QueryPoll::Ready(Ok(value)) => value.value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::DeclarationGenerics(generics) = generic_declaration.as_ref() else {
+            return QueryPoll::Ready(Err(fault("definition generic declaration query differs")));
+        };
+        if !generics.matches_metadata(parse, recipe, declaration) {
+            return QueryPoll::Ready(Err(fault("definition generic declaration source differs")));
+        }
         let implementation =
             match tree.syntax_at(declaration.range, |node| ast::Impl::can_cast(node.kind())) {
                 Ok(Some(node)) => ast::Impl::cast(node).map(|item| item.trait_().is_some()),
@@ -123,6 +139,7 @@ impl DefinitionReceipt {
             header,
             context,
             parsed,
+            generic_declaration,
             implementation,
             trait_declaration,
         })))
@@ -1351,4 +1368,24 @@ pub(crate) fn check_scope_receipts(db: &mut Database, seal: crate::db::seals::Se
 #[cfg(test)]
 pub(crate) fn check_completed_source_catalog(input: &DiscoveryInput) -> Result<Digest, Diagnostic> {
     catalog_world(input)
+}
+
+/// Supplemental source receipt control; never constructs an opaque Type ID,
+/// full facts, client table or ReadyProvider from syntax-only information.
+#[cfg(test)]
+pub(crate) fn check_opaque_return_receipt(
+    db: &mut Database, definition: Digest, expected: &Arc<QueryValue>, previous: Option<&Arc<QueryValue>>,
+) {
+    let receipt = match DefinitionReceipt::observe(db, definition) {
+        QueryPoll::Ready(Ok(Some(receipt))) => receipt,
+        other => panic!("actual opaque function receipt: {other:?}"),
+    };
+    let QueryValue::DeclarationGenerics(current) = expected.as_ref() else { panic!("actual generic declaration result") };
+    assert!(receipt.matches_generics(current));
+    let plan = current.opaque_returns().expect("actual declared return Type");
+    assert!(std::ptr::eq(receipt.opaque_returns().unwrap(), plan), "receipt must share the actual retained declaration plan");
+    if let Some(previous) = previous {
+        let QueryValue::DeclarationGenerics(old) = previous.as_ref() else { panic!() };
+        assert!(!receipt.matches_generics(old), "replaced source metadata must not acquire current authority");
+    }
 }

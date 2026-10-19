@@ -1,0 +1,44 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Actual opaque-return syntax/generic receipt producer and shared function-header admission; no typed opaque ID/captures/bounds/root/member/VM join",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_opaque_return_headers_retain_actual_source_and_cold_bodies_all_editions",
+    "cli::preentry_loader_tests::generated_opaque_headers_share_declaration_query_and_refresh_actual_source_receipts",
+    "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+    "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions"
+  ],
+  "runtime_cases": [
+    {
+      "path": "tests/ui/generics/generic-fn.rs",
+      "edition": 2024,
+      "expected_stdout_bytes": [
+        54,
+        50,
+        10,
+        97,
+        10,
+        54,
+        55,
+        10
+      ],
+      "expected_stderr_bytes": []
+    },
+    {
+      "path": "tests/ui/impl-trait/nesting.rs",
+      "edition": 2024,
+      "expected_stdout_bytes": [
+        91,
+        52,
+        50,
+        93,
+        10,
+        91,
+        57,
+        57,
+        93,
+        10
+      ],
+      "expected_stderr_bytes": []
+    }
+  ]
+}

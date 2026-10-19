@@ -2827,3 +2827,138 @@ fn unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_edi
     }
     assert!(constants > 0 && regions > 0);
 }
+
+#[test]
+fn unchanged_opaque_return_headers_retain_actual_source_and_cold_bodies_all_editions() {
+    use crate::{
+        core::{digest::StableEncode, profile::ProfileIdentity},
+        db::{key::QueryKey, memo::Database, poll::QueryPoll, provider::SyntaxProvider, value::QueryValue},
+    };
+    use ra_ap_syntax::{AstNode, ast::HasTypeBounds};
+    fn ready<T: std::fmt::Debug>(poll: QueryPoll<T>) -> T {
+        match poll { QueryPoll::Ready(Ok(value)) => value, other => panic!("actual declaration query: {other:?}") }
+    }
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");
+    let mut sites = 0;
+    for edition in [2015, 2018, 2021, 2024] {
+        for (case, targets) in [
+            ("tests/ui/impl-trait/nesting.rs", &[ ("foo",1usize), ("bar",1) ][..]),
+            ("tests/ui/impl-trait/impl_fn_associativity.rs", &[ ("f_debug",2usize), ("ff_debug",3), ("multi",2) ][..]),
+        ] {
+            let path=root.join(case);let original=std::fs::read_to_string(&path).unwrap();
+            let profile=ProfileIdentity {edition,..ProfileIdentity::current()};
+            let ((inputs,view,_,_),_)=super::crate_graph::capture_with(&path,false,edition,
+                &super::crate_graph::ExternCrates::default(),
+                crate::source::embedded_crates::standard_facade_crates(&profile),None).unwrap();
+            let mut db=Database::default();inputs.publish(&mut db).unwrap();db.trace.detailed=true;
+            for &(name,count) in targets {
+                let item=view.outline().items.iter().find(|item|item.def_key.declared_name==name).unwrap();
+                let definition=item.def_key.fingerprint();
+                let value=ready(db.fetch(&SyntaxProvider,QueryKey::DeclarationGenerics(definition))).value;
+                let QueryValue::DeclarationGenerics(row)=value.as_ref() else {panic!()};
+                let plan=row.opaque_returns().expect("real return Type");
+                assert_eq!(plan.definition(),definition);assert_eq!(plan.sites().len(),count);
+                assert!(plan.macro_frontiers().is_empty());
+                for (index,site) in plan.sites().iter().enumerate() {
+                    assert_eq!(site.position(),index as u32);
+                    assert_eq!(site.parent(),index.checked_sub(1).map(|i|i as u32));
+                    assert_eq!(site.edition(),edition);
+                    let syntax=row.opaque_return_syntax(site.position()).unwrap().unwrap();
+                    assert_eq!(crate::syntax::ast_adapter::range(syntax.syntax().text_range()),site.range());
+                    let bounds=syntax.type_bound_list().unwrap();
+                    assert_eq!(Some(crate::syntax::ast_adapter::range(bounds.syntax().text_range())),site.bounds_range());
+                    assert!(!bounds.syntax().text().to_string().is_empty());sites+=1;
+                }
+                let reused=ready(db.fetch(&SyntaxProvider,QueryKey::DeclarationGenerics(definition))).value;
+                assert!(std::sync::Arc::ptr_eq(&value,&reused));
+                crate::traits::upstream::check_opaque_return_receipt(&mut db,definition,&value,None);
+                if name=="foo" {
+                    // Adapt only an external temporary copy of the real source.
+                    // Inventory the unexpanded return Type macro, not a false
+                    // empty opaque set. No macro/guest code is executed here.
+                    let ret=plan.result_range();let a=ret.start as usize;let b=ret.end as usize;
+                    let mut wrapped=original.clone();
+                    wrapped.replace_range(a..b,&format!("opaque_type_passthrough!{{{}}}",&original[a..b]));
+                    let (_,_,context,_)=row.source_parts().unwrap();
+                    wrapped.insert_str(context.range.start as usize,"macro_rules! opaque_type_passthrough {($t:ty)=>{$t}}\n");
+                    let altered=temporary_source(&format!("opaque-type-frontier-{edition}"),&wrapped);
+                    let ((inputs,view,_,_),_)=super::crate_graph::capture_with(&altered,false,edition,
+                        &super::crate_graph::ExternCrates::default(),crate::source::embedded_crates::standard_facade_crates(&profile),None).unwrap();
+                    let mut frontier_db=Database::default();inputs.publish(&mut frontier_db).unwrap();
+                    let item=view.outline().items.iter().find(|i|i.def_key.declared_name==name).unwrap();
+                    let frontier=ready(frontier_db.fetch(&SyntaxProvider,QueryKey::DeclarationGenerics(item.def_key.fingerprint()))).value;
+                    let QueryValue::DeclarationGenerics(frontier)=frontier.as_ref() else {panic!()};
+                    let frontier=frontier.opaque_returns().unwrap();
+                    assert!(frontier.sites().is_empty());assert_eq!(frontier.macro_frontiers().len(),1);
+                }
+            }
+            assert!(db.trace.events.iter().all(|event| !matches!(event.key,
+                QueryKey::FunctionSignature(_) | QueryKey::BodyStructure(_) | QueryKey::SourceLocalPlan(_) | QueryKey::Thunk(_) | QueryKey::PatternPlan(_))));
+        }
+    }
+    assert_eq!(sites,36);
+}
+
+#[test]
+fn generated_opaque_headers_share_declaration_query_and_refresh_actual_source_receipts() {
+    use crate::{core::{digest::StableEncode,profile::ProfileIdentity},
+        db::{dependency::{InputKey,InputValue},key::QueryKey,memo::Database,poll::QueryPoll,provider::SyntaxProvider,value::QueryValue}};
+    use ra_ap_syntax::AstNode;
+    fn ready<T: std::fmt::Debug>(poll:QueryPoll<T>)->T {match poll {QueryPoll::Ready(Ok(value))=>value,other=>panic!("actual opaque source query: {other:?}")}}
+    let original=std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout/tests/ui/impl-trait/nesting.rs")).unwrap();
+    // Keep crate attributes/directives outside the macro; emit the exact
+    // original function declarations/bodies through normal source admission.
+    let offset=original.find("fn foo").unwrap();let prefix=&original[..offset];let declarations=&original[offset..];
+    let mut worlds=0;
+    for edition in [2015,2018,2021,2024] {
+        for wrapper in [false,true] {
+            let setup=if wrapper {"macro_rules! outer {($($t:tt)*)=>{emit!{$($t)*}}}"}else{""};
+            let invoke=if wrapper {"outer"}else{"emit"};
+            let source=format!("{prefix}macro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} {setup} {invoke}!{{{declarations}}}");
+            let path=temporary_source(&format!("opaque-emit-{edition}-{wrapper}"),&source);
+            let (mut db,seal,scope)=configured_impl_catalog_world(&path,edition).unwrap();
+            let input=db.input(&InputKey::DiscoverySeal(seal.clone())).unwrap();
+            let InputValue::DiscoverySeal(catalog)=input.as_ref() else {panic!()};
+            let headers=ready(db.fetch(&SyntaxProvider,QueryKey::PreparedScopeImplHeaders(seal.clone()))).value;
+            let QueryValue::PreparedScopeImplHeaders(headers)=headers.as_ref()else{panic!()};
+            let names=headers.inventory_root().environment().unwrap().names();
+            let definitions=["foo","bar"].into_iter().map(|name| {
+                let lookup=names.lookup_source_path(crate::source::manifest::Namespace::Value,
+                    &[crate::syntax::imports::ImportSegment::Name(name.into())],false,&scope,edition).unwrap();
+                let crate::frontend::names::NameLookup::Defined(found)=lookup else {panic!("actual generated function {name}: {lookup:?}")};
+                (found.identity,name)
+            }).collect::<Vec<_>>();
+            assert_eq!(definitions.len(),2);db.trace.detailed=true;let start=db.trace.events.len();
+            for (definition,name) in definitions {
+                let value=ready(db.fetch(&SyntaxProvider,QueryKey::DeclarationGenerics(definition))).value;
+                let QueryValue::DeclarationGenerics(row)=value.as_ref() else {panic!()};
+                let plan=row.opaque_returns().unwrap();assert_eq!(plan.sites().len(),1,"{name}");assert!(plan.macro_frontiers().is_empty());
+                assert_eq!(plan.sites()[0].edition(),edition);assert!(row.opaque_return_syntax(0).unwrap().is_some());
+                crate::traits::upstream::check_opaque_return_receipt(&mut db,definition,&value,None);
+            }
+            assert!(db.trace.events[start..].iter().all(|event|!matches!(event.key,QueryKey::FunctionSignature(_)|QueryKey::BodyStructure(_)|QueryKey::Thunk(_)|QueryKey::PatternPlan(_))));worlds+=1;
+        }
+        // Re-publish genuine source input snapshots, retaining the old immutable
+        // plan. The body-only comment shifts bar's actual source locations.
+        let path=temporary_source(&format!("opaque-refresh-{edition}"),&original);
+        let profile=ProfileIdentity{edition,..ProfileIdentity::current()};
+        let capture=||super::crate_graph::capture_with(&path,false,edition,&super::crate_graph::ExternCrates::default(),crate::source::embedded_crates::standard_facade_crates(&profile),None).unwrap().0;
+        let (inputs,view,_,_)=capture();let mut db=Database::default();inputs.publish(&mut db).unwrap();
+        let def=view.outline().items.iter().find(|i|i.def_key.declared_name=="bar").unwrap().def_key.fingerprint();
+        let old=ready(db.fetch(&SyntaxProvider,QueryKey::DeclarationGenerics(def))).value;
+        std::fs::write(&path,original.replacen("[t]","/* retained source refresh */ [t]",1)).unwrap();
+        let (inputs,view,_,_)=capture();inputs.publish(&mut db).unwrap();
+        let def=view.outline().items.iter().find(|i|i.def_key.declared_name=="bar").unwrap().def_key.fingerprint();
+        let new=ready(db.fetch(&SyntaxProvider,QueryKey::DeclarationGenerics(def))).value;
+        assert!(!std::sync::Arc::ptr_eq(&old,&new));
+        let (QueryValue::DeclarationGenerics(old_row),QueryValue::DeclarationGenerics(new_row))=(old.as_ref(),new.as_ref())else{panic!()};
+        assert_ne!(old_row.source_parts().unwrap().0,new_row.source_parts().unwrap().0);
+        assert_ne!(old_row.opaque_returns().unwrap().sites()[0].range(),new_row.opaque_returns().unwrap().sites()[0].range());
+        assert_eq!(old_row.opaque_return_syntax(0).unwrap().unwrap().syntax().text().to_string(),new_row.opaque_return_syntax(0).unwrap().unwrap().syntax().text().to_string());
+        crate::traits::upstream::check_opaque_return_receipt(&mut db,def,&new,Some(&old));
+        let mut absent=Database::default();let absent=ready(absent.fetch(&SyntaxProvider,QueryKey::DeclarationGenerics(def))).value;
+        let QueryValue::DeclarationGenerics(absent)=absent.as_ref()else{panic!()};
+        assert!(absent.source_parts().is_none());assert!(absent.opaque_returns().is_none());
+    }
+    assert_eq!(worlds,8);
+}

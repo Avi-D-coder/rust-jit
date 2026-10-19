@@ -344,21 +344,14 @@ impl ParsedFile {
             predicates: Vec::new(),
         })
     }
-    pub fn function_signature(
-        &self,
-        definition: Digest,
-        header: &HeaderRecipe,
-        context: &DeclarationContext,
-        body: Option<&BodyHandle>,
-    ) -> Result<FunctionSignature, Diagnostic> {
-        if header.profile != self.profile {
-            return Err(fault("signature/source profile mismatch"));
-        }
-        if body.is_some_and(|b| b.def_key != definition) {
-            return Err(fault("signature/body definition mismatch"));
-        }
-        if let Some(signature) = self.initializer_signature(definition, header, context)? {
-            return Ok(signature);
+    /// Shared source/header admission for signature and declaration metadata.
+    /// This reads only the retained Fn header; it never lowers its body.
+    pub(crate) fn function_header(
+        &self, definition: Digest, header: &HeaderRecipe,
+        context: &DeclarationContext, body: Option<&BodyHandle>,
+    ) -> Result<ast::Fn, Diagnostic> {
+        if header.profile != self.profile || body.is_some_and(|b| b.def_key != definition) {
+            return Err(fault("signature/source profile or definition mismatch"));
         }
         let function = self
             .syntax_at(context.range, |node| ast::Fn::can_cast(node.kind()))
@@ -375,6 +368,25 @@ impl ParsedFile {
                 "signature declaration is not in its immutable source",
             ));
         }
+        Ok(function)
+    }
+    pub fn function_signature(
+        &self,
+        definition: Digest,
+        header: &HeaderRecipe,
+        context: &DeclarationContext,
+        body: Option<&BodyHandle>,
+    ) -> Result<FunctionSignature, Diagnostic> {
+        if header.profile != self.profile {
+            return Err(fault("signature/source profile mismatch"));
+        }
+        if body.is_some_and(|b| b.def_key != definition) {
+            return Err(fault("signature/body definition mismatch"));
+        }
+        if let Some(signature) = self.initializer_signature(definition, header, context)? {
+            return Ok(signature);
+        }
+        let function = self.function_header(definition, header, context, body)?;
         let (generics, layout) = self.declaration_generics(function.syntax())?;
         let list = function
             .param_list()
