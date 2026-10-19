@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V234/V235 partial M020 upstream client integration: Pattern/Existential/Expr relations, full compiler const-expression operation metadata/constructors, abstract-constant expansion and region erasure now use audited pinned compiler ports. Removed3relation hooks, the generic expansion algorithm hook and Probe allocation hook from SourceFacts; abstract_const supplies prepared data only. Both cohorts build library/CLI. V234 unchanged unop/fn_call contracts both fail before the shared solver (wildcard type resolution; symbolic array return preparation), never counted passed. New concrete-family/roundtrip/cache semantics remain unexecuted: no real provider/inference/delegate/root-goal invocation. Zero new stock gains and no M020/interpreter/JIT closure.",
+      "scope": "V236\u2013V243 partial M019/M020: concrete immutable SourceFacts reader, exact retained source receipts, complete-catalog publication checks and derived pinned relevant-impl indexes. Actual scoped provider/context factory now type-checks after repairing the real ThinVec cache-drop lifetime failure with safe scoped cleanup. Final library/CLI builds and 2/2 host controls pass: normal/unwind cleanup and 8 source worlds (7,972 actual impl receipt observations) across all 4 editions, with parse-owner sharing, missing inputs, no body queries and real Scope certificate rejection. No complete M019 producer, positive source-backed ready instance, actual inference/delegate/root-goal execution, stock runtime gain or interpreter/JIT closure.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1707,11 +1707,15 @@
         "tools/sync_upstream_type_traversal.py",
         "tools/sync_upstream_binders.py",
         "tools/sync_upstream_relations.py",
-        "worktracks/05-trait-goal-engine/2026-10-19-upstream-relations.md"
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-relations.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-prepared-solver-provider.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-prepared-provider-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-prepared-provider-controls.json",
+        "tools/sync_upstream_candidates.py"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T10:49:04.540742+00:00",
+      "updated_at": "2026-10-19T11:26:08.497482+00:00",
       "review_after": "2026-10-20T08:52:46.617857+00:00"
     }
   ],

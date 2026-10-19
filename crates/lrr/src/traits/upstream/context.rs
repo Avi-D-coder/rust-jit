@@ -5,7 +5,7 @@ use super::{
     identity::DefinitionId,
     model::*,
     parameters::SourceParameter,
-    storage::{InternPool, Interned},
+    storage::{CacheGuard, InternPool, Interned, ScopedCache},
 };
 use rustc_index::bit_set::DenseBitSet;
 use rustc_type_ir::lang_items::{SolverAdtLangItem, SolverProjectionLangItem, SolverTraitLangItem};
@@ -20,17 +20,17 @@ use std::{
 
 #[derive(Clone, Copy)]
 pub(crate) struct Context<'cx, F: SourceFacts<'cx>> {
-    state: &'cx State<'cx, F>,
+    state: &'cx StateRef<'cx, F>,
 }
 impl<'cx, F: SourceFacts<'cx>> PartialEq for Context<'cx, F> {
     fn eq(&self, b: &Self) -> bool {
-        std::ptr::eq(self.state, b.state)
+        std::ptr::eq(self.state.global, b.state.global)
     }
 }
 impl<'cx, F: SourceFacts<'cx>> Eq for Context<'cx, F> {}
 impl<'cx, F: SourceFacts<'cx>> Hash for Context<'cx, F> {
     fn hash<H: Hasher>(&self, h: &mut H) {
-        std::ptr::from_ref(self.state).hash(h)
+        std::ptr::from_ref(self.state.global).hash(h)
     }
 }
 impl<'cx, F: SourceFacts<'cx>> Debug for Context<'cx, F> {
@@ -39,10 +39,49 @@ impl<'cx, F: SourceFacts<'cx>> Debug for Context<'cx, F> {
     }
 }
 
+/// Borrowed, nondropping context view. Interned nodes reference this view,
+/// never the owner whose destructor releases the arenas. Keep it local to the
+/// enclosing scope; all owned caches/arenas remain in State below.
+pub(crate) struct StateRef<'cx, F: SourceFacts<'cx>> {
+    services: F,
+    global: &'cx RefCell<ty::search_graph::GlobalCache<Context<'cx, F>>>,
+    canonical_env: &'cx ScopedCache<ty::CanonicalParamEnvCache<Context<'cx, F>>>,
+    erased_types: &'cx RefCell<ty::data_structures::HashMap<Ty<'cx, F>, Ty<'cx, F>>>,
+    types: &'cx InternPool<'cx, WithCachedTypeInfo<TyKind<Context<'cx, F>>>>,
+    args: &'cx InternPool<'cx, Vec<Arg<'cx, F>>>,
+    type_lists: &'cx InternPool<'cx, Vec<Ty<'cx, F>>>,
+    const_lists: &'cx InternPool<'cx, Vec<Const<Context<'cx, F>>>>,
+    regions: &'cx InternPool<'cx, RegionKind<Context<'cx, F>>>,
+    constants: &'cx InternPool<'cx, WithCachedTypeInfo<ConstKind<Context<'cx, F>>>>,
+    patterns: &'cx InternPool<'cx, WithCachedTypeInfo<PatternKind<Context<'cx, F>>>>,
+    pattern_lists: &'cx InternPool<'cx, Vec<Pattern<'cx, F>>>,
+    trees: &'cx InternPool<'cx, ValTreeKind<Context<'cx, F>>>,
+    predicates: &'cx InternPool<
+        'cx,
+        WithCachedTypeInfo<Binder<Context<'cx, F>, PredicateKind<Context<'cx, F>>>>,
+    >,
+    clause_lists: &'cx InternPool<'cx, Vec<Clause<'cx, F>>>,
+    clauses: &'cx InternPool<'cx, WithCachedTypeInfo<List<'cx, Clause<'cx, F>>>>,
+    existentials:
+        &'cx InternPool<'cx, Vec<Binder<Context<'cx, F>, ExistentialPredicate<Context<'cx, F>>>>>,
+    bound_kinds: &'cx InternPool<'cx, Vec<BoundVariableKind<Context<'cx, F>>>>,
+    canonical_kinds: &'cx InternPool<'cx, Vec<CanonicalVarKind<Context<'cx, F>>>>,
+    opaques: &'cx InternPool<'cx, Vec<(OpaqueTypeKey<Context<'cx, F>>, Ty<'cx, F>)>>,
+    local_ids: &'cx InternPool<'cx, Vec<DefinitionId>>,
+    assumptions: &'cx InternPool<'cx, Vec<OutlivesClause<Context<'cx, F>, Arg<'cx, F>>>>,
+    external: &'cx InternPool<'cx, ty::solve::ExternalConstraintsData<Context<'cx, F>>>,
+    canonical_inputs: &'cx InternPool<'cx, ty::solve::CanonicalInputData<Context<'cx, F>>>,
+    generic_parameters: &'cx InternPool<'cx, Vec<GenericParameter<'cx, F>>>,
+}
+impl<'cx, F: SourceFacts<'cx>> StateRef<'cx, F> {
+    pub(crate) fn context(&'cx self) -> Context<'cx, F> {
+        Context { state: self }
+    }
+}
 pub(crate) struct State<'cx, F: SourceFacts<'cx>> {
     services: F,
     global: RefCell<ty::search_graph::GlobalCache<Context<'cx, F>>>,
-    canonical_env: RefCell<ty::CanonicalParamEnvCache<Context<'cx, F>>>,
+    canonical_env: ScopedCache<ty::CanonicalParamEnvCache<Context<'cx, F>>>,
     erased_types: RefCell<ty::data_structures::HashMap<Ty<'cx, F>, Ty<'cx, F>>>,
     types: InternPool<'cx, WithCachedTypeInfo<TyKind<Context<'cx, F>>>>,
     args: InternPool<'cx, Vec<Arg<'cx, F>>>,
@@ -75,7 +114,7 @@ impl<'cx, F: SourceFacts<'cx>> State<'cx, F> {
         Self {
             services,
             global: RefCell::new(Default::default()),
-            canonical_env: RefCell::new(Default::default()),
+            canonical_env: ScopedCache::empty(),
             erased_types: RefCell::new(Default::default()),
             types: InternPool::default(),
             args: InternPool::default(),
@@ -100,8 +139,41 @@ impl<'cx, F: SourceFacts<'cx>> State<'cx, F> {
             generic_parameters: InternPool::default(),
         }
     }
-    pub(crate) fn context(&'cx self) -> Context<'cx, F> {
-        Context { state: self }
+    /// The guard must be declared after the context view and before running
+    /// upstream code, so the live cache dies before that view on all exits.
+    pub(super) fn enter_cache(
+        &self,
+    ) -> CacheGuard<'_, ty::CanonicalParamEnvCache<Context<'cx, F>>> {
+        self.canonical_env.enter(Default::default())
+    }
+    pub(crate) fn view(&'cx self) -> StateRef<'cx, F> {
+        StateRef {
+            services: self.services,
+            global: &self.global,
+            canonical_env: &self.canonical_env,
+            erased_types: &self.erased_types,
+            types: &self.types,
+            args: &self.args,
+            type_lists: &self.type_lists,
+            const_lists: &self.const_lists,
+            regions: &self.regions,
+            constants: &self.constants,
+            patterns: &self.patterns,
+            pattern_lists: &self.pattern_lists,
+            trees: &self.trees,
+            predicates: &self.predicates,
+            clause_lists: &self.clause_lists,
+            clauses: &self.clauses,
+            existentials: &self.existentials,
+            bound_kinds: &self.bound_kinds,
+            canonical_kinds: &self.canonical_kinds,
+            opaques: &self.opaques,
+            local_ids: &self.local_ids,
+            assumptions: &self.assumptions,
+            external: &self.external,
+            canonical_inputs: &self.canonical_inputs,
+            generic_parameters: &self.generic_parameters,
+        }
     }
 }
 impl<'cx, F: SourceFacts<'cx>> Context<'cx, F> {
@@ -809,7 +881,7 @@ impl<'cx, F: SourceFacts<'cx>> ty::Interner for Context<'cx, F> {
         self,
         f: impl FnOnce(&mut ty::CanonicalParamEnvCache<Self>) -> R,
     ) -> R {
-        f(&mut self.state.canonical_env.borrow_mut())
+        self.state.canonical_env.with(f)
     }
     fn assert_evaluation_is_concurrent(&self) {
         panic!("unexpected concurrent cache replacement in one LRR context")

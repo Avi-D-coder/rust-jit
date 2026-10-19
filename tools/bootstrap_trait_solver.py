@@ -30,6 +30,7 @@ SUPPORT_SOURCES = (
     'compiler/rustc_middle/src/ty/abstract_const.rs',
     'compiler/rustc_middle/src/mir/syntax.rs',
     'compiler/rustc_middle/src/ty/erase_regions.rs',
+    'compiler/rustc_middle/src/ty/trait_def.rs',
 )
 
 

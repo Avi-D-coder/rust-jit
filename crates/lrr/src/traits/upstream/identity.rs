@@ -6,7 +6,7 @@ use rustc_type_ir::{
     VisitorResult,
 };
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub(crate) struct DefinitionId {
     world: Digest,
     source: Digest,

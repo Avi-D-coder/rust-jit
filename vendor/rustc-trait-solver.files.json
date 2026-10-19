@@ -348,6 +348,13 @@
       "upstream_sha256": "2bac6a97bc8670297081a013cc744b22dbf93cf3455a60e1596ef1d9d5e279db"
     },
     {
+      "path": "compiler/rustc_middle/src/ty/trait_def.rs",
+      "bytes": 14512,
+      "sha256": "a4c51634eee9ad9a5944256bfbcf8f4d6ac09c034ba6f34acd844eb30646608d",
+      "upstream": "compiler/rustc_middle/src/ty/trait_def.rs",
+      "upstream_sha256": "a4c51634eee9ad9a5944256bfbcf8f4d6ac09c034ba6f34acd844eb30646608d"
+    },
+    {
       "path": "compiler/rustc_next_trait_solver/Cargo.toml",
       "bytes": 508,
       "sha256": "4f4d29f0df153d08c889210976a49a75aba975027087dc6b5516e8f075ae29e8",
@@ -932,6 +939,7 @@
     "compiler/rustc_middle/src/ty/consts/kind.rs",
     "compiler/rustc_middle/src/ty/abstract_const.rs",
     "compiler/rustc_middle/src/mir/syntax.rs",
-    "compiler/rustc_middle/src/ty/erase_regions.rs"
+    "compiler/rustc_middle/src/ty/erase_regions.rs",
+    "compiler/rustc_middle/src/ty/trait_def.rs"
   ]
 }

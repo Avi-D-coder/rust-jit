@@ -5,9 +5,48 @@ use std::{
     collections::HashSet,
     fmt,
     hash::{Hash, Hasher},
+    mem::ManuallyDrop,
     ops::Deref,
 };
 use typed_arena::Arena;
+
+/// An initially empty cache slot whose live value is owned by a separate
+/// scope guard. Stable ThinVec's destructor conservatively needs its IR
+/// arguments live: destroy that cache while the borrowed context view still
+/// exists, rather than in the arena owner's later destructor. The empty slot
+/// has no allocation to release. All operations, including cleanup, are safe.
+pub(super) struct ScopedCache<T> {
+    value: ManuallyDrop<RefCell<Option<T>>>,
+}
+impl<T> ScopedCache<T> {
+    pub(super) fn empty() -> Self {
+        Self {
+            value: ManuallyDrop::new(RefCell::new(None)),
+        }
+    }
+    pub(super) fn enter(&self, value: T) -> CacheGuard<'_, T> {
+        let mut slot = self.value.borrow_mut();
+        assert!(slot.is_none(), "cache scope is already entered");
+        *slot = Some(value);
+        CacheGuard(self)
+    }
+    pub(super) fn with<R>(&self, run: impl FnOnce(&mut T) -> R) -> R {
+        run(self
+            .value
+            .borrow_mut()
+            .as_mut()
+            .expect("cache scope is not entered"))
+    }
+}
+pub(super) struct CacheGuard<'a, T>(&'a ScopedCache<T>);
+impl<T> Drop for CacheGuard<'_, T> {
+    fn drop(&mut self) {
+        // Take before running T's destructor. The slot is already empty even
+        // if that destructor unwinds; the owner never retains a live value.
+        let value = self.0.value.borrow_mut().take();
+        drop(value);
+    }
+}
 
 /// A shared immutable node owned by one borrowed solver context. Copying a
 /// handle neither clones a type tree nor extends that context's lifetime.
@@ -104,6 +143,38 @@ mod tests {
     impl Drop for Payload {
         fn drop(&mut self) {
             self.drops.set(self.drops.get() + 1);
+        }
+    }
+
+    #[test]
+    fn scoped_cache_releases_live_values_on_return_and_unwind() {
+        for unwind in [false, true] {
+            let drops = Rc::new(Cell::new(0));
+            let cache = ScopedCache::empty();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let _guard = cache.enter(Payload {
+                    key: 7,
+                    drops: Rc::clone(&drops),
+                });
+                cache.with(|value| assert_eq!(value.key, 7));
+                assert_eq!(drops.get(), 0);
+                if unwind {
+                    panic!("exercise cache cleanup while unwinding");
+                }
+            }));
+            assert_eq!(result.is_err(), unwind);
+            assert_eq!(drops.get(), 1);
+            assert!(cache.value.borrow().is_none());
+            // A new scope owns a fresh cache; the old value cannot survive it.
+            {
+                let _guard = cache.enter(Payload {
+                    key: 9,
+                    drops: Rc::clone(&drops),
+                });
+                cache.with(|value| assert_eq!(value.key, 9));
+            }
+            assert_eq!(drops.get(), 2);
+            assert!(cache.value.borrow().is_none());
         }
     }
 

@@ -1,0 +1,939 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "at": "2026-10-19T11:25:21.160626+00:00",
+  "parent": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "scope": "V236\u2013V243 partial M019/M020: concrete immutable SourceFacts reader, exact retained source receipts, complete-catalog publication checks and derived pinned relevant-impl indexes. Actual scoped provider/context factory now type-checks after repairing the real ThinVec cache-drop lifetime failure with safe scoped cleanup. Final library/CLI builds and 2/2 host controls pass: normal/unwind cleanup and 8 source worlds (7,972 actual impl receipt observations) across all 4 editions, with parse-owner sharing, missing inputs, no body queries and real Scope certificate rejection. No complete M019 producer, positive source-backed ready instance, actual inference/delegate/root-goal execution, stock runtime gain or interpreter/JIT closure.",
+  "precode": "worktracks/05-trait-goal-engine/2026-10-19-prepared-solver-provider.md",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-19-prepared-provider-review.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-19-prepared-provider-controls.json",
+  "selection_sha256": "05606e8cf8cfe96203e8df24afd81314b8ca394f82fada5b8e57f4f2385604ba",
+  "cohorts": {
+    "236": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T10:59:17.666104+00:00",
+          "head": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+          "file_count": 8470,
+          "source_sha256": "be32c3463b8b15e3f40689a047674ec781ff85742ea9014c55e3296fad61c189",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:00:55.050175+00:00",
+          "head": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+          "file_count": 8470,
+          "source_sha256": "be32c3463b8b15e3f40689a047674ec781ff85742ea9014c55e3296fad61c189",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "terminal_authority": "Cargo JSON build-finished",
+        "success": false,
+        "compiler_error_count": 29,
+        "errors": [
+          {
+            "code": "E0659",
+            "message": "`Ty` is ambiguous",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 34
+              }
+            ]
+          },
+          {
+            "code": "E0659",
+            "message": "`Clause` is ambiguous",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 36
+              }
+            ]
+          },
+          {
+            "code": "E0659",
+            "message": "`Span` is ambiguous",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 39
+              }
+            ]
+          },
+          {
+            "code": "E0659",
+            "message": "`Symbol` is ambiguous",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 139
+              }
+            ]
+          },
+          {
+            "code": "E0659",
+            "message": "`Span` is ambiguous",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 140
+              }
+            ]
+          },
+          {
+            "code": "E0659",
+            "message": "`Span` is ambiguous",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 217
+              }
+            ]
+          },
+          {
+            "code": "E0659",
+            "message": "`Span` is ambiguous",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 248
+              }
+            ]
+          },
+          {
+            "code": "E0659",
+            "message": "`Span` is ambiguous",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 377
+              }
+            ]
+          },
+          {
+            "code": "E0659",
+            "message": "`Span` is ambiguous",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 447
+              }
+            ]
+          },
+          {
+            "code": "E0659",
+            "message": "`Span` is ambiguous",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 574
+              }
+            ]
+          },
+          {
+            "code": "E0659",
+            "message": "`Span` is ambiguous",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 584
+              }
+            ]
+          },
+          {
+            "code": "E0659",
+            "message": "`Span` is ambiguous",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 788
+              }
+            ]
+          },
+          {
+            "code": "E0659",
+            "message": "`Span` is ambiguous",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 792
+              }
+            ]
+          },
+          {
+            "code": "E0659",
+            "message": "`Symbol` is ambiguous",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 849
+              }
+            ]
+          },
+          {
+            "code": "E0782",
+            "message": "expected a type, found a trait",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 34
+              }
+            ]
+          },
+          {
+            "code": "E0782",
+            "message": "expected a type, found a trait",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 36
+              }
+            ]
+          },
+          {
+            "code": "E0782",
+            "message": "expected a type, found a trait",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 39
+              }
+            ]
+          },
+          {
+            "code": "E0782",
+            "message": "expected a type, found a trait",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 139
+              }
+            ]
+          },
+          {
+            "code": "E0782",
+            "message": "expected a type, found a trait",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 140
+              }
+            ]
+          },
+          {
+            "code": "E0782",
+            "message": "expected a type, found a trait",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 217
+              }
+            ]
+          },
+          {
+            "code": "E0782",
+            "message": "expected a type, found a trait",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 248
+              }
+            ]
+          },
+          {
+            "code": "E0782",
+            "message": "expected a type, found a trait",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 377
+              }
+            ]
+          },
+          {
+            "code": "E0782",
+            "message": "expected a type, found a trait",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 447
+              }
+            ]
+          },
+          {
+            "code": "E0782",
+            "message": "expected a type, found a trait",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 792
+              }
+            ]
+          },
+          {
+            "code": "E0782",
+            "message": "expected a type, found a trait",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 849
+              }
+            ]
+          },
+          {
+            "code": "E0782",
+            "message": "expected a type, found a trait",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 574
+              }
+            ]
+          },
+          {
+            "code": "E0782",
+            "message": "expected a type, found a trait",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 584
+              }
+            ]
+          },
+          {
+            "code": "E0782",
+            "message": "expected a type, found a trait",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 217
+              }
+            ]
+          },
+          {
+            "code": "E0782",
+            "message": "expected a type, found a trait",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 788
+              }
+            ]
+          }
+        ],
+        "messages_sha256": "535f7fa2582cb9ebfbd6f6caf1eafa1a3862e9c1bffe4987a49f1ef62eea4271"
+      }
+    },
+    "237": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:03:00.527716+00:00",
+          "head": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+          "file_count": 8470,
+          "source_sha256": "741bf490d139de458ff0cb1f9becabc7da6ce0b66070cb35449806e76a47455b",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:05:24.203687+00:00",
+          "head": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+          "file_count": 8470,
+          "source_sha256": "741bf490d139de458ff0cb1f9becabc7da6ce0b66070cb35449806e76a47455b",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "8adfd40d8341b07f8ee35b8e832beb19d88fe0e96bfef307310101c33e6f492d"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "terminal_authority": "Cargo JSON build-finished",
+        "success": true,
+        "compiler_error_count": 0,
+        "errors": [],
+        "messages_sha256": "d25c93126c2bc506bc70dfbc7e5b0966d80345419455c9843b8cbf0fc666660e"
+      }
+    },
+    "238": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:08:00.046976+00:00",
+          "head": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+          "file_count": 8473,
+          "source_sha256": "4b7689a7c9b8a3285ba9c7df5f5ce4657bcec8485187dce195c9bae62a6b003e",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:10:25.984456+00:00",
+          "head": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+          "file_count": 8473,
+          "source_sha256": "4b7689a7c9b8a3285ba9c7df5f5ce4657bcec8485187dce195c9bae62a6b003e",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "terminal_authority": "Cargo JSON build-finished",
+        "success": false,
+        "compiler_error_count": 17,
+        "errors": [
+          {
+            "code": "E0433",
+            "message": "cannot find `SimplifiedType` in `ty`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/candidates.rs",
+                "line": 72
+              }
+            ]
+          },
+          {
+            "code": "E0433",
+            "message": "cannot find `SimplifiedType` in `ty`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/candidates.rs",
+                "line": 73
+              }
+            ]
+          },
+          {
+            "code": "E0433",
+            "message": "cannot find `SimplifiedType` in `ty`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/candidates.rs",
+                "line": 74
+              }
+            ]
+          },
+          {
+            "code": "E0433",
+            "message": "cannot find `SimplifiedType` in `ty`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/candidates.rs",
+                "line": 75
+              }
+            ]
+          },
+          {
+            "code": "E0433",
+            "message": "cannot find `SimplifiedType` in `ty`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/candidates.rs",
+                "line": 76
+              }
+            ]
+          },
+          {
+            "code": "E0433",
+            "message": "cannot find `SimplifiedType` in `ty`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/candidates.rs",
+                "line": 77
+              }
+            ]
+          },
+          {
+            "code": "E0433",
+            "message": "cannot find `SimplifiedType` in `ty`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/candidates.rs",
+                "line": 79
+              }
+            ]
+          },
+          {
+            "code": "E0433",
+            "message": "cannot find `SimplifiedType` in `ty`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/candidates.rs",
+                "line": 80
+              }
+            ]
+          },
+          {
+            "code": "E0433",
+            "message": "cannot find `SimplifiedType` in `ty`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/candidates.rs",
+                "line": 81
+              }
+            ]
+          },
+          {
+            "code": "E0433",
+            "message": "cannot find `SimplifiedType` in `ty`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/candidates.rs",
+                "line": 82
+              }
+            ]
+          },
+          {
+            "code": "E0433",
+            "message": "cannot find `SimplifiedType` in `ty`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/candidates.rs",
+                "line": 83
+              }
+            ]
+          },
+          {
+            "code": "E0433",
+            "message": "cannot find `SimplifiedType` in `ty`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/candidates.rs",
+                "line": 84
+              }
+            ]
+          },
+          {
+            "code": "E0433",
+            "message": "cannot find `SimplifiedType` in `ty`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/candidates.rs",
+                "line": 95
+              }
+            ]
+          },
+          {
+            "code": "E0433",
+            "message": "cannot find `SimplifiedType` in `ty`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/candidates.rs",
+                "line": 96
+              }
+            ]
+          },
+          {
+            "code": "E0433",
+            "message": "cannot find `SimplifiedType` in `ty`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/candidates.rs",
+                "line": 97
+              }
+            ]
+          },
+          {
+            "code": "E0433",
+            "message": "cannot find `SimplifiedType` in `ty`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/candidates.rs",
+                "line": 98
+              }
+            ]
+          },
+          {
+            "code": "E0425",
+            "message": "cannot find type `DefId` in this scope",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/candidates.rs",
+                "line": 17
+              }
+            ]
+          }
+        ],
+        "messages_sha256": "46ce88777cedf964727cc7a19c150573268d4fe22cea8b1d7f40f8093fd5229c"
+      }
+    },
+    "239": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:10:26.604935+00:00",
+          "head": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+          "file_count": 8473,
+          "source_sha256": "2870ca12332f7ae5a0620622284a9dd7a9ea99f82caa6f883e666ebdc293f621",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:13:53.350389+00:00",
+          "head": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+          "file_count": 8473,
+          "source_sha256": "2870ca12332f7ae5a0620622284a9dd7a9ea99f82caa6f883e666ebdc293f621",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "terminal_authority": "Cargo JSON build-finished",
+        "success": false,
+        "compiler_error_count": 1,
+        "errors": [
+          {
+            "code": "E0597",
+            "message": "`state` does not live long enough",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 401
+              }
+            ]
+          }
+        ],
+        "messages_sha256": "1ef8cfefab52f0b0c9244afc6c71fafa5e6e11ae59929079b9cf734800111120"
+      }
+    },
+    "240": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:13:53.851342+00:00",
+          "head": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+          "file_count": 8473,
+          "source_sha256": "757dfdce7d88e160a1c363b3f7628181130a30d811fb87f27aac3eb01743eab7",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:17:14.844744+00:00",
+          "head": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+          "file_count": 8473,
+          "source_sha256": "757dfdce7d88e160a1c363b3f7628181130a30d811fb87f27aac3eb01743eab7",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "terminal_authority": "Cargo JSON build-finished",
+        "success": false,
+        "compiler_error_count": 3,
+        "errors": [
+          {
+            "code": "E0063",
+            "message": "missing field `existentials` in initializer of `StateRef<'_, _>`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/context.rs",
+                "line": 143
+              }
+            ]
+          },
+          {
+            "code": "E0597",
+            "message": "`state` does not live long enough",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 401
+              }
+            ]
+          },
+          {
+            "code": "E0597",
+            "message": "`view` does not live long enough",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 402
+              }
+            ]
+          }
+        ],
+        "messages_sha256": "f3f364ee10ed5082380e2378df9bbdcfb0335093400c738854ceca5c92fd76e2"
+      }
+    },
+    "241": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:17:15.336405+00:00",
+          "head": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+          "file_count": 8473,
+          "source_sha256": "12470076f0424bffa8bf638dcb183b4fba42e2272a1e60c53052404d0aafdc95",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:21:10.071180+00:00",
+          "head": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+          "file_count": 8473,
+          "source_sha256": "12470076f0424bffa8bf638dcb183b4fba42e2272a1e60c53052404d0aafdc95",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "terminal_authority": "Cargo JSON build-finished",
+        "success": false,
+        "compiler_error_count": 2,
+        "errors": [
+          {
+            "code": "E0597",
+            "message": "`state` does not live long enough",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 401
+              }
+            ]
+          },
+          {
+            "code": "E0597",
+            "message": "`view` does not live long enough",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                "line": 402
+              }
+            ]
+          }
+        ],
+        "messages_sha256": "2c5d37420e1fc7c826a9f23b4e71ed0f86b199cd8b5fda760527c4d536a8f740",
+        "exec_terminal": {
+          "session": 77657,
+          "exit": 101
+        }
+      }
+    },
+    "242": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:21:10.579861+00:00",
+          "head": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+          "file_count": 8473,
+          "source_sha256": "5e396083f0b5ca2ed3eee58dc8a8dfc55a6e84c9109fb68a1161b372ffba6ed5",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:21:52.302134+00:00",
+          "head": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+          "file_count": 8473,
+          "source_sha256": "5e396083f0b5ca2ed3eee58dc8a8dfc55a6e84c9109fb68a1161b372ffba6ed5",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "ecf79deb77f02ccb071aecbe9b149bfc9fbb73250f0ab9c231a7e32678532583"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "terminal_authority": "Cargo JSON build-finished",
+        "success": true,
+        "compiler_error_count": 0,
+        "errors": [],
+        "messages_sha256": "cf81f0f07159db1d63ca2b913051ab7595595771569565dccd6478d5c3a5fb1c",
+        "exec_terminal": {
+          "session": 65545,
+          "exit": 0
+        }
+      }
+    },
+    "243": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:22:41.352639+00:00",
+          "head": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+          "file_count": 8473,
+          "source_sha256": "644d1cf0882b0f81feb4019842d0255b20048130ff24d3c99a8a2662d0277bbe",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:23:42.884691+00:00",
+          "head": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+          "file_count": 8473,
+          "source_sha256": "644d1cf0882b0f81feb4019842d0255b20048130ff24d3c99a8a2662d0277bbe",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "24a307c9f242c1826365d5bfc243f6367cccb73970eddc8984d19838eee869d6"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "fe40226ad1f37b4d1fe443665d7f71a717b905eecb64888f12df2d1544b33134"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:24:48.269286+00:00",
+          "head": "e39424128f6fbfbc71d9d66b7011a7172ec8b8a7",
+          "file_count": 8473,
+          "source_sha256": "644d1cf0882b0f81feb4019842d0255b20048130ff24d3c99a8a2662d0277bbe",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "24a307c9f242c1826365d5bfc243f6367cccb73970eddc8984d19838eee869d6"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "fe40226ad1f37b4d1fe443665d7f71a717b905eecb64888f12df2d1544b33134"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "terminal_authority": "Cargo JSON build-finished",
+        "success": true,
+        "compiler_error_count": 0,
+        "errors": [],
+        "messages_sha256": "68e4d294ba21ac40acdab027357152b1d31ad3099060f1d5f52234d1cc8d3107",
+        "exec_terminal": {
+          "session": 38332,
+          "exit": 0
+        }
+      },
+      "cli_build": {
+        "command": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+        "terminal_authority": "Cargo JSON build-finished",
+        "success": true,
+        "compiler_error_count": 0,
+        "errors": [],
+        "messages_sha256": "cb1efab73e64377dc0d6459906c3716ad717bd31ae24dfd1b9ee53ec27f902b0",
+        "exec_terminal": {
+          "session": 26326,
+          "exit": 0
+        }
+      },
+      "host_controls": {
+        "command": "python3.12 tools/validation/run_controls.py artifacts/validation-current-v243 worktracks/05-trait-goal-engine/2026-10-19-prepared-provider-controls.json",
+        "session": 1660,
+        "exit": 0,
+        "results": [
+          {
+            "selector": "traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 0.375,
+            "log": "control-0.log"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_impl_receipts_reuse_actual_parse_inputs_without_claiming_solver_readiness",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_impl_receipts_reuse_actual_parse_inputs_without_claiming_solver_readiness",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 22.517,
+            "log": "control-1.log"
+          }
+        ],
+        "worlds": 8,
+        "receipt_observations": 7972,
+        "guest_executions": 0,
+        "upstream_goal_executions": 0
+      }
+    }
+  },
+  "unchanged_fixtures": [
+    {
+      "path": "tests/ui/methods/method-self-arg-trait.rs",
+      "sha256": "51b379109a3aaf3ebd0523202a3784a441b3ce88e8d4b735f2da48f210b761f0",
+      "unchanged_from_upstream_pin": true,
+      "scope": "host source attachment, not runtime execution"
+    },
+    {
+      "path": "tests/ui/traits/safety-ok.rs",
+      "sha256": "a3be42a53118893e31d5b29c824d0843b639f0f164f24b321483c8cea3360e1a",
+      "unchanged_from_upstream_pin": true,
+      "scope": "host source attachment, not runtime execution"
+    }
+  ],
+  "provenance": {
+    "pin": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "shared_crates": 8,
+    "files": 131,
+    "source_bytes": 1862983,
+    "upstream_rust_source_changes": 0,
+    "git_object_audit_passed": true,
+    "ports_audited": [
+      "tools/sync_upstream_type_traversal.py",
+      "tools/sync_upstream_binders.py",
+      "tools/sync_upstream_relations.py",
+      "tools/sync_upstream_candidates.py"
+    ]
+  },
+  "new_distinct_upstream_runtime_passes": 0,
+  "runtime_cases_executed": 0,
+  "full_fixtures_passed": 0,
+  "suite_total_refreshed": false,
+  "milestone_gate": "not run; partial component, no integrated task or gate completion",
+  "required_open": [
+    "actual complete configured-world/trait-facade producer and ImplCatalog certificate",
+    "actual owning configuration and crate limits/features",
+    "complete source generics/parent/lifetime/header/predicate/type translation",
+    "positive genuine source-backed PreparedFacts and ready context",
+    "compatible inference/delegate and required pinned host clients",
+    "actual root true/false/ambiguous/rollback/roundtrip/cache controls",
+    "ordinary selected-member/continuation/source-epoch and negative-dependency integration",
+    "original/user-macro/wrapper/standard expansion acceptance matrix",
+    "full applicable interpreter correctness and upstream runtime acceptance before guest JIT"
+  ]
+}

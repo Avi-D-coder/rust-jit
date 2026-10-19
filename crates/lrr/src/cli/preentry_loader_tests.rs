@@ -1137,3 +1137,17 @@ fn unchanged_auto_and_unsafe_trait_headers_keep_actual_modifiers_without_body_pr
         }
     }
 }
+
+
+#[test]
+fn unchanged_impl_receipts_reuse_actual_parse_inputs_without_claiming_solver_readiness() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");
+    for edition in [2015, 2018, 2021, 2024] {
+        for case in ["tests/ui/methods/method-self-arg-trait.rs", "tests/ui/traits/safety-ok.rs"] {
+            let (mut db, seal, _) = prepared_impl_header_world(&root.join(case), edition);
+            let count = crate::traits::upstream::check_scope_receipts(&mut db, seal);
+            assert!(count > 0, "no actual impl receipts for {case}, edition{edition}");
+            eprintln!("actual source receipts {case}, edition{edition}: {count}; no solver or guest execution");
+        }
+    }
+}

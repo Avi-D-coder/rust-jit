@@ -1,0 +1,8 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "M019/M020 source receipts and context-cache host cleanup; no source-backed solver or guest execution",
+  "controls": [
+    "traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind",
+    "cli::preentry_loader_tests::unchanged_impl_receipts_reuse_actual_parse_inputs_without_claiming_solver_readiness"
+  ]
+}

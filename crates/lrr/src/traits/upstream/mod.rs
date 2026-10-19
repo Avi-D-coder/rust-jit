@@ -22,6 +22,11 @@ pub(crate) mod expression_operators;
 pub(crate) mod identity;
 pub(crate) mod model;
 pub(crate) mod parameters;
+#[cfg(test)]
+pub(crate) use prepared::check_scope_receipts;
+mod prepared;
+mod candidates;
+pub(crate) use prepared::{PreparedProvider, ReadyProvider, evaluate_prepared};
 mod predicates;
 mod printing;
 mod relations;
@@ -33,7 +38,7 @@ pub(crate) const SOURCE_REVISION: &str = "ae0fe511b15ab760d7e963b13389d1bc2ab42b
 /// Called only for an external demanded goal; recursive child goals stay in
 /// upstream's search graph. The caller retains the actual inference/dependency
 /// context and maps the canonical answer; no guest work happens in this entry.
-pub(crate) fn evaluate<D: SolverDelegate>(
+fn evaluate<D: SolverDelegate>(
     delegate: &D,
     goal: Goal<D::Interner, <D::Interner as Interner>::Predicate>,
     span: <D::Interner as Interner>::Span,
