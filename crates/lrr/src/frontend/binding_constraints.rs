@@ -1145,6 +1145,11 @@ impl<'a> Component<'a> {
             generics::TermProjection::Parameter(key, remaining) if is_call => {
                 self.relate_parameter(db, node, definition, key, remaining)
             }
+            generics::TermProjection::Leaf(term)
+                if is_call && self.open && methods::mentions_parameter(&term) =>
+            {
+                self.relate_signature_type(db, node, definition, &term, &[])
+            }
             generics::TermProjection::Leaf(_) => self.constrain_term(db, node, term, demand),
             _ => {
                 self.defer(node, demand);

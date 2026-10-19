@@ -1053,6 +1053,12 @@ impl<'a> Component<'a> {
                         ready!(self.relate_parameter(db, call, function, key, remaining));
                         handled = true;
                     }
+                    super::generics::TermProjection::Leaf(term)
+                        if self.open && mentions_parameter(&term) =>
+                    {
+                        ready!(self.relate_signature_type(db, call, function, &term, &[]));
+                        handled = true;
+                    }
                     _ => {}
                 }
             }

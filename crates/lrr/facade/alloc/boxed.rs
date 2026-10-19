@@ -32,6 +32,13 @@ impl<T> Box<T> {
     }
 }
 
+// Pinned alloc/src/boxed/convert.rs: From<T> allocates and moves T.
+impl<T> core::convert::From<T> for Box<T> {
+    fn from(value: T) -> Self {
+        Box::new(value)
+    }
+}
+
 impl<T: ?Sized> Box<T> {
     pub fn leak<'a>(b: Box<T>) -> &'a mut T {
         core::intrinsics::lrr_shared_to_mut(core::intrinsics::lrr_box_leak(b))

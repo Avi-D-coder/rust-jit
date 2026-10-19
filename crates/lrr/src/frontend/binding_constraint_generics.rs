@@ -49,12 +49,21 @@ pub(super) enum TermProjection {
 /// Projection paths from a declared Type term to type parameter `key`
 /// (through references, tuples, arrays, slices and nominal type arguments).
 pub(super) fn parameter_paths(term: &TyTerm, key: &ParamKey) -> Vec<Vec<Step>> {
-    fn walk(term: &TyTerm, key: &ParamKey, prefix: &mut Vec<Step>, out: &mut Vec<Vec<Step>>) {
+    declared_paths(term, &TyTerm::Param(*key))
+}
+/// Occurrences of the same symbolic Type in a selected signature. This also
+/// relates a whole application (`&W<T> -> W<T>`), before any of its leaves
+/// have been decided. Equality is structural, with the actual binder keys.
+fn declared_paths(term: &TyTerm, wanted: &TyTerm) -> Vec<Vec<Step>> {
+    fn walk(term: &TyTerm, wanted: &TyTerm, prefix: &mut Vec<Step>, out: &mut Vec<Vec<Step>>) {
+        if term == wanted {
+            out.push(prefix.clone());
+            return;
+        }
         match term {
-            TyTerm::Param(found) if found == key => out.push(prefix.clone()),
             TyTerm::Ref(_, _, inner) => {
                 prefix.push(Step::Deref);
-                walk(inner, key, prefix, out);
+                walk(inner, wanted, prefix, out);
                 prefix.pop();
             }
             TyTerm::Tuple(members) => {
@@ -63,13 +72,13 @@ pub(super) fn parameter_paths(term: &TyTerm, key: &ParamKey) -> Vec<Vec<Step>> {
                         return;
                     };
                     prefix.push(Step::Field(position));
-                    walk(member, key, prefix, out);
+                    walk(member, wanted, prefix, out);
                     prefix.pop();
                 }
             }
             TyTerm::Array(inner, _) | TyTerm::Slice(inner) => {
                 prefix.push(Step::Element);
-                walk(inner, key, prefix, out);
+                walk(inner, wanted, prefix, out);
                 prefix.pop();
             }
             // A nominal's own type arguments (`Box<T>`, `Option<T>`).
@@ -83,7 +92,7 @@ pub(super) fn parameter_paths(term: &TyTerm, key: &ParamKey) -> Vec<Vec<Step>> {
                         return;
                     };
                     prefix.push(Step::TypeArgument(position));
-                    walk(inner, key, prefix, out);
+                    walk(inner, wanted, prefix, out);
                     prefix.pop();
                 }
             }
@@ -91,7 +100,7 @@ pub(super) fn parameter_paths(term: &TyTerm, key: &ParamKey) -> Vec<Vec<Step>> {
         }
     }
     let mut out = Vec::new();
-    walk(term, key, &mut Vec::new(), &mut out);
+    walk(term, wanted, &mut Vec::new(), &mut out);
     out
 }
 /// The primitives an integer / float inference variable may become.
@@ -441,6 +450,45 @@ impl<'a> Component<'a> {
         {
             return self.explicit_parameter(db, call, &key, remaining);
         }
+        ready!(self.relate_signature_type(
+            db,
+            call,
+            definition,
+            &TyTerm::Param(key),
+            &remaining
+        ));
+        // Closures written for parameters bounded by `Fn*(..) -> R` hold the
+        // parameter wherever that bound names it.
+        ready!(self.relate_fn_bounds(db, call, definition, &key, &remaining));
+        // The variable is only a part of the instantiated parameter: the
+        // parameter's bounds are obligations on the whole Type.
+        if !remaining.is_empty() {
+            return self.inside_bounds(db, call, definition, &key, &remaining);
+        }
+        match ready!(self.parameter_bounds(db, definition, &key)) {
+            BoundAnswer::Unconstraining => {}
+            // The variable is the parameter itself: the one applicable impl
+            // fixes it.
+            BoundAnswer::Selected(primitive) => {
+                if let Err(error) = self.constrain(call, primitive) {
+                    return QueryPoll::Ready(Err(error));
+                }
+            }
+            BoundAnswer::Unknown => self.defer(call, ConstraintDemand::ParameterType),
+        }
+        QueryPoll::Ready(Ok(()))
+    }
+    /// Relate every occurrence of the same declared symbolic Type. Both
+    /// bare parameters and structural applications use this worklist; no
+    /// runtime descriptor or executable callee body is consulted.
+    pub(super) fn relate_signature_type(
+        &mut self,
+        db: &mut Database,
+        call: NodeId,
+        definition: Digest,
+        wanted: &TyTerm,
+        remaining: &[Step],
+    ) -> QueryPoll<()> {
         let (arguments, offset) = match self.fact(call) {
             // A method call's operands are its receiver and arguments, in
             // parameter order, as a language-item call's are its arguments;
@@ -461,7 +509,7 @@ impl<'a> Component<'a> {
         let related = |component: &mut Self, node: NodeId, path: Vec<Step>| {
             let scalar = path.is_empty();
             let mut steps = path;
-            steps.extend_from_slice(&remaining);
+            steps.extend_from_slice(remaining);
             component.expression_via(
                 Some(node),
                 Via {
@@ -496,7 +544,7 @@ impl<'a> Component<'a> {
                 } else {
                     None
                 };
-                for path in parameter_paths(&term, &key) {
+                for path in declared_paths(&term, wanted) {
                     let path = if method && position == 0 {
                         let rest = path
                             .iter()
@@ -521,28 +569,9 @@ impl<'a> Component<'a> {
             }
         }
         if let Some(term) = ready!(self.quiet_result_term(db, call, definition)) {
-            for path in parameter_paths(&term, &key) {
+            for path in declared_paths(&term, wanted) {
                 related(self, call, path);
             }
-        }
-        // Closures written for parameters bounded by `Fn*(..) -> R` hold the
-        // parameter wherever that bound names it.
-        ready!(self.relate_fn_bounds(db, call, definition, &key, &remaining));
-        // The variable is only a part of the instantiated parameter: the
-        // parameter's bounds are obligations on the whole Type.
-        if !remaining.is_empty() {
-            return self.inside_bounds(db, call, definition, &key, &remaining);
-        }
-        match ready!(self.parameter_bounds(db, definition, &key)) {
-            BoundAnswer::Unconstraining => {}
-            // The variable is the parameter itself: the one applicable impl
-            // fixes it.
-            BoundAnswer::Selected(primitive) => {
-                if let Err(error) = self.constrain(call, primitive) {
-                    return QueryPoll::Ready(Err(error));
-                }
-            }
-            BoundAnswer::Unknown => self.defer(call, ConstraintDemand::ParameterType),
         }
         QueryPoll::Ready(Ok(()))
     }

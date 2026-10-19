@@ -1,0 +1,16 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Identical structural generic signature relations and ordinary Box From source; held interpreter prerequisite",
+  "controls": [
+    "cli::callable_value_tests::upstream_cloned_box_conversion_keeps_generic_context_all_editions_and_origins",
+    "cli::callable_value_tests::upstream_reference_conversion_uses_shared_receiver_probe_all_editions_and_origins",
+    "cli::crate_graph::generic_boundary_tests::generic_callers_pass_their_instantiation_to_generic_callees",
+    "cli::crate_graph::generic_boundary_tests::cold_associated_result_keeps_unentered_source_calls_cold"
+  ],
+  "runtime_cases": [
+    "tests/ui/closures/closure-capture-after-clone.rs",
+    "tests/ui/let-else/let-else-source-expr-nomove-pass.rs",
+    "tests/ui/methods/method-self-arg-trait.rs",
+    "tests/ui/let-else/let-else-non-copy.rs"
+  ]
+}
