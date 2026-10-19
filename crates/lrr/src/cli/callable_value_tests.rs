@@ -482,3 +482,30 @@ fn forwarded_builtin_positions_keep_raw_input_context_under_standard_macros() {
         completed(source, edition);
     }
 }
+
+#[test]
+fn included_source_uses_one_pipeline_and_preserves_boundaries_and_exact_once_effects() {
+    // LRR source/origin control outside unchanged originals. The same physical
+    // included bytes keep line 3 through a marked include caller, wrappers and
+    // standard assertion expansion. Only reached VM execution prints.
+    let fragment = source("{\n    println!(\"included\");\n    line!()\n}\n");
+    let literal = format!("{:?}", fragment.0.to_str().unwrap());
+    let program = format!(r#"
+macro_rules! emit {{ () => {{ include!({literal}) }} }}
+macro_rules! wrapper {{ () => {{ emit!() }} }}
+mod nested {{ pub fn value() -> u32 {{ wrapper!() }} }}
+fn cold() -> u32 {{ wrapper!() }}
+fn main() {{
+    let direct = include!({literal});
+    let emitted = emit!();
+    assert_eq!(direct, 3_u32);
+    assert_eq!(emitted, 3_u32);
+    assert_eq!(wrapper!(), 3_u32);
+    assert_eq!(nested::value(), 3_u32);
+}}
+"#);
+    for edition in [2015, 2018, 2021, 2024] {
+        let report = completed(&program, edition);
+        assert_eq!(report.output.stdout, "included\nincluded\nincluded\nincluded\n");
+    }
+}

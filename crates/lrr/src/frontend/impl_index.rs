@@ -1079,31 +1079,27 @@ impl DeclarationMacroParent {
     /// Argument lookup cannot depend on bindings produced by its own invocation.
     /// Retain the live index unchanged; omit only that position in this private view.
     pub(crate) fn compiler_argument_snapshot(
-        &self,
+        mut self,
         invocation: crate::core::digest::Digest,
     ) -> Result<Self, Diagnostic> {
-        match self {
+        match &mut self {
             Self::Source(index) => {
                 let producer = index.producer(invocation)?;
-                let mut snapshot = index.as_ref().clone();
-                snapshot.scopes.omit_invocation_position(
-                    producer.lexical_scope,
-                    u64::from(producer.range.start),
-                )?;
-                Ok(Self::Source(Arc::new(snapshot)))
+                let site = (producer.lexical_scope, u64::from(producer.range.start));
+                Arc::make_mut(index).scopes.omit_invocation_position(site.0, site.1)?;
             }
             Self::Argument(index) => {
                 let producer = index.producer(invocation)?;
-                let mut snapshot = index.as_ref().clone();
-                snapshot.scopes.omit_invocation_position(
-                    producer.lexical_scope,
-                    u64::from(producer.range.start),
-                )?;
-                Ok(Self::Argument(Arc::new(snapshot)))
+                let site = (producer.lexical_scope, u64::from(producer.range.start));
+                Arc::make_mut(index).scopes.omit_invocation_position(site.0, site.1)?;
             }
-            // Generated compiler calls already use their explicit generated arena/base.
-            Self::Generated(_) => Err(fault()),
+            Self::Generated(index) => {
+                let producer = index.producer(invocation)?;
+                let site = (producer.lexical_scope, u64::from(producer.range.start));
+                Arc::make_mut(index).scopes.omit_invocation_position(site.0, site.1)?;
+            }
         }
+        Ok(self)
     }
     pub(crate) fn compiler_origin(&self) -> Option<crate::syntax::token_wire::Key> {
         match self {

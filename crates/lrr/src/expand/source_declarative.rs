@@ -36,6 +36,7 @@ mod retained_provider;
 mod builtin_call_sites;
 #[path = "source_declarative/scalar_pattern_replay.rs"]
 mod scalar_pattern_replay;
+pub(crate) type IncludedSourceViews = BTreeMap<Digest, std::sync::Arc<crate::source::include_view::IncludedSourceView>>;
 pub struct SourceDeclarative {
     source: PreparedSourceView,
     compiler_attribute_preparation:
@@ -514,9 +515,20 @@ fn builtin_call_site(
     source: &PreparedSourceView,
     at: u32,
     call_edition: u16,
+    scope: &crate::syntax::outline::ScopeKey,
 ) -> Result<lrr_expand_adapter::builtin_macros::BuiltinCallSite, Diagnostic> {
     let text = std::str::from_utf8(source.captured_macro_blob()?.bytes())
         .map_err(|_| fault("LRR-E-SOURCE-UTF8", "builtin call source is not UTF-8"))?;
+    builtin_call_site_in_source(source, text, source.selection().path.as_str(), at, call_edition, scope)
+}
+fn builtin_call_site_in_source(
+    source: &PreparedSourceView,
+    text: &str,
+    physical_path: &str,
+    at: u32,
+    call_edition: u16,
+    scope: &crate::syntax::outline::ScopeKey,
+) -> Result<lrr_expand_adapter::builtin_macros::BuiltinCallSite, Diagnostic> {
     let prefix = text
         .get(..at as usize)
         .ok_or_else(|| fault("LRR-E-EXPANSION-INPUT", "builtin call site outside source"))?;
@@ -528,6 +540,9 @@ fn builtin_call_site(
         .count()
         + 1;
     let selection = source.selection();
+    if scope.crate_key != selection.outline.crate_key {
+        return Err(fault("LRR-E-EXPANSION-INPUT", "builtin lexical module owner differs"));
+    }
     let path = selection.path.as_str().to_owned();
     // rustc's default crate name is the root file stem with `-` as `_`.
     let crate_name = std::path::Path::new(&path)
@@ -536,7 +551,7 @@ fn builtin_call_site(
         .unwrap_or("main")
         .replace('-', "_");
     let module_path = std::iter::once(crate_name)
-        .chain(selection.outline.module_path.iter().cloned())
+        .chain(scope.module_path.iter().cloned())
         .collect::<Vec<_>>()
         .join("::");
     let cfg = source.captured_macro_cfg()?;
@@ -564,7 +579,7 @@ fn builtin_call_site(
         line: u32::try_from(line).map_err(|_| fault("LRR-E-SOURCE-LIMIT", "line overflow"))?,
         column: u32::try_from(column)
             .map_err(|_| fault("LRR-E-SOURCE-LIMIT", "column overflow"))?,
-        file: path,
+        file: physical_path.to_owned(),
         module_path,
         cfg: active,
         crate_names,
@@ -579,7 +594,7 @@ pub fn engine_version() -> Digest {
     e.digest(Digest(
         lrr_expand_adapter::builtin_attributes::compiler_inert_inventory_identity().0,
     ));
-    e.u32(8); // Actual context-directed builtin expansion-cause locations.
+    e.u32(9); // Common generated compiler requests and included-source/lexical-module facts.
     e.finish()
 }
 fn fault(code: &'static str, message: &str) -> Diagnostic {
@@ -2799,6 +2814,7 @@ impl SourceDeclarative {
                     &self.source,
                     producer.range.start,
                     selection.outline.parse.profile.edition,
+                    &producer.scope,
                 )?),
             }),
             (None, Some(owner), Some(range)) => Some(owner.original_definition_body(range)?),
@@ -3195,6 +3211,15 @@ impl SourceDeclarative {
         invocation: Digest,
         namespaces: Option<&crate::frontend::macro_names::MacroNamespaces>,
     ) -> Result<SourceDeclarativeDemand, Diagnostic> {
+        self.generated_declaration_demand_with_sources(index, invocation, namespaces, None)
+    }
+    pub(crate) fn generated_declaration_demand_with_sources(
+        &self,
+        index: &crate::frontend::impl_index::GeneratedDeclarationMacroIndex,
+        invocation: Digest,
+        namespaces: Option<&crate::frontend::macro_names::MacroNamespaces>,
+        included: Option<&IncludedSourceViews>,
+    ) -> Result<SourceDeclarativeDemand, Diagnostic> {
         use crate::frontend::{impl_index::DeclarationBodyOwner, macro_origins::MacroSelection};
         let source = index.source_index()?.scan();
         let selection = self.source.selection();
@@ -3248,12 +3273,32 @@ impl SourceDeclarative {
         };
         let output = index.output();
         let call = output.macro_call(invocation)?;
+        // A generated call uses the same selected compiler facet and immutable
+        // request preparation as original source and admitted macro arguments.
+        // Probe before reading a rustc_builtin_macro's placeholder body.
+        if let Some(catalog) = &self.compiler
+            && catalog.select(&definition)?.is_some()
+        {
+            let parent = output.record().key();
+            let request = self.declaration_compiler_input(
+                definition.clone(),
+                producer,
+                &call.input,
+                call.site,
+                crate::frontend::impl_index::DeclarationMacroParent::Generated(
+                    std::sync::Arc::new(index.clone()),
+                ),
+                parent.consumer_compile_env,
+                parent.engine_version,
+            )?.ok_or_else(|| fault("LRR-E-COMPILE-INPUT", "selected generated compiler facet disappeared"))?;
+            return Ok(SourceDeclarativeDemand::Ready(Box::new(request)));
+        }
         let builtin = self.library_builtin(&definition);
         let body = match index.body_owner(definition.identity) {
             _ if builtin.is_some() => {
                 DeclarativeBody::Builtin {
                     kind: builtin.expect("builtin checked"),
-                    facts: std::sync::Arc::new(self.generated_builtin_call_site(index, &call.path, call.edition)?),
+                    facts: std::sync::Arc::new(self.generated_builtin_call_site_with_sources(index, &call.path, call.edition, &producer.scope, included)?),
                 }
             }
             Ok(DeclarationBodyOwner::Argument(argument)) => DeclarativeBody::Source(

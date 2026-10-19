@@ -15,7 +15,13 @@ use std::{
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum IncludeRootKind {
     Source,
+    /// E006: fallback physical source address space, bounded by OS permissions.
+    /// The primary Source root still defines relative original caller locations.
+    AmbientSource,
     BuildOutput { producer: Digest },
+}
+impl IncludeRootKind {
+    pub(crate) fn is_source(self) -> bool { matches!(self, Self::Source | Self::AmbientSource) }
 }
 #[derive(Debug, Clone)]
 pub struct IncludeRoot {
@@ -180,6 +186,22 @@ impl IncludeAuthorities {
                 return Err(fault("duplicate include authority identity or path"));
             }
         }
+        // Source preparation has no sandbox (E006). Retain the filesystem
+        // root as a fallback address space without changing relative caller
+        // bases or the more-specific immutable build-output snapshots.
+        let filesystem = retained.values().find(|root| root.kind == IncludeRootKind::Source)
+            .and_then(|root| root.path.ancestors().last()).map(Path::to_owned);
+        if let Some(path) = filesystem
+            && !paths.contains(&path)
+        {
+            let mut identity = StableEncoder::new("lrr/v1/ambient-source-location-root");
+            identity.digest(unit); identity.digest(generation);
+            identity.string(path.to_str().ok_or_else(|| fault("filesystem source root encoding"))?);
+            let identity = identity.finish();
+            if retained.insert(identity, IncludeRoot { identity, path, kind: IncludeRootKind::AmbientSource }).is_some() {
+                return Err(fault("ambient source location identity conflicts"));
+            }
+        }
         let mut e = StableEncoder::new("lrr/v2/include-authorities");
         e.digest(unit);
         e.digest(generation);
@@ -192,6 +214,7 @@ impl IncludeAuthorities {
             );
             match root.kind {
                 IncludeRootKind::Source => e.u8(0),
+                IncludeRootKind::AmbientSource => e.u8(2),
                 IncludeRootKind::BuildOutput { producer } => {
                     e.u8(1);
                     e.digest(producer);

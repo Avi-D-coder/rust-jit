@@ -628,7 +628,7 @@ fn capture_root(input: &InputRequest) -> Result<Digest, Diagnostic> {
         .ok_or_else(|| fault("retained module capture candidates absent"))?
         .root();
     if request.candidates().iter().any(|candidate| {
-        candidate.root() != root || candidate.root_kind() != IncludeRootKind::Source
+        candidate.root() != root || !candidate.root_kind().is_source()
     }) {
         return Err(fault("retained module capture source root differs"));
     }

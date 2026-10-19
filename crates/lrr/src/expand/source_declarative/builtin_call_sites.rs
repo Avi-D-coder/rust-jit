@@ -1,6 +1,8 @@
 //! Physical source locations for the pinned builtin adapter. Raw token context
 //! ancestry selects each expansion's actual call site; no runtime Rust executes.
-use super::{SourceDeclarative, builtin_call_site, fault};
+use super::{
+    IncludedSourceViews, SourceDeclarative, builtin_call_site, builtin_call_site_in_source, fault,
+};
 use crate::{
     core::{diagnostic::Diagnostic, digest::Digest},
     frontend::impl_index::{DeclarationCallSite, GeneratedDeclarationMacroIndex},
@@ -33,12 +35,63 @@ fn path_site(path: &TokenForest) -> Result<(&SpanRecord, &ContextRecord), Diagno
         })?;
     Ok((span, context))
 }
+/// Location metadata only. Names/editions still require their ordinary hygiene
+/// joins. These views come solely from successful coordinator include admission.
+fn included_source<'a>(
+    included: Option<&'a IncludedSourceViews>,
+    span: &SpanRecord,
+) -> Result<Option<&'a crate::source::include_view::IncludedSourceView>, Diagnostic> {
+    let Some(included) = included else {
+        return Ok(None);
+    };
+    let mut matching = included.values().filter(|view| {
+        view.location().unit.0 == span.source.unit.0
+            && view.blob().content().0 == span.source.content.0
+            && view.location().path.as_str() == span.source.path
+            && view.origin().0 == span.origin.0
+    });
+    let Some(view) = matching.next() else {
+        return Ok(None);
+    };
+    if matching.any(|other| other.identity() != view.identity()) {
+        return Err(fault(
+            "LRR-E-EXPANSION-INPUT",
+            "builtin included physical source is ambiguous",
+        ));
+    }
+    if !view.tokens().spans().iter().any(|token| {
+        token.source.unit.0 == span.source.unit.0
+            && token.source.content.0 == span.source.content.0
+            && token.source.path == span.source.path
+            && token.origin.0 == span.origin.0
+            && token.start == span.start
+            && token.end == span.end
+    }) {
+        return Err(fault(
+            "LRR-E-EXPANSION-INPUT",
+            "builtin included location lacks its actual captured token",
+        ));
+    }
+    Ok(Some(view.as_ref()))
+}
+
 impl SourceDeclarative {
     pub(super) fn generated_builtin_call_site(
         &self,
         index: &GeneratedDeclarationMacroIndex,
         path: &TokenForest,
         call_edition: u16,
+        scope: &crate::syntax::outline::ScopeKey,
+    ) -> Result<lrr_expand_adapter::builtin_macros::BuiltinCallSite, Diagnostic> {
+        self.generated_builtin_call_site_with_sources(index, path, call_edition, scope, None)
+    }
+    pub(super) fn generated_builtin_call_site_with_sources(
+        &self,
+        index: &GeneratedDeclarationMacroIndex,
+        path: &TokenForest,
+        call_edition: u16,
+        scope: &crate::syntax::outline::ScopeKey,
+        included: Option<&IncludedSourceViews>,
     ) -> Result<lrr_expand_adapter::builtin_macros::BuiltinCallSite, Diagnostic> {
         let (mut span, mut context) = path_site(path)?;
         // Each selected call context comes from an older admitted expansion.
@@ -46,6 +99,21 @@ impl SourceDeclarative {
         let original;
         let mut visited = std::collections::BTreeSet::new();
         loop {
+            // rustc's cause walk stops at include. The admitted view retains
+            // that boundary even when the included text inherited a marked
+            // caller context; a later macro mark must still be followed first.
+            if let Some(view) = included_source(included, span)?
+                && view.caller_context().0 == span.context.0
+            {
+                return builtin_call_site_in_source(
+                    &self.source,
+                    view.blob().text()?,
+                    view.location().path.as_str(),
+                    span.start,
+                    call_edition,
+                    scope,
+                );
+            }
             let Some(expansion) = context.expansion else {
                 break;
             };
@@ -115,12 +183,22 @@ impl SourceDeclarative {
             || span.source.content.0 != source.outline.parse.content.0
             || span.source.path != source.path.as_str()
         {
+            if let Some(view) = included_source(included, span)? {
+                return builtin_call_site_in_source(
+                    &self.source,
+                    view.blob().text()?,
+                    view.location().path.as_str(),
+                    span.start,
+                    call_edition,
+                    scope,
+                );
+            }
             return Err(fault(
                 "LRR-E-EXPANSION-INPUT",
                 "builtin expansion cause physical source is not captured by its owner",
             ));
         }
-        builtin_call_site(&self.source, span.start, call_edition)
+        builtin_call_site(&self.source, span.start, call_edition, scope)
     }
 }
 
@@ -158,7 +236,7 @@ mod tests {
                 .identity;
             let path = &generated.macro_call(invocation).unwrap().path;
             let facts = provider
-                .generated_builtin_call_site(&index, path, edition)
+                .generated_builtin_call_site(&index, path, edition, generated.scan().scope())
                 .unwrap();
             assert_eq!((facts.column, facts.line), (9, 19));
             let changed = format!("\n{ORIGINAL}");
@@ -172,13 +250,23 @@ mod tests {
             .unwrap();
             assert!(
                 foreign
-                    .generated_builtin_call_site(&index, path, edition)
+                    .generated_builtin_call_site(
+                        &index,
+                        path,
+                        edition,
+                        index.output().scan().scope()
+                    )
                     .is_err(),
                 "another physical source supplied the builtin coordinates"
             );
             assert!(
                 provider
-                    .generated_builtin_call_site(&foreign_index, path, edition)
+                    .generated_builtin_call_site(
+                        &foreign_index,
+                        path,
+                        edition,
+                        index.output().scan().scope()
+                    )
                     .is_err(),
                 "another actual expansion supplied the context-to-invocation join"
             );

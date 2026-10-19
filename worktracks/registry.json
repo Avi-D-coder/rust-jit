@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19T02:36:04.953873+00:00",
+  "updated_at": "2026-10-19T03:05:23.292374+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -754,14 +754,14 @@
     "imported_cases": 2808,
     "imported_files": 3480,
     "claims_are_not_acceptance": true,
-    "validation": "V137 solo held M007/M011 builtin source-location repair: generated builtin preparation follows raw context expansion identities to actual captured call paths instead of immediate-parent lookup and byte-zero fallback. Unchanged issue26322 newly completes all4official editions (523matchedVMoutcomes,3source calls,cleanup) versus measured V134 failure. Both builds and18focused test bodies pass (2runtime position/origin controls,1actual source/expansion authority control,15existing assembly controls). Selected distinct stock4/5runtime contracts pass; source-utils remains unsupported at include despite restoring its exact licensed helper fragment. One distinct measured gain, not4; no refreshed suite total. Foreign proc physical-source, file/module/include boundaries, full currentness/suspension/formatter/macro/interpreter/JIT gates remain held.",
+    "validation": "V144 solo held M011/M007/E006 common compiler/include integration: generated compiler calls select the existing immutable request/coordinator route, included physical source views flow through shared preparation, actual lexical scopes supply module_path, and source include directory sandbox exclusion is removed using an OS-bounded ambient address root. Unchanged source-utils newly completes all4editions with19247matchedVMoperations/1157source calls/cleanup. Both builds,6/6selected unchanged stock runtime contracts and27/27focused test bodies pass, including4edition exact-once/origin checks, actual capture races and epoch-correct ancestry. One measured distinct new runtime gain; no refreshed suite total/full fixture or full macro/include/NoSandbox/interpreter/JIT closure.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
-    "new_whole_upstream_runtime_passes_verified_this_resumption": 31,
+    "new_whole_upstream_runtime_passes_verified_this_resumption": 32,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": true,
+    "source_checkpoint_pushed": false,
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired.",
-    "latest_targeted_evidence": "worktracks/evidence/2026-10-18-interpreter-v134-v137-builtin-locations.json",
+    "latest_targeted_evidence": "worktracks/evidence/2026-10-18-interpreter-v138-v144-common-includes.json",
     "evidence": [
       "worktracks/evidence/2026-10-18-interpreter-v92-v99-symbolic-places.json",
       "worktracks/evidence/2026-10-18-interpreter-v100-open-reference-coercions.json",
@@ -770,9 +770,10 @@
       "worktracks/evidence/2026-10-18-interpreter-v109-v113-definition-modules.json",
       "worktracks/evidence/2026-10-18-interpreter-v114-v116-no-core-prelude.json",
       "worktracks/evidence/2026-10-18-interpreter-v129-v133-hygienic-captures.json",
-      "worktracks/evidence/2026-10-18-interpreter-v134-v137-builtin-locations.json"
+      "worktracks/evidence/2026-10-18-interpreter-v134-v137-builtin-locations.json",
+      "worktracks/evidence/2026-10-18-interpreter-v138-v144-common-includes.json"
     ],
     "source_checkpoint_commit": "2b599608cc400c5bb19ba158abaa50ab3d1d6353",
-    "source_checkpoint_note": "V137 validated source WIP pushed to codex/lrr-implementation (57208/d05dd9/0). One new measured distinct upstream runtime gain all4editions,18focused checks; source-utils/include and full interpreter/JIT gates remain open."
+    "source_checkpoint_note": "V144 validated source WIP prepared for publication; last confirmed pushed source remains recorded until new push succeeds. No integration/milestone/runtime gate closure."
   }
 }

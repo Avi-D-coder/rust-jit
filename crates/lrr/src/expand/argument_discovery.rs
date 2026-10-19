@@ -162,6 +162,16 @@ impl ArgumentDiscovery {
         budget: &SharedExpansionBudget,
         namespaces: &crate::frontend::macro_names::MacroNamespaces,
     ) -> Result<ArgumentDiscoveryStep, Diagnostic> {
+        self.poll_with_sources(provider, input, budget, namespaces, None)
+    }
+    pub(crate) fn poll_with_sources(
+        &mut self,
+        provider: &SourceDeclarative,
+        input: &DeclarationFragmentInput,
+        budget: &SharedExpansionBudget,
+        namespaces: &crate::frontend::macro_names::MacroNamespaces,
+        included: Option<&super::source_declarative::IncludedSourceViews>,
+    ) -> Result<ArgumentDiscoveryStep, Diagnostic> {
         loop {
             if let Some(PendingArgumentProcedural { selection, .. }) = &self.pending_procedural {
                 return Ok(ArgumentDiscoveryStep::NeedProceduralSelection(
@@ -169,7 +179,7 @@ impl ArgumentDiscovery {
                 ));
             }
             if let Some((ordinal, fragment)) = &mut self.active {
-                match fragment.poll_with_namespaces(provider, namespaces)? {
+                match fragment.poll_with_sources(provider, namespaces, included)? {
                     DeclarationFragmentStep::NeedAttributeSelection(selection) => {
                         return Ok(ArgumentDiscoveryStep::NeedAttributeSelection(selection));
                     }

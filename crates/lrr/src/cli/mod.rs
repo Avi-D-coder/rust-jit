@@ -1160,6 +1160,7 @@ mod tests {
                     .unwrap();
                 let mut db = Database::default();
                 prepared.publish(&mut db).unwrap();
+                db.begin_expansion_epoch(1).unwrap();
                 let mut discovery = crate::expand::source_discovery::SourceDiscovery::new(
                     sources,
                     view.outline().root_scope.clone(),
@@ -1196,7 +1197,13 @@ mod tests {
                 let result = run.poll(&mut db);
                 if fuel != 0 {
                     let RunPoll::Completed(report) = result else {
-                        panic!("stock included foo/bar did not complete");
+                        let detail = match &result {
+                            RunPoll::Fault(error) => format!("{}: {}", error.code, error.message),
+                            RunPoll::NeedInput(input) => format!("pending input: {input:?}"),
+                            RunPoll::Panicked(report) => format!("guest panic: {}", report.panic.description()),
+                            RunPoll::Completed(_) => "unexpected completion".into(),
+                        };
+                        panic!("stock included foo/bar did not complete: {detail}");
                     };
                     assert!(matches!(
                         report.value,

@@ -47,7 +47,7 @@ impl SourceCapture {
         use cap_std::fs::MetadataExt as _;
         use std::os::unix::fs::MetadataExt as _;
         for root in self.authorities.roots() {
-            if root.kind != IncludeRootKind::Source {
+            if !root.kind.is_source() {
                 continue;
             }
             let dir = self
@@ -186,7 +186,7 @@ impl SourceCapture {
         }
         let mut source_dirs = BTreeMap::new();
         for root in authorities.roots() {
-            if root.kind != IncludeRootKind::Source {
+            if !root.kind.is_source() {
                 continue;
             }
             let actual = std::fs::canonicalize(&root.path)
@@ -438,7 +438,7 @@ impl SourceCapture {
                 }
                 identity.digest(tree.fingerprint());
             }
-            IncludeRootKind::Source => {
+            IncludeRootKind::Source | IncludeRootKind::AmbientSource => {
                 use cap_std::fs::MetadataExt as _;
                 let dir = self
                     .source_dirs
@@ -497,7 +497,7 @@ impl SourceCapture {
                                 .is_some_and(|suffix| suffix.starts_with('/'))
                         })
                 }
-                IncludeRootKind::Source => self.resolve_optional_physical(candidate)?.is_some(),
+                IncludeRootKind::Source | IncludeRootKind::AmbientSource => self.resolve_optional_physical(candidate)?.is_some(),
             };
             observations.push(if present {
                 match self.module_nonfile_identity(candidate)? {

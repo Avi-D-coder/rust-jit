@@ -16,7 +16,7 @@ use crate::{
     expand::source_declarative::macro_exports::SourceMacroExportFacet,
     frontend::source_module_declarations::SourceModuleDeclaration,
     source::{
-        include_paths::{IncludeAuthorities, IncludeRootKind},
+        include_paths::{IncludeAuthorities},
         module_capture::AdoptedModuleCapture,
     },
 };
@@ -124,7 +124,7 @@ impl MacroExportModuleRequest {
             .ok_or_else(|| fault("macro-export module source authority is absent"))?;
         if authorities.unit() != parent.unit()
             || root.path != parent.source_root()
-            || root.kind != IncludeRootKind::Source
+            || !root.kind.is_source()
             || parent.package_root() != child.package_root()
             || parent.source_root() != child.source_root()
         {
@@ -143,7 +143,7 @@ impl MacroExportModuleRequest {
             candidate.generation() != parent.preparation()
                 || candidate.from().root != root.identity
                 || candidate.root() != root.identity
-                || candidate.root_kind() != IncludeRootKind::Source
+                || !candidate.root_kind().is_source()
                 || candidate.from().path != parent.source().selection().path
         }) {
             return Err(fault(
