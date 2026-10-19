@@ -345,15 +345,17 @@ impl RunMachine {
                 return Err(error);
             }
         }
-        // A returned raw pointer takes the call's closed declared pointer
-        // type (E-R5-008): the intrinsics behind `null`, `cast` and `as_ptr`
-        // return pointers with an erased pointee.
+        // A returned pointer takes the call's closed declared pointer type
+        // (E-R5-008). Raw pointer intrinsics may erase the pointee, and a
+        // function item/non-capturing closure reifies to its fn-pointer result
+        // through the same pointer coercion before the caller observes it.
         if let Some(term) = suspended.call.contracts.source_result.as_ref()
-            && crate::traits::pointer_terms::as_raw_pointer(term).is_some()
+            && (crate::traits::pointer_terms::as_raw_pointer(term).is_some()
+                || matches!(term, crate::traits::term::TyTerm::Function(_)))
             && crate::frontend::call_contracts::closed_term(term)
         {
             let value = self.store.peek_ticket(ticket)?;
-            if value.kind == 9
+            if matches!(value.kind, 8 | 9)
                 && let Some(expected) = self.store.intern_structural_term(term)?
                 && expected.0 != value.type_id
                 && self.store.pointer_coercion(value, expected)?

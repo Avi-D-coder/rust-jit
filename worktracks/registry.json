@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19T01:17:43.179487+00:00",
+  "updated_at": "2026-10-19T01:32:12.824038+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -754,14 +754,14 @@
     "imported_cases": 2808,
     "imported_files": 3479,
     "claims_are_not_acceptance": true,
-    "validation": "V121 solo common callable repair: const-qualified closures use ordinary closure lowering; function items and empty-capture closures share destination admission and Frame::write pointer coercion, and closure calls retain the actual creating source owner. Both builds and5/5focused pointer/capture/origin/cold/cleanup controls pass. Unchanged const-closure-fn-ptr-const-item newly completes all4editions versus V120 ownership failure, one initializer and cleanup each: one distinct runtime gain. Broader closure-to-fn-coercion fails numeric return context. V120 common parser controls pass; actual full-core capture/declaration parse advances to module alias provenance failure. No refreshed suite total/full-fixture, library namespace, interpreter or JIT closure.",
+    "validation": "V124 solo common fn-pointer closure signature/result repair and shared return-boundary coercion: verified MakeClosure body/result metadata, actual Function parameter/result descriptors retained in common call contracts, and function items/noncapturing closures reified through existing pointer coercion before caller observation. Both builds and5/5focused controls pass; prior const-closure fn-pointer original remains complete. Broader unchanged closure-to-fn-coercion advances from return42 failure to mem::size_of::<T>() after1336matched VM outcomes,11source calls/6initializer frames, then fails missing creating generic binding. Zero additional distinct gains after V121; no refreshed suite total. Generic application context/identity and E007 pointer-aggregate once caching remain held, as do actual library alias provenance/full runtime/JIT gates.",
     "historical_runtime_contract_passes": 1429,
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
     "new_whole_upstream_runtime_passes_verified_this_resumption": 29,
     "guest_jit": "blocked_by_runtime_acceptance",
     "source_checkpoint_pushed": true,
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired.",
-    "latest_targeted_evidence": "worktracks/evidence/2026-10-18-interpreter-v117-v121-common-callables.json",
+    "latest_targeted_evidence": "worktracks/evidence/2026-10-18-interpreter-v122-v124-closure-signatures.json",
     "evidence": [
       "worktracks/evidence/2026-10-18-interpreter-v92-v99-symbolic-places.json",
       "worktracks/evidence/2026-10-18-interpreter-v100-open-reference-coercions.json",
@@ -770,7 +770,7 @@
       "worktracks/evidence/2026-10-18-interpreter-v109-v113-definition-modules.json",
       "worktracks/evidence/2026-10-18-interpreter-v114-v116-no-core-prelude.json"
     ],
-    "source_checkpoint_commit": "b3b8acf4744ad863c2a1d791b2582bfb08d6dc31",
-    "source_checkpoint_note": "b3b8acf push confirmed by 25588/b20eac; successor V121 source-only WIP staged, not yet committed or pushed"
+    "source_checkpoint_commit": "423dc577fcdbaa32ae644273ba14652c6a9114f1",
+    "source_checkpoint_note": "423dc577 push confirmed69591/f28b56; V124 source WIP candidate pending checkpoint/push, no feature integration"
   }
 }

@@ -1045,6 +1045,7 @@ fn verify_inner(
                 Some(*destination)
             }
             Op::MakeClosure {
+                body: closure_body,
                 captures,
                 parameters,
                 destination,
@@ -1055,6 +1056,12 @@ fn verify_inner(
                     || node.role != NodeRole::Expression(ExpressionKind::Closure)
                     || node.value != Some(*destination)
                     || node.closure_scope.is_none()
+                    || node.operands.last() != Some(closure_body)
+                    || body.nodes().get(closure_body.0 as usize).is_none_or(|child| {
+                        child.parent != Some(node.id)
+                            || !matches!(child.role, NodeRole::Expression(_))
+                            || child.value.is_none()
+                    })
                 {
                     return Err(invalid("closure creation requires its own closure entry"));
                 }

@@ -364,6 +364,7 @@ impl ParsedFile {
                     index,
                     key,
                     vec![Op::MakeClosure {
+                        body: body_id,
                         captures,
                         parameters,
                         destination: node.value.ok_or_else(|| error("closure value absent"))?,

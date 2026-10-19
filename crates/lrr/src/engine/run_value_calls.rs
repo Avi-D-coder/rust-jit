@@ -126,6 +126,7 @@ impl RunMachine {
 pub(super) struct ClosureTarget {
     body: Arc<BodyIndex>,
     node: NodeId,
+    result: SlotId,
     captures: Box<[crate::ir::op::ClosureCapture]>,
     parameters: Box<[crate::ir::op::ClosureParameter]>,
 }
@@ -133,10 +134,12 @@ pub(super) struct ClosureTarget {
 struct SelectedClosure {
     target: Arc<ClosureTarget>,
     closure: crate::runtime::place::Place,
+    signature: Option<crate::runtime::shape::TypeId>,
 }
 /// The closure frame entry a sealed closure call carries to `enter_callee`.
 pub(super) struct ClosureEntry {
     pub(super) entry: PcKey,
+    pub(super) result: SlotId,
     pub(super) captures: Box<[crate::ir::op::ClosureCapture]>,
     pub(super) closure: crate::runtime::place::Place,
     pub(super) mutable: Box<[bool]>,
@@ -187,6 +190,7 @@ impl RunMachine {
             .skip(self.frame.resume_operation_index())
         {
             let Op::MakeClosure {
+                body: closure_body,
                 captures,
                 parameters,
                 ..
@@ -206,10 +210,14 @@ impl RunMachine {
             let node = NodeId(self.frame.pc().node);
             let identity =
                 crate::vm::frame::closures_frame::closure_identity(self.frame.body.body(), node);
+            let result = self.frame.body.nodes().get(closure_body.0 as usize)
+                .and_then(|node| node.value)
+                .ok_or_else(|| call_fault("verified closure body result absent"))?;
             self.closures.targets.entry(identity).or_insert_with(|| {
                 Arc::new(ClosureTarget {
                     body: Arc::clone(&self.frame.body),
                     node,
+                    result,
                     captures: captures.clone(),
                     parameters: parameters.clone(),
                 })
@@ -236,17 +244,17 @@ impl RunMachine {
             ));
         }
         let (closure, ty) = self.frame.value_callee(site, &self.store)?;
-        match self.store.type_descriptor(ty)?.key.as_ref() {
-            TypeKey::Callable { .. } => {}
+        let signature = match self.store.type_descriptor(ty)?.key.as_ref() {
+            TypeKey::Callable { .. } => None,
             // A reified non-capturing closure has no aggregate captures to
             // bind; its registered code address selected this same target.
-            TypeKey::Function { .. } if target.captures.is_empty() => {}
+            TypeKey::Function { .. } if target.captures.is_empty() => Some(ty),
             _ => return Err(call_fault("closure callee type differs")),
-        }
+        };
         let identity = self.frame.call_identity(site);
         self.closures
             .selected
-            .insert(identity, SelectedClosure { target, closure });
+            .insert(identity, SelectedClosure { target, closure, signature });
         Ok(())
     }
     /// A selected closure call's arguments take its written primitive
@@ -263,7 +271,24 @@ impl RunMachine {
             .get(&identity)
             .ok_or_else(|| call_fault("closure call start lacks its selection"))?;
         let mut hints = Vec::with_capacity(arguments.len());
-        for (slot, parameter) in arguments.iter().zip(selected.target.parameters.iter()) {
+        let pointer_parameters = selected.signature.map(|ty| {
+            match self.store.type_descriptor(ty)?.key.as_ref() {
+                TypeKey::Function { params, .. } => Ok(params.as_ref()),
+                _ => Err(call_fault("selected closure pointer signature differs")),
+            }
+        }).transpose()?;
+        if pointer_parameters.is_some_and(|params| params.len() != arguments.len()) {
+            return Err(Diagnostic::new("LRR-E-CALL-ARITY",
+                "function pointer called with a different number of arguments".into()));
+        }
+        for (ordinal, (slot, parameter)) in arguments.iter()
+            .zip(selected.target.parameters.iter()).enumerate() {
+            if let Some(params) = pointer_parameters {
+                let ty = params[ordinal];
+                hints.push((*slot, Some(ty), self.store.descriptor_source_term(ty)
+                    .filter(crate::vm::frame::Frame::admissible_parameter_source)));
+                continue;
+            }
             match parameter.hint {
                 Some(primitive) => hints.push((
                     *slot,
@@ -305,6 +330,16 @@ impl RunMachine {
             return QueryPoll::Ready(Err(call_fault("closure call seal lacks its selection")));
         };
         let target = Arc::clone(&selected.target);
+        let result_descriptor = match selected.signature {
+            Some(ty) => match self.store.type_descriptor(ty) {
+                Ok(descriptor) => match descriptor.key.as_ref() {
+                    TypeKey::Function { result, .. } => Some(*result),
+                    _ => return QueryPoll::Ready(Err(call_fault("closure signature differs"))),
+                },
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            },
+            None => None,
+        };
         let prepared = (|| {
             let mut cells = Vec::with_capacity(arguments.len());
             let mut types = Vec::with_capacity(arguments.len());
@@ -339,6 +374,7 @@ impl RunMachine {
                 owner,
                 cells,
                 types,
+                result_descriptor,
             );
         }
         let Some(graph) = &self.graph else {
@@ -360,7 +396,7 @@ impl RunMachine {
         self.closures
             .owners
             .insert(target.body.body().clone(), owner.clone());
-        self.finish_closure_seal(db, site, target, selected.closure, owner, cells, types)
+        self.finish_closure_seal(db, site, target, selected.closure, owner, cells, types, result_descriptor)
     }
     #[allow(clippy::too_many_arguments)]
     fn finish_closure_seal(
@@ -372,6 +408,7 @@ impl RunMachine {
         owner: Arc<SourceCallable>,
         cells: Vec<crate::runtime::cell::CellId>,
         types: Vec<crate::runtime::shape::TypeId>,
+        result_descriptor: Option<crate::runtime::shape::TypeId>,
     ) -> QueryPoll<()> {
         if let Err(error) = owner.revalidate(db) {
             return QueryPoll::Ready(Err(error));
@@ -405,8 +442,8 @@ impl RunMachine {
             parameter_descriptors: types.clone(),
             source_substitution: BTreeMap::new(),
             runtime_substitution: BTreeMap::new(),
-            source_result: None,
-            result_descriptor: None,
+            source_result: result_descriptor.and_then(|ty| self.store.descriptor_source_term(ty)),
+            result_descriptor,
             normalized_deferred_return: None,
             structural_references: false,
         };
@@ -419,6 +456,7 @@ impl RunMachine {
             retained_bytes: 0,
             closure: Some(Box::new(ClosureEntry {
                 entry,
+                result: target.result,
                 captures: target.captures.clone(),
                 closure,
                 mutable: target.parameters.iter().map(|p| p.mutable).collect(),

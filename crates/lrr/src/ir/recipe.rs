@@ -472,7 +472,7 @@ fn hint(e: &mut StableEncoder, h: &HintRecipe) {
     }
 }
 impl StableEncode for Recipe {
-    const DOMAIN: &'static str = "lrr/v16/lrir-recipe";
+    const DOMAIN: &'static str = "lrr/v17/lrir-recipe";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         span(e, &self.origin.span);
@@ -656,11 +656,13 @@ impl StableEncode for Recipe {
                 e.u32(destination.0);
             }
             Op::MakeClosure {
+                body,
                 captures,
                 parameters,
                 destination,
             } => {
                 e.u32(u32::from(super::op::MAKE_CLOSURE_OPCODE));
+                e.u32(body.0);
                 e.sequence(captures, |e, capture| {
                     match capture.source {
                         super::op::CaptureSource::Binding(binding) => {

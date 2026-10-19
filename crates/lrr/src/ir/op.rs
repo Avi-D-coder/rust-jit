@@ -1,5 +1,5 @@
 //! Owned initial LRIR inventory. No callbacks, guest handles or native addresses.
-use super::pc::SlotId;
+use super::pc::{NodeId, SlotId};
 use crate::{
     core::diagnostic::Diagnostic,
     syntax::{body_index::ScopeId, spans::BodySpan},
@@ -673,6 +673,8 @@ pub enum Op {
     /// unique references to, or values moved/copied out of, the enclosing
     /// bindings). Its body executes only in the closure's own call frame.
     MakeClosure {
+        /// The actual indexed body expression, retained for its call result context.
+        body: NodeId,
         captures: Box<[ClosureCapture]>,
         parameters: Box<[ClosureParameter]>,
         destination: SlotId,
