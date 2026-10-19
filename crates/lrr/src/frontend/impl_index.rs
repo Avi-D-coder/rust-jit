@@ -992,7 +992,23 @@ pub enum DeclarationMacroParent {
     Generated(Arc<GeneratedDeclarationMacroIndex>),
     Argument(Arc<ArgumentDeclarationMacroIndex>),
 }
+/// Exact physical invocation capture, independent of declaration lookup and
+/// of diagnostic/structural expansion ancestry.
+pub(crate) enum DeclarationCallSite<'a> {
+    Source { scan: &'a DeclarationScan, range: crate::syntax::spans::SourceRange },
+    Captured(&'a lrr_expand_adapter::token_wire::TokenForest),
+}
 impl DeclarationMacroParent {
+    fn invocation_site(&self, invocation: crate::core::digest::Digest) -> Result<DeclarationCallSite<'_>, Diagnostic> {
+        Ok(match self {
+            Self::Source(index) => {
+                let producer = index.producer(invocation)?;
+                DeclarationCallSite::Source { scan: &index.scan, range: producer.range }
+            }
+            Self::Generated(index) => DeclarationCallSite::Captured(&index.output.macro_call(invocation)?.path),
+            Self::Argument(index) => DeclarationCallSite::Captured(&index.argument.macro_call(invocation)?.path),
+        })
+    }
     fn scan(&self) -> &DeclarationScan {
         match self {
             Self::Source(index) => index.scan(),
@@ -1491,6 +1507,25 @@ impl GeneratedDeclarationMacroIndex {
             bindings.push(binding);
         }
         Ok(bindings)
+    }
+    /// Select an actual expansion's invocation, following only the retained
+    /// emitting source graph. The caller chooses the expansion from a raw
+    /// token context, rather than assuming structural parents are call sites.
+    pub(crate) fn expansion_call_site(&self, expansion: crate::core::digest::Digest) -> Result<DeclarationCallSite<'_>, Diagnostic> {
+        let mut current = self;
+        loop {
+            if current.output.record().key().fingerprint() == expansion {
+                return current.parent.invocation_site(current.output.parent_invocation());
+            }
+            let mut parent = &current.parent;
+            loop {
+                match parent {
+                    DeclarationMacroParent::Generated(index) => { current = index; break; }
+                    DeclarationMacroParent::Argument(index) => parent = &index.outer,
+                    DeclarationMacroParent::Source(_) => return Err(fault()),
+                }
+            }
+        }
     }
     pub(crate) fn parent(&self) -> &DeclarationMacroParent {
         &self.parent

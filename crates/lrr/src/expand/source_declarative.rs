@@ -33,6 +33,7 @@ pub mod macro_exports;
 pub(crate) mod original_annotations;
 #[path = "source_declarative/retained_provider.rs"]
 mod retained_provider;
+mod builtin_call_sites;
 #[path = "source_declarative/scalar_pattern_replay.rs"]
 mod scalar_pattern_replay;
 pub struct SourceDeclarative {
@@ -578,7 +579,7 @@ pub fn engine_version() -> Digest {
     e.digest(Digest(
         lrr_expand_adapter::builtin_attributes::compiler_inert_inventory_identity().0,
     ));
-    e.u32(7); // Ordinary const-closure item/expression disambiguation in the pinned parser.
+    e.u32(8); // Actual context-directed builtin expansion-cause locations.
     e.finish()
 }
 fn fault(code: &'static str, message: &str) -> Diagnostic {
@@ -3250,21 +3251,9 @@ impl SourceDeclarative {
         let builtin = self.library_builtin(&definition);
         let body = match index.body_owner(definition.identity) {
             _ if builtin.is_some() => {
-                // `line!`/`column!` use the outermost original call site: the
-                // original producer that started this generated frame.
-                let root = output.parent_invocation();
-                let at = source
-                    .producers()
-                    .iter()
-                    .find(|producer| producer.identity == root)
-                    .map_or(0, |producer| producer.range.start);
                 DeclarativeBody::Builtin {
                     kind: builtin.expect("builtin checked"),
-                    facts: std::sync::Arc::new(builtin_call_site(
-                        &self.source,
-                        at,
-                        call.edition,
-                    )?),
+                    facts: std::sync::Arc::new(self.generated_builtin_call_site(index, &call.path, call.edition)?),
                 }
             }
             Ok(DeclarationBodyOwner::Argument(argument)) => DeclarativeBody::Source(

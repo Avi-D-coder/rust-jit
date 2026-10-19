@@ -13008,6 +13008,12 @@
       "bytes": 450
     },
     {
+      "path": "tests/ui/macros/syntax-extension-source-utils-files/includeme.fragment",
+      "git_blob": "d752015a4dcdc515acc03fa47d8dbea5ff090297",
+      "sha256": "a12409e8db2e00227a52a84352ef6a729d1c61b53add4eac3e57a9622bb5e0d9",
+      "bytes": 191
+    },
+    {
       "path": "tests/ui/macros/syntax-extension-source-utils.rs",
       "git_blob": "2f88e508058c1ab994012d054a9e0d4dc2a00a1a",
       "sha256": "ff962db0ade67dbfe6fc4b486d49ee54f4a9296f9387ce6b69cef1db14e34230",

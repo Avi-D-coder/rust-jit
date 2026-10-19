@@ -444,3 +444,41 @@ fn main() {
         }
     }
 }
+
+#[test]
+fn upstream_nested_builtin_positions_use_actual_expansion_causes_all_editions() {
+    // Entire unchanged upstream original, including its exact byte positions.
+    let original = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/macros/issue-26322.rs"
+    );
+    for edition in [2015, 2018, 2021, 2024] {
+        let report = completed_with_standard_facade(original, edition);
+        assert_eq!(closures_made(&report), 2);
+    }
+}
+
+#[test]
+fn forwarded_builtin_positions_keep_raw_input_context_under_standard_macros() {
+    // LRR location/source join control outside imported originals. `column!`
+    // written as an argument retains its location through a wrapper; tokens
+    // emitted by that wrapper use the wrapper's invocation. A standard assert
+    // expansion also forwards original input tokens rather than relocating them.
+    let source = concat!(
+        "macro_rules! forward { ($e:expr) => { $e } }\n",
+        "macro_rules! wrap { ($e:expr) => { forward!($e) } }\n",
+        "macro_rules! inner { () => { column!() } }\n",
+        "macro_rules! outer { () => { inner!() } }\n",
+        "fn main() {\n",
+        "    let direct = column!();\n",
+        "    let passed = wrap!(column!());\n",
+        "    let emitted = outer!();\n",
+        "    assert_eq!(direct, 18);\n",
+        "    assert_eq!(passed, 24);\n",
+        "    assert_eq!(emitted, 19);\n",
+        "    assert_eq!(column!(), 16);\n",
+        "}\n",
+    );
+    for edition in [2015, 2018, 2021, 2024] {
+        completed(source, edition);
+    }
+}
