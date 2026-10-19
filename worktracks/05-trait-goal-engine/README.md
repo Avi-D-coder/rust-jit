@@ -4,6 +4,8 @@ Integrate the pinned next-generation rustc trait solver with LRR's demand-driven
 
 ## Current boundary
 
+Latest held M020 interface: V373 concrete owning SolverContext satisfies upstream SolverDelegate and connects existing compiler operations/proof-tree provider. Both builds and2/2source matrices pass over140Types/136TraitRefs/48edition-origin worlds. Five mandatory semantic clients and actual fact/root/member/VM integration remain unimplemented; no new stock runtime gain or gate closure. [Evidence](../evidence/2026-10-19-v370-v373-upstream-delegate.json).
+
 Latest held E006/M020 prerequisite: V368 removes connected structural resource guards and uses one heap substitution/closed traversal; the unchanged depth300 signature boundary passes all4editions. Three stock runtime contracts pass all4editions/12rows at V368. V369 changes only a stale host region expectation; final builds/affected control pass, production unchanged, earlier source/runtime evidence stays at V368. No measured stock gain/refreshed total or full upstream root/VM integration. [Evidence](../evidence/2026-10-19-v366-v369-structural-resource-guards.json).
 
 Latest held M020 component: V352 adds current compiler source-origin opaque/outlives records/state and variable wake predicate. Final builds/affected source control pass; two untouched V351 controls retain their own evidence, production unchanged. Nonempty source opaques/full inference/delegate/root/runtime integration remain open; zero new stock runtime gains. [Evidence](../evidence/2026-10-19-v350-v352-upstream-obligation-state.json).

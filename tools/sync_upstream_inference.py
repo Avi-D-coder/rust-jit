@@ -2,7 +2,7 @@
 """Audit/regenerate pinned next-solver inference storage; no custom transactions.
 
 Only concrete IR/import/diagnostic-span spelling changes. The original licensed
-files stay unchanged. SolverDelegate and body inference are deliberately absent.
+files stay unchanged. Required source-dependent delegate clients and body inference remain absent.
 """
 import argparse
 import hashlib
@@ -17,6 +17,7 @@ from upstream_infer_client import extend_infer_client
 from upstream_canonical_instantiation import extend_canonical_instantiation
 from upstream_region_response import extend_region_response
 from upstream_goal_fast_path import extend_goal_fast_path
+from upstream_solver_delegate import extend_solver_delegate
 
 ROOT = Path(__file__).resolve().parents[1]
 PIN = 'ae0fe511b15ab760d7e963b13389d1bc2ab42b18'
@@ -145,6 +146,7 @@ impl Span {
     extend_canonical_instantiation(outputs, header, rustfmt)
     extend_region_response(outputs, header, rustfmt)
     extend_goal_fast_path(outputs, header, rustfmt)
+    extend_solver_delegate(outputs, header, rustfmt)
     return outputs
 
 
@@ -160,7 +162,7 @@ def main():
                 target.write_bytes(raw)
             if target.read_bytes() != raw:
                 raise ValueError('inference storage differs from registered pinned client: ' + name)
-        print('Pinned inference storage: exact originals and registered mechanical port; no local undo/commit/unification algorithm or solver delegate.')
+        print('Pinned inference storage: exact originals and registered mechanical port; no local undo/commit/unification algorithm; source-dependent delegate clients remain required.')
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         parser.exit(1, str(error) + '\n' + getattr(error, 'stderr', b'').decode(errors='replace'))
 

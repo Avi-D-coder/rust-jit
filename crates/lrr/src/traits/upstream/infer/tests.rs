@@ -16,6 +16,7 @@ pub(crate) fn check_actual_storage<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, sp
     check_inference_client(cx, actual, span);
     check_canonical_instantiation(cx, actual, span);
     check_goal_fast_path(cx, actual, span);
+    check_solver_delegate(cx, actual, span);
     let storage = InferenceStorage::new();
     let root = ty::UniverseIndex::ROOT;
     let (a, b, integer, float, constant, first_region, second_region) = {
@@ -759,18 +760,21 @@ fn check_canonical_instantiation<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, span
         cx.mk_bound_variable_kinds_from_iter([ty::BoundVariableKind::Ty(ty::BoundTyKind::Anon)]));
     let canonical = ty::Canonical { value: (actual,args,(clauses,ordinary_binder)), max_universe: young, var_kinds: kinds };
     let input = ty::CanonicalQueryInput { canonical, typing_mode: ty::TypingModeEqWrapper(ty::TypingMode::PostAnalysis) };
-    let (owner, output, values) = InferenceContext::build_with_canonical(cx, span, &input);
+    use rustc_next_trait_solver::delegate::SolverDelegate as Delegate;
+    use super::delegate::SolverContext;
+    let (delegate, output, values) = <SolverContext as Delegate>::build_with_canonical(cx, &input);
+    let owner = &*delegate;
     assert_eq!(output.0, actual);assert_eq!(output.1.items(),values.var_values.items());
     let ty::Tuple(nested) = output.2.1.skip_binder().kind() else { panic!("real nested binder tuple absent") };
     assert_eq!(nested.items()[0],ordinary_bound,"ordinary bound variable must stay in its binder");
     assert_eq!(nested.items()[1],values.var_values.items()[0].expect_ty(),"canonical variable must be substituted inside the ordinary binder");
     assert!(!output.2.1.has_escaping_bound_vars(),"ordinary variable is genuinely bound");
-    assert_eq!(values.len(),9);assert_eq!(Client::universe(&owner),young);
-    assert!(matches!(Client::typing_mode_raw(&owner),ty::TypingMode::PostAnalysis));
+    assert_eq!(values.len(),9);assert_eq!(Client::universe(owner),young);
+    assert!(matches!(Client::typing_mode_raw(owner),ty::TypingMode::PostAnalysis));
     let ty_vid = |n: usize| match values.var_values.items()[n].expect_ty().kind() {ty::Infer(ty::TyVar(v))=>v,_=>panic!("expected real type inference var")};
-    assert_ne!(Client::root_ty_var(&owner,ty_vid(0)),Client::root_ty_var(&owner,ty_vid(1)));
-    assert_eq!(Client::sub_unification_table_root_var(&owner,ty_vid(0)),Client::sub_unification_table_root_var(&owner,ty_vid(1)));
-    assert_eq!(Client::universe_of_ty(&owner,ty_vid(0)),Some(root));
+    assert_ne!(Client::root_ty_var(owner,ty_vid(0)),Client::root_ty_var(owner,ty_vid(1)));
+    assert_eq!(Client::sub_unification_table_root_var(owner,ty_vid(0)),Client::sub_unification_table_root_var(owner,ty_vid(1)));
+    assert_eq!(Client::universe_of_ty(owner,ty_vid(0)),Some(root));
     assert!(matches!(values.var_values.items()[2].expect_ty().kind(),ty::Infer(ty::IntVar(_))));
     assert!(matches!(values.var_values.items()[3].expect_ty().kind(),ty::Infer(ty::FloatVar(_))));
     assert!(matches!(values.var_values.items()[4].expect_region().kind(),ty::RegionKind::ReVar(_)));
@@ -787,6 +791,7 @@ fn check_canonical_instantiation<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, span
     assert_eq!(canonical.instantiate_projected(cx,&other_values,|p|p.2.0),output.2.0);
     assert_eq!(cache.clauses_cache.borrow().len(),count,"unused suffix must share exact compiler prefix cache");
     assert_eq!(canonical.instantiate(cx,&values),output);
+    assert_eq!(Delegate::instantiate_canonical(&delegate,canonical,values),output);
     assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| canonical.instantiate(cx,&ty::CanonicalVarValues::dummy()))).is_err());
     // An existing non-root inference context rebases incoming universe zero.
     let rebased = InferenceContext::new(cx,ty::TypingMode::PostAnalysis);
@@ -856,11 +861,12 @@ fn check_region_response<'cx>(context: &super::InferenceContext<'cx>, span: Span
 
 // Actual compiler fast-path outcomes; no substitute relation or trait provider.
 fn check_goal_fast_path<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, span: Span) {
-    use super::InferenceContext;
+    use super::{InferenceContext,delegate::SolverContext};
+    use rustc_next_trait_solver::delegate::SolverDelegate;
     use crate::traits::upstream::model::{ParamEnv,List,ValueConst,ScalarInt};
     use ty::{InferCtxtLike as Client,inherent::Ty as _};
     use ty::solve::{ComputeGoalFastPathOutcome::{NoFastPath,TriviallyHolds,TriviallyStalled},Goal,TyOrConstInferVar,GoalStalledOnOpaques,SizedTraitKind};
-    let owner=InferenceContext::new(cx,ty::TypingMode::PostAnalysis);
+    let owner=SolverContext::from_inference_context(InferenceContext::new(cx,ty::TypingMode::PostAnalysis));
     let env=ParamEnv(cx.clauses(List::default()));
     let goal=|kind| Goal::new(cx,env,ty::Binder::dummy(kind));
     let wf=|value: Ty<'cx>| goal(ty::PredicateKind::Clause(ty::ClauseKind::WellFormed(value.into())));
@@ -895,7 +901,7 @@ fn check_goal_fast_path<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, span: Span) {
     let TriviallyStalled{stalled_on}=owner.compute_goal_fast_path(wf(unknown),span) else {panic!("unknown WF must stall")};
     assert_eq!(stalled_on.stalled_vars.as_slice(),&[TyOrConstInferVar::Ty(vid)]);
     assert!(matches!(stalled_on.opaques,GoalStalledOnOpaques::No));
-    Client::instantiate_ty_var_raw(&owner,vid,boolean);
+    Client::instantiate_ty_var_raw(&*owner,vid,boolean);
     assert!(matches!(owner.compute_goal_fast_path(wf(unknown),span),TriviallyHolds));
     let left=owner.next_region_var(span);let right=owner.next_region_var(span);
     let outlives=goal(ty::PredicateKind::Clause(ty::ClauseKind::RegionOutlives(ty::OutlivesClause(left,right))));
@@ -924,15 +930,15 @@ fn check_goal_fast_path<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, span: Span) {
     let const_goal=goal(ty::PredicateKind::Clause(ty::ClauseKind::ConstArgHasType(constant,boolean)));
     assert!(matches!(owner.compute_goal_fast_path(const_goal,span),TriviallyStalled{..}));
     let value=Const::new(cx,ty::ConstKind::Value(ValueConst{ty:boolean,tree:cx.valtree(ty::ValTreeKind::Leaf(ScalarInt{bits:1,bytes:1}))}));
-    Client::instantiate_const_var_raw(&owner,const_vid,value);
+    Client::instantiate_const_var_raw(&*owner,const_vid,value);
     assert!(matches!(owner.compute_goal_fast_path(const_goal,span),NoFastPath),"known const still needs full solver validation");
     for coerce in [false,true] {
         let a=owner.next_ty_var(span);let b=owner.next_ty_var(span);
         let kind=if coerce {ty::PredicateKind::Coerce(ty::CoercePredicate{a,b})}else{ty::PredicateKind::Subtype(ty::SubtypePredicate{a_is_expected:true,a,b})};
         let TriviallyStalled{stalled_on}=owner.compute_goal_fast_path(goal(kind),span) else {panic!("two vars must stall")};
         assert_eq!(stalled_on.stalled_vars.as_slice(),&[TyOrConstInferVar::Ty(a.ty_vid().unwrap()),TyOrConstInferVar::Ty(b.ty_vid().unwrap())]);
-        assert_eq!(Client::sub_unification_table_root_var(&owner,a.ty_vid().unwrap()),Client::sub_unification_table_root_var(&owner,b.ty_vid().unwrap()));
-        assert_ne!(Client::root_ty_var(&owner,a.ty_vid().unwrap()),Client::root_ty_var(&owner,b.ty_vid().unwrap()));
+        assert_eq!(Client::sub_unification_table_root_var(&*owner,a.ty_vid().unwrap()),Client::sub_unification_table_root_var(&*owner,b.ty_vid().unwrap()));
+        assert_ne!(Client::root_ty_var(&*owner,a.ty_vid().unwrap()),Client::root_ty_var(&*owner,b.ty_vid().unwrap()));
     }
     assert!(owner.known_no_opaque_types_in_storage());
     let erased=InferenceContext::new(cx,ty::TypingMode::ErasedNotCoherence(ty::MayBeErased));
@@ -941,10 +947,11 @@ fn check_goal_fast_path<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, span: Span) {
 }
 
 pub(crate) fn check_trait_fast_path<'cx>(cx: DbInterner<'cx>, reference: ty::TraitRef<DbInterner<'cx>>, span: Span) {
-    use super::InferenceContext;
+    use super::{InferenceContext,delegate::SolverContext};
+    use rustc_next_trait_solver::delegate::SolverDelegate;
     use crate::traits::upstream::model::{ParamEnv,List};
     use ty::solve::{ComputeGoalFastPathOutcome::TriviallyStalled,Goal,GoalStalledOnOpaques,SucceededInErased,TyOrConstInferVar};
-    let owner=InferenceContext::new(cx,ty::TypingMode::PostAnalysis);
+    let owner=SolverContext::from_inference_context(InferenceContext::new(cx,ty::TypingMode::PostAnalysis));
     let unknown=owner.next_ty_var(span);
     let source_ref=reference.with_replaced_self_ty(cx,unknown);
     let env=ParamEnv(cx.clauses(List::default()));
@@ -955,4 +962,41 @@ pub(crate) fn check_trait_fast_path<'cx>(cx: DbInterner<'cx>, reference: ty::Tra
         assert!(matches!(stalled_on.opaques,GoalStalledOnOpaques::Yes{num_opaques_in_storage:0,previously_succeeded_in_erased:SucceededInErased::No}));
     }
     assert!(cx.services().ready(cx).is_err(),"source TraitRef stall is not a proven trait/root");
+}
+
+// Actual SolverDelegate entry methods over the same source-owned context.
+// Five required metadata-dependent clients remain uninstalled/unexecuted.
+fn check_solver_delegate<'cx>(cx:DbInterner<'cx>,actual:Ty<'cx>,span:Span) {
+    use super::{InferenceContext,delegate::SolverContext};
+    use rustc_next_trait_solver::delegate::SolverDelegate as Delegate;
+    use ty::{InferCtxtLike as Client,inherent::{GenericArg as _,Ty as _}};
+    use ty::solve::VisibleForLeakCheck::Yes;
+    let owner=SolverContext::from_inference_context(InferenceContext::new(cx,ty::TypingMode::PostAnalysis));
+    assert_eq!(Delegate::cx(&owner),cx);
+    let root=ty::UniverseIndex::ROOT;
+    let young=Client::create_next_universe(&*owner);
+    let ty=Delegate::fresh_var_for_kind(&owner,actual.into(),span,young).expect_ty();
+    assert_eq!(Client::universe_of_ty(&*owner,ty.ty_vid().unwrap()),Some(young));
+    let region=Delegate::fresh_var_for_kind(&owner,Region::new_static(cx).into(),span,young).expect_region();
+    assert!(matches!(region.kind(),ty::RegionKind::ReVar(_)));
+    let boolean=cx.ty(ty::Bool);
+    let value=Const::new(cx,ty::ConstKind::Value(ValueConst{ty:boolean,tree:cx.valtree(ty::ValTreeKind::Leaf(ScalarInt{bits:1,bytes:1}))}));
+    let constant=Delegate::fresh_var_for_kind(&owner,value.into(),span,young).expect_const();
+    assert!(matches!(constant.kind(),ty::ConstKind::Infer(ty::InferConst::Var(_))));
+    let arg=Delegate::instantiate_canonical_var(&owner,ty::CanonicalVarKind::Ty{ui:root,sub_root:ty::BoundVar::from_u32(0)},span,&[],|_|young).expect_ty();
+    assert_eq!(Client::universe_of_ty(&*owner,arg.ty_vid().unwrap()),Some(young));
+    assert!(Delegate::make_deduplicated_region_constraints(&owner).is_empty());
+    assert!(Delegate::leak_check(&owner,root).is_ok());
+    let snapshot=owner.start_snapshot();
+    let a=Region::new_placeholder(cx,ty::PlaceholderRegion::new_anon(young,ty::BoundVar::from_u32(0)));
+    let b=Region::new_placeholder(cx,ty::PlaceholderRegion::new_anon(young,ty::BoundVar::from_u32(1)));
+    Client::sub_regions(&*owner,a,b,Yes,span);
+    assert_eq!(Delegate::leak_check(&owner,root),Err(ty::solve::NoSolution));
+    let constraints=Delegate::make_deduplicated_region_constraints(&owner);
+    assert_eq!(constraints.len(),1);assert_eq!(constraints[0].1,Yes);
+    assert_eq!(Delegate::make_deduplicated_region_constraints(&owner),constraints);
+    owner.rollback_to(snapshot);
+    assert!(Delegate::make_deduplicated_region_constraints(&owner).is_empty());
+    assert!(Delegate::leak_check(&owner,root).is_ok());
+    assert!(cx.services().ready(cx).is_err(),"delegate methods grant no missing source clients or root readiness");
 }

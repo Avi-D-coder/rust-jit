@@ -1,0 +1,8 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Concrete SolverDelegate operations over unchanged source Type/TraitRef and genuine const/region declaration contexts; no metadata client, proof-tree or actual root/runtime acceptance",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+    "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions"
+  ]
+}

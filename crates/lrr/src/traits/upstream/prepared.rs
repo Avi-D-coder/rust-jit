@@ -148,11 +148,7 @@ pub(super) struct Settings<'cx> {
 /// source, serialized, or defaulted to a stub. Installing the real functions is
 /// a separate integration requirement, not established by this record type.
 pub(super) struct Clients<'cx> {
-    pub(super) proof_tree: fn(
-        Cx<'cx>,
-        Interned<'cx, ty::solve::CanonicalInputData<Cx<'cx>>>,
-        usize,
-    ) -> ProofResult<'cx>,
+    pub(super) solver: super::infer::delegate::SolverClients<'cx>,
     pub(super) discriminant: fn(Cx<'cx>, T<'cx>) -> T<'cx>,
     pub(super) reflective_field: fn(Cx<'cx>, DefinitionId, A<'cx>) -> Option<FieldInfo<Cx<'cx>>>,
 }
@@ -354,14 +350,11 @@ pub(crate) struct ReadyProvider<'cx> {
     context: Cx<'cx>,
 }
 
-/// The actual shared root-goal entry is gated by this provider's preparation
-/// token. A real compatible inference delegate still has to be implemented.
-pub(crate) fn evaluate_prepared<
-    'cx,
-    D: rustc_next_trait_solver::delegate::SolverDelegate<Interner = Cx<'cx>>,
->(
+/// The concrete shared root-goal entry is gated by actual source preparation.
+/// Required source-dependent solver clients are not yet implemented/installed.
+pub(crate) fn evaluate_prepared<'cx>(
     ready: ReadyProvider<'cx>,
-    delegate: &D,
+    delegate: &super::infer::delegate::SolverContext<'cx>,
     goal: ty::solve::Goal<Cx<'cx>, Predicate<'cx, PreparedProvider<'cx>>>,
     span: Span,
 ) -> Result<
@@ -444,6 +437,13 @@ pub(super) fn with_provider<R>(
     Ok(run(view.context(), provider))
 }
 impl<'cx> PreparedProvider<'cx> {
+    pub(super) fn solver_clients(self) -> &'cx super::infer::delegate::SolverClients<'cx> {
+        &self.data().clients.solver
+    }
+    pub(super) fn record_solver_overflow(self, span: Span, message: String) {
+        // Diagnostic evidence only; this is not a lint/static rejection.
+        self.diagnostics.borrow_mut().push((span, message));
+    }
     pub(super) fn enable_next_solver_overflow_fcw(self) -> bool { self.settings.enable_next_solver_overflow_fcw }
     pub(super) fn disable_trait_solver_fast_paths(self) -> bool { self.settings.disable_trait_solver_fast_paths }
     pub(super) fn source_world(self) -> Digest { self.world }
@@ -1214,7 +1214,11 @@ impl<'cx> SourceFacts<'cx> for PreparedProvider<'cx> {
         goal: Interned<'cx, ty::solve::CanonicalInputData<Cx<'cx>>>,
         depth: usize,
     ) -> ProofResult<'cx> {
-        (self.data().clients.proof_tree)(cx, goal, depth)
+        assert_eq!(self.data().context, cx, "proof-tree context differs from prepared source");
+        assert!(self.data().indexes.get().is_some(), "proof-tree candidate index is not prepared");
+        rustc_next_trait_solver::solve::evaluate_root_goal_for_proof_tree_raw_provider::<
+            super::infer::delegate::SolverContext<'cx>, _,
+        >(cx, goal, depth)
     }
     fn item_name(self, _: Cx<'cx>, id: DefinitionId) -> Symbol<'cx> {
         self.definition(id).name

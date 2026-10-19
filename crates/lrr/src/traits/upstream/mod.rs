@@ -1,8 +1,9 @@
 //! The shared solver's ordinary root-goal entry; no alternate solver.
 //!
-//! This is the typed integration boundary, not yet a concrete LRR Interner or
-//! SolverDelegate. Source/header/ParamEnv transport, demand suspension and
-//! selected-impl witness mapping must join before any runtime acceptance.
+//! Concrete source Interner/inference/delegate interface; required compiler
+//! source clients and complete fact production still gate root entry.
+//! Source/header/ParamEnv transport, demand suspension and selected-impl witness
+//! mapping must join before any runtime acceptance.
 pub(crate) mod source_generics;
 mod source_bindings;
 use rustc_next_trait_solver::{

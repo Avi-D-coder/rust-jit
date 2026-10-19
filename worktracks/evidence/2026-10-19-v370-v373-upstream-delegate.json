@@ -1,0 +1,430 @@
+{
+  "schema": "lrr/held-component-evidence/v1",
+  "task_ids": [
+    "M020"
+  ],
+  "claim_ids": [
+    "LOCAL-049"
+  ],
+  "track": "WT05-02",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "baseline_commit": "552082e78c367eab379e154efe415b7fd039f5ef",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-19-upstream-delegate-review.md",
+  "architecture": "worktracks/05-trait-goal-engine/2026-10-19-upstream-delegate-wiring.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-19-upstream-delegate-controls.json",
+  "scope": "Concrete upstream SolverDelegate trait/interface and shared operations; five required semantic clients and real source fact producer remain unimplemented, not a working root solver",
+  "vendor_audit": {
+    "exit": 0,
+    "session": 42271,
+    "command": "python3.12 tools/bootstrap_trait_solver.py --verify-upstream --checkout rustc/rust",
+    "crates": 8,
+    "files": 183,
+    "source_bytes": 2742155,
+    "retained_original_rust_changes": 0,
+    "registered_stable_dependency_projections": 5,
+    "upstream_git_objects_verified": true
+  },
+  "generator_audit": {
+    "exit": 0,
+    "command": "python3.12 tools/sync_upstream_inference.py",
+    "source": "compiler/rustc_trait_selection/src/solve/delegate.rs",
+    "sha256": "ad43375618c2e3a7c5ff6f69abfc8a4af33ae1d003cb003d350aea0bb0d17095",
+    "new_client_functions_installed": 0
+  },
+  "cohorts": {
+    "370": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T22:45:14.503775+00:00",
+          "head": "552082e78c367eab379e154efe415b7fd039f5ef",
+          "file_count": 8603,
+          "source_sha256": "b1f3ebe7cfb73fbb1e87d7ab475f8cc0dd36929af63d7495d71a6f849ef01b0a",
+          "binaries": {},
+          "slice_files": {
+            "crates/lrr/src/traits/upstream/infer/delegate.rs": "4696fff3f3633377b313e476d5d5abb22a0236f1eaf7f9df8146e2b9d0a6abdd",
+            "crates/lrr/src/traits/upstream/infer/mod.rs": "eba9bb37067d72ea6a4b61c5357ca1764aae1dafc8e88f4d635045bbde86d129",
+            "crates/lrr/src/traits/upstream/infer/tests.rs": "29033b044a7107c6ffa395595a4ab64310229a9de0d1ce385686611ed900a970",
+            "crates/lrr/src/traits/upstream/mod.rs": "fb7e372c1637ef0c0ef0a0aff4dd0546357c4268d95be109189b9bba72a385cd",
+            "crates/lrr/src/traits/upstream/prepared.rs": "ac7df160617028df3f44ee5983c014d94fbed73d0034f9a4d9db4593d82ac04a",
+            "tools/sync_upstream_inference.py": "e25ccd36f97a6130852890ee1e96181e0428044acbc85769eb4ad64df4869d03",
+            "tools/upstream_solver_delegate.py": "4b041157631007a04985c7a8c627756b016a89c31bcd03244ad54ebb355a5bba"
+          }
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T22:45:50.300580+00:00",
+          "head": "552082e78c367eab379e154efe415b7fd039f5ef",
+          "file_count": 8603,
+          "source_sha256": "b1f3ebe7cfb73fbb1e87d7ab475f8cc0dd36929af63d7495d71a6f849ef01b0a",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "6c6023e929e4f9a1b906dcfbfa8f66df8254816ae6b9ba50fd2a1b5da45387cd"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "slice_files": {
+            "crates/lrr/src/traits/upstream/infer/delegate.rs": "4696fff3f3633377b313e476d5d5abb22a0236f1eaf7f9df8146e2b9d0a6abdd",
+            "crates/lrr/src/traits/upstream/infer/mod.rs": "eba9bb37067d72ea6a4b61c5357ca1764aae1dafc8e88f4d635045bbde86d129",
+            "crates/lrr/src/traits/upstream/infer/tests.rs": "29033b044a7107c6ffa395595a4ab64310229a9de0d1ce385686611ed900a970",
+            "crates/lrr/src/traits/upstream/mod.rs": "fb7e372c1637ef0c0ef0a0aff4dd0546357c4268d95be109189b9bba72a385cd",
+            "crates/lrr/src/traits/upstream/prepared.rs": "ac7df160617028df3f44ee5983c014d94fbed73d0034f9a4d9db4593d82ac04a",
+            "tools/sync_upstream_inference.py": "e25ccd36f97a6130852890ee1e96181e0428044acbc85769eb4ad64df4869d03",
+            "tools/upstream_solver_delegate.py": "4b041157631007a04985c7a8c627756b016a89c31bcd03244ad54ebb355a5bba"
+          }
+        }
+      },
+      "build_terminals": {
+        "lib": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 16.92s\n"
+      },
+      "compiler_errors": [],
+      "controls": [],
+      "note": "Interface compiles; no controls or CLI build run."
+    },
+    "371": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T22:46:23.313145+00:00",
+          "head": "552082e78c367eab379e154efe415b7fd039f5ef",
+          "file_count": 8603,
+          "source_sha256": "bb51bbeba75479e5ad00ccd6a15552bd016395f5cb22754e42941721805ea6f7",
+          "binaries": {},
+          "slice_files": {
+            "crates/lrr/src/traits/upstream/infer/delegate.rs": "4696fff3f3633377b313e476d5d5abb22a0236f1eaf7f9df8146e2b9d0a6abdd",
+            "crates/lrr/src/traits/upstream/infer/mod.rs": "eba9bb37067d72ea6a4b61c5357ca1764aae1dafc8e88f4d635045bbde86d129",
+            "crates/lrr/src/traits/upstream/infer/tests.rs": "e512cc06e3f9bba608a0676634f647f918480456e170af022e711bb5540dd8a1",
+            "crates/lrr/src/traits/upstream/mod.rs": "fb7e372c1637ef0c0ef0a0aff4dd0546357c4268d95be109189b9bba72a385cd",
+            "crates/lrr/src/traits/upstream/prepared.rs": "ac7df160617028df3f44ee5983c014d94fbed73d0034f9a4d9db4593d82ac04a",
+            "tools/sync_upstream_inference.py": "e25ccd36f97a6130852890ee1e96181e0428044acbc85769eb4ad64df4869d03",
+            "tools/upstream_solver_delegate.py": "4b041157631007a04985c7a8c627756b016a89c31bcd03244ad54ebb355a5bba"
+          }
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T22:46:49.665796+00:00",
+          "head": "552082e78c367eab379e154efe415b7fd039f5ef",
+          "file_count": 8603,
+          "source_sha256": "bb51bbeba75479e5ad00ccd6a15552bd016395f5cb22754e42941721805ea6f7",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "slice_files": {
+            "crates/lrr/src/traits/upstream/infer/delegate.rs": "4696fff3f3633377b313e476d5d5abb22a0236f1eaf7f9df8146e2b9d0a6abdd",
+            "crates/lrr/src/traits/upstream/infer/mod.rs": "eba9bb37067d72ea6a4b61c5357ca1764aae1dafc8e88f4d635045bbde86d129",
+            "crates/lrr/src/traits/upstream/infer/tests.rs": "e512cc06e3f9bba608a0676634f647f918480456e170af022e711bb5540dd8a1",
+            "crates/lrr/src/traits/upstream/mod.rs": "fb7e372c1637ef0c0ef0a0aff4dd0546357c4268d95be109189b9bba72a385cd",
+            "crates/lrr/src/traits/upstream/prepared.rs": "ac7df160617028df3f44ee5983c014d94fbed73d0034f9a4d9db4593d82ac04a",
+            "tools/sync_upstream_inference.py": "e25ccd36f97a6130852890ee1e96181e0428044acbc85769eb4ad64df4869d03",
+            "tools/upstream_solver_delegate.py": "4b041157631007a04985c7a8c627756b016a89c31bcd03244ad54ebb355a5bba"
+          }
+        }
+      },
+      "build_terminals": {
+        "lib": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 2 previous errors; 50 warnings emitted\n"
+      },
+      "compiler_errors": [
+        "error[E0277]: the trait bound `SolverContext<'_>: rustc_type_ir::InferCtxtLike` is not satisfied\n   --> crates/lrr/src/traits/upstream/infer/tests.rs:904:36\n    |\n904 |     Client::instantiate_ty_var_raw(&owner,vid,boolean);\n    |     ------------------------------ ^^^^^^ unsatisfied trait bound\n    |     |\n    |     required by a bound introduced by this call\n    |\nhelp: the trait `rustc_type_ir::InferCtxtLike` is not implemented for `SolverContext<'_>`\n   --> crates/lrr/src/traits/upstream/infer/delegate.rs:60:1\n    |\n 60 | pub(crate) struct SolverContext<'db>(InferenceContext<'db>);\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: the trait `rustc_type_ir::InferCtxtLike` is implemented for `InferenceContext<'db>`\n   --> crates/lrr/src/traits/upstream/infer/client.rs:26:1\n    |\n 26 | impl<'db> rustc_type_ir::InferCtxtLike for InferenceContext<'db> {\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n",
+        "error[E0277]: the trait bound `SolverContext<'_>: rustc_type_ir::InferCtxtLike` is not satisfied\n   --> crates/lrr/src/traits/upstream/infer/tests.rs:904:47\n    |\n904 |     Client::instantiate_ty_var_raw(&owner,vid,boolean);\n    |                                               ^^^^^^^ unsatisfied trait bound\n    |\nhelp: the trait `rustc_type_ir::InferCtxtLike` is not implemented for `SolverContext<'_>`\n   --> crates/lrr/src/traits/upstream/infer/delegate.rs:60:1\n    |\n 60 | pub(crate) struct SolverContext<'db>(InferenceContext<'db>);\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: the trait `rustc_type_ir::InferCtxtLike` is implemented for `InferenceContext<'db>`\n   --> crates/lrr/src/traits/upstream/infer/client.rs:26:1\n    |\n 26 | impl<'db> rustc_type_ir::InferCtxtLike for InferenceContext<'db> {\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n"
+      ],
+      "controls": [],
+      "note": "Two diagnostics for one host UFCS call; fixed only borrower to &*owner, not a second InferCtxtLike implementation."
+    },
+    "372": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T22:46:50.142650+00:00",
+          "head": "552082e78c367eab379e154efe415b7fd039f5ef",
+          "file_count": 8603,
+          "source_sha256": "883fc0a7b0c957005fe18a58edc8bb88dbc420d94c664ca56fc40eefd612d570",
+          "binaries": {},
+          "slice_files": {
+            "crates/lrr/src/traits/upstream/infer/delegate.rs": "4696fff3f3633377b313e476d5d5abb22a0236f1eaf7f9df8146e2b9d0a6abdd",
+            "crates/lrr/src/traits/upstream/infer/mod.rs": "eba9bb37067d72ea6a4b61c5357ca1764aae1dafc8e88f4d635045bbde86d129",
+            "crates/lrr/src/traits/upstream/infer/tests.rs": "60afdeb0a9fa191570ea1f2b083600feda4d8bb5fc51fe680d2ec912586dae8c",
+            "crates/lrr/src/traits/upstream/mod.rs": "fb7e372c1637ef0c0ef0a0aff4dd0546357c4268d95be109189b9bba72a385cd",
+            "crates/lrr/src/traits/upstream/prepared.rs": "ac7df160617028df3f44ee5983c014d94fbed73d0034f9a4d9db4593d82ac04a",
+            "tools/sync_upstream_inference.py": "e25ccd36f97a6130852890ee1e96181e0428044acbc85769eb4ad64df4869d03",
+            "tools/upstream_solver_delegate.py": "4b041157631007a04985c7a8c627756b016a89c31bcd03244ad54ebb355a5bba"
+          }
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T22:47:29.031302+00:00",
+          "head": "552082e78c367eab379e154efe415b7fd039f5ef",
+          "file_count": 8603,
+          "source_sha256": "883fc0a7b0c957005fe18a58edc8bb88dbc420d94c664ca56fc40eefd612d570",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "1b81e72e1370af60e75152089823994debc01fb2c820c3f0758250c4fe2329b5"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "slice_files": {
+            "crates/lrr/src/traits/upstream/infer/delegate.rs": "4696fff3f3633377b313e476d5d5abb22a0236f1eaf7f9df8146e2b9d0a6abdd",
+            "crates/lrr/src/traits/upstream/infer/mod.rs": "eba9bb37067d72ea6a4b61c5357ca1764aae1dafc8e88f4d635045bbde86d129",
+            "crates/lrr/src/traits/upstream/infer/tests.rs": "60afdeb0a9fa191570ea1f2b083600feda4d8bb5fc51fe680d2ec912586dae8c",
+            "crates/lrr/src/traits/upstream/mod.rs": "fb7e372c1637ef0c0ef0a0aff4dd0546357c4268d95be109189b9bba72a385cd",
+            "crates/lrr/src/traits/upstream/prepared.rs": "ac7df160617028df3f44ee5983c014d94fbed73d0034f9a4d9db4593d82ac04a",
+            "tools/sync_upstream_inference.py": "e25ccd36f97a6130852890ee1e96181e0428044acbc85769eb4ad64df4869d03",
+            "tools/upstream_solver_delegate.py": "4b041157631007a04985c7a8c627756b016a89c31bcd03244ad54ebb355a5bba"
+          }
+        }
+      },
+      "build_terminals": {
+        "lib": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.58s\n"
+      },
+      "compiler_errors": [],
+      "controls": [],
+      "note": "Interface/source controls compile; no execution. Superseded by concrete proof-tree provider dispatch in V373."
+    },
+    "373": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T22:47:38.405829+00:00",
+          "head": "552082e78c367eab379e154efe415b7fd039f5ef",
+          "file_count": 8603,
+          "source_sha256": "563567ece87f592ce9d69197ee67015859b60764ceed920bca752f31abe462bc",
+          "binaries": {},
+          "slice_files": {
+            "crates/lrr/src/traits/upstream/infer/delegate.rs": "4696fff3f3633377b313e476d5d5abb22a0236f1eaf7f9df8146e2b9d0a6abdd",
+            "crates/lrr/src/traits/upstream/infer/mod.rs": "eba9bb37067d72ea6a4b61c5357ca1764aae1dafc8e88f4d635045bbde86d129",
+            "crates/lrr/src/traits/upstream/infer/tests.rs": "60afdeb0a9fa191570ea1f2b083600feda4d8bb5fc51fe680d2ec912586dae8c",
+            "crates/lrr/src/traits/upstream/mod.rs": "fb7e372c1637ef0c0ef0a0aff4dd0546357c4268d95be109189b9bba72a385cd",
+            "crates/lrr/src/traits/upstream/prepared.rs": "eb08c0331356cf605416b659b815bc1a86767a4f30e254bea5cd9f27ebbdbffb",
+            "tools/sync_upstream_inference.py": "e25ccd36f97a6130852890ee1e96181e0428044acbc85769eb4ad64df4869d03",
+            "tools/upstream_solver_delegate.py": "4b041157631007a04985c7a8c627756b016a89c31bcd03244ad54ebb355a5bba"
+          }
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T22:48:39.951028+00:00",
+          "head": "552082e78c367eab379e154efe415b7fd039f5ef",
+          "file_count": 8603,
+          "source_sha256": "563567ece87f592ce9d69197ee67015859b60764ceed920bca752f31abe462bc",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "0690f9d75e88154c410f7f8bde1437510599d5860eac919bca016a3539e8cd81"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "a275cbb2ab0bf1ef72d58123051cb5fd1b3eea2afc4aba866f1bf17986b118c9"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "slice_files": {
+            "crates/lrr/src/traits/upstream/infer/delegate.rs": "4696fff3f3633377b313e476d5d5abb22a0236f1eaf7f9df8146e2b9d0a6abdd",
+            "crates/lrr/src/traits/upstream/infer/mod.rs": "eba9bb37067d72ea6a4b61c5357ca1764aae1dafc8e88f4d635045bbde86d129",
+            "crates/lrr/src/traits/upstream/infer/tests.rs": "60afdeb0a9fa191570ea1f2b083600feda4d8bb5fc51fe680d2ec912586dae8c",
+            "crates/lrr/src/traits/upstream/mod.rs": "fb7e372c1637ef0c0ef0a0aff4dd0546357c4268d95be109189b9bba72a385cd",
+            "crates/lrr/src/traits/upstream/prepared.rs": "eb08c0331356cf605416b659b815bc1a86767a4f30e254bea5cd9f27ebbdbffb",
+            "tools/sync_upstream_inference.py": "e25ccd36f97a6130852890ee1e96181e0428044acbc85769eb4ad64df4869d03",
+            "tools/upstream_solver_delegate.py": "4b041157631007a04985c7a8c627756b016a89c31bcd03244ad54ebb355a5bba"
+          }
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T22:54:18.834536+00:00",
+          "head": "552082e78c367eab379e154efe415b7fd039f5ef",
+          "file_count": 8603,
+          "source_sha256": "563567ece87f592ce9d69197ee67015859b60764ceed920bca752f31abe462bc",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "0690f9d75e88154c410f7f8bde1437510599d5860eac919bca016a3539e8cd81"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "a275cbb2ab0bf1ef72d58123051cb5fd1b3eea2afc4aba866f1bf17986b118c9"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true,
+          "slice_files": {
+            "crates/lrr/src/traits/upstream/infer/delegate.rs": "4696fff3f3633377b313e476d5d5abb22a0236f1eaf7f9df8146e2b9d0a6abdd",
+            "crates/lrr/src/traits/upstream/infer/mod.rs": "eba9bb37067d72ea6a4b61c5357ca1764aae1dafc8e88f4d635045bbde86d129",
+            "crates/lrr/src/traits/upstream/infer/tests.rs": "60afdeb0a9fa191570ea1f2b083600feda4d8bb5fc51fe680d2ec912586dae8c",
+            "crates/lrr/src/traits/upstream/mod.rs": "fb7e372c1637ef0c0ef0a0aff4dd0546357c4268d95be109189b9bba72a385cd",
+            "crates/lrr/src/traits/upstream/prepared.rs": "eb08c0331356cf605416b659b815bc1a86767a4f30e254bea5cd9f27ebbdbffb",
+            "tools/sync_upstream_inference.py": "e25ccd36f97a6130852890ee1e96181e0428044acbc85769eb4ad64df4869d03",
+            "tools/upstream_solver_delegate.py": "4b041157631007a04985c7a8c627756b016a89c31bcd03244ad54ebb355a5bba"
+          }
+        }
+      },
+      "build_terminals": {
+        "lib": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.29s\n",
+        "cli": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 24.20s\n"
+      },
+      "compiler_errors": [],
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+            "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 118.77,
+          "log": "control-0.log",
+          "terminal_tail": "entity refusals; actual generics_of and identity_for_item, no full facts or solver root\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18751452) panicked at crates/lrr/src/traits/upstream/infer/region_response.rs:100:9:\ncannot take registered region assumptions in a snapshot\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18751452) panicked at crates/lrr/src/traits/upstream/infer/canonical.rs:187:9:\nassertion `left == right` failed\n  left: 9\n right: 0\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18751452) panicked at crates/lrr/src/traits/upstream/prepared.rs:851:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18751452) panicked at crates/lrr/src/traits/upstream/infer/region_response.rs:100:9:\ncannot take registered region assumptions in a snapshot\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18751452) panicked at crates/lrr/src/traits/upstream/infer/canonical.rs:187:9:\nassertion `left == right` failed\n  left: 9\n right: 0\n\nthread 'cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions' (18751452) panicked at crates/lrr/src/traits/upstream/prepared.rs:851:9:\nassertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:2; actual pinned inference storage/rollback per source head; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs,edition2024,origin2: 2source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\nactual shared source heads encoded:140; no typed source-fact publication or upstream solving\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1782 filtered out; finished in 118.35s\n\n"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+            "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 46.479,
+          "log": "control-1.log",
+          "terminal_tail": "endent/issue-61936.rs,edition2021,origin0: 3rows/2consts/2regions; original main unexecuted\nactual typed source generics: 3rows/2consts/2regions; 7source identity refusals; actual generics_of and identity_for_item, no full facts or solver root\nactual generic Type facts tests/ui/const-generics/type-dependent/issue-61936.rs,edition2021,origin1: 3rows/2consts/2regions; original main unexecuted\nactual typed source generics: 3rows/2consts/2regions; 7source identity refusals; actual generics_of and identity_for_item, no full facts or solver root\nactual generic Type facts tests/ui/const-generics/type-dependent/issue-61936.rs,edition2021,origin2: 3rows/2consts/2regions; original main unexecuted\nactual typed source generics: 1rows/1consts/0regions; 0source identity refusals; actual generics_of and identity_for_item, no full facts or solver root\nactual generic Type facts tests/ui/const-generics/type-after-const-ok.rs,edition2024,origin0: 1rows/1consts/0regions; original main unexecuted\nactual typed source generics: 2rows/2consts/0regions; 2source identity refusals; actual generics_of and identity_for_item, no full facts or solver root\nactual generic Type facts tests/ui/const-generics/generic_const_exprs/unop.rs,edition2024,origin0: 2rows/2consts/0regions; original main unexecuted\nactual typed source generics: 3rows/2consts/2regions; 7source identity refusals; actual generics_of and identity_for_item, no full facts or solver root\nactual generic Type facts tests/ui/const-generics/type-dependent/issue-61936.rs,edition2024,origin0: 3rows/2consts/2regions; original main unexecuted\nactual typed source generics: 3rows/2consts/2regions; 7source identity refusals; actual generics_of and identity_for_item, no full facts or solver root\nactual generic Type facts tests/ui/const-generics/type-dependent/issue-61936.rs,edition2024,origin1: 3rows/2consts/2regions; original main unexecuted\nactual typed source generics: 3rows/2consts/2regions; 7source identity refusals; actual generics_of and identity_for_item, no full facts or solver root\nactual generic Type facts tests/ui/const-generics/type-dependent/issue-61936.rs,edition2024,origin2: 3rows/2consts/2regions; original main unexecuted\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1782 filtered out; finished in 46.06s\n\n"
+        }
+      ],
+      "note": "Both builds and2/2actual source-context controls pass; five semantic clients/proof-tree/root remain unexecuted/uninstalled."
+    }
+  },
+  "sessions": {
+    "370": {
+      "lib": {
+        "id": 59047,
+        "exit": 0
+      }
+    },
+    "371": {
+      "lib": {
+        "id": 41708,
+        "exit": 101
+      }
+    },
+    "372": {
+      "lib": {
+        "id": 12229,
+        "exit": 0
+      }
+    },
+    "373": {
+      "lib": {
+        "id": 57875,
+        "exit": 0
+      },
+      "cli": {
+        "id": 62390,
+        "exit": 0
+      },
+      "controls": {
+        "id": 43764,
+        "exit": 0
+      }
+    }
+  },
+  "executed_scope": {
+    "source_type_heads": 140,
+    "genuine_trait_refs": 136,
+    "type_origin_edition_worlds": 48,
+    "generic_worlds": 20,
+    "generic_rows": 48,
+    "source_const_types": 36,
+    "source_early_regions": 24,
+    "operations": [
+      "SolverDelegate canonical builder and response instantiate with real nested binder/9namespace forms",
+      "existing primitive/tuple/ref/pointer/const fast paths through actual SolverContext",
+      "genuine source TraitRef unresolved-Self positive/negative polarity stalls",
+      "fresh Type/Region/Const in actual non-root universe",
+      "canonical variable creation in mapped universe",
+      "real leak NoSolution, non-consuming region collection and snapshot rollback to success",
+      "existing shared inference/source identity refusals"
+    ],
+    "root_goals_executed": 0,
+    "proof_tree_providers_executed": 0,
+    "semantic_clients_executed": 0,
+    "stock_mains_executed": 0
+  },
+  "required_unimplemented_clients": [
+    "const evaluation with normalization",
+    "well-formed goals",
+    "hidden-type item bounds",
+    "eligible associated item",
+    "transmutability"
+  ],
+  "remaining": [
+    "actual source fact/ParamEnv producers and dependency closure",
+    "real required client algorithms and installation",
+    "ReadyProvider publication and actual root evaluation",
+    "answer/currentness/member/dictionary/VM joins",
+    "obsolete legacy Unifier and trait dispatch removal",
+    "full origin/epoch/suspension/cleanup matrix and milestone"
+  ],
+  "latest_stock_runtime_failure": {
+    "cohort": "V356",
+    "path": "tests/ui/traits/multidispatch1.rs",
+    "configuration": "LRR_EMBEDDED_FACADE=1",
+    "exit": 2,
+    "code": "LRR-E-NAME-AMBIGUOUS",
+    "message": "several impls provide get for the receiver and its argument types",
+    "new_execution": false,
+    "repaired": false
+  },
+  "new_distinct_stock_runtime_gains": 0,
+  "refreshed_suite_total": false,
+  "full_fixture_passes_claimed": 0,
+  "upstream_runtime_acceptance": "incomplete",
+  "diagnostic_compatibility": "unassessed_by_this_slice",
+  "compiler_tooling_compatibility": "unassessed_by_this_slice",
+  "full_suite_compatibility": "incomplete",
+  "interpreter_correctness_gate": "incomplete",
+  "M020_complete": false,
+  "guest_jit_allowed": false,
+  "performance_claim": false,
+  "reproduction": {
+    "before": "python3.12 tools/validation/source_manifest.py artifacts/validation-current-vNNN before",
+    "lib": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+    "cli": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+    "after_build": "python3.12 tools/validation/source_manifest.py artifacts/validation-current-vNNN after-build --cargo-messages artifacts/validation-current-vNNN/lib-build.jsonl --cli-binary target/debug/lrr",
+    "controls": "python3.12 tools/validation/run_controls.py artifacts/validation-current-vNNN worktracks/05-trait-goal-engine/2026-10-19-upstream-delegate-controls.json",
+    "after_runtime": "python3.12 tools/validation/source_manifest.py artifacts/validation-current-vNNN after-runtime",
+    "artifact_policy": "Raw outputs disposable; Git retains source, hashes, pins, exact selections/commands and terminals, no local artifact folder required to continue or reproduce."
+  },
+  "created_utc": "2026-10-19T22:55:18.363424+00:00",
+  "planning_checks": {
+    "worktracks_check": {
+      "exit": 0,
+      "tracks": 12,
+      "items": 60,
+      "claims": 49,
+      "scope": "planning integrity only"
+    },
+    "spec_consistency": {
+      "exit": 0,
+      "passed": true,
+      "scope": "document consistency only"
+    }
+  }
+}
