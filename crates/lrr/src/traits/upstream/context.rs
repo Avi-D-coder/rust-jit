@@ -10,7 +10,7 @@ use super::{
 use rustc_index::bit_set::DenseBitSet;
 use rustc_type_ir::lang_items::{SolverAdtLangItem, SolverProjectionLangItem, SolverTraitLangItem};
 use rustc_type_ir::search_graph::RequiredDepth;
-use rustc_type_ir::solve::{inspect, QueryResult};
+use rustc_type_ir::solve::{QueryResult, inspect};
 use rustc_type_ir::{self as ty, inherent::*, *};
 use std::{
     cell::RefCell,
@@ -43,6 +43,7 @@ pub(crate) struct State<'cx, F: SourceFacts<'cx>> {
     services: F,
     global: RefCell<ty::search_graph::GlobalCache<Context<'cx, F>>>,
     canonical_env: RefCell<ty::CanonicalParamEnvCache<Context<'cx, F>>>,
+    erased_types: RefCell<ty::data_structures::HashMap<Ty<'cx, F>, Ty<'cx, F>>>,
     types: InternPool<'cx, WithCachedTypeInfo<TyKind<Context<'cx, F>>>>,
     args: InternPool<'cx, Vec<Arg<'cx, F>>>,
     type_lists: InternPool<'cx, Vec<Ty<'cx, F>>>,
@@ -75,6 +76,7 @@ impl<'cx, F: SourceFacts<'cx>> State<'cx, F> {
             services,
             global: RefCell::new(Default::default()),
             canonical_env: RefCell::new(Default::default()),
+            erased_types: RefCell::new(Default::default()),
             types: InternPool::default(),
             args: InternPool::default(),
             type_lists: InternPool::default(),
@@ -105,6 +107,32 @@ impl<'cx, F: SourceFacts<'cx>> State<'cx, F> {
 impl<'cx, F: SourceFacts<'cx>> Context<'cx, F> {
     pub(crate) fn services(self) -> F {
         self.state.services
+    }
+    /// The compiler client's pure immutable-type query, memoized within this
+    /// context. No source query, namespace or changed-world cache is involved.
+    pub(super) fn erase_and_anonymize_regions_ty(self, ty: Ty<'cx, F>) -> Ty<'cx, F> {
+        if let Some(cached) = self.state.erased_types.borrow().get(&ty).copied() {
+            return cached;
+        }
+        let erased = super::abstract_consts::erase_and_anonymize_regions_ty(self, ty);
+        self.state.erased_types.borrow_mut().insert(ty, erased);
+        erased
+    }
+    /// Compiler-client spelling using the same shared CollectAndApply adapter
+    /// as the Interner's argument/type-list constructors.
+    pub(super) fn mk_patterns_from_iter<I, T>(self, items: I) -> T::Output
+    where
+        I: Iterator<Item = T>,
+        T: CollectAndApply<Pattern<'cx, F>, List<'cx, Pattern<'cx, F>>>,
+    {
+        T::collect_and_apply(items, |items| self.list(items.to_vec()))
+    }
+    pub(super) fn mk_poly_existential_predicates_from_iter<I, T>(self, items: I) -> T::Output
+    where
+        I: Iterator<Item = T>,
+        T: CollectAndApply<Binder<Self, ExistentialPredicate<Self>>, Existentials<'cx, F>>,
+    {
+        T::collect_and_apply(items, |items| Existentials(self.list(items.to_vec())))
     }
     /// Compiler-client spelling for the actual shared BoundVarKinds allocator.
     pub(super) fn mk_bound_variable_kinds_from_iter(
@@ -371,7 +399,7 @@ impl<'cx, F: SourceFacts<'cx>> ty::Interner for Context<'cx, F> {
     type CanonicalInput = Interned<'cx, ty::solve::CanonicalInputData<Context<'cx, F>>>;
     type Tracked<T: Debug + Clone> = T;
     fn expand_abstract_consts<T: TypeFoldable<Self>>(self, t: T) -> T {
-        self.services().expand_abstract_consts(self, t)
+        self.expand_abstract_consts(t)
     }
     fn generics_of(self, def_id: Self::DefId) -> Self::GenericsOf {
         self.services().generics_of(self, def_id)
@@ -725,7 +753,7 @@ impl<'cx, F: SourceFacts<'cx>> ty::Interner for Context<'cx, F> {
             .opaque_types_and_coroutines_defined_by(self, defining_anchor)
     }
     fn mk_probe(self, probe: inspect::Probe<Self>) -> Self::Probe {
-        self.services().mk_probe(self, probe)
+        Box::new(probe)
     }
     fn evaluate_root_goal_for_proof_tree_raw(
         self,

@@ -1,0 +1,281 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "at": "2026-10-19T10:49:04.540742+00:00",
+  "parent": "b9ccd3247a0823e97b47b02aa2ed799e348235a0",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "scope": "V234/V235 partial M020 upstream client integration: Pattern/Existential/Expr relations, full compiler const-expression operation metadata/constructors, abstract-constant expansion and region erasure now use audited pinned compiler ports. Removed3relation hooks, the generic expansion algorithm hook and Probe allocation hook from SourceFacts; abstract_const supplies prepared data only. Both cohorts build library/CLI. V234 unchanged unop/fn_call contracts both fail before the shared solver (wildcard type resolution; symbolic array return preparation), never counted passed. New concrete-family/roundtrip/cache semantics remain unexecuted: no real provider/inference/delegate/root-goal invocation. Zero new stock gains and no M020/interpreter/JIT closure.",
+  "precode": "worktracks/05-trait-goal-engine/2026-10-19-upstream-relations.md",
+  "cohorts": {
+    "234": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T10:41:41.636881+00:00",
+          "head": "b9ccd3247a0823e97b47b02aa2ed799e348235a0",
+          "file_count": 8467,
+          "source_sha256": "e5e15d5a70ce50842997e4852ab5600378b0829703249597102a9cc6eeb16d37",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T10:43:37.062727+00:00",
+          "head": "b9ccd3247a0823e97b47b02aa2ed799e348235a0",
+          "file_count": 8467,
+          "source_sha256": "e5e15d5a70ce50842997e4852ab5600378b0829703249597102a9cc6eeb16d37",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-c589b5df93981725",
+              "sha256": "86ea9f4709e7063470c570bee3daa9d0a2142d18efbeef391e7c1afb1018da83"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "418d062ce07e1c9bc24d522266868976e05a6ff0a6e6584d54e209c174108d9a"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T10:44:48.963603+00:00",
+          "head": "b9ccd3247a0823e97b47b02aa2ed799e348235a0",
+          "file_count": 8467,
+          "source_sha256": "e5e15d5a70ce50842997e4852ab5600378b0829703249597102a9cc6eeb16d37",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-c589b5df93981725",
+              "sha256": "86ea9f4709e7063470c570bee3daa9d0a2142d18efbeef391e7c1afb1018da83"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "418d062ce07e1c9bc24d522266868976e05a6ff0a6e6584d54e209c174108d9a"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build": {
+        "session": 12850,
+        "exit": 0
+      },
+      "cli_build": {
+        "session": 7252,
+        "exit": 0
+      },
+      "stock_session": 37902,
+      "stock_exit": 1,
+      "stock": {
+        "input_guard": "all_imported_originals_manifest_and_binary_unchanged",
+        "counts": {
+          "interpreter_failure": 2
+        },
+        "native_execution": false,
+        "selected_batch_passed": false,
+        "cases": [
+          {
+            "case": "tests/ui/const-generics/generic_const_exprs/unop.rs",
+            "status": "interpreter_failure",
+            "mode": "run-pass",
+            "edition": 2015,
+            "directives": [
+              "//@ run-pass"
+            ],
+            "source_sha256": "162a1cf0b501c86c0d1f695d0265b62b417d8d2b15438ec0992dcf10534e0311",
+            "capture_context": "b6aea8234280925636f97198518703c15e85772ee10b5d72e7a91c77eb849754",
+            "observation": {
+              "argv": [
+                "/Users/avi/Code/rust-jit/target/debug/lrr",
+                "--edition",
+                "2015",
+                "run",
+                "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/const-generics/generic_const_exprs/unop.rs",
+                "--runtime-capture",
+                "--capture-context",
+                "b6aea8234280925636f97198518703c15e85772ee10b5d72e7a91c77eb849754"
+              ],
+              "timed_out": false,
+              "output_limited": false,
+              "exit_code": 2,
+              "pid": 27687,
+              "elapsed_seconds": 4.822103291982785,
+              "stdout_bytes": 7341,
+              "stdout_sha256": "732cb2c0a8436f1ac16d029d6bed3304700397f93dcd429be7e9f38305b9ce17",
+              "stderr_bytes": 0,
+              "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "terminal_code": "LRR-E-UNSUPPORTED",
+            "message": "wildcard type requires symbolic type resolution"
+          },
+          {
+            "case": "tests/ui/const-generics/generic_const_exprs/fn_call.rs",
+            "status": "interpreter_failure",
+            "mode": "run-pass",
+            "edition": 2015,
+            "directives": [
+              "//@ run-pass"
+            ],
+            "source_sha256": "e2bd4a25f559883a5f5a3ed3278e8583eef55ad83c5972ae129a254f61a58655",
+            "capture_context": "7deaa5339c1992d19dc43c5fe6bbbb05d9975dcf6aa2afea19231225151cbfb5",
+            "observation": {
+              "argv": [
+                "/Users/avi/Code/rust-jit/target/debug/lrr",
+                "--edition",
+                "2015",
+                "run",
+                "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/const-generics/generic_const_exprs/fn_call.rs",
+                "--runtime-capture",
+                "--capture-context",
+                "7deaa5339c1992d19dc43c5fe6bbbb05d9975dcf6aa2afea19231225151cbfb5"
+              ],
+              "timed_out": false,
+              "output_limited": false,
+              "exit_code": 2,
+              "pid": 27712,
+              "elapsed_seconds": 3.951474166009575,
+              "stdout_bytes": 4528,
+              "stdout_sha256": "afde84184b6b381ba21c85ff1e07522ec481c701eca2b2794ec95a37fe71ba6c",
+              "stderr_bytes": 0,
+              "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "terminal_code": "LRR-E-UNSUPPORTED",
+            "message": "symbolic return syntax awaits body-hint integration: `[u8;std::mem::size_of::<T>()]`"
+          }
+        ]
+      }
+    },
+    "235": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T10:45:55.933397+00:00",
+          "head": "b9ccd3247a0823e97b47b02aa2ed799e348235a0",
+          "file_count": 8469,
+          "source_sha256": "22caf99f47951a7aaec7643c1963d17ef23829872ee6557dd98ba1d866d3b985",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T10:48:19.758855+00:00",
+          "head": "b9ccd3247a0823e97b47b02aa2ed799e348235a0",
+          "file_count": 8469,
+          "source_sha256": "22caf99f47951a7aaec7643c1963d17ef23829872ee6557dd98ba1d866d3b985",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "662544ca252554ad3fb361b91f924ea2fc65a0285b9d7e09b72fd5fe11ce8c05"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "3353e5ba24562fd88cbc9203d7bcdfc4a13a7794251cd57a29b5b95faf3485c4"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "session": 32564,
+        "exit": 0
+      },
+      "cli_build": {
+        "session": 99375,
+        "exit": 0
+      },
+      "scope": "Additional pinned abstract-constant/region client integration and Probe allocation; no runtime batch repeated. Earlier stock failures retain their V234 source identity."
+    }
+  },
+  "upstream_provenance": {
+    "pin": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "audit_exit": 0,
+    "upstream_git_objects_verified": true,
+    "crates": 8,
+    "retained_files": 130,
+    "bytes": 1848471,
+    "upstream_Rust_changes": 0,
+    "support_originals": [
+      {
+        "path": "compiler/rustc_middle/src/mir/syntax.rs",
+        "bytes": 84423,
+        "sha256": "b2f38c58405cfb5999cbdf50770e151910c796a7f20c82456d37a3f39481f4e1"
+      },
+      {
+        "path": "compiler/rustc_middle/src/ty/abstract_const.rs",
+        "bytes": 2949,
+        "sha256": "18f9e57b4a92096a90b12d73a42f0f5c8ed67b83b0a0e5b73b27788c5ab55b44"
+      },
+      {
+        "path": "compiler/rustc_middle/src/ty/consts/kind.rs",
+        "bytes": 4293,
+        "sha256": "8d365a93687c9c26ed501ea79ff8760300669cb86b4460ad7405d8fa690ee568"
+      },
+      {
+        "path": "compiler/rustc_middle/src/ty/erase_regions.rs",
+        "bytes": 3347,
+        "sha256": "b745df17e5de37c1a4de6577f7dda44dbd07d2002b18a0f32a08907c4553b5b1"
+      },
+      {
+        "path": "compiler/rustc_middle/src/ty/relate.rs",
+        "bytes": 6503,
+        "sha256": "9bbf1a363657e2c1c6784ada114234054e6502b874a2b0d898573b3c213a17b8"
+      }
+    ],
+    "noncompiled_support_only": true,
+    "no_rustc_middle_MIR_or_driver_dependency": true,
+    "port_tool": "tools/sync_upstream_relations.py",
+    "all_three_port_audit_exits": {
+      "relations_constants": 0,
+      "binders": 0,
+      "Ty_traversal": 0
+    },
+    "new_direct_dependency": "tracing0.1.44 already in Cargo.lock and upstream dependency closure; retain original debug logging; no new package/version changes",
+    "mechanical_adaptations": [
+      "Context/type-handle/lifetime and method visibility spelling",
+      "remove compiler-internal serialization/folding derives; use existing explicit shared fold/visit implementations",
+      "safe borrowed IR slice and pattern/list allocator views",
+      "std assert_matches to stable assert(matches), compiler internal bug to panic for invalid internal expression args",
+      "existing Context structural interning/CollectAndApply in place of compiler allocator spellings",
+      "retain every pinned MIR binary/unary and abstract cast enum variant as metadata only",
+      "type-query memo local to the immutable context, preserving upstream inference/bound-region behavior",
+      "abstract_const reads actual prepared data instead of invoking compiler THIR query"
+    ]
+  },
+  "source_review": {
+    "fingerprint": "22caf99f47951a7aaec7643c1963d17ef23829872ee6557dd98ba1d866d3b985",
+    "all_eight_modes": "Recorded separately in bounded context document; actual symbols and removed hooks named there. New generic family behavior remains unexecuted."
+  },
+  "commands": {
+    "lib": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+    "cli": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr",
+    "audit_upstream": "python3.12 tools/bootstrap_trait_solver.py --verify-upstream --checkout rustc/rust",
+    "audit_relations": "python3.12 tools/sync_upstream_relations.py",
+    "stock": "LRR_EMBEDDED_FACADE=1 python3.12 tools/rustc_checkout_runtime.py --lrr target/debug/lrr --source-digester target/debug/examples/lrr_source_digests --report-dir /private/tmp/lrr-v234-stock --case tests/ui/const-generics/generic_const_exprs/unop.rs --case tests/ui/const-generics/generic_const_exprs/fn_call.rs"
+  },
+  "acceptance": {
+    "new_client_implementation": "generic API/build and exact provenance/port audit only",
+    "new_type_family_behavior_and_source_constructibility": "unexecuted; cannot be inferred from builds",
+    "fake_or_empty_providers": 0,
+    "source_fact_provider_implementations": 0,
+    "inference_context_or_delegate": false,
+    "actual_upstream_goal_invocation": false,
+    "selected_upstream_runtime_passes": 0,
+    "selected_upstream_runtime_failures": 2,
+    "new_distinct_stock_gains": 0,
+    "refreshed_suite_total": false,
+    "full_fixture_passes_claimed": 0,
+    "M020_complete": false,
+    "M024_complete": false,
+    "interpreter_gate": "incomplete",
+    "guest_jit_gate": "runtime prerequisite incomplete",
+    "upstream_runtime_acceptance": "incomplete",
+    "diagnostic_compatibility": "unassessed",
+    "compiler_tooling_compatibility": "unassessed",
+    "full_suite_compatibility": "incomplete"
+  }
+}

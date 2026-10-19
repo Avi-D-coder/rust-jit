@@ -406,11 +406,7 @@ pub(crate) struct ValueConst<'cx, F: SourceFacts<'cx>> {
     pub(crate) ty: Ty<'cx, F>,
     pub(crate) tree: ValTree<'cx, F>,
 }
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub(crate) struct ExprConst<'cx, F: SourceFacts<'cx>> {
-    pub(crate) origin: DefinitionId,
-    pub(crate) args: Args<'cx, F>,
-}
+pub(crate) use super::constant_expression::ExprConst;
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub(crate) struct ValTree<'cx, F: SourceFacts<'cx>>(
     pub(super) Interned<'cx, ValTreeKind<Context<'cx, F>>>,
@@ -459,14 +455,10 @@ impl<'cx, F: SourceFacts<'cx>> TypeFoldable<Context<'cx, F>> for ValueConst<'cx,
         }
     }
 }
-impl<'cx, F: SourceFacts<'cx>> ty::inherent::ExprConst<Context<'cx, F>> for ExprConst<'cx, F> {
-    fn args(self) -> Args<'cx, F> {
-        self.args
-    }
-}
+
 impl<'cx, F: SourceFacts<'cx>> TypeVisitable<Context<'cx, F>> for ExprConst<'cx, F> {
     fn visit_with<V: TypeVisitor<Context<'cx, F>>>(&self, v: &mut V) -> V::Result {
-        self.args.visit_with(v)
+        self.args().visit_with(v)
     }
 }
 impl<'cx, F: SourceFacts<'cx>> TypeFoldable<Context<'cx, F>> for ExprConst<'cx, F> {
@@ -474,28 +466,13 @@ impl<'cx, F: SourceFacts<'cx>> TypeFoldable<Context<'cx, F>> for ExprConst<'cx, 
         self,
         d: &mut D,
     ) -> Result<Self, D::Error> {
-        Ok(Self {
-            origin: self.origin,
-            args: self.args.try_fold_with(d)?,
-        })
+        Ok(Self::new(self.kind, self.args().try_fold_with(d)?))
     }
     fn fold_with<D: TypeFolder<Context<'cx, F>>>(self, d: &mut D) -> Self {
-        Self {
-            origin: self.origin,
-            args: self.args.fold_with(d),
-        }
+        Self::new(self.kind, self.args().fold_with(d))
     }
 }
-impl<'cx, F: SourceFacts<'cx>> Relate<Context<'cx, F>> for ExprConst<'cx, F> {
-    fn relate<R: TypeRelation<Context<'cx, F>>>(
-        r: &mut R,
-        a: Self,
-        b: Self,
-    ) -> RelateResult<Context<'cx, F>, Self> {
-        let cx = r.cx();
-        cx.services().relate_const_expression(cx, r, a, b)
-    }
-}
+
 impl<'cx, F: SourceFacts<'cx>> IntoKind for Pattern<'cx, F> {
     type Kind = PatternKind<Context<'cx, F>>;
     fn kind(self) -> Self::Kind {
@@ -526,16 +503,6 @@ impl<'cx, F: SourceFacts<'cx>> TypeFoldable<Context<'cx, F>> for Pattern<'cx, F>
     fn fold_with<D: TypeFolder<Context<'cx, F>>>(self, d: &mut D) -> Self {
         let cx = d.cx();
         cx.pattern(self.kind().fold_with(d))
-    }
-}
-impl<'cx, F: SourceFacts<'cx>> Relate<Context<'cx, F>> for Pattern<'cx, F> {
-    fn relate<R: TypeRelation<Context<'cx, F>>>(
-        r: &mut R,
-        a: Self,
-        b: Self,
-    ) -> RelateResult<Context<'cx, F>, Self> {
-        let cx = r.cx();
-        cx.services().relate_type_pattern(cx, r, a, b)
     }
 }
 
@@ -714,16 +681,6 @@ impl<'cx, F: SourceFacts<'cx>> TypeFoldable<Context<'cx, F>> for Existentials<'c
         Self(self.0.fold_with(d))
     }
 }
-impl<'cx, F: SourceFacts<'cx>> Relate<Context<'cx, F>> for Existentials<'cx, F> {
-    fn relate<R: TypeRelation<Context<'cx, F>>>(
-        r: &mut R,
-        a: Self,
-        b: Self,
-    ) -> RelateResult<Context<'cx, F>, Self> {
-        let cx = r.cx();
-        cx.services().relate_existentials(cx, r, a, b)
-    }
-}
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub(crate) enum GenericParameter<'cx, F: SourceFacts<'cx>> {
@@ -862,5 +819,19 @@ where
     fn fold_with<D: TypeFolder<Context<'cx, F>>>(self, d: &mut D) -> Self {
         let cx = d.cx();
         cx.value(self.value().clone().fold_with(d))
+    }
+}
+
+impl<'cx, F: SourceFacts<'cx>> std::ops::Deref for Pattern<'cx, F> {
+    type Target = PatternKind<Context<'cx, F>>;
+    fn deref(&self) -> &Self::Target {
+        &self.0.internee
+    }
+}
+impl<'cx, F: SourceFacts<'cx>> IntoIterator for Existentials<'cx, F> {
+    type Item = Binder<Context<'cx, F>, ExistentialPredicate<Context<'cx, F>>>;
+    type IntoIter = <List<'cx, Self::Item> as IntoIterator>::IntoIter;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }

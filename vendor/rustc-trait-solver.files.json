@@ -292,6 +292,34 @@
       "upstream_sha256": "d168e6ea5a34f9aaf9e38502cc24c033dce15cdcc10a43cbe5f9f80ff04d6939"
     },
     {
+      "path": "compiler/rustc_middle/src/mir/syntax.rs",
+      "bytes": 84423,
+      "sha256": "b2f38c58405cfb5999cbdf50770e151910c796a7f20c82456d37a3f39481f4e1",
+      "upstream": "compiler/rustc_middle/src/mir/syntax.rs",
+      "upstream_sha256": "b2f38c58405cfb5999cbdf50770e151910c796a7f20c82456d37a3f39481f4e1"
+    },
+    {
+      "path": "compiler/rustc_middle/src/ty/abstract_const.rs",
+      "bytes": 2949,
+      "sha256": "18f9e57b4a92096a90b12d73a42f0f5c8ed67b83b0a0e5b73b27788c5ab55b44",
+      "upstream": "compiler/rustc_middle/src/ty/abstract_const.rs",
+      "upstream_sha256": "18f9e57b4a92096a90b12d73a42f0f5c8ed67b83b0a0e5b73b27788c5ab55b44"
+    },
+    {
+      "path": "compiler/rustc_middle/src/ty/consts/kind.rs",
+      "bytes": 4293,
+      "sha256": "8d365a93687c9c26ed501ea79ff8760300669cb86b4460ad7405d8fa690ee568",
+      "upstream": "compiler/rustc_middle/src/ty/consts/kind.rs",
+      "upstream_sha256": "8d365a93687c9c26ed501ea79ff8760300669cb86b4460ad7405d8fa690ee568"
+    },
+    {
+      "path": "compiler/rustc_middle/src/ty/erase_regions.rs",
+      "bytes": 3347,
+      "sha256": "b745df17e5de37c1a4de6577f7dda44dbd07d2002b18a0f32a08907c4553b5b1",
+      "upstream": "compiler/rustc_middle/src/ty/erase_regions.rs",
+      "upstream_sha256": "b745df17e5de37c1a4de6577f7dda44dbd07d2002b18a0f32a08907c4553b5b1"
+    },
+    {
       "path": "compiler/rustc_middle/src/ty/fold.rs",
       "bytes": 14258,
       "sha256": "e07cb2d26e76490d9a5cb6af659d993f5a95e4ccc99088ed90f233e2842f50b4",
@@ -304,6 +332,13 @@
       "sha256": "181d0e2a00bf8ff81fb367990c6d1e405fc0ab8f8f6be3e35141e48466c7272e",
       "upstream": "compiler/rustc_middle/src/ty/predicate.rs",
       "upstream_sha256": "181d0e2a00bf8ff81fb367990c6d1e405fc0ab8f8f6be3e35141e48466c7272e"
+    },
+    {
+      "path": "compiler/rustc_middle/src/ty/relate.rs",
+      "bytes": 6503,
+      "sha256": "9bbf1a363657e2c1c6784ada114234054e6502b874a2b0d898573b3c213a17b8",
+      "upstream": "compiler/rustc_middle/src/ty/relate.rs",
+      "upstream_sha256": "9bbf1a363657e2c1c6784ada114234054e6502b874a2b0d898573b3c213a17b8"
     },
     {
       "path": "compiler/rustc_middle/src/ty/structural_impls.rs",
@@ -892,6 +927,11 @@
   "support_sources": [
     "compiler/rustc_middle/src/ty/structural_impls.rs",
     "compiler/rustc_middle/src/ty/fold.rs",
-    "compiler/rustc_middle/src/ty/predicate.rs"
+    "compiler/rustc_middle/src/ty/predicate.rs",
+    "compiler/rustc_middle/src/ty/relate.rs",
+    "compiler/rustc_middle/src/ty/consts/kind.rs",
+    "compiler/rustc_middle/src/ty/abstract_const.rs",
+    "compiler/rustc_middle/src/mir/syntax.rs",
+    "compiler/rustc_middle/src/ty/erase_regions.rs"
   ]
 }

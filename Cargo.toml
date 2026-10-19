@@ -30,6 +30,7 @@ rustc_next_trait_solver = { path = "vendor/rustc-trait-solver/compiler/rustc_nex
 rustc_type_ir = { path = "vendor/rustc-trait-solver/compiler/rustc_type_ir", default-features = false }
 typed-arena = "=2.0.2"
 rustc_index = { path = "vendor/rustc-trait-solver/compiler/rustc_index", default-features = false }
+tracing = "=0.1.44"
 
 [profile.release]
 opt-level = 3

@@ -12,15 +12,19 @@ use rustc_type_ir::{
     Interner,
 };
 
+mod abstract_consts;
 mod binders;
+mod constant_expression;
 mod constructors;
 pub(crate) mod context;
 pub(crate) mod facts;
+pub(crate) mod expression_operators;
 pub(crate) mod identity;
 pub(crate) mod model;
 pub(crate) mod parameters;
 mod predicates;
 mod printing;
+mod relations;
 pub(crate) mod storage;
 mod traversal;
 

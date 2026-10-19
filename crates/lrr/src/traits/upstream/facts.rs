@@ -8,20 +8,22 @@ use super::{
 };
 use rustc_index::bit_set::DenseBitSet;
 use rustc_type_ir::lang_items::{SolverAdtLangItem, SolverProjectionLangItem, SolverTraitLangItem};
-use rustc_type_ir::relate::{RelateResult, TypeRelation};
 use rustc_type_ir::search_graph::RequiredDepth;
-use rustc_type_ir::solve::{inspect, QueryResult};
+use rustc_type_ir::solve::{QueryResult, inspect};
 use rustc_type_ir::{self as ty, *};
 use std::fmt::Debug;
 
 pub(crate) trait SourceFacts<'cx>:
     Sized + Copy + Debug + Eq + std::hash::Hash + 'cx
 {
-    fn expand_abstract_consts<T: TypeFoldable<Context<'cx, Self>>>(
+    /// Prepared abstract expression, if this actual declaration has one.
+    /// Missing source must suspend before context entry, never become Ok(None).
+    /// This callback performs no THIR/body inference or initializer execution.
+    fn abstract_const(
         self,
         cx: Context<'cx, Self>,
-        t: T,
-    ) -> T;
+        def_id: DefinitionId,
+    ) -> Result<Option<ty::EarlyBinder<Context<'cx, Self>, Const<Context<'cx, Self>>>>, ErrorToken>;
     fn generics_of(self, cx: Context<'cx, Self>, def_id: DefinitionId) -> Generics<'cx, Self>;
     fn variances_of(self, cx: Context<'cx, Self>, def_id: DefinitionId) -> &'cx [ty::Variance];
     fn opt_alias_variances(
@@ -278,12 +280,12 @@ pub(crate) trait SourceFacts<'cx>:
     fn is_impl_trait_in_trait(self, cx: Context<'cx, Self>, def_id: DefinitionId) -> bool;
     fn delay_bug(self, cx: Context<'cx, Self>, msg: impl ToString) -> ErrorToken;
     fn span_delayed_bug(self, cx: Context<'cx, Self>, span: Span, msg: impl ToString)
-        -> ErrorToken;
+    -> ErrorToken;
     fn is_general_coroutine(self, cx: Context<'cx, Self>, coroutine_def_id: DefinitionId) -> bool;
     fn coroutine_is_async(self, cx: Context<'cx, Self>, coroutine_def_id: DefinitionId) -> bool;
     fn coroutine_is_gen(self, cx: Context<'cx, Self>, coroutine_def_id: DefinitionId) -> bool;
     fn coroutine_is_async_gen(self, cx: Context<'cx, Self>, coroutine_def_id: DefinitionId)
-        -> bool;
+    -> bool;
     fn unsizing_params_for_adt(
         self,
         cx: Context<'cx, Self>,
@@ -299,11 +301,7 @@ pub(crate) trait SourceFacts<'cx>:
         cx: Context<'cx, Self>,
         defining_anchor: DefinitionId,
     ) -> List<'cx, DefinitionId>;
-    fn mk_probe(
-        self,
-        cx: Context<'cx, Self>,
-        probe: inspect::Probe<Context<'cx, Self>>,
-    ) -> Box<ty::solve::inspect::Probe<Context<'cx, Self>>>;
+
     fn evaluate_root_goal_for_proof_tree_raw(
         self,
         cx: Context<'cx, Self>,
@@ -340,25 +338,4 @@ pub(crate) trait SourceFacts<'cx>:
         args: Args<'cx, Self>,
     ) -> Option<FieldInfo<Context<'cx, Self>>>;
     fn discriminant_type(self, cx: Context<'cx, Self>, ty: Ty<'cx, Self>) -> Ty<'cx, Self>;
-    fn relate_const_expression<R: TypeRelation<Context<'cx, Self>>>(
-        self,
-        cx: Context<'cx, Self>,
-        relation: &mut R,
-        a: ExprConst<'cx, Self>,
-        b: ExprConst<'cx, Self>,
-    ) -> RelateResult<Context<'cx, Self>, ExprConst<'cx, Self>>;
-    fn relate_type_pattern<R: TypeRelation<Context<'cx, Self>>>(
-        self,
-        cx: Context<'cx, Self>,
-        relation: &mut R,
-        a: Pattern<'cx, Self>,
-        b: Pattern<'cx, Self>,
-    ) -> RelateResult<Context<'cx, Self>, Pattern<'cx, Self>>;
-    fn relate_existentials<R: TypeRelation<Context<'cx, Self>>>(
-        self,
-        cx: Context<'cx, Self>,
-        relation: &mut R,
-        a: Existentials<'cx, Self>,
-        b: Existentials<'cx, Self>,
-    ) -> RelateResult<Context<'cx, Self>, Existentials<'cx, Self>>;
 }

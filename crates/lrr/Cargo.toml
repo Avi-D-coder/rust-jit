@@ -26,6 +26,7 @@ rustc_next_trait_solver.workspace = true
 rustc_type_ir.workspace = true
 typed-arena.workspace = true
 rustc_index.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

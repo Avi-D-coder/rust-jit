@@ -25,6 +25,11 @@ SUPPORT_SOURCES = (
     "compiler/rustc_middle/src/ty/structural_impls.rs",
     "compiler/rustc_middle/src/ty/fold.rs",
     "compiler/rustc_middle/src/ty/predicate.rs",
+    'compiler/rustc_middle/src/ty/relate.rs',
+    'compiler/rustc_middle/src/ty/consts/kind.rs',
+    'compiler/rustc_middle/src/ty/abstract_const.rs',
+    'compiler/rustc_middle/src/mir/syntax.rs',
+    'compiler/rustc_middle/src/ty/erase_regions.rs',
 )
 
 

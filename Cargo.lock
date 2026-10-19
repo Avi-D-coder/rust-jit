@@ -926,6 +926,7 @@ dependencies = [
  "serde_json",
  "toml",
  "toml_edit",
+ "tracing",
  "typed-arena",
  "unicode-normalization",
 ]
