@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19T03:17:07.009836+00:00",
+  "updated_at": "2026-10-19T03:18:00.909103+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -759,7 +759,7 @@
     "historical_evidence": "artifacts/runs/inventory/raw-v16-facade.json (local, older binary; not current-source acceptance)",
     "new_whole_upstream_runtime_passes_verified_this_resumption": 33,
     "guest_jit": "blocked_by_runtime_acceptance",
-    "source_checkpoint_pushed": false,
+    "source_checkpoint_pushed": true,
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired.",
     "latest_targeted_evidence": "worktracks/evidence/2026-10-18-interpreter-v145-v147-compiler-grammar.json",
     "evidence": [
@@ -774,7 +774,8 @@
       "worktracks/evidence/2026-10-18-interpreter-v138-v144-common-includes.json",
       "worktracks/evidence/2026-10-18-interpreter-v145-v147-compiler-grammar.json"
     ],
-    "source_checkpoint_note": "V147 source reviewed and targeted validated; checkpoint publication pending.",
-    "previous_source_checkpoint_commit": "10d27d6792082f71d118353e27dafef871800a83"
+    "source_checkpoint_note": "V147 reviewed and targeted-validated source WIP pushed to codex/lrr-implementation (98943/ba01a0/0). One measured distinct upstream runtime gain all4editions,7focused bodies and3/4selected stock pass; concat-bytes remains failed. Full architecture/interpreter/JIT gates remain incomplete.",
+    "previous_source_checkpoint_commit": "10d27d6792082f71d118353e27dafef871800a83",
+    "source_checkpoint_commit": "9a10f652cbefee686fa8daa444d988fa153b8355"
   }
 }
