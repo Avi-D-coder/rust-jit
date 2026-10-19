@@ -51,6 +51,7 @@ SUPPORT_SOURCES = (
     'compiler/rustc_infer/src/infer/snapshot/undo_log.rs',
     'compiler/rustc_infer/src/infer/outlives/obligations.rs',
     'compiler/rustc_infer/src/infer/relate/higher_ranked.rs',
+    'compiler/rustc_infer/src/infer/region_constraints/mod.rs',
 ) + stable.SUPPORT_SOURCES
 
 

@@ -44,6 +44,7 @@ def adapt(text):
     text = text.replace('ConstVariableValue::Unknown { origin: _, universe }', 'ConstVariableValue::Unknown { span: _, universe }')
     text = text.replace("BoundVarReplacerDelegate<'db>", "BoundVarReplacerDelegate<'db, PreparedProvider<'db>>")
     text = text.replace('BoundVariableKind::Ty(_)', 'BoundVariableKind::Ty(..)')
+    text = text.replace('.unwrap_region_constraints().probe_value(', '.unwrap_region_constraints().try_resolve_region_var(')
     for name, kind in (('new_int', 'Int'), ('new_uint', 'Uint'), ('new_float', 'Float')):
         text = text.replace('Ty::' + name + '(self.interner, ty)', 'self.interner.ty(ty::TyKind::' + kind + '(ty))')
     for name, kind, args in (('new_int_var', 'IntVar', ('vid', 'root', 'inner.int_unification_table().find(vid)')), ('new_float_var', 'FloatVar', ('vid', 'root', 'self.next_float_vid()', 'inner.float_unification_table().find(vid)'))):

@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V344 HELD M020 compiler solver-region/forall client. Exact compiler formula storage, get/overwrite/register, field/constructor and undo variant/reverse arm share the one existing inference owner and combined snapshot engine. No second transaction/formula engine. Actual enter_forall_and_leak_universe/enter_forall reuse existing FnMutDelegate/BoundVarReplacer; no local binder walker or leak rule. Five additional original compiler support files retained and verified;8sharedcrates/157files/2282895bytes,0retained-original Rust edits and4existing vendor mechanical projections. Both macOS1.99.0 builds and3/3source-context controls pass with exact source/HEAD/binary guards.140Type heads/136TraitRefs/48original/user-macro/wrapper edition worlds exercise nested formula rollback/commit/probe, spans, dedup/reflexivity/fresh-owner isolation and mixed/no-bound rigid placeholders/universes/no fresh inference variables.20generic worlds/48rows/36consts/24early regions and existing cleanup pass. One compiler ambiguity unit assertion body runs with an explicit actual Cx/span adapter; not an unchanged-test or runtime pass. Full source binders/region visibility/leak/type-outlives origin/generalizer/relations/canonical/InferCtxtLike/delegate/full facts/root/member/currentness/runtime migration and legacy removal remain incomplete. Zero new distinct stock runtime gain or refreshed suite total; no M020/milestone/interpreter/JIT/Linux/performance acceptance.",
+      "scope": "V345-V346 HELD M020 modern compiler region collector. Old four-case enum and two-subregion equality implementation removed from production; current compiler seven kinds/direct equalities/iter_outlives, explicit visibility/origin and selected mutators/combination/current region resolution share the existing collector/unification/undo owner. Actual source Span retained beside every constraint; no guessed origin or leak-success/empty-response stub. Compatible RA Verify/member/extra variable-span records remain explicit migration holds. New unchanged compiler original verifies8sharedcrates/158files/2314085bytes,0retained-original Rust changes and4existing vendor projections. Both macOS1.99.0 builds and3/3focused controls pass with exact guards:140actual Type heads/136TraitRefs/48original-user-macro-wrapper edition worlds, all7kinds/Yes-No/source spans/equality iteration/static-reflexive cases/canonical resolution and snapshot-reset isolation;20generic worlds/48rows/36consts/24early regions and prior controls pass. V345 mechanical namespace/iter compile failure retained. Actual graph/SCC/leak checker, full source origin classes/Verify-member/source binder/facts/InferCtxtLike/generalizer/relations/canonical/delegate/root/member/currentness/runtime migration and legacy removal remain incomplete. Zero new distinct stock runtime gain or refreshed suite total; no M020/milestone/interpreter/JIT/Linux/performance/diagnostic acceptance.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1854,11 +1854,16 @@
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-solver-regions.md",
         "worktracks/evidence/2026-10-19-v344-upstream-solver-regions.json",
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-solver-regions-review.md",
-        "worktracks/05-trait-goal-engine/2026-10-19-upstream-solver-regions-controls.json"
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-solver-regions-controls.json",
+        "tools/upstream_region_collector.py",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-region-collector.md",
+        "worktracks/evidence/2026-10-19-v345-v346-upstream-region-collector.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-region-collector-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-region-collector-controls.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T20:27:23.735370+00:00",
+      "updated_at": "2026-10-19T20:38:45.612460+00:00",
       "review_after": "2026-10-20T08:52:46.617857+00:00",
       "shared_interfaces": [
         {

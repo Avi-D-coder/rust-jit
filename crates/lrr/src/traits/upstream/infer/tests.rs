@@ -9,6 +9,7 @@ pub(crate) fn check_actual_storage<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, sp
     assert!(!span.is_dummy(), "actual retained declaration range supplies inference origin");
     check_placeholder_assumptions(cx, actual, span);
     check_solver_region_transactions(cx, span);
+    check_current_region_collector(cx, span);
     check_variable_resolution(cx, actual, span);
     let storage = InferenceStorage::new();
     let root = ty::UniverseIndex::ROOT;
@@ -40,7 +41,7 @@ pub(crate) fn check_actual_storage<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, sp
         inner.int_unification_table().unify_var_value(integer, ty::IntVarValue::IntType(ty::IntTy::I32)).unwrap();
         inner.float_unification_table().unify_var_value(float, ty::FloatVarValue::Known(ty::FloatTy::F64)).unwrap();
         inner.const_unification_table().union_value(constant, ConstVariableValue::Known { value });
-        inner.unwrap_region_constraints().make_eqregion(first, second);
+        inner.unwrap_region_constraints().make_eqregion(span, first, second, ty::solve::VisibleForLeakCheck::Yes);
     }
     assert!(storage.region_constraints_added_in_snapshot(&outer));
     // A nested unsuccessful candidate allocates and mutates state before the
@@ -88,8 +89,8 @@ pub(crate) fn check_actual_storage<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, sp
         assert!(inner.const_unification_table().probe_value(constant).known().is_none());
         let mut regions = inner.unwrap_region_constraints();
         assert!(regions.region_constraint_data().is_empty());
-        assert_eq!(regions.opportunistic_resolve_var(cx, first_region), first);
-        assert_eq!(regions.opportunistic_resolve_var(cx, second_region), second);
+        assert_eq!(regions.shallow_resolve_region_var(cx, first_region), first);
+        assert_eq!(regions.shallow_resolve_region_var(cx, second_region), second);
     }
     storage.commit_if_ok::<(), (), _>(|_| {
         storage.inner.borrow_mut().type_variables().instantiate(a, actual);
@@ -362,4 +363,94 @@ fn check_solver_region_transactions<'cx>(cx: DbInterner<'cx>, span: Span) {
     assert!(super::InferenceContext::new(cx, ty::TypingMode::PostAnalysis)
         .get_solver_region_constraint().is_true());
     assert!(cx.services().ready(cx).is_err(), "region state grants no source facts/root readiness");
+}
+
+/// Host route/transaction witness over the real source context and source span.
+/// Explicit placeholder inputs exercise the pinned collector, not a Rust parser,
+/// static checker or actual trait root. No leak-check outcome is fabricated.
+fn check_current_region_collector<'cx>(cx: DbInterner<'cx>, span: Span) {
+    use super::region_constraints::ConstraintKind;
+    use ty::solve::VisibleForLeakCheck::{Yes, No};
+    let context = super::InferenceContext::new(cx, ty::TypingMode::PostAnalysis);
+    let first = context.next_region_var(span);
+    let second = context.next_region_var(span);
+    let third = context.next_region_var(span);
+    let ty::RegionKind::ReVar(first_vid) = first.kind() else { panic!() };
+    let ty::RegionKind::ReVar(second_vid) = second.kind() else { panic!() };
+    let root = context.universe();
+    let snapshot = context.start_snapshot();
+    {
+        let mut inner = context.inner.borrow_mut();
+        let mut regions = inner.unwrap_region_constraints();
+        regions.make_eqregion(span, first, second, No);
+        let data = regions.data();
+        assert_eq!(data.constraints.len(), 1, "one direct upstream equality, not two legacy subregion records");
+        let (equality, origin) = data.constraints[0];
+        assert_eq!(origin, span); assert_eq!(equality.visible_for_leak_check, No);
+        assert_eq!(equality.kind, ConstraintKind::VarEqVar);
+        let parts = equality.iter_outlives().collect::<Vec<_>>();
+        assert_eq!(parts.len(), 2);
+        assert!(parts.iter().all(|part| part.kind == ConstraintKind::VarSubVar && part.visible_for_leak_check == No));
+        assert_eq!((parts[0].sub, parts[0].sup), (first, second));
+        assert_eq!((parts[1].sub, parts[1].sup), (second, first));
+        assert_eq!(regions.shallow_resolve_region_var(cx, first_vid), regions.shallow_resolve_region_var(cx, second_vid));
+        regions.make_subregion(span, third, first, Yes);
+        regions.make_subregion(span, first, first, No);
+        regions.make_subregion(span, first, Region::new_static(cx), Yes);
+        assert_eq!(regions.data().constraints.len(), 2, "upstream reflexive/static-subregion no-ops");
+    }
+    let universe = context.create_next_universe();
+    let placeholders = [0, 1].map(|index| cx.intern_region(ty::RegionKind::RePlaceholder(
+        ty::PlaceholderRegion::new_anon(universe, ty::BoundVar::from_u32(index)))));
+    let fresh = context.next_region_var(span);
+    {
+        let mut inner = context.inner.borrow_mut();
+        let mut regions = inner.unwrap_region_constraints();
+        regions.make_eqregion(span, placeholders[0], placeholders[1], Yes);
+        regions.make_subregion(span, placeholders[0], third, No);
+        regions.make_subregion(span, third, placeholders[1], Yes);
+        regions.make_eqregion(span, Region::new_static(cx), placeholders[1], No);
+        regions.make_eqregion(span, Region::new_static(cx), third, Yes);
+        regions.make_eqregion(span, fresh, placeholders[0], Yes);
+        let data = regions.data();
+        assert_eq!(data.constraints.len(), 8);
+        let kinds = data.constraints.iter().map(|(c, _)| c.kind).collect::<std::collections::HashSet<_>>();
+        assert_eq!(kinds.len(), 7, "all actual compiler constraint kinds exercised");
+        for (constraint, origin) in &data.constraints {
+            assert_eq!(*origin, span);
+            let parts = constraint.iter_outlives().collect::<Vec<_>>();
+            assert!(parts.iter().all(|p| p.visible_for_leak_check == constraint.visible_for_leak_check));
+            let equality = matches!(constraint.kind, ConstraintKind::VarEqVar | ConstraintKind::VarEqReg | ConstraintKind::RegEqReg);
+            assert_eq!(parts.len(), if equality {2} else {1});
+        }
+        assert_eq!(data.constraints.iter().filter(|(c, _)| c.visible_for_leak_check == No).count(), 3);
+        assert_eq!(data.constraints[5].0.kind, ConstraintKind::RegSubReg);
+        assert_eq!(data.constraints[5].0.sub, Region::new_static(cx));
+        assert_eq!(data.constraints[6].0.kind, ConstraintKind::RegSubVar);
+    }
+    context.rollback_to(snapshot);
+    assert_eq!(context.universe(), root);
+    assert_eq!(context.num_region_vars(), 3);
+    {
+        let mut inner = context.inner.borrow_mut();
+        let mut regions = inner.unwrap_region_constraints();
+        assert!(regions.data().constraints.is_empty());
+        assert_eq!(regions.shallow_resolve_region_var(cx, first_vid), first);
+        assert_eq!(regions.shallow_resolve_region_var(cx, second_vid), second);
+        assert_eq!(regions.try_resolve_region_var(first_vid), Err(root));
+    }
+    context.commit_if_ok::<(), (), _>(|_| {
+        context.inner.borrow_mut().unwrap_region_constraints().make_eqregion(span, first, second, No);
+        Ok(())
+    }).unwrap();
+    let mut inner = context.inner.borrow_mut();
+    let mut regions = inner.unwrap_region_constraints();
+    let collected = regions.take_and_reset_data();
+    assert_eq!(collected.constraints.len(), 1);
+    assert_eq!(collected.constraints[0].0.visible_for_leak_check, No);
+    assert_eq!(collected.constraints[0].1, span);
+    assert!(regions.data().constraints.is_empty());
+    assert_eq!(regions.shallow_resolve_region_var(cx, first_vid), first);
+    assert_eq!(regions.shallow_resolve_region_var(cx, second_vid), second);
+    assert!(cx.services().ready(cx).is_err(), "collection grants no source facts/root or leak-check readiness");
 }

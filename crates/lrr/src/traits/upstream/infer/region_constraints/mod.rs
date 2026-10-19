@@ -3,6 +3,7 @@
 //! Registered mechanical port: tools/sync_upstream_inference.py.
 //! See `README.md`.
 
+use std::iter;
 use std::ops::Range;
 use std::{cmp, fmt, mem};
 
@@ -10,8 +11,9 @@ use ena::undo_log::{Rollback, UndoLogs};
 use ena::unify as ut;
 use rustc_hash::FxHashMap;
 use rustc_index::IndexVec;
+use rustc_type_ir::RegionKind::{ReBound, ReStatic, ReVar};
 use rustc_type_ir::inherent::{IntoKind, Ty as _};
-use rustc_type_ir::{RegionKind, RegionVid, UniverseIndex};
+use rustc_type_ir::{self as ty, RegionKind, RegionVid, UniverseIndex};
 use tracing::{debug, instrument};
 
 use self::CombineMapType::*;
@@ -74,7 +76,7 @@ pub type VarInfos = IndexVec<RegionVid, RegionVariableInfo>;
 pub struct RegionConstraintData<'db> {
     /// Constraints of the form `A <= B`, where either `A` or `B` can
     /// be a region variable (or neither, as it happens).
-    pub constraints: Vec<Constraint<'db>>,
+    pub constraints: Vec<(Constraint<'db>, Span)>,
 
     /// Constraints of the form `R0 member of [R1, ..., Rn]`, meaning that
     /// `R0` must be equal to one of the regions `R1..Rn`. These occur
@@ -91,31 +93,104 @@ pub struct RegionConstraintData<'db> {
 }
 
 /// Represents a constraint that influences the inference process.
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
-pub enum Constraint<'db> {
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub enum ConstraintKind {
     /// A region variable is a subregion of another.
-    VarSubVar(RegionVid, RegionVid),
+    VarSubVar,
 
     /// A concrete region is a subregion of region variable.
-    RegSubVar(Region<'db>, RegionVid),
+    RegSubVar,
 
     /// A region variable is a subregion of a concrete region. This does not
     /// directly affect inference, but instead is checked after
     /// inference is complete.
-    VarSubReg(RegionVid, Region<'db>),
+    VarSubReg,
 
     /// A constraint where neither side is a variable. This does not
     /// directly affect inference, but instead is checked after
     /// inference is complete.
-    RegSubReg(Region<'db>, Region<'db>),
+    RegSubReg,
+
+    /// A region variable is equal to another.
+    VarEqVar,
+
+    /// A region variable is equal to a concrete region. This does not
+    /// directly affect inference, but instead is checked after
+    /// inference is complete.
+    VarEqReg,
+
+    /// An equality constraint where neither side is a variable. This does not
+    /// directly affect inference, but instead is checked after
+    /// inference is complete.
+    RegEqReg,
 }
 
-impl<'db> Constraint<'db> {
+/// Represents a constraint that influences the inference process.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub struct Constraint<'db> {
+    pub kind: ConstraintKind,
+    // If `kind` is `VarSubVar`, `VarSubReg`, `VarEqVar` or `VarEqReg`, this must be a `ReVar`.
+    pub sub: Region<'db>,
+    // If `kind` is `VarSubVar`, `RegSubVar` or `VarEqVar`, this must be a `ReVar`.
+    pub sup: Region<'db>,
+    pub visible_for_leak_check: ty::solve::VisibleForLeakCheck,
+}
+
+impl Constraint<'_> {
     pub fn involves_placeholders(&self) -> bool {
-        match self {
-            Constraint::VarSubVar(_, _) => false,
-            Constraint::VarSubReg(_, r) | Constraint::RegSubVar(r, _) => r.is_placeholder(),
-            Constraint::RegSubReg(r, s) => r.is_placeholder() || s.is_placeholder(),
+        self.sub.is_placeholder() || self.sup.is_placeholder()
+    }
+
+    pub fn iter_outlives(self) -> impl Iterator<Item = Self> {
+        let Constraint {
+            kind,
+            sub,
+            sup,
+            visible_for_leak_check,
+        } = self;
+
+        match kind {
+            ConstraintKind::VarSubVar
+            | ConstraintKind::RegSubVar
+            | ConstraintKind::VarSubReg
+            | ConstraintKind::RegSubReg => iter::once(self).chain(None),
+
+            ConstraintKind::VarEqVar => iter::once(Constraint {
+                kind: ConstraintKind::VarSubVar,
+                sub,
+                sup,
+                visible_for_leak_check,
+            })
+            .chain(Some(Constraint {
+                kind: ConstraintKind::VarSubVar,
+                sub: sup,
+                sup: sub,
+                visible_for_leak_check,
+            })),
+            ConstraintKind::VarEqReg => iter::once(Constraint {
+                kind: ConstraintKind::VarSubReg,
+                sub,
+                sup,
+                visible_for_leak_check,
+            })
+            .chain(Some(Constraint {
+                kind: ConstraintKind::RegSubVar,
+                sub: sup,
+                sup: sub,
+                visible_for_leak_check,
+            })),
+            ConstraintKind::RegEqReg => iter::once(Constraint {
+                kind: ConstraintKind::RegSubReg,
+                sub,
+                sup,
+                visible_for_leak_check,
+            })
+            .chain(Some(Constraint {
+                kind: ConstraintKind::RegSubReg,
+                sub: sup,
+                sup: sub,
+                visible_for_leak_check,
+            })),
         }
     }
 }
@@ -244,7 +319,7 @@ pub struct VerifyIfEq<'db> {
     pub bound: Region<'db>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct TwoRegions<'db> {
     a: Region<'db>,
     b: Region<'db>,
@@ -266,7 +341,7 @@ pub(crate) enum UndoLog<'db> {
     AddCombination(CombineMapType, TwoRegions<'db>),
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 pub(crate) enum CombineMapType {
     Lub,
     Glb,
@@ -405,7 +480,7 @@ impl<'db> RegionConstraintCollector<'db, '_> {
         vid
     }
 
-    fn add_constraint(&mut self, constraint: Constraint<'db>) {
+    fn add_constraint(&mut self, constraint: Constraint<'db>, origin: Span) {
         // cannot add constraints once regions are resolved
         debug!(
             "RegionConstraintCollector: add_constraint({:?})",
@@ -413,32 +488,76 @@ impl<'db> RegionConstraintCollector<'db, '_> {
         );
 
         let index = self.storage.data.constraints.len();
-        self.storage.data.constraints.push(constraint);
+        self.storage.data.constraints.push((constraint, origin));
         self.undo_log.push(AddConstraint(index));
     }
 
-    pub(super) fn make_eqregion(&mut self, a: Region<'db>, b: Region<'db>) {
+    pub(super) fn make_eqregion(
+        &mut self,
+        origin: Span,
+        a: Region<'db>,
+        b: Region<'db>,
+        visible_for_leak_check: ty::solve::VisibleForLeakCheck,
+    ) {
         if a != b {
-            // Eventually, it would be nice to add direct support for
-            // equating regions.
-            self.make_subregion(a, b);
-            self.make_subregion(b, a);
-
-            match (a.kind(), b.kind()) {
-                (RegionKind::ReVar(a), RegionKind::ReVar(b)) => {
-                    debug!("make_eqregion: unifying {:?} with {:?}", a, b);
-                    if self.unification_table_mut().unify_var_var(a, b).is_ok() {
+            // FIXME: We could only emit constraints if `unify_var_{var, value}` fails when
+            // equating region vars.
+            match (a.kind(), b.kind(), a, b) {
+                (ReBound(..), _, _, _) | (_, ReBound(..), _, _) => {
+                    panic!(
+                        "cannot relate bound region at {:?}: {:?} == {:?}",
+                        origin, a, b
+                    );
+                }
+                (ReVar(a_vid), ReVar(b_vid), _, _) => {
+                    self.add_constraint(
+                        Constraint {
+                            kind: ConstraintKind::VarEqVar,
+                            sub: a,
+                            sup: b,
+                            visible_for_leak_check,
+                        },
+                        origin,
+                    );
+                    debug!("make_eqregion: unifying {:?} with {:?}", a_vid, b_vid);
+                    if self
+                        .unification_table_mut()
+                        .unify_var_var(a_vid, b_vid)
+                        .is_ok()
+                    {
                         self.storage.any_unifications = true;
                     }
                 }
-                (RegionKind::ReVar(vid), _) => {
-                    debug!("make_eqregion: unifying {:?} with {:?}", vid, b);
+                (ReVar(vid), _, var, reg) | (_, ReVar(vid), reg, var) => {
+                    if reg.is_static() {
+                        // all regions are subregions of static, so don't go bidirectional here
+                        self.add_constraint(
+                            Constraint {
+                                kind: ConstraintKind::RegSubVar,
+                                sub: reg,
+                                sup: var,
+                                visible_for_leak_check,
+                            },
+                            origin,
+                        );
+                    } else {
+                        self.add_constraint(
+                            Constraint {
+                                kind: ConstraintKind::VarEqReg,
+                                sub: var,
+                                sup: reg,
+                                visible_for_leak_check,
+                            },
+                            origin,
+                        );
+                    }
+                    debug!("make_eqregion: unifying {:?} with {:?}", vid, reg);
                     if self
                         .unification_table_mut()
                         .unify_var_value(
                             vid,
                             RegionVariableValue::Known {
-                                value: b,
+                                value: reg,
                                 span: None,
                             },
                         )
@@ -447,49 +566,97 @@ impl<'db> RegionConstraintCollector<'db, '_> {
                         self.storage.any_unifications = true;
                     };
                 }
-                (_, RegionKind::ReVar(vid)) => {
-                    debug!("make_eqregion: unifying {:?} with {:?}", a, vid);
-                    if self
-                        .unification_table_mut()
-                        .unify_var_value(
-                            vid,
-                            RegionVariableValue::Known {
-                                value: a,
-                                span: None,
-                            },
-                        )
-                        .is_ok()
-                    {
-                        self.storage.any_unifications = true;
-                    };
+                (ReStatic, _, st, reg) | (_, ReStatic, reg, st) => {
+                    // all regions are subregions of static, so don't go bidirectional here
+                    self.add_constraint(
+                        Constraint {
+                            kind: ConstraintKind::RegSubReg,
+                            sub: st,
+                            sup: reg,
+                            visible_for_leak_check,
+                        },
+                        origin,
+                    );
                 }
-                (_, _) => {}
+                _ => {
+                    self.add_constraint(
+                        Constraint {
+                            kind: ConstraintKind::RegEqReg,
+                            sub: a,
+                            sup: b,
+                            visible_for_leak_check,
+                        },
+                        origin,
+                    );
+                }
             }
         }
     }
 
     #[instrument(skip(self), level = "debug")]
-    pub(super) fn make_subregion(&mut self, sub: Region<'db>, sup: Region<'db>) {
+    pub(super) fn make_subregion(
+        &mut self,
+        origin: Span,
+        sub: Region<'db>,
+        sup: Region<'db>,
+        visible_for_leak_check: ty::solve::VisibleForLeakCheck,
+    ) {
         // cannot add constraints once regions are resolved
+        debug!("origin = {:#?}", origin);
 
         match (sub.kind(), sup.kind()) {
-            (RegionKind::ReBound(..), _) | (_, RegionKind::ReBound(..)) => {
-                panic!("cannot relate bound region: {sub:?} <= {sup:?}");
+            (ReBound(..), _) | (_, ReBound(..)) => {
+                panic!(
+                    "cannot relate bound region at {:?}: {:?} <= {:?}",
+                    origin, sub, sup
+                );
             }
-            (_, RegionKind::ReStatic) => {
+            (_, ReStatic) => {
                 // all regions are subregions of static, so we can ignore this
             }
-            (RegionKind::ReVar(sub_id), RegionKind::ReVar(sup_id)) => {
-                self.add_constraint(Constraint::VarSubVar(sub_id, sup_id));
+            (ReVar(sub_id), ReVar(sup_id)) => {
+                if sub_id != sup_id {
+                    self.add_constraint(
+                        Constraint {
+                            kind: ConstraintKind::VarSubVar,
+                            sub,
+                            sup,
+                            visible_for_leak_check,
+                        },
+                        origin,
+                    );
+                }
             }
-            (_, RegionKind::ReVar(sup_id)) => {
-                self.add_constraint(Constraint::RegSubVar(sub, sup_id));
-            }
-            (RegionKind::ReVar(sub_id), _) => {
-                self.add_constraint(Constraint::VarSubReg(sub_id, sup));
-            }
+            (_, ReVar(_)) => self.add_constraint(
+                Constraint {
+                    kind: ConstraintKind::RegSubVar,
+                    sub,
+                    sup,
+                    visible_for_leak_check,
+                },
+                origin,
+            ),
+            (ReVar(_), _) => self.add_constraint(
+                Constraint {
+                    kind: ConstraintKind::VarSubReg,
+                    sub,
+                    sup,
+                    visible_for_leak_check,
+                },
+                origin,
+            ),
             _ => {
-                self.add_constraint(Constraint::RegSubReg(sub, sup));
+                if sub != sup {
+                    self.add_constraint(
+                        Constraint {
+                            kind: ConstraintKind::RegSubReg,
+                            sub,
+                            sup,
+                            visible_for_leak_check,
+                        },
+                        origin,
+                    )
+                }
             }
         }
     }
@@ -536,20 +703,23 @@ impl<'db> RegionConstraintCollector<'db, '_> {
 
     /// Resolves a region var to its value in the unification table, if it exists.
     /// Otherwise, it is resolved to the root `ReVar` in the table.
-    pub fn opportunistic_resolve_var(
+    pub fn shallow_resolve_region_var(
         &mut self,
-        cx: DbInterner<'db>,
-        vid: RegionVid,
-    ) -> Region<'db> {
+        tcx: DbInterner<'db>,
+        vid: ty::RegionVid,
+    ) -> ty::Region<DbInterner<'db>> {
         let mut ut = self.unification_table_mut();
         let root_vid = ut.find(vid).vid;
         match ut.probe_value(root_vid) {
             RegionVariableValue::Known { value, .. } => value,
-            RegionVariableValue::Unknown { .. } => Region::new_var(cx, root_vid),
+            RegionVariableValue::Unknown { .. } => ty::Region::new_var(tcx, root_vid),
         }
     }
 
-    pub fn probe_value(&mut self, vid: RegionVid) -> Result<Region<'db>, UniverseIndex> {
+    pub fn try_resolve_region_var(
+        &mut self,
+        vid: ty::RegionVid,
+    ) -> Result<ty::Region<DbInterner<'db>>, ty::UniverseIndex> {
         match self.unification_table_mut().probe_value(vid) {
             RegionVariableValue::Known { value, .. } => Ok(value),
             RegionVariableValue::Unknown { universe, .. } => Err(universe),
@@ -565,27 +735,37 @@ impl<'db> RegionConstraintCollector<'db, '_> {
 
     fn combine_vars(
         &mut self,
-        cx: DbInterner<'db>,
+        tcx: DbInterner<'db>,
         t: CombineMapType,
         a: Region<'db>,
         b: Region<'db>,
         origin: Span,
     ) -> Region<'db> {
         let vars = TwoRegions { a, b };
-        if let Some(c) = self.combine_map(t.clone()).get(&vars) {
-            return Region::new_var(cx, *c);
+        if let Some(&c) = self.combine_map(t).get(&vars) {
+            return ty::Region::new_var(tcx, c);
         }
         let a_universe = self.universe(a);
         let b_universe = self.universe(b);
         let c_universe = cmp::max(a_universe, b_universe);
         let c = self.new_region_var(c_universe, origin);
-        self.combine_map(t.clone()).insert(vars.clone(), c);
-        self.undo_log.push(AddCombination(t.clone(), vars));
-        let new_r = Region::new_var(cx, c);
+        self.combine_map(t).insert(vars, c);
+        self.undo_log.push(AddCombination(t, vars));
+        let new_r = ty::Region::new_var(tcx, c);
         for old_r in [a, b] {
             match t {
-                Glb => self.make_subregion(new_r, old_r),
-                Lub => self.make_subregion(old_r, new_r),
+                Glb => self.make_subregion(
+                    origin.clone(),
+                    new_r,
+                    old_r,
+                    ty::solve::VisibleForLeakCheck::Yes,
+                ),
+                Lub => self.make_subregion(
+                    origin.clone(),
+                    old_r,
+                    new_r,
+                    ty::solve::VisibleForLeakCheck::Yes,
+                ),
             }
         }
         debug!("combine_vars() c={:?}", c);
@@ -600,7 +780,7 @@ impl<'db> RegionConstraintCollector<'db, '_> {
             | RegionKind::ReEarlyParam(..)
             | RegionKind::ReError(_) => UniverseIndex::ROOT,
             RegionKind::RePlaceholder(placeholder) => placeholder.universe,
-            RegionKind::ReVar(vid) => match self.probe_value(vid) {
+            RegionKind::ReVar(vid) => match self.try_resolve_region_var(vid) {
                 Ok(value) => self.universe(value),
                 Err(universe) => universe,
             },

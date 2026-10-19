@@ -10,6 +10,7 @@ from pathlib import Path
 from sync_upstream_binders import method
 import subprocess
 from upstream_solver_regions import extend_storage
+from upstream_region_collector import extend_collector
 
 ROOT = Path(__file__).resolve().parents[1]
 PIN = 'ae0fe511b15ab760d7e963b13389d1bc2ab42b18'
@@ -60,6 +61,7 @@ def expected():
                  'snapshot/undo_log.rs', 'opaque_types/table.rs'):
         text = original('next_solver/infer/' + name)
         outputs[name] = rustfmt(header + adapt(text))
+    outputs['region_constraints/mod.rs'] = extend_collector(outputs['region_constraints/mod.rs'].decode(), rustfmt)
     source = original('next_solver/infer/mod.rs')
     table = source[source.index('pub(crate) type UnificationTable'):source.index('/// This type contains all the things')]
     inner = source[source.index('#[derive(Clone)]\npub struct InferCtxtInner'):source.index('#[derive(Clone)]\npub struct InferCtxt<')]

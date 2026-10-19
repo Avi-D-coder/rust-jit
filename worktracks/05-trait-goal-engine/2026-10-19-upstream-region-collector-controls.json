@@ -1,0 +1,9 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Actual pinned modern region constraint kinds/iteration/origin/visibility/mutation and common rollback on unchanged-fixture source contexts; no leak checker/root/runtime acceptance.",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+    "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+    "traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind"
+  ]
+}
