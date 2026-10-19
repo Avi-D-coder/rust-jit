@@ -339,7 +339,7 @@ impl Packet {
                 | QueryKey::ImplHeadTypes(_)
                 | QueryKey::ImplTraitIdentity(_) | QueryKey::ImplTraitCatalog(_) | QueryKey::SolverConfiguration(_) | QueryKey::ImplSourceTypes(_)
                 | QueryKey::ImplPredicates(_)
-                | QueryKey::TraitDeclaration(_) | QueryKey::DeclarationGenerics(_)
+                | QueryKey::TraitDeclaration(_) | QueryKey::DeclarationGenerics(_) | QueryKey::DeclarationGenericTypes(_)
                 | QueryKey::ParseFile(_)
                 | QueryKey::Outline(_)
                 | QueryKey::ScopeBucket(_)

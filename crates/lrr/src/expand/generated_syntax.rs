@@ -28,6 +28,7 @@ pub struct GeneratedSyntaxInput {
     // Prepared once with the actual admitted root and shared by consumers.
     outline: Arc<crate::syntax::outline::Outline>,
     declaration_locations: BTreeMap<Digest, usize>,
+    member_declarations: BTreeMap<ScopeKey, Digest>,
 }
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-INTERNAL-SNAPSHOT", message.into())
@@ -125,6 +126,7 @@ impl GeneratedSyntaxInput {
         let mut declarations = BTreeMap::new();
         let mut definitions = BTreeMap::new();
         let mut declaration_locations = BTreeMap::new();
+        let mut member_declarations = BTreeMap::new();
         for (location, item) in outline.items.iter().enumerate() {
             if item.scope.crate_key != scope.crate_key
                 || !(item.scope == scope && admitted || item.scope.owner.is_none_or(|owner| {
@@ -145,6 +147,15 @@ impl GeneratedSyntaxInput {
                 .get(&(item.declaration_span.start, item.declaration_span.end))
                 .ok_or_else(|| fault("generated query structural header absent"))?;
             let id = header.key.fingerprint();
+            if matches!(item.def_key.item_kind, crate::source::manifest::ItemKind::Impl | crate::source::manifest::ItemKind::Trait) {
+                let mut member_scope = item.scope.clone();
+                member_scope.owner = Some(if item.def_key.item_kind == crate::source::manifest::ItemKind::Impl {
+                    item.def_key.enclosing_impl.ok_or_else(|| fault("generated impl member identity absent"))?
+                } else { item.def_key.fingerprint() });
+                if member_declarations.insert(member_scope, id).is_some() {
+                    return Err(fault("generated associated scope has duplicate declarations"));
+                }
+            }
             definitions.insert(id, item.def_key.clone());
             if declaration_locations.insert(id, location).is_some() {
                 return Err(fault("generated canonical declaration location repeats"));
@@ -184,12 +195,16 @@ impl GeneratedSyntaxInput {
                 included_source,
                 outline: Arc::new(outline),
                 declaration_locations,
+                member_declarations,
             }),
             declarations,
         ))
     }
     pub(crate) fn declaration(&self, identity: Digest) -> Option<&crate::syntax::outline::ItemOutline> {
         self.outline.items.get(*self.declaration_locations.get(&identity)?)
+    }
+    pub(crate) fn declaration_for_member_scope(&self, scope: &ScopeKey) -> Option<Digest> {
+        self.member_declarations.get(scope).copied()
     }
     /// The unit's outline (already computed at preparation).
     pub(crate) fn outline(&self) -> Result<Arc<crate::syntax::outline::Outline>, Diagnostic> {
@@ -264,7 +279,7 @@ impl GeneratedSyntaxInput {
     }
 }
 impl StableEncode for GeneratedSyntaxInput {
-    const DOMAIN: &'static str = "lrr/v3/generated-syntax-value";
+    const DOMAIN: &'static str = "lrr/v4/generated-syntax-value";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.record(&self.scope);
@@ -273,5 +288,6 @@ impl StableEncode for GeneratedSyntaxInput {
         e.record(&self.items.record().descriptor());
         e.option(&self.producer_origin, |e, origin| e.record(origin.as_ref()));
         e.option(&self.included_source, |e, view| e.digest(view.identity()));
+        e.map(&self.member_declarations, |e, scope, definition| { e.record(scope); e.digest(*definition); });
     }
 }

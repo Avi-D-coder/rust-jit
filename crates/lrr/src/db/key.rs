@@ -148,6 +148,7 @@ pub use crate::frontend::constants::query_identity::ConstQueryIdentity as Consta
 pub enum QueryKey {
     TraitDeclaration(Digest),
     DeclarationGenerics(Digest),
+    DeclarationGenericTypes(Box<crate::frontend::declaration_generic_types::DeclarationGenericTypesKey>),
     PreparedBodySyntax(Box<PreparedBodySyntaxKey>),
     ArrayRepeatPlan(crate::source::manifest::PcKey),
     PreparedArrayRepeat(crate::source::manifest::PcKey),
@@ -220,7 +221,7 @@ impl QueryKey {
                     + key.bucket.name.capacity()
             }
             Self::DiscoverySeal(_) | Self::ScopeDeclarationInventory(_)
-            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) | Self::DeclarationGenerics(_) | Self::ImplTraitIdentity(_) | Self::ImplTraitCatalog(_) | Self::SolverConfiguration(_) | Self::ImplSourceTypes(_) => 0,
+            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) | Self::DeclarationGenerics(_) | Self::DeclarationGenericTypes(_) | Self::ImplTraitIdentity(_) | Self::ImplTraitCatalog(_) | Self::SolverConfiguration(_) | Self::ImplSourceTypes(_) => 0,
             Self::ExpansionInput(k) | Self::CurrentExpansionInput(k) => {
                 std::mem::size_of_val(k.as_ref()) + crate::expand::record::key_heap_bytes(k)
             }
@@ -279,6 +280,7 @@ impl QueryKey {
             Self::ImplPredicates(_) => "ImplPredicates",
             Self::TraitDeclaration(_) => "TraitDeclaration",
             Self::DeclarationGenerics(_) => "DeclarationGenerics",
+            Self::DeclarationGenericTypes(_) => "DeclarationGenericTypes",
             Self::AssociatedItemQualifier(_) => "AssociatedItemQualifier",
             Self::AssociatedEquations(_) => "AssociatedEquations",
             Self::NominalMember(_) => "NominalMember",
@@ -340,6 +342,7 @@ impl StableEncode for QueryKey {
             Self::ImplPredicates(key) => { e.u32(59); e.record(key.as_ref()); }
             Self::TraitDeclaration(key) => { e.u32(60); e.digest(*key); }
             Self::DeclarationGenerics(key) => { e.u32(69); e.digest(*key); }
+            Self::DeclarationGenericTypes(key) => { e.u32(70); e.record(key.as_ref()); }
             Self::AssociatedItemQualifier(key) => { e.u32(51); e.record(key); }
             Self::AssociatedEquations(key) => {
                 e.u32(50);

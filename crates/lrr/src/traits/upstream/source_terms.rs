@@ -1,7 +1,7 @@
 //! Actual demanded impl source terms -> shared IR, without inference or effects.
 use super::{configuration::PreparedSolverConfiguration, identity::DefinitionId,
     model::{self, AllocateList, Arg, Ty, AdtDefinition, EarlyRegion, ValueConst, ScalarInt},
-    parameters::SourceParameter, prepared::{self, Cx, DefinitionReceipt}};
+    parameters::SourceParameter, prepared::{self, Cx}};
 use crate::{
     core::{diagnostic::Diagnostic, digest::{Digest, StableEncode, StableEncoder}},
     db::{dependency::{InputKey, InputValue}, key::QueryKey, memo::Database, poll::QueryPoll,
@@ -24,10 +24,7 @@ pub enum SourceTypePending {
 pub struct PreparedImplSourceTypes {
     key: ImplHeaderSyntaxKey,
     head: Arc<QueryValue>,
-    catalog: Arc<InputValue>,
-    definitions: BTreeMap<Digest, DefinitionId>,
-    receipts: Vec<DefinitionReceipt>,
-    generics: BTreeMap<DefinitionId, Arc<QueryValue>>,
+    bindings: super::source_bindings::SourceBindings,
     pending: Option<SourceTypePending>,
 }
 macro_rules! ready {
@@ -38,10 +35,11 @@ macro_rules! ready {
     } };
 }
 impl PreparedImplSourceTypes {
-    pub(super) fn source_generics(&self) -> &BTreeMap<DefinitionId, Arc<QueryValue>> { &self.generics }
-    pub(super) fn catalog_input(&self) -> &Arc<InputValue> { &self.catalog }
+    pub(super) fn bindings(&self) -> &super::source_bindings::SourceBindings { &self.bindings }
+    pub(super) fn source_generics(&self) -> &BTreeMap<DefinitionId, Arc<QueryValue>> { &self.bindings.generics }
+    pub(super) fn catalog_input(&self) -> &Arc<InputValue> { &self.bindings.catalog }
     fn catalog(&self) -> &DiscoveryInput {
-        let InputValue::DiscoverySeal(catalog) = self.catalog.as_ref() else { unreachable!("captured source catalog") }; catalog
+        let InputValue::DiscoverySeal(catalog) = self.bindings.catalog.as_ref() else { unreachable!("captured source catalog") }; catalog
     }
     pub fn key(&self) -> &ImplHeaderSyntaxKey { &self.key }
     pub fn pending(&self) -> Option<SourceTypePending> { self.pending }
@@ -54,47 +52,22 @@ impl PreparedImplSourceTypes {
             return QueryPoll::Ready(Err(fault("source term catalog absent")));
         };
         let InputValue::DiscoverySeal(catalog) = input.as_ref() else { return QueryPoll::Ready(Err(fault("source term catalog variant differs"))); };
-        let world = match prepared::catalog_world(catalog) { Ok(world) => world, Err(error) => return QueryPoll::Ready(Err(error)) };
-        let local_unit = catalog.impl_catalog.as_ref().expect("checked catalog").root().outline.crate_key;
-        let mut plan = Self { key: key.clone(), head, catalog: Arc::clone(&input),
-            definitions: BTreeMap::new(), receipts: Vec::new(), generics: BTreeMap::new(), pending: None };
+        if let Err(error) = prepared::catalog_world(catalog) { return QueryPoll::Ready(Err(error)); }
+        let mut plan = Self { key: key.clone(), head,
+            bindings: super::source_bindings::SourceBindings::empty(Arc::clone(&input)), pending: None };
         let ImplHeadTypeResult::Resolved { self_type, trait_ref } = plan.head().result() else {
             plan.pending = Some(SourceTypePending::HeadTypes); return QueryPoll::Ready(Ok(plan));
         };
-        let mut terms = vec![self_type];
+        use super::source_bindings::{DefinitionKind, require_type, SourceBindings};
         let mut required = BTreeMap::new();
+        require_type(&mut required, self_type);
         if let Some(reference) = trait_ref {
-            required.insert(reference.trait_key, false);
-            for arg in &reference.args { if let GenericArg::Type(ty) = arg { terms.push(ty); } }
+            required.insert(reference.trait_key, DefinitionKind::Trait);
+            for arg in &reference.args { if let GenericArg::Type(ty) = arg { require_type(&mut required, ty); } }
         }
-        while let Some(ty) = terms.pop() {
-            if let Some((_, pointee)) = crate::traits::pointer_terms::as_raw_pointer(ty) { terms.push(pointee); continue; }
-            match ty {
-                TyTerm::Nominal(definition, args) => {
-                    required.insert(*definition, true);
-                    for arg in args { if let GenericArg::Type(ty) = arg { terms.push(ty); } }
-                }
-                TyTerm::Tuple(fields) => terms.extend(fields),
-                TyTerm::Array(ty, _) | TyTerm::Slice(ty) | TyTerm::Ref(_, _, ty) => terms.push(ty),
-                TyTerm::Function(function) => { terms.extend(&function.value.parameters); terms.push(&function.value.result); }
-                _ => {},
-            }
-        }
-        for (definition, nominal) in required {
-            let Some(receipt) = ready!(DefinitionReceipt::observe(db, definition)) else {
-                plan.pending = Some(SourceTypePending::SourceDefinition); return QueryPoll::Ready(Ok(plan));
-            };
-            let valid = if nominal { match receipt.is_nominal() { Ok(value) => value, Err(error) => return QueryPoll::Ready(Err(error)) } } else { receipt.is_trait() };
-            if !valid { plan.pending = Some(SourceTypePending::SourceDefinition); return QueryPoll::Ready(Ok(plan)); }
-            let generics = ready!(db.fetch(&SyntaxProvider, QueryKey::DeclarationGenerics(definition))).value;
-            let QueryValue::DeclarationGenerics(actual) = generics.as_ref() else { return QueryPoll::Ready(Err(fault("source generic query variant differs"))); };
-            if !receipt.matches_generics(actual) || actual.argument_kinds().is_none() {
-                plan.pending = Some(SourceTypePending::ParameterLayout); return QueryPoll::Ready(Ok(plan));
-            }
-            let id = receipt.definition_id(world, local_unit);
-            plan.generics.insert(id, generics);
-            plan.definitions.insert(definition, id); plan.receipts.push(receipt);
-        }
+        if let Some(owner) = plan.head().syntax().canonical_owner() { required.insert(owner.identity(), DefinitionKind::Impl); }
+        plan.bindings = ready!(SourceBindings::prepare(db, input, required));
+        plan.pending = plan.bindings.pending;
         QueryPoll::Ready(Ok(plan))
     }
     pub(super) fn encode<'cx>(&self, cx: Cx<'cx>, configuration: &PreparedSolverConfiguration)
@@ -103,10 +76,10 @@ impl PreparedImplSourceTypes {
         if configuration.source() != self.catalog().impl_catalog.as_ref().expect("checked catalog").root()
             || cx.services().source_world() != self.catalog().seal.fingerprint() { return Err(SourceTypePending::SourceDefinition); }
         let ImplHeadTypeResult::Resolved { self_type, trait_ref } = self.head().result() else { return Err(SourceTypePending::HeadTypes); };
-        let encoder = Encoder { plan: self, cx, configuration };
+        let encoder = Encoder { definitions: &self.bindings.definitions, cx, configuration };
         let self_ty = encoder.ty(self_type, &[])?;
         let trait_arguments = trait_ref.as_ref().map(|reference| {
-            let definition = *self.definitions.get(&reference.trait_key).ok_or(SourceTypePending::SourceDefinition)?;
+            let definition = *self.bindings.definitions.get(&reference.trait_key).ok_or(SourceTypePending::SourceDefinition)?;
             let mut args = vec![Arg::Type(self_ty)];
             for argument in &reference.args { args.push(encoder.arg(argument, &[])?); }
             Ok::<_, SourceTypePending>(EncodedTraitArguments { definition, args: cx.list(args) })
@@ -118,9 +91,9 @@ pub(super) struct EncodedImplTypes<'cx> {
     pub(super) self_ty: Ty<'cx, prepared::PreparedProvider<'cx>>,
     pub(super) trait_arguments: Option<EncodedTraitArguments<'cx>>,
 }
-/// Actual shared argument list plus source definition identity. Constructing
-/// TraitRef calls upstream's generic-layout guard and must wait for real typed
-/// fact publication; do not bypass that guard or install dummy source callbacks.
+/// Actual shared argument list plus source definition identity. The upstream
+/// constructor reads genuine prepared generic metadata; it grants no complete
+/// source-fact readiness and cannot bypass the upstream argument-layout guard.
 pub(super) struct EncodedTraitArguments<'cx> {
     pub(super) definition: DefinitionId,
     pub(super) args: model::Args<'cx, prepared::PreparedProvider<'cx>>,
@@ -130,10 +103,14 @@ impl<'cx> EncodedTraitArguments<'cx> {
         ty::TraitRef::new_from_args(cx, self.definition, self.args)
     }
 }
-struct Encoder<'a, 'cx> { plan: &'a PreparedImplSourceTypes, cx: Cx<'cx>, configuration: &'a PreparedSolverConfiguration }
+struct Encoder<'a, 'cx> { definitions: &'a BTreeMap<Digest, DefinitionId>, cx: Cx<'cx>, configuration: &'a PreparedSolverConfiguration }
+pub(super) fn encode_declared<'cx>(cx: Cx<'cx>, configuration: &PreparedSolverConfiguration,
+    definitions: &BTreeMap<Digest, DefinitionId>, ty: &TyTerm) -> Result<Ty<'cx, prepared::PreparedProvider<'cx>>, SourceTypePending> {
+    Encoder { definitions, cx, configuration }.ty(ty, &[])
+}
 impl<'cx> Encoder<'_, 'cx> {
     fn parameter(&self, key: term::ParamKey, kind: BoundKind) -> Result<SourceParameter, SourceTypePending> {
-        SourceParameter::from_impl(self.plan.head().syntax(), key, kind).map_err(|_| SourceTypePending::ParameterLayout)
+        self.cx.services().source_parameter(key, kind).ok_or(SourceTypePending::ParameterLayout)
     }
     fn bound(&self, depth: u32, index: u32, kind: BoundKind, binders: &[&[BoundKind]]) -> Result<(), SourceTypePending> {
         if depth as usize >= binders.len() || binders[binders.len() - 1 - depth as usize].get(index as usize) != Some(&kind) {
@@ -189,7 +166,7 @@ impl<'cx> Encoder<'_, 'cx> {
             TyTerm::Str => TyKind::Str, TyTerm::Never => TyKind::Never,
             TyTerm::Param(key) => TyKind::Param(self.parameter(*key, BoundKind::Type)?),
             TyTerm::Nominal(definition, args) => {
-                let id = *self.plan.definitions.get(definition).ok_or(SourceTypePending::SourceDefinition)?;
+                let id = *self.definitions.get(definition).ok_or(SourceTypePending::SourceDefinition)?;
                 let args = args.iter().map(|arg| self.arg(arg, binders)).collect::<Result<Vec<_>, _>>()?;
                 TyKind::Adt(AdtDefinition { context: self.cx, definition: id }, self.cx.list(args))
             }
@@ -213,11 +190,9 @@ impl<'cx> Encoder<'_, 'cx> {
 }
 fn fault(message: &str) -> Diagnostic { Diagnostic::new("LRR-E-UPSTREAM-SOLVER-INPUT", message.into()) }
 impl StableEncode for PreparedImplSourceTypes {
-    const DOMAIN: &'static str = "lrr/v2/prepared-impl-source-type-bindings";
+    const DOMAIN: &'static str = "lrr/v3/prepared-impl-source-type-bindings";
     fn encode_fields(&self, e: &mut StableEncoder) {
-        e.record(&self.key); e.record(self.head()); e.digest(self.catalog().seal.fingerprint());
-        e.map(&self.definitions, |e, source, id| { e.digest(*source); e.record(id); });
-        e.map(&self.generics, |e, id, value| { e.record(id); let QueryValue::DeclarationGenerics(generics) = value.as_ref() else { unreachable!() }; e.record(generics.as_ref()); });
+        e.record(&self.key); e.record(self.head()); e.record(&self.bindings);
         e.option(&self.pending, |e, pending| e.u32(*pending as u32));
     }
 }
@@ -253,15 +228,17 @@ pub(crate) fn check_actual_encodings(db: &mut Database, key: &crate::db::seals::
     let layouts = super::source_generics::SourceGenericLayouts::from_plans(Arc::clone(&input), &plans)?;
     for value in &plans {
         let QueryValue::ImplSourceTypes(plan) = value.as_ref() else { unreachable!() };
-        for (id, actual) in &plan.generics {
+        for (id, actual) in &plan.bindings.generics {
+            let QueryValue::DeclarationGenericTypes(actual) = actual.as_ref() else { unreachable!() };
             let again = match db.fetch(&SyntaxProvider, QueryKey::DeclarationGenerics(id.source())) {
                 QueryPoll::Ready(Ok(value)) => value.value, _ => return Err(fault("actual generic memo is unavailable")),
             };
-            assert!(Arc::ptr_eq(actual, &again), "ordinary trait and constructor clients share the generic query");
+            assert!(Arc::ptr_eq(actual.declaration_root(), &again), "ordinary trait and constructor clients share the generic query");
         }
     }
     let before = db.trace.events.len();
     let count = configuration.with_source_context(db, Arc::clone(&input), Some(&layouts), |cx, _| -> Result<usize, Diagnostic> {
+        super::source_generics::check_materialized(cx, &layouts);
         let mut count = 0;
         let mut references = 0;
         for value in &plans {

@@ -361,6 +361,7 @@ pub(crate) struct WrittenTypeDeclaration<'a> {
     syntax: Option<&'a ra_ap_syntax::SyntaxNode>,
     impl_self: Option<&'a TyTerm>,
     type_arguments: Option<&'a std::collections::BTreeMap<crate::traits::term::ParamKey, TyTerm>>,
+    parameter_rebase: Option<&'a std::collections::BTreeMap<crate::traits::term::ParamKey, crate::traits::term::ParamKey>>,
 }
 impl<'a> WrittenTypeDeclaration<'a> {
     /// A directly written parameter, before alias normalization. Used for
@@ -403,6 +404,7 @@ impl<'a> WrittenTypeDeclaration<'a> {
             syntax: None,
             impl_self: None,
             type_arguments: None,
+            parameter_rebase: None,
         }
     }
     pub(super) fn function_syntax(
@@ -428,6 +430,7 @@ impl<'a> WrittenTypeDeclaration<'a> {
             syntax: Some(syntax),
             impl_self: None,
             type_arguments: None,
+            parameter_rebase: None,
         }
     }
     pub(crate) fn implementation(
@@ -436,11 +439,24 @@ impl<'a> WrittenTypeDeclaration<'a> {
         syntax: &'a ra_ap_syntax::SyntaxNode,
         impl_self: Option<&'a TyTerm>,
     ) -> Self {
+        Self::declaration(owner, generics, syntax, impl_self)
+    }
+    pub(crate) fn declaration(
+        owner: super::type_name_namespace::SourceTypeOwner<'a>,
+        generics: &'a [crate::syntax::signatures::DefinitionParameter],
+        syntax: &'a ra_ap_syntax::SyntaxNode, self_type: Option<&'a TyTerm>,
+    ) -> Self {
         Self { definition: owner.definition, scope: owner.scope, header: owner.header,
-            generics, predicates: &[], function: None, syntax: Some(syntax), impl_self, type_arguments: None }
+            generics, predicates: &[], function: None, syntax: Some(syntax), impl_self: self_type, type_arguments: None, parameter_rebase: None }
+    }
+    pub(crate) fn rebase_parameters(mut self, map: &'a std::collections::BTreeMap<crate::traits::term::ParamKey, crate::traits::term::ParamKey>) -> Self {
+        self.parameter_rebase = Some(map); self
+    }
+    fn parameter_key(&self, key: crate::traits::term::ParamKey) -> crate::traits::term::ParamKey {
+        self.parameter_rebase.and_then(|map| map.get(&key)).copied().unwrap_or(key)
     }
     fn parameter_type(&self, key: crate::traits::term::ParamKey) -> TyTerm {
-        self.type_arguments.and_then(|arguments| arguments.get(&key)).cloned().unwrap_or(TyTerm::Param(key))
+        self.type_arguments.and_then(|arguments| arguments.get(&key)).cloned().unwrap_or_else(|| TyTerm::Param(self.parameter_key(key)))
     }
     fn resolve_name(
         &self,
@@ -678,10 +694,10 @@ pub(super) fn resolve_actual_type(
                             return QueryPoll::Ready(Ok(None));
                         };
                         let length =
-                            crate::traits::term::ConstTerm::Param(crate::traits::term::ParamKey {
+                            crate::traits::term::ConstTerm::Param(signature.parameter_key(crate::traits::term::ParamKey {
                                 definition: signature.definition,
                                 ordinal: parameter.ordinal,
-                            });
+                            }));
                         return match walk(db, graph, sources, signature, &element) {
                             QueryPoll::Ready(Ok(Some(element))) => {
                                 QueryPoll::Ready(Ok(Some(TyTerm::Array(Box::new(element), length))))
@@ -1259,7 +1275,7 @@ fn complete_trait_arguments(
             if symbolic_type_pending(&default).is_some() { return QueryPoll::Ready(Ok(None)); }
             let declaration = WrittenTypeDeclaration { definition: trait_key, scope, header: recipe,
                 generics: header.generics(), predicates: &[], function: None, syntax: None,
-                impl_self: Some(self_type), type_arguments: Some(&bindings) };
+                impl_self: Some(self_type), type_arguments: Some(&bindings), parameter_rebase: None };
             let Some(term) = ready!(resolve_actual_type(db, graph, sources, &declaration, &default)) else {
                 return QueryPoll::Ready(Ok(None));
             };

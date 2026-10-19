@@ -157,6 +157,22 @@ impl ParsedFile {
         self.spell_generic_bounds(declaration, &mut generics)?;
         Ok((generics, layout))
     }
+    /// Direct retained locations of const parameter Types in the same own/owner
+    /// declaration order as declaration_generics. No token-text parser.
+    pub(crate) fn declaration_const_type_ranges(&self, declaration: &SyntaxNode)
+        -> Result<std::collections::BTreeMap<u32, super::spans::SourceRange>, Diagnostic> {
+        let mut result = std::collections::BTreeMap::new();
+        let mut ordinal = 0u32;
+        for owner in std::iter::once(declaration.clone()).chain(associated_owner(declaration)) {
+            for parameter in owner.children().find_map(ast::GenericParamList::cast).into_iter().flat_map(|list| list.generic_params()) {
+                if let ast::GenericParam::ConstParam(parameter) = parameter {
+                    if let Some(ty) = parameter.ty() { result.insert(ordinal, super::ast_adapter::range(ty.syntax().text_range())); }
+                }
+                ordinal = ordinal.checked_add(1).ok_or_else(|| fault("generic parameter ordinal overflow"))?;
+            }
+        }
+        Ok(result)
+    }
     /// Own and immediate impl/trait where clauses belong to the same
     /// declared Type scope. This prepares signature facts, never a body.
     pub(crate) fn declaration_predicates(

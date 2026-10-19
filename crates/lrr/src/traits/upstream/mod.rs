@@ -3,7 +3,8 @@
 //! This is the typed integration boundary, not yet a concrete LRR Interner or
 //! SolverDelegate. Source/header/ParamEnv transport, demand suspension and
 //! selected-impl witness mapping must join before any runtime acceptance.
-mod source_generics;
+pub(crate) mod source_generics;
+mod source_bindings;
 use rustc_next_trait_solver::{
     delegate::SolverDelegate,
     solve::{GoalEvaluation, SolverDelegateEvalExt},

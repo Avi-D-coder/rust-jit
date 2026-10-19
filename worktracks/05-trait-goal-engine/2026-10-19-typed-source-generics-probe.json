@@ -1,0 +1,7 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Actual source-bound typed generics_of/identity arguments, source parameter identities/order, const Types/early regions and explicit pending function binders. No ready solver facts or root evaluation.",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions"
+  ]
+}

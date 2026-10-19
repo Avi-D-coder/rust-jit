@@ -1,3 +1,4 @@
+pub(crate) mod declaration_generic_types;
 pub(crate) mod declaration_generics;
 pub(crate) mod pattern_access;
 pub(crate) mod trait_declarations;

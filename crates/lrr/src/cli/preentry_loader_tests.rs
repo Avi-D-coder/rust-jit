@@ -2793,3 +2793,37 @@ fn root_solver_configuration_uses_common_cfg_attr_without_static_feature_validat
     assert!(!prepared.features().contains("gca_const_items"));
     assert!(prepared.features().contains("lrr_unrecognized_source_feature"));
 }
+
+#[test]
+fn unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions() {
+    use crate::db::key::QueryKey;
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");
+    let mut constants = 0; let mut regions = 0;
+    for edition in [2015, 2018, 2021, 2024] {
+        for (case, names, methods) in [
+            ("tests/ui/const-generics/type-after-const-ok.rs", &["A"][..], false),
+            ("tests/ui/const-generics/generic_const_exprs/unop.rs", &["Foo", "test"][..], false),
+            ("tests/ui/const-generics/type-dependent/issue-61936.rs", &["ArrayWindowsExample", "SliceExt"][..], true),
+        ] {
+            let mut paths = vec![root.join(case)];
+            if methods {
+                let original = std::fs::read_to_string(&paths[0]).unwrap();
+                paths.push(temporary_source(&format!("const-region-emit-{edition}"),
+                    &format!("macro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} emit!{{{original}}}")));
+                paths.push(temporary_source(&format!("const-region-wrap-{edition}"),
+                    &format!("macro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} macro_rules! wrap {{($($t:tt)*)=>{{emit!{{$($t)*}}}}}} wrap!{{{original}}}")));
+            }
+            for (origin, path) in paths.iter().enumerate() {
+            let (mut db, seal, scope) = configured_impl_catalog_world(path, edition).unwrap();
+            db.trace.detailed = true; let before = db.trace.events.len();
+            let (rows, c, r) = crate::traits::upstream::source_generics::check_actual_declarations(&mut db, &seal, scope.crate_key, names, methods)
+                .unwrap_or_else(|error| panic!("actual typed generics {case},edition{edition}: {error:?}"));
+            assert!(rows > 0); constants += c; regions += r;
+            assert!(db.trace.events[before..].iter().all(|event| !matches!(event.key,
+                QueryKey::FunctionSignature(_) | QueryKey::BodyStructure(_) | QueryKey::Thunk(_) | QueryKey::PatternPlan(_))));
+            eprintln!("actual generic Type facts {case},edition{edition},origin{origin}: {rows}rows/{c}consts/{r}regions; original main unexecuted");
+            }
+        }
+    }
+    assert!(constants > 0 && regions > 0);
+}

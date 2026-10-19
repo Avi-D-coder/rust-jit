@@ -6,7 +6,6 @@ use crate::{
         poll::QueryPoll, provider::SyntaxProvider, value::QueryValue},
     syntax::{signatures::{DefinitionParameter, GenericKind, GenericSourceLayout},
         outline::{HeaderRecipe, DeclarationContext}, parse::ParseKey},
-    traits::term::BoundKind,
 };
 use ra_ap_syntax::{AstNode, ast};
 use std::sync::Arc;
@@ -22,17 +21,25 @@ pub struct DeclarationGenerics {
     /// function's inherited Self. Neither changes ordinary source ordinals.
     trait_self: bool,
     function: bool,
-    argument_kinds: Vec<BoundKind>,
+    const_types: std::collections::BTreeMap<u32, crate::syntax::spans::SourceRange>,
 }
 impl DeclarationGenerics {
     pub fn definition(&self) -> Digest { self.definition }
     pub fn parameters(&self) -> &[DefinitionParameter] { &self.parameters }
     pub fn layout(&self) -> Option<GenericSourceLayout> { self.layout }
-    pub(crate) fn argument_kinds(&self) -> Option<&[BoundKind]> {
-        self.layout.map(|_| self.argument_kinds.as_slice())
-    }
     pub(crate) fn has_trait_self(&self) -> bool { self.trait_self }
     pub(crate) fn is_function(&self) -> bool { self.function }
+    pub(crate) fn source_parts(&self) -> Option<(&ParseKey, &HeaderRecipe, &DeclarationContext, &crate::syntax::parse::ParsedFile)> {
+        let [source, header, context] = self.metadata.as_ref()?;
+        let (InputValue::DefinitionSource(source), InputValue::DefinitionHeader(header), InputValue::DeclarationContext(context), Some(QueryValue::ParseFile(parsed))) =
+            (source.as_ref(), header.as_ref(), context.as_ref(), self.parsed.as_deref()) else { unreachable!("captured declaration inputs") };
+        Some((source, header, context, parsed))
+    }
+    pub(crate) fn const_type(&self, ordinal: u32) -> Result<Option<ast::Type>, Diagnostic> {
+        let Some(range) = self.const_types.get(&ordinal) else { return Ok(None); };
+        let Some((_, _, _, parsed)) = self.source_parts() else { return Ok(None); };
+        parsed.syntax_at(*range, |node| ast::Type::can_cast(node.kind())).map(|node| node.and_then(ast::Type::cast))
+    }
     pub(crate) fn matches_metadata(&self, source: &ParseKey, header: &HeaderRecipe,
         context: &DeclarationContext) -> bool {
         let Some([actual_source, actual_header, actual_context]) = &self.metadata else { return false; };
@@ -42,7 +49,7 @@ impl DeclarationGenerics {
     }
     pub(crate) fn prepare(db: &mut Database, definition: Digest) -> QueryPoll<Self> {
         let mut result = Self { definition, metadata: None, parsed: None, parameters: Vec::new(),
-            layout: None, trait_self: false, function: false, argument_kinds: Vec::new() };
+            layout: None, trait_self: false, function: false, const_types: std::collections::BTreeMap::new() };
         let source = db.input(&InputKey::DefinitionSource(definition));
         let header = db.input(&InputKey::DefinitionHeader(definition));
         let context = db.input(&InputKey::DeclarationContext(definition));
@@ -71,9 +78,8 @@ impl DeclarationGenerics {
         }
         result.trait_self = ast::Trait::can_cast(node.kind());
         result.function = ast::Fn::can_cast(node.kind());
-        let kind = |p: &DefinitionParameter| match p.kind {
-            GenericKind::Type => BoundKind::Type, GenericKind::Lifetime => BoundKind::Region,
-            GenericKind::Const => BoundKind::Const,
+        result.const_types = match tree.declaration_const_type_ranges(&node) {
+            Ok(ranges) => ranges, Err(error) => return QueryPoll::Ready(Err(error)),
         };
         // Function early/late lifetime classification must come from the real
         // binder service. Never expose all written function lifetimes as early.
@@ -81,11 +87,6 @@ impl DeclarationGenerics {
             result.parameters = parameters; result.metadata = Some([source, header, context]);
             result.parsed = Some(parsed); return QueryPoll::Ready(Ok(result));
         }
-        if result.trait_self { result.argument_kinds.push(BoundKind::Type); }
-        if layout.implicit_self { result.argument_kinds.push(BoundKind::Type); }
-        result.argument_kinds.extend(parameters[layout.own as usize..].iter()
-            .filter(|p| !(layout.implicit_self && p.ordinal as usize == parameters.len() - 1)).map(kind));
-        result.argument_kinds.extend(parameters[..layout.own as usize].iter().map(kind));
         result.parameters = parameters; result.layout = Some(layout);
         result.metadata = Some([source, header, context]); result.parsed = Some(parsed);
         QueryPoll::Ready(Ok(result))
@@ -93,11 +94,11 @@ impl DeclarationGenerics {
 }
 fn fault(message: &str) -> Diagnostic { Diagnostic::new("LRR-E-DECLARATION-GENERICS", message.into()) }
 impl StableEncode for DeclarationGenerics {
-    const DOMAIN: &'static str = "lrr/v1/actual-declaration-generics";
+    const DOMAIN: &'static str = "lrr/v2/actual-declaration-generics";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.definition); e.option(&self.layout, |e, layout| e.record(layout));
         e.bool(self.trait_self); e.bool(self.function);
-        e.sequence(&self.argument_kinds, |e, kind| e.u32(kind.tag()));
+        e.map(&self.const_types, |e, ordinal, range| { e.u32(*ordinal); e.u32(range.start); e.u32(range.end); });
         e.sequence(&self.parameters, |e, p| {
             e.u32(p.ordinal); e.string(&p.name);
             e.u32(match p.kind { GenericKind::Type => 0, GenericKind::Lifetime => 1, GenericKind::Const => 2 });

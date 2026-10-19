@@ -117,7 +117,7 @@ impl PreparedSolverConfiguration {
             // catalogs have no -Z flag input. Cargo/override profiles remain work.
             assumptions_on_binders: false, renormalize_rigid_aliases: false,
         };
-        prepared::with_provider(&settings, run)
+        prepared::with_provider(&settings, self, run)
     }
 }
 fn fault(message: &str) -> Diagnostic { Diagnostic::new("LRR-E-UPSTREAM-SOLVER-INPUT", message.into()) }

@@ -344,6 +344,13 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(request) => QueryPoll::NeedInput(request),
                 };
             }
+            QueryKey::DeclarationGenericTypes(key) => {
+                return match crate::frontend::declaration_generic_types::DeclarationGenericTypes::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::DeclarationGenericTypes(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::DeclarationGenerics(definition) => {
                 return match crate::frontend::declaration_generics::DeclarationGenerics::prepare(db, *definition) {
                     QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::DeclarationGenerics(Box::new(value))),

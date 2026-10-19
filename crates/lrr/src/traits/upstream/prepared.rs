@@ -4,7 +4,7 @@
 use super::model::{Clause, Predicate, Span, Symbol, Ty};
 use super::{
     context::Context, facts::SourceFacts, identity::DefinitionId, model::*,
-    parameters::SourceParameter, storage::Interned,
+    parameters::SourceParameter, storage::{Interned, ScopedCache},
 };
 use crate::{
     core::{
@@ -75,6 +75,7 @@ impl DefinitionReceipt {
             || ast::Enum::can_cast(node.kind()) || ast::Union::can_cast(node.kind())).map(|node| node.is_some())
     }
     pub(super) fn is_trait(&self) -> bool { self.trait_declaration }
+    pub(super) fn is_impl(&self) -> bool { self.implementation.is_some() }
     pub(super) fn matches_generics(&self, generics: &crate::frontend::declaration_generics::DeclarationGenerics) -> bool {
         let (InputValue::DefinitionSource(parse), InputValue::DefinitionHeader(header), InputValue::DeclarationContext(context)) =
             (self.source.as_ref(), self.header.as_ref(), self.context.as_ref()) else { return false; };
@@ -377,6 +378,7 @@ pub(crate) struct PreparedProvider<'cx> {
     world: Digest,
     settings: &'cx Settings<'cx>,
     facts: &'cx OnceCell<PreparedFacts<'cx>>,
+        generic_facts: &'cx ScopedCache<BTreeMap<DefinitionId, Generics<'cx, PreparedProvider<'cx>>>>,
     diagnostics: &'cx RefCell<Vec<(Span, String)>>,
 }
 impl fmt::Debug for PreparedProvider<'_> {
@@ -388,6 +390,7 @@ impl PartialEq for PreparedProvider<'_> {
     fn eq(&self, b: &Self) -> bool {
         std::ptr::eq(self.settings, b.settings)
             && std::ptr::eq(self.facts, b.facts)
+            && std::ptr::eq(self.generic_facts, b.generic_facts)
             && std::ptr::eq(self.diagnostics, b.diagnostics)
             && self.world == b.world
     }
@@ -397,6 +400,7 @@ impl Hash for PreparedProvider<'_> {
     fn hash<H: Hasher>(&self, h: &mut H) {
         std::ptr::from_ref(self.settings).hash(h);
         std::ptr::from_ref(self.facts).hash(h);
+        std::ptr::from_ref(self.generic_facts).hash(h);
         std::ptr::from_ref(self.diagnostics).hash(h);
         self.world.hash(h);
     }
@@ -421,23 +425,39 @@ pub(super) fn catalog_world(catalog: &DiscoveryInput) -> Result<Digest, Diagnost
 /// it can evaluate a goal. It cannot return borrowed upstream IR handles.
 pub(super) fn with_provider<R>(
     settings: &Settings<'_>,
+    configuration: &super::configuration::PreparedSolverConfiguration,
     run: impl for<'cx> FnOnce(Cx<'cx>, PreparedProvider<'cx>) -> R,
 ) -> Result<R, Diagnostic> {
     let facts = OnceCell::new();
     let diagnostics = RefCell::new(Vec::new());
-    let provider = PreparedProvider::new(settings, &facts, &diagnostics)?;
+    let generic_facts = ScopedCache::empty();
+    let provider = PreparedProvider::new(settings, &facts, &generic_facts, &diagnostics)?;
     let state = super::context::State::new(provider);
     let view = state.view();
     let _cache = state.enter_cache();
+    let prepared = settings.construction_generics.map(|source| source.materialize(view.context(), configuration)).transpose()?;
+    // This owner drops the typed table before the context/interner. The
+    // separate initially empty slot never retains arena handles at destruction.
+    let _generic_guard = prepared.map(|prepared| generic_facts.enter(prepared));
     Ok(run(view.context(), provider))
 }
 impl<'cx> PreparedProvider<'cx> {
     pub(super) fn source_world(self) -> Digest { self.world }
+    pub(super) fn source_parameter(self, key: ParamKey, kind: BoundKind) -> Option<SourceParameter> {
+        self.settings.construction_generics?.parameter(key, kind)
+    }
+    pub(super) fn require_generic_value(self, id: DefinitionId, value: Generics<'cx, Self>) -> Result<(), Diagnostic> {
+        if id.world() != self.world || self.generic_facts.with(|generics| generics.get(&id).copied()) != Some(value) {
+            return Err(fault("typed generics differ from actual source identity/order/parent count/const Type"));
+        }
+        Ok(())
+    }
     /// A typed reader handle is not a ready solver context. Its actual complete
     /// source producer must publish every demanded record before entry.
     pub(super) fn new(
         settings: &'cx Settings<'cx>,
         facts: &'cx OnceCell<PreparedFacts<'cx>>,
+    generic_facts: &'cx ScopedCache<BTreeMap<DefinitionId, Generics<'cx, PreparedProvider<'cx>>>>,
         diagnostics: &'cx RefCell<Vec<(Span, String)>>,
     ) -> Result<Self, Diagnostic> {
         let world = catalog_world(&settings.catalog)?;
@@ -445,6 +465,7 @@ impl<'cx> PreparedProvider<'cx> {
             world,
             settings,
             facts,
+            generic_facts,
             diagnostics,
         })
     }
@@ -459,11 +480,10 @@ impl<'cx> PreparedProvider<'cx> {
         }
         let world = self.world;
         for (id, row) in &facts.definitions {
-            if let Some(generics) = self.settings.construction_generics.and_then(|source| source.get(*id)) {
-                if !row.receipt.matches_generics(generics)
-                    || !generics.argument_kinds().is_some_and(|source| source.iter().copied().eq(row.generics.parameters.iter().map(parameter_kind))) {
-                    return Err(fault("typed generics differ from actual constructor metadata"));
-                }
+            let source = self.settings.construction_generics.and_then(|source| source.get(*id))
+                .ok_or_else(|| fault("typed definition lacks actual generic source preparation"))?;
+            if !row.receipt.matches_generics(source) || self.require_generic_value(*id, row.generics).is_err() {
+                return Err(fault("typed generics differ from actual source parameter identity, order or const Type"));
             }
             if id.world() != world || id.source() != row.receipt.definition {
                 return Err(fault("prepared source declaration identity differs"));
@@ -581,6 +601,7 @@ impl<'cx> PreparedProvider<'cx> {
             .map_err(|_| fault("prepared source facts were already frozen"))
     }
     pub(super) fn ready(self, cx: Cx<'cx>) -> Result<ReadyProvider<'cx>, Diagnostic> {
+        if self.facts.get().is_none() { return Err(fault("complete actual source facts are not prepared")); }
         if cx.services() != self || cx != self.data().context {
             return Err(fault("source-fact reader belongs to another context"));
         }
@@ -721,8 +742,7 @@ impl<'cx> PreparedProvider<'cx> {
     }
     fn ordinary_layout(self, id: DefinitionId) -> impl Iterator<Item = BoundKind> + 'cx {
         assert_eq!(id.world(), self.world, "foreign constructor definition world");
-        let source = self.settings.construction_generics.and_then(|layouts| layouts.get(id));
-        let source = source.map(|generics| generics.argument_kinds().expect("actual generic layout pending"));
+        let source = self.settings.construction_generics.and_then(|layouts| layouts.argument_kinds(id));
         let typed = source.is_none().then(|| self.definition(id).generics.parameters);
         source.into_iter().flat_map(|kinds| kinds.iter().copied())
             .chain(typed.into_iter().flat_map(|parameters| parameters.iter().map(parameter_kind)))
@@ -765,7 +785,9 @@ impl<'cx> SourceFacts<'cx> for PreparedProvider<'cx> {
         self.const_data(id).abstract_value
     }
     fn generics_of(self, _: Cx<'cx>, id: DefinitionId) -> Generics<'cx, Self> {
-        self.definition(id).generics
+        assert_eq!(id.world(), self.world, "foreign generic fact world");
+        self.generic_facts.with(|generics| generics.get(&id).copied())
+            .unwrap_or_else(|| self.definition(id).generics)
     }
     fn variances_of(self, _: Cx<'cx>, id: DefinitionId) -> &'cx [Variance] {
         self.definition(id).variances

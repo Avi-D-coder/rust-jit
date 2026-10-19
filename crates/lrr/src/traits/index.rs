@@ -33,6 +33,7 @@ pub struct PreparedScopeImplHeaders {
     locations: Vec<HeaderLocation>,
     owners: Vec<Option<CanonicalImplOwner>>,
     owner_locations: Vec<(Digest, u32)>,
+    member_declarations: std::collections::BTreeMap<crate::syntax::outline::ScopeKey, Digest>,
     inventory_fingerprint: Digest,
     fingerprint: Digest,
     exclusive_bytes: usize,
@@ -158,6 +159,7 @@ impl PreparedScopeImplHeaders {
             .ok_or_else(resource)?;
         // Once per selected source inventory, not once per header query.
         let mut source_owners = std::collections::BTreeMap::new();
+        let mut source_members = std::collections::BTreeMap::new();
         for scan in scans {
             if scan.impls().is_empty() {
                 continue;
@@ -176,10 +178,13 @@ impl PreparedScopeImplHeaders {
                                 return Err(error("canonical impl source scan differs"));
                             }
                             for raw in scan.impls() {
-                                if let Some(item) = prepared
-                                    .owner(raw.identity)
-                                    .and_then(|owner| owner.canonical)
-                                {
+                                if let Some(owner) = prepared.owner(raw.identity)
+                                    && let Some(item) = owner.canonical {
+                                    if let Some(member) = owner.member_owner {
+                                        let mut scope = item.scope.clone();
+                                        scope.owner = Some(member);
+                                        source_members.insert(raw.identity, scope);
+                                    }
                                     source_owners.insert(
                                         raw.identity,
                                         CanonicalImplOwner::Original(item.def_key.clone()),
@@ -230,7 +235,14 @@ impl PreparedScopeImplHeaders {
             }
         }
         owner_locations.sort_unstable();
-        let mut encoded = StableEncoder::new("lrr/v2/prepared-scope-source-impl-headers");
+        let mut member_declarations = std::collections::BTreeMap::new();
+        for (header, owner) in headers.iter().zip(&owners) {
+            if let (Some(scope), Some(owner)) = (source_members.remove(&header.identity), owner)
+                && member_declarations.insert(scope, owner.identity()).is_some() {
+                return Err(error("associated impl scope has duplicate canonical declarations"));
+            }
+        }
+        let mut encoded = StableEncoder::new("lrr/v3/prepared-scope-source-impl-headers");
         encoded.record(&key);
         encoded.digest(inventory_fingerprint);
         encoded.u64(prepared.len() as u64);
@@ -241,12 +253,14 @@ impl PreparedScopeImplHeaders {
             encoded.u32(location.header);
             encoded.option(owner, |e, owner| e.record(owner));
         }
+        encoded.map(&member_declarations, |e, scope, definition| { e.record(scope); e.digest(*definition); });
         Ok(Self {
             key,
             inventory,
             locations: prepared,
             owners,
             owner_locations,
+            member_declarations,
             inventory_fingerprint,
             fingerprint: encoded.finish(),
             exclusive_bytes,
@@ -293,6 +307,10 @@ impl PreparedScopeImplHeaders {
             .binary_search_by_key(&identity, |header| header.identity)
             .ok()?;
         self.owners.get(ordinal)?.as_ref()
+    }
+    /// Actual original associated scope -> declaration join, retained once.
+    pub(crate) fn declaration_for_member_scope(&self, scope: &crate::syntax::outline::ScopeKey) -> Option<Digest> {
+        self.member_declarations.get(scope).copied()
     }
     pub(crate) fn header_by_owner(&self, definition: Digest) -> Option<SourceImplHeader<'_>> {
         let at = self
