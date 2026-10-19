@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19T09:24:53.546656+00:00",
+  "updated_at": "2026-10-19T09:36:46.596087+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -318,13 +318,14 @@
           "id": "WT05-02",
           "title": "Pinned upstream solver bridge and transactions",
           "status": "in_progress",
-          "acceptance_scope": "V221\u2013V224 partial M020 source parameter transport: GenericSourceLayout captured once in ordinary FunctionSignature (v3 encoding); actual upstream ParamLike mapping preserves source owner/namespace and parent-first order. V222 both builds and3existingpositivecontrols pass, including16/16trait-Self runtime worlds; two header controls initially failed their selector. V224 host-only successor corrects actual member selection and passes2/2affected controls across12sourceedition/origin and4const/inheritedregion worlds. Same production CLI passes2/4selected stock contracts; mid-path call classification and clone/capture return inference fail. Zero new distinct stock gains. Concrete Interner/inference/delegate, function-region/actual parent-definition joins and actual upstream goal execution remain unimplemented; M020/interpreter/JIT gates open.",
+          "acceptance_scope": "V225/V226 partial M020 context storage/source identity: InternPool shares immutable structurally interned nodes in typed-arena2.0.2 with context-owned destruction; DefinitionId keeps source/context/local identities and explicit portable encoding. Both builds and3/3focused controls pass, including12actual edition/origin header worlds and host sharing/isolation/destruction controls. One selected existing unchanged stock runtime contract passes; zero new distinct gains or suite total. V225 private upstream module import failure preserved; public reexports used without upstream changes. Complete concrete type family/Interner, prepared source-fact provider, inference/delegate and actual upstream goal execution remain absent. No M020/interpreter/JIT closure.",
           "historical_candidate": "artifacts/macos-first/sol-canonical-candidate-transactions-v1/HANDOFF.md",
           "historical_acceptance_scope": "frozen source-only exact replay/fmt/provenance;10 Rust controls uncompiled; actual source-goal and normalization prerequisites incomplete",
           "candidate": "worktracks/05-trait-goal-engine/2026-10-19-upstream-solver-bootstrap.md",
           "evidence": [
             "worktracks/evidence/2026-10-19-v217-v220-upstream-solver-trait-self.json",
-            "worktracks/evidence/2026-10-19-v221-v224-upstream-parameters.json"
+            "worktracks/evidence/2026-10-19-v221-v224-upstream-parameters.json",
+            "worktracks/evidence/2026-10-19-v225-v226-upstream-context-storage.json"
           ]
         },
         {
@@ -350,7 +351,8 @@
       "component_evidence": [
         "worktracks/evidence/2026-10-19-v209-v215-reference-receiver-probe.json",
         "worktracks/evidence/2026-10-19-v217-v220-upstream-solver-trait-self.json",
-        "worktracks/evidence/2026-10-19-v221-v224-upstream-parameters.json"
+        "worktracks/evidence/2026-10-19-v221-v224-upstream-parameters.json",
+        "worktracks/evidence/2026-10-19-v225-v226-upstream-context-storage.json"
       ],
       "solver_policy": "Pinned upstream next-generation rustc solver; E-R5-014. Adapter integration not implemented."
     },

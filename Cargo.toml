@@ -28,6 +28,7 @@ unicode-normalization = "=0.1.25"
 rustix = { version = "=1.1.5", features = ["fs", "process"] }
 rustc_next_trait_solver = { path = "vendor/rustc-trait-solver/compiler/rustc_next_trait_solver", default-features = false }
 rustc_type_ir = { path = "vendor/rustc-trait-solver/compiler/rustc_type_ir", default-features = false }
+typed-arena = "=2.0.2"
 
 [profile.release]
 opt-level = 3

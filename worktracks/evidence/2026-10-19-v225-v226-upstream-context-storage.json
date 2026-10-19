@@ -1,0 +1,276 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "at": "2026-10-19T09:36:46.596087+00:00",
+  "parent": "af8d41dc183ed2d0d9c464748380acbaf38d5610",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "scope": "M020 lifetime-owned structural storage and portable source IDs, incomplete context component",
+  "precode": "worktracks/05-trait-goal-engine/2026-10-19-upstream-context.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-19-upstream-context-selection.json",
+  "dependency": {
+    "name": "typed-arena",
+    "version": "2.0.2",
+    "checksum": "6af6ae20167a9ece4bcb41af5b80f8a1f1df981f6391189ce00fd257af04126a",
+    "fetch_exit": 0,
+    "fetch_log": "/private/tmp/lrr-upstream-context-fetch.log",
+    "other_package_changes": 0
+  },
+  "cohorts": {
+    "225": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T09:31:53.821006+00:00",
+          "head": "af8d41dc183ed2d0d9c464748380acbaf38d5610",
+          "file_count": 8446,
+          "source_sha256": "eb3c0c78b8d92f3ac29b59a24e0c0c8bb3e128b3c84c9c178627736424743629",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T09:32:31.447051+00:00",
+          "head": "af8d41dc183ed2d0d9c464748380acbaf38d5610",
+          "file_count": 8446,
+          "source_sha256": "eb3c0c78b8d92f3ac29b59a24e0c0c8bb3e128b3c84c9c178627736424743629",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "session": 35489,
+        "exit": 101,
+        "error": "9diagnostics from importing private fold/visit modules; public crate-root reexports used in V226. No runtime executed."
+      }
+    },
+    "226": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T09:32:55.019025+00:00",
+          "head": "af8d41dc183ed2d0d9c464748380acbaf38d5610",
+          "file_count": 8446,
+          "source_sha256": "9b43d1f00651578ce8510b28fda691ef41aa956845ad5ac28f693cb5f6280888",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T09:35:26.682143+00:00",
+          "head": "af8d41dc183ed2d0d9c464748380acbaf38d5610",
+          "file_count": 8446,
+          "source_sha256": "9b43d1f00651578ce8510b28fda691ef41aa956845ad5ac28f693cb5f6280888",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-db0469becf6319d3",
+              "sha256": "47c712000caf843529d2a8d066082dc4a285b5561828f96528f27ffbde718b53"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "e96ac308787805d6fe36d14d31a2b7efc4667ceea45c3a399aa0c8f05e69f148"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T09:36:46.375582+00:00",
+          "head": "af8d41dc183ed2d0d9c464748380acbaf38d5610",
+          "file_count": 8446,
+          "source_sha256": "9b43d1f00651578ce8510b28fda691ef41aa956845ad5ac28f693cb5f6280888",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-db0469becf6319d3",
+              "sha256": "47c712000caf843529d2a8d066082dc4a285b5561828f96528f27ffbde718b53"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "e96ac308787805d6fe36d14d31a2b7efc4667ceea45c3a399aa0c8f05e69f148"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "controls": [
+        {
+          "selector": "traits::upstream::storage::tests::nodes_share_by_structure_and_owned_context_drops_every_payload",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-db0469becf6319d3",
+            "traits::upstream::storage::tests::nodes_share_by_structure_and_owned_context_drops_every_payload",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.363,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "traits::upstream::storage::tests::handles_are_context_local_and_implement_the_actual_upstream_interned_api",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-db0469becf6319d3",
+            "traits::upstream::storage::tests::handles_are_context_local_and_implement_the_actual_upstream_interned_api",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.363,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::upstream_parameter_order_preserves_real_impl_trait_and_method_identities",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-db0469becf6319d3",
+            "frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::upstream_parameter_order_preserves_real_impl_trait_and_method_identities",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.977,
+          "log": "control-2.log"
+        }
+      ],
+      "lib_build": {
+        "session": 12970,
+        "exit": 0,
+        "seconds": 34.23
+      },
+      "cli_build": {
+        "session": 17516,
+        "exit": 0,
+        "seconds": 26.5
+      },
+      "controls_terminal": {
+        "session": 90808,
+        "exit": 0
+      },
+      "stock_terminal": {
+        "session": 92707,
+        "exit": 0
+      },
+      "stock": {
+        "schema": "lrr/v5/selected-upstream-runtime/v1",
+        "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+        "platform": "aarch64-apple-darwin",
+        "manifest_sha256": "874bb4abeda060172bf49847a132f921d8f51051005ec59bf971e182d14d5ffa",
+        "interpreter_sha256": "e96ac308787805d6fe36d14d31a2b7efc4667ceea45c3a399aa0c8f05e69f148",
+        "source_digester_sha256": "8846a79ccc76c48048bf6e4be6f33d35f4aa9beb1893782fdd22ae59eac601d3",
+        "native_execution": false,
+        "upstream_runtime_acceptance": {
+          "status": "incomplete",
+          "counts": {
+            "runtime_contract_pass": 1
+          }
+        },
+        "diagnostic_compatibility": {
+          "status": "unassessed"
+        },
+        "compiler_tooling_compatibility": {
+          "status": "unassessed"
+        },
+        "full_suite_compatibility": {
+          "status": "incomplete"
+        },
+        "selected_cases": [
+          {
+            "case": "tests/ui/methods/method-self-arg-trait.rs",
+            "status": "runtime_contract_pass",
+            "edition": 2015,
+            "mode": "run-pass",
+            "directives": [
+              "//@ run-pass"
+            ],
+            "source_sha256": "51b379109a3aaf3ebd0523202a3784a441b3ce88e8d4b735f2da48f210b761f0",
+            "observation": {
+              "argv": [
+                "/Users/avi/Code/rust-jit/target/debug/lrr",
+                "--edition",
+                "2015",
+                "run",
+                "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/methods/method-self-arg-trait.rs",
+                "--runtime-capture",
+                "--capture-context",
+                "ab8e0a1ca74e3c2280313ed17cbfe5978f994ef9032311d09ed48617c0d6a7b6"
+              ],
+              "timed_out": false,
+              "output_limited": false,
+              "exit_code": 0,
+              "pid": 22606,
+              "elapsed_seconds": 7.068259791005403,
+              "stdout_bytes": 2138,
+              "stdout_sha256": "7eaf488be5a8342a3a209030a6e48533a9df69147df789c4e4023da95d690c88",
+              "stderr_bytes": 0,
+              "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            "checks": {
+              "clean_process_exit": true,
+              "protocol_not_guest_output": true,
+              "separate_host_preparation": true,
+              "owning_edition": true,
+              "completed_main": true,
+              "complete_capture": true,
+              "closed_guest_streams": true,
+              "actual_dispatch": true,
+              "terminal_and_cleanup": true,
+              "no_unobserved_boundaries": true,
+              "root_path": true,
+              "entry_identity": true,
+              "captured_originals": true
+            },
+            "guest_output": {
+              "stdout": "",
+              "stderr": ""
+            }
+          }
+        ]
+      }
+    }
+  },
+  "commands": {
+    "lib_build": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+    "cli_build": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr",
+    "controls": "LRR_EMBEDDED_FACADE=1 python3.12 tools/validation/run_controls.py artifacts/validation-current-v226 worktracks/05-trait-goal-engine/2026-10-19-upstream-context-selection.json",
+    "stock": "LRR_EMBEDDED_FACADE=1 python3.12 tools/rustc_checkout_runtime.py --lrr target/debug/lrr --source-digester target/debug/examples/lrr_source_digests --report-dir /private/tmp/lrr-v226-stock --case tests/ui/methods/method-self-arg-trait.rs"
+  },
+  "acceptance": {
+    "focused_controls": "3/3",
+    "actual_source_header_edition_origin_worlds": "12/12 with retained source IDs, parameter node sharing and foreign-context isolation",
+    "host_ownership": "duplicate disposed immediately; retained destructor-bearing nodes released when context ends",
+    "actual_shared_interface_exercised": "rustc_type_ir::intern::Interned::get; source ParamLike::index retained",
+    "generic_DefId_and_folding_impls": "compile-only until concrete LRR Interner exists",
+    "selected_stock_runtime_contracts": "1/1 existing regression; not a new language gain",
+    "new_distinct_stock_gains": 0,
+    "refreshed_suite_total": false,
+    "full_fixture_passes_claimed": 0,
+    "concrete_type_family_or_Interner": false,
+    "prepared_source_fact_provider": false,
+    "InferCtxtLike_or_SolverDelegate": false,
+    "actual_upstream_goal_invocation": false,
+    "M020_complete": false,
+    "milestone": "partial component only; not claimed",
+    "interpreter_gate": "incomplete",
+    "guest_jit_gate": "runtime prerequisite incomplete",
+    "upstream_runtime_acceptance": "incomplete",
+    "diagnostic_compatibility": "unassessed",
+    "compiler_tooling_compatibility": "unassessed",
+    "full_suite_compatibility": "incomplete"
+  },
+  "conclusion": "Safe scoped storage and source-ID implementations compile with the real shared IR and pass ownership/header controls. No node leak, local unsafe, pointer persistence, alternate solver, source/member runtime changes or compiler static checks introduced. Actual source/header fact closure, complete concrete IR family, Interner callbacks, inference/delegate, answer conversion and migration of custom consumers remain required."
+}

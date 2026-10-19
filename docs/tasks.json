@@ -20074,7 +20074,9 @@
         "worktracks/evidence/2026-10-19-v217-v220-upstream-solver-trait-self.json",
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-solver-bootstrap.md",
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-parameter-identity.md",
-        "worktracks/evidence/2026-10-19-v221-v224-upstream-parameters.json"
+        "worktracks/evidence/2026-10-19-v221-v224-upstream-parameters.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-context.md",
+        "worktracks/evidence/2026-10-19-v225-v226-upstream-context-storage.json"
       ],
       "title": "Pinned upstream solver bridge and transactions",
       "acceptance_contract": "TR007/TR008, source/type/binder round trips, genuine upstream invocation, failed-candidate isolation and cold-body/unused-bound controls. Depends: M019.",
@@ -20082,7 +20084,7 @@
       "implementation_contract": "Files: traits/upstream/, traits/term.rs, frontend/source_view.rs, Cargo.toml and provenance manifests. Build the pinned shared solver on macOS Rust1.99.0; adapt actual source Types/ParamEnv/headers, upstream inference transactions and canonical responses to LRR queries. Migrate custom inference/canonicalization consumers and remove superseded algorithms with explicit holds until verified.",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
-      "latest_component_scope": "V221\u2013V224 partial M020 source parameter transport: GenericSourceLayout captured once in ordinary FunctionSignature (v3 encoding); actual upstream ParamLike mapping preserves source owner/namespace and parent-first order. V222 both builds and3existingpositivecontrols pass, including16/16trait-Self runtime worlds; two header controls initially failed their selector. V224 host-only successor corrects actual member selection and passes2/2affected controls across12sourceedition/origin and4const/inheritedregion worlds. Same production CLI passes2/4selected stock contracts; mid-path call classification and clone/capture return inference fail. Zero new distinct stock gains. Concrete Interner/inference/delegate, function-region/actual parent-definition joins and actual upstream goal execution remain unimplemented; M020/interpreter/JIT gates open."
+      "latest_component_scope": "V225/V226 partial M020 context storage/source identity: InternPool shares immutable structurally interned nodes in typed-arena2.0.2 with context-owned destruction; DefinitionId keeps source/context/local identities and explicit portable encoding. Both builds and3/3focused controls pass, including12actual edition/origin header worlds and host sharing/isolation/destruction controls. One selected existing unchanged stock runtime contract passes; zero new distinct gains or suite total. V225 private upstream module import failure preserved; public reexports used without upstream changes. Complete concrete type family/Interner, prepared source-fact provider, inference/delegate and actual upstream goal execution remain absent. No M020/interpreter/JIT closure."
     },
     {
       "id": "M021",

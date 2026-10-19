@@ -15,7 +15,11 @@ const SUFFIX: &str = include_str!(
 fn upstream_parameter_order_preserves_real_impl_trait_and_method_identities() {
     use crate::traits::{
         term::BoundKind,
-        upstream::parameters::{ParameterPending, ParameterPreparation, SignatureParameters},
+        upstream::{
+            identity::DefinitionId,
+            parameters::{ParameterPending, ParameterPreparation, SignatureParameters},
+            storage::InternPool,
+        },
     };
     use rustc_type_ir::inherent::ParamLike;
     const ORIGINAL: &str = include_str!(
@@ -33,6 +37,15 @@ fn upstream_parameter_order_preserves_real_impl_trait_and_method_identities() {
     for edition in [2015, 2018, 2021, 2024] {
         for text in [ORIGINAL, &emitted, &wrapped] {
             let (mut db, plan) = world(text, edition, false);
+            let context = plan
+                .environment()
+                .unwrap()
+                .macros()
+                .source_environment()
+                .dependency()
+                .fingerprint();
+            let nodes = InternPool::default();
+            let foreign_nodes = InternPool::default();
             let mut methods = 0;
             for (name, definition) in published_source_declarations(&plan, &["new"]) {
                 if name != "new" {
@@ -44,6 +57,22 @@ fn upstream_parameter_order_preserves_real_impl_trait_and_method_identities() {
                 let QueryValue::FunctionSignature(signature) = owner.value.as_ref() else {
                     panic!()
                 };
+                let identity = DefinitionId::new(context, definition, true);
+                assert_eq!(identity.world(), context);
+                assert_eq!(identity.source(), definition);
+                assert_ne!(
+                    identity.fingerprint(),
+                    DefinitionId::new(context, definition, false).fingerprint()
+                );
+                assert_ne!(
+                    identity.fingerprint(),
+                    DefinitionId::new(
+                        Digest::of_bytes(b"foreign source context"),
+                        definition,
+                        true,
+                    )
+                    .fingerprint()
+                );
                 let ParameterPreparation::Ready(mapping) =
                     SignatureParameters::prepare(signature).unwrap()
                 else {
@@ -59,6 +88,10 @@ fn upstream_parameter_order_preserves_real_impl_trait_and_method_identities() {
                 assert_eq!(mapping.parent_count() as usize, expected.len() - 1);
                 for (index, name) in expected.iter().enumerate() {
                     let parameter = mapping.from_upstream(index as u32).unwrap();
+                    let node = nodes.intern(parameter);
+                    assert_eq!(node, nodes.intern(parameter));
+                    assert_ne!(node, foreign_nodes.intern(parameter));
+                    assert_eq!(*node.value(), parameter);
                     assert_eq!(parameter.index(), index as u32);
                     assert_eq!(parameter.source().definition, definition);
                     assert_eq!(

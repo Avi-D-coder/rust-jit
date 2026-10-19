@@ -8,11 +8,13 @@ use rustc_next_trait_solver::{
     solve::{GoalEvaluation, SolverDelegateEvalExt},
 };
 use rustc_type_ir::{
-    Interner,
     solve::{Goal, NoSolution},
+    Interner,
 };
 
+pub(crate) mod identity;
 pub(crate) mod parameters;
+pub(crate) mod storage;
 
 pub(crate) const SOURCE_REVISION: &str = "ae0fe511b15ab760d7e963b13389d1bc2ab42b18";
 
