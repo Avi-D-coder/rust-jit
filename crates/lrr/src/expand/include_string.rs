@@ -126,8 +126,6 @@ impl IncludeDataExpansion<'_> {
                 definition: self.selected.identity,
             })
             || self.key.definition_edition != self.selected.definition_edition
-            || (descriptor.kind() != CompileInputKind::Include
-                && self.key.grammar != GrammarSlot::Expression)
             || self.key.input_tokens != Digest::of_bytes(&wire)
         {
             return Err(fault("include string definition/input/grammar mismatch"));

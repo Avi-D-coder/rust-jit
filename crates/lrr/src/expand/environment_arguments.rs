@@ -185,7 +185,7 @@ impl FrozenCompileEnvironment {
         request: EnvironmentExpansion<'_>,
         resolved: Option<&EnvironmentArguments>,
     ) -> Result<EnvironmentExpansionPoll, Diagnostic> {
-        use crate::expand::identity::{GrammarSlot, MacroIdentity};
+        use crate::expand::identity::MacroIdentity;
         request.key.validate()?;
         if request.max_wire_bytes == 0 {
             return Err(fault("environment output resource limits are invalid"));
@@ -208,7 +208,6 @@ impl FrozenCompileEnvironment {
                 != (MacroIdentity::Builtin {
                     definition: request.selected.identity,
                 })
-            || request.key.grammar != GrammarSlot::Expression
         {
             return Err(fault(
                 "environment output definition/input/environment/grammar mismatch",

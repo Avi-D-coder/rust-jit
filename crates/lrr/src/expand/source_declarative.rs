@@ -594,7 +594,7 @@ pub fn engine_version() -> Digest {
     e.digest(Digest(
         lrr_expand_adapter::builtin_attributes::compiler_inert_inventory_identity().0,
     ));
-    e.u32(9); // Common generated compiler requests and included-source/lexical-module facts.
+    e.u32(10); // Compiler token output uses its actual consumer grammar.
     e.finish()
 }
 fn fault(code: &'static str, message: &str) -> Diagnostic {

@@ -15,7 +15,7 @@ use crate::{
         concat_arguments::{ConcatArguments, ConcatExpansion, ConcatExpansionPoll},
         environment_arguments::{EnvironmentExpansion, EnvironmentExpansionPoll},
         environment_plan::{AdoptedEnvironmentExpansionPoll, EnvironmentArgumentPlan},
-        identity::{ExpansionKey, GrammarSlot, MacroIdentity},
+        identity::{ExpansionKey, MacroIdentity},
         include_arguments::{IncludeArguments, NestedStringInvocation},
         include_string::{IncludeDataExpansion, IncludeDataPoll},
         record::ExpansionRecord,
@@ -147,8 +147,6 @@ impl Frame {
             })
             || key.definition_edition != selected.definition_edition
             || key.consumer_compile_env != environment.fingerprint()
-            || (descriptor.kind() != CompileInputKind::Include
-                && key.grammar != GrammarSlot::Expression)
             || key.input_tokens
                 != Digest::of_bytes(&original.encode().map_err(|e| fault(&e.to_string()))?)
         {

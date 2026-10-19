@@ -39,7 +39,6 @@ impl ConcatLiteralValue {
                 != (crate::expand::identity::MacroIdentity::Builtin {
                     definition: selected.identity,
                 })
-            || key.grammar != crate::expand::identity::GrammarSlot::Expression
         {
             return Err(fault("concat output identity/input/grammar mismatch"));
         }

@@ -509,3 +509,31 @@ fn main() {{
         assert_eq!(report.output.stdout, "included\nincluded\nincluded\nincluded\n");
     }
 }
+
+#[test]
+fn compiler_literals_join_ordinary_patterns_across_macro_origins() {
+    // LRR route/exact-once control, outside imported upstream originals.
+    const SOURCE: &str = r#"
+macro_rules! emitted { () => { concat!("a", "b") } }
+macro_rules! wrapper { () => { emitted!() } }
+fn value() -> &'static str { println!("scrutinee"); "ab" }
+fn cold() -> bool { ().unsupported_method_xyz() }
+fn main() {
+    assert!(match value() { concat!("a", "b") => true, _ => false });
+    assert!(if let emitted!() = value() { true } else { false });
+    let mut selected = false;
+    while let wrapper!() = value() { selected = true; break; }
+    assert!(selected);
+    let wrapper!() = value() else { panic!("unmatched") };
+    assert!(if false { cold() } else { true });
+}
+"#;
+    let emitted = format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nemit! {{ {SOURCE} }}");
+    let wrapped = format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nmacro_rules! outer {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }}\nouter! {{ {SOURCE} }}");
+    for edition in [2015, 2018, 2021, 2024] {
+        for text in [SOURCE, &emitted, &wrapped] {
+            let report = completed(text, edition);
+            assert_eq!(report.output.stdout, "scrutinee\nscrutinee\nscrutinee\nscrutinee\n");
+        }
+    }
+}

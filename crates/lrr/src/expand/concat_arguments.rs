@@ -260,7 +260,7 @@ impl ConcatArguments {
         request: ConcatExpansion<'_>,
         chains: &std::collections::BTreeMap<usize, super::string_chain::StringExpansionChain>,
     ) -> ConcatExpansionPoll {
-        use crate::expand::identity::{GrammarSlot, MacroIdentity};
+        use crate::expand::identity::MacroIdentity;
         let mut work = || -> Result<ConcatExpansionPoll, Diagnostic> {
             request.key.validate()?;
             let descriptor = request
@@ -271,7 +271,6 @@ impl ConcatArguments {
                 || self.definition != descriptor.definition_identity()
                 || request.key.input_tokens != self.original
                 || request.key.definition_edition != request.selected.definition_edition
-                || request.key.grammar != GrammarSlot::Expression
                 || request.key.macro_identity
                     != (MacroIdentity::Builtin {
                         definition: request.selected.identity,
