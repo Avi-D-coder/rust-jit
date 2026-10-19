@@ -300,7 +300,8 @@ impl Database {
                     | QueryValue::EnteredCall(_)
                     | QueryValue::EnteredType(_)
                     | QueryValue::PreparedTypePlan(_)
-                    | QueryValue::EnteredValue(_) => {
+                    | QueryValue::EnteredValue(_)
+                    | QueryValue::LexicalValue(_) => {
                         for root in memo.value.source_roots() {
                             product_retention::count_owner(root, &mut inner, &mut products);
                         }

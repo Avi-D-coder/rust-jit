@@ -906,6 +906,14 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
+            QueryKey::LexicalValue(key) => {
+                if key.phase != 0 { return Provided::error("LRR-E-QUERY-REQUEST", "lexical Value goal requires entry phase"); }
+                return match crate::frontend::source_value_goals::prepare_lexical(db, &key.body, crate::ir::pc::NodeId(key.node)) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::LexicalValue(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::EnteredValue(key) => {
                 if key.phase != 0 {
                     return Provided::error(
@@ -1247,6 +1255,12 @@ impl Provider for SyntaxProvider {
                         QueryPoll::Ready(Ok(None)) => {}
                         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                         QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
+                    }
+                    match super::closure_capture_thunk::thunk(db, parsed, handle, index, pc) {
+                        QueryPoll::Ready(Ok(Some(provided))) => return QueryPoll::Ready(Ok(provided)),
+                        QueryPoll::Ready(Ok(None)) => {},
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
                     }
                     match super::entered_value_thunk::thunk(db, parsed, handle, index, pc) {
                         QueryPoll::Ready(Ok(Some(provided))) => return QueryPoll::Ready(Ok(provided)),

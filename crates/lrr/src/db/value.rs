@@ -120,6 +120,7 @@ pub enum QueryValue {
     PreparedBindingPlan(Box<crate::frontend::prepared_binding_plan::PreparedBindingPlan>),
     BindingConstraints(Box<crate::frontend::binding_constraints::PreparedBindingConstraints>),
     EnteredValue(Box<crate::frontend::source_value_goals::EnteredValueGoal>),
+    LexicalValue(Box<crate::frontend::source_value_goals::EnteredValueGoal>),
     DeclaredParameterGoal(Box<crate::frontend::source_parameter_goals::ParameterGoalObservation>),
     SourceConstraints(Box<crate::syntax::source_constraints::SourceConstraintPlan>),
     QualifiedBodyType(Box<crate::frontend::qualified_type_names::QualifiedTypeObservation>),
@@ -181,7 +182,7 @@ impl QueryValue {
             Self::PreparedTypePlan(value) => {
                 Some(SourceArtifactRef::LocalPlan(value.retained_plan()))
             }
-            Self::EnteredValue(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
+            Self::EnteredValue(value) | Self::LexicalValue(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::SourceLocalPlan(plan) => Some(SourceArtifactRef::LocalPlan(plan)),
             Self::MacroDefinitionModule(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::QualifiedBodyType(value) => {
@@ -277,7 +278,8 @@ impl QueryValue {
         if let (Self::BindingConstraints(value), QueryKey::BindingConstraints(key)) = (self, key) {
             return value.key() == key && key.phase == 0;
         }
-        if let (Self::EnteredValue(value), QueryKey::EnteredValue(key)) = (self, key) {
+        if let (Self::EnteredValue(value), QueryKey::EnteredValue(key))
+            | (Self::LexicalValue(value), QueryKey::LexicalValue(key)) = (self, key) {
             return value.body() == &key.body && value.node().0 == key.node && key.phase == 0;
         }
         if let (
@@ -413,6 +415,7 @@ impl QueryValue {
                 e.u32(40);
                 e.record(value.as_ref());
             }
+            Self::LexicalValue(value) => { e.u32(62); e.digest(value.fingerprint()); }
             Self::EnteredValue(value) => {
                 e.u32(39);
                 e.digest(value.fingerprint());
@@ -585,7 +588,7 @@ impl QueryValue {
             Self::PreparedTypePlan(value) => value.metadata_bytes(),
             Self::PreparedBindingPlan(value) => value.metadata_bytes(),
             Self::BindingConstraints(value) => value.metadata_bytes(),
-            Self::EnteredValue(value) => value.estimated_bytes(),
+            Self::EnteredValue(value) | Self::LexicalValue(value) => value.estimated_bytes(),
             Self::DeclaredParameterGoal(value) => value.estimated_bytes(),
             Self::SourceConstraints(value) => value.estimated_bytes(),
             Self::CurrentModuleName(value) => value

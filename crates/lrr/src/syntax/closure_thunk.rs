@@ -9,7 +9,7 @@
 //! value from the closure's Operand(0) continuation. Closure parameters are
 //! the frame's parameters, read like a function's; captured bindings are
 //! bound by the call to the cells the closure value captured.
-use super::{binding_name_matches, draft, error, id_for, local_binding, return_pc};
+use super::{binding_name_matches, draft, error, id_for, return_pc};
 use crate::{
     core::diagnostic::Diagnostic,
     expand::scopes::MacroName,
@@ -22,7 +22,7 @@ use crate::{
     syntax::{body_index::BodyIndex, outline::BodyHandle, parse::ParsedFile},
 };
 use ra_ap_syntax::{
-    AstNode, SyntaxKind, SyntaxNode,
+    AstNode, SyntaxNode,
     ast::{self, HasName},
 };
 
@@ -172,119 +172,16 @@ fn merge(found: &mut Vec<ClosureCapture>, source: CaptureSource, mode: CaptureMo
     }
 }
 
-/// The spelling of a single-segment path (`x`, `self`).
-fn single_name(path: &ast::PathExpr) -> Option<String> {
-    let path = path.path()?;
-    if path.qualifier().is_some() {
-        return None;
-    }
-    let segment = path.segment()?;
-    match segment.kind()? {
-        ast::PathSegmentKind::Name(name) => Some(name.text().to_string()),
-        ast::PathSegmentKind::SelfKw => Some("self".into()),
-        _ => None,
-    }
+/// Capture-use classification over actual ordinary indexed expressions. The
+/// caller supplies identities selected by the shared hygienic lexical query.
+pub(crate) fn capture_mode(path: &SyntaxNode, by_value: bool) -> CaptureMode {
+    if by_value { CaptureMode::Value } else { capture_use(path) }
+}
+pub(crate) fn merge_capture(found: &mut Vec<ClosureCapture>, source: CaptureSource, mode: CaptureMode) {
+    merge(found, source, mode);
 }
 
 impl ParsedFile {
-    /// What a name used at `anchor` inside `closure` captures: an enclosing
-    /// binding, or a parameter of the frame creating the closure.
-    fn capture_source(
-        &self,
-        index: &BodyIndex,
-        body: &BodyHandle,
-        closure: &ast::ClosureExpr,
-        anchor: &SyntaxNode,
-        binding: Option<NodeId>,
-        name: &str,
-    ) -> Result<Option<CaptureSource>, Diagnostic> {
-        let span = closure.syntax().text_range();
-        if let Some(binding) = binding {
-            let inside = body
-                .range
-                .start
-                .checked_add(index.nodes()[binding.0 as usize].range.start)
-                .is_some_and(|start| span.contains(start.into()));
-            return Ok((!inside).then_some(CaptureSource::Binding(binding)));
-        }
-        let Ok(name) = MacroName::local(name, self.edition) else {
-            return Ok(None);
-        };
-        Ok(super::parameter_from(self, closure.syntax(), anchor, &name)?
-            .map(CaptureSource::Parameter))
-    }
-    /// The enclosing variables a closure's body names, in first-use order.
-    fn closure_captures(
-        &self,
-        index: &BodyIndex,
-        body: &BodyHandle,
-        closure: &ast::ClosureExpr,
-    ) -> Result<Box<[ClosureCapture]>, Diagnostic> {
-        let mut found = Vec::new();
-        let Some(closure_body) = closure.body() else {
-            return Ok(found.into_boxed_slice());
-        };
-        for node in closure_body.syntax().descendants() {
-            if let Some(path) = ast::PathExpr::cast(node.clone()) {
-                let Some(name) = single_name(&path) else {
-                    continue;
-                };
-                let binding = local_binding(self, index, body, &path)?;
-                let Some(source) =
-                    self.capture_source(index, body, closure, path.syntax(), binding, &name)?
-                else {
-                    continue;
-                };
-                let mode = if closure.move_token().is_some() {
-                    CaptureMode::Value
-                } else {
-                    capture_use(path.syntax())
-                };
-                merge(&mut found, source, mode);
-            } else if node.kind() == SyntaxKind::MACRO_CALL {
-                // Names in a macro's token arguments resolve like paths at
-                // the call; format and assertion macros borrow them.
-                let Some(call) = ast::MacroCall::cast(node.clone()) else {
-                    continue;
-                };
-                let Some(tokens) = call.token_tree() else {
-                    continue;
-                };
-                for token in tokens
-                    .syntax()
-                    .descendants_with_tokens()
-                    .filter_map(|element| element.into_token())
-                    .filter(|token| {
-                        matches!(token.kind(), SyntaxKind::IDENT | SyntaxKind::SELF_KW)
-                    })
-                {
-                    let Ok(name) = MacroName::local(token.text(), self.edition) else {
-                        continue;
-                    };
-                    let binding =
-                        super::local_binding_at(self, index, body, call.syntax(), &name)?;
-                    let Some(source) = self.capture_source(
-                        index,
-                        body,
-                        closure,
-                        call.syntax(),
-                        binding,
-                        token.text(),
-                    )?
-                    else {
-                        continue;
-                    };
-                    let mode = if closure.move_token().is_some() {
-                        CaptureMode::Value
-                    } else {
-                        CaptureMode::Shared
-                    };
-                    merge(&mut found, source, mode);
-                }
-            }
-        }
-        Ok(found.into_boxed_slice())
-    }
     /// Identifier parameters only: their binding mutability and written
     /// primitive annotation.
     fn closure_parameters(
@@ -332,6 +229,7 @@ impl ParsedFile {
         index: &BodyIndex,
         key: &PcKey,
         syntax: SyntaxNode,
+        captures: Option<&[ClosureCapture]>,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         let id = NodeId(key.node);
         let node = &index.nodes()[key.node as usize];
@@ -359,7 +257,10 @@ impl ParsedFile {
                     Ok(parameters) => parameters,
                     Err(reason) => return unsupported(reason),
                 };
-                let captures = self.closure_captures(index, body, &closure)?;
+                let Some(captures) = captures else {
+                    return unsupported("closure captures require admitted hygienic source selection");
+                };
+                let captures = captures.to_vec().into_boxed_slice();
                 draft(
                     index,
                     key,

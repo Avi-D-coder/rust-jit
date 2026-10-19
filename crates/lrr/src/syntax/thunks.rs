@@ -62,6 +62,7 @@ struct EnteredAdmissions<'a> {
     call: Option<&'a crate::frontend::entered_call_goals::EnteredCallGoal>,
     let_annotation: Option<&'a let_annotations::LetAnnotation>,
     value_goal: Option<&'a crate::frontend::source_value_goals::EnteredValueGoal>,
+    closure_captures: Option<&'a [crate::ir::op::ClosureCapture]>,
 }
 
 fn error(message: &str) -> Diagnostic {
@@ -2192,6 +2193,17 @@ impl ParsedFile {
     ) -> Result<VerifiedRecipe, Diagnostic> {
         self.initial_thunk_admission(body, index, key, EnteredAdmissions::default())
     }
+    pub(crate) fn initial_thunk_with_closure_captures(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+        captures: &[crate::ir::op::ClosureCapture],
+    ) -> Result<VerifiedRecipe, Diagnostic> {
+        self.initial_thunk_admission(body, index, key, EnteredAdmissions {
+            closure_captures: Some(captures), ..Default::default()
+        })
+    }
     pub(crate) fn initial_thunk_with_value_goal(
         &self,
         body: &BodyHandle,
@@ -2481,6 +2493,7 @@ impl ParsedFile {
             call,
             let_annotation,
             value_goal,
+            closure_captures,
         } = admissions;
         if body.key() != *index.body() || key.body != body.key() {
             return Err(error("selected thunk body identity changed"));
@@ -2613,7 +2626,7 @@ impl ParsedFile {
                 unsupported("let pattern requires a top-level if/while condition clause")
             }
             SyntaxKind::CALL_EXPR => self.initial_call_thunk(body, index, key, syntax, call),
-            SyntaxKind::CLOSURE_EXPR => self.closure_thunk(body, index, key, syntax),
+            SyntaxKind::CLOSURE_EXPR => self.closure_thunk(body, index, key, syntax, closure_captures),
             SyntaxKind::FORMAT_ARGS_EXPR => {
                 self.initial_format_args_thunk(body, index, key, syntax)
             }

@@ -72,7 +72,28 @@ fn check_suffix(db: &mut Database, plan: &PreparedSourceLocalPlan) {
             node: node.0,
             phase: 0,
         });
+        // The capture consumer can establish local versus item identity from
+        // this same memo without preparing even the cold item's signature.
+        let lexical_key = QueryKey::LexicalValue(PcKey {
+            body: body.clone(), node: node.0, phase: 0,
+        });
+        let before_prefix = db.trace.events.len();
+        let prefix = ready(db.fetch(&SyntaxProvider, lexical_key.clone()));
+        let QueryValue::LexicalValue(lexical) = prefix.value.as_ref() else {
+            panic!("actual lexical Value variant differs");
+        };
+        assert!(lexical.pending().is_none(), "pending lexical identity: {lexical:?}");
+        assert!(lexical.declaration().is_none(), "lexical selection prepared a global header");
+        if name.starts_with("id_") {
+            assert!(lexical.local_binding().is_none());
+            assert!(!db.trace.events[before_prefix..].iter().any(|event| matches!(
+                event.key, QueryKey::FunctionSignature(_) | QueryKey::TypeSchema(_)
+                    | QueryKey::Thunk(_) | QueryKey::Constant(_) | QueryKey::CurrentModuleName(_)
+            )), "lexical item classification prepared cold declaration/executable metadata");
+        }
         let first = ready(db.fetch(&SyntaxProvider, key.clone()));
+        let retained = ready(db.fetch(&SyntaxProvider, lexical_key));
+        assert!(Arc::ptr_eq(&prefix.value, &retained.value), "entered read reconstructed lexical selection");
         let goal = observed(first.value.as_ref());
         assert!(
             goal.pending().is_none(),

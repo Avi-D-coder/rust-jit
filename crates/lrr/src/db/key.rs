@@ -163,6 +163,7 @@ pub enum QueryKey {
     PreparedBindingPlan(crate::source::manifest::PcKey),
     BindingConstraints(crate::source::manifest::PcKey),
     EnteredValue(crate::source::manifest::PcKey),
+    LexicalValue(crate::source::manifest::PcKey),
     DeclaredParameterGoal { definition: Digest, ordinal: u32 },
     SourceConstraints(crate::source::manifest::BodyKey),
     QualifiedBodyType(crate::source::manifest::PcKey),
@@ -236,6 +237,7 @@ impl QueryKey {
             | Self::PreparedBindingPlan(_)
             | Self::BindingConstraints(_)
             | Self::EnteredValue(_)
+            | Self::LexicalValue(_)
             | Self::MacroDefinitionModule { .. }
             | Self::SourceLocalPlan(_)
             | Self::SourceConstraints(_)
@@ -276,6 +278,7 @@ impl QueryKey {
             Self::PreparedBindingPlan(_) => "PreparedBindingPlan",
             Self::BindingConstraints(_) => "BindingConstraints",
             Self::EnteredValue(_) => "EnteredValue",
+            Self::LexicalValue(_) => "LexicalValue",
             Self::DeclaredParameterGoal { .. } => "DeclaredParameterGoal",
             Self::SourceConstraints(_) => "SourceConstraints",
             Self::QualifiedBodyType(_) => "QualifiedBodyType",
@@ -361,6 +364,7 @@ impl StableEncode for QueryKey {
                 e.u32(40);
                 e.record(key);
             }
+            Self::LexicalValue(key) => { e.u32(62); e.record(key); }
             Self::EnteredValue(key) => {
                 e.u32(39);
                 e.record(key);

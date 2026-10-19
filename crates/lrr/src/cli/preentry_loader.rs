@@ -357,6 +357,7 @@ impl Packet {
                 | QueryKey::PreparedBindingPlan(_)
                 | QueryKey::BindingConstraints(_)
                 | QueryKey::EnteredValue(_)
+                | QueryKey::LexicalValue(_)
                 | QueryKey::DeclaredParameterGoal { .. }
                 | QueryKey::SourceConstraints(_)
                 | QueryKey::MacroDefinitionModule { .. }

@@ -14,6 +14,7 @@ pub mod seals;
 
 mod binding_constraint_thunk;
 mod entered_value_thunk;
+mod closure_capture_thunk;
 mod body_environment_provider;
 mod pattern_plan_provider;
 mod sealed_name_provider;

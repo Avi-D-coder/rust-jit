@@ -203,6 +203,7 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
         | QueryKey::PreparedBindingPlan(_)
         | QueryKey::BindingConstraints(_)
         | QueryKey::EnteredValue(_)
+        | QueryKey::LexicalValue(_)
         | QueryKey::DeclaredParameterGoal { .. }
         | QueryKey::SourceConstraints(_)
         | QueryKey::Thunk(_) => {}

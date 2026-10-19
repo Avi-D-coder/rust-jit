@@ -147,11 +147,28 @@ impl SelectedValueDeclaration {
         self.variant.as_ref()
     }
 }
+/// The lexical query stops before global declaration/type preparation. The
+/// ordinary Value query resumes this retained selection without repeating lookup.
+#[derive(Debug, Clone)]
+enum ValueContinuation {
+    Module {
+        name: String,
+        raw: Key,
+        edition: u16,
+        name_range: SourceRange,
+    },
+    Qualified,
+    Declaration {
+        selected: NameDefinition,
+        foreign: bool,
+    },
+}
 #[derive(Clone)]
 pub struct EnteredValueGoal {
     key: PcKey,
     plan: Arc<PreparedSourceLocalPlan>,
     local: Option<Digest>,
+    continuation: Option<ValueContinuation>,
     target: Option<BindingTarget>,
     declaration: Option<SelectedValueDeclaration>,
     // The ordinary Value lookup selected a closed library facade function.
@@ -213,6 +230,14 @@ impl EnteredValueGoal {
         index: &crate::syntax::body_index::BodyIndex,
         key: &PcKey,
     ) -> Result<Option<LocalValueAccess>, Diagnostic> {
+        self.indexed_local_access_at(index, key, NodeId(key.node))
+    }
+    pub(crate) fn indexed_local_access_at(
+        &self,
+        index: &crate::syntax::body_index::BodyIndex,
+        key: &PcKey,
+        at: NodeId,
+    ) -> Result<Option<LocalValueAccess>, Diagnostic> {
         use crate::frontend::pattern_binding_occurrences::PatternLocalOccurrence;
         use crate::syntax::local_bindings::BindingForm;
         if &self.key != key
@@ -220,6 +245,29 @@ impl EnteredValueGoal {
             || !std::ptr::eq(index, self.plan.context().source().index().as_ref())
         {
             return Err(error("selected local access body/PC differs"));
+        }
+        // A capture may project the selected use into its enclosing creation
+        // frame, never an unrelated indexed frame. Ordinary reads use themselves.
+        let mut ancestor = Some(NodeId(key.node));
+        while let Some(node) = ancestor {
+            if node == at {
+                break;
+            }
+            ancestor = index
+                .nodes()
+                .get(node.0 as usize)
+                .and_then(|node| node.parent);
+        }
+        if ancestor.is_none()
+            || (at.0 != key.node
+                && index
+                    .nodes()
+                    .get(at.0 as usize)
+                    .is_none_or(|node| node.role != NodeRole::Expression(ExpressionKind::Closure)))
+        {
+            return Err(error(
+                "selected local destination is not its enclosing closure",
+            ));
         }
         let Some(identity) = self.local else {
             return Ok(None);
@@ -267,7 +315,7 @@ impl EnteredValueGoal {
             })
         {
             return Ok(Some(LocalValueAccess::Parameter(
-                index.frame_parameter_ordinal(NodeId(key.node), 0)?,
+                index.frame_parameter_ordinal(at, 0)?,
             )));
         }
         for (ordinal, parameter) in parameters.params().enumerate() {
@@ -280,7 +328,7 @@ impl EnteredValueGoal {
                     .and_then(|n| u32::try_from(n).ok())
                     .ok_or_else(|| error("selected parameter ordinal overflow"))?;
                 return Ok(Some(LocalValueAccess::Parameter(
-                    index.frame_parameter_ordinal(NodeId(key.node), ordinal)?,
+                    index.frame_parameter_ordinal(at, ordinal)?,
                 )));
             }
         }
@@ -357,6 +405,9 @@ impl EnteredValueGoal {
                 .ok_or_else(crate::runtime::arena::resource)?;
             Ok(())
         };
+        if let Some(ValueContinuation::Module { name, .. }) = &self.continuation {
+            add(name.capacity())?;
+        }
         if let Some(target) = &self.target {
             add(target.name.capacity())?;
             add(target.raw_name.capacity())?;
@@ -375,13 +426,34 @@ impl EnteredValueGoal {
     }
 }
 impl StableEncode for EnteredValueGoal {
-    const DOMAIN: &'static str = "lrr/v1/entered-value-source-goal";
+    const DOMAIN: &'static str = "lrr/v2/entered-value-source-goal";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.digest(self.plan.context().source().identity());
         e.digest(self.occurrence);
         e.digest(self.reads);
         e.option(&self.local, |e, id| e.digest(*id));
+        e.option(&self.continuation, |e, continuation| match continuation {
+            ValueContinuation::Module {
+                name,
+                raw,
+                edition,
+                name_range,
+            } => {
+                e.u8(0);
+                e.string(name);
+                e.digest(Digest(raw.0));
+                e.u16(*edition);
+                e.u32(name_range.start);
+                e.u32(name_range.end);
+            }
+            ValueContinuation::Qualified => e.u8(1),
+            ValueContinuation::Declaration { selected, foreign } => {
+                e.u8(2);
+                e.record(selected);
+                e.bool(*foreign);
+            }
+        });
         e.option(&self.target, |e, target| {
             e.digest(target.identity);
             e.string(&target.name);
@@ -462,6 +534,59 @@ impl StableEncode for EnteredValueGoal {
 /// Pure metadata preparation over an actual entered source plan. This function
 /// never captures source, publishes names, prepares a child body or executes it.
 pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<EnteredValueGoal> {
+    let key = PcKey {
+        body: body.clone(),
+        node: node.0,
+        phase: 0,
+    };
+    let prefix = polled!(db.fetch(&SyntaxProvider, QueryKey::LexicalValue(key)));
+    let QueryValue::LexicalValue(prefix) = prefix.value.as_ref() else {
+        return QueryPoll::Ready(Err(error("Value lexical query variant differs")));
+    };
+    let mut goal = prefix.as_ref().clone();
+    if goal.pending().is_some() {
+        return QueryPoll::Ready(goal.finish());
+    }
+    let Some(continuation) = goal.continuation.take() else {
+        return QueryPoll::Ready(goal.finish());
+    };
+    match continuation {
+        ValueContinuation::Qualified => {
+            let source = goal.plan.context().source();
+            let syntax = checked!(source.parsed().entered_node_syntax(
+                source.body(),
+                source.index(),
+                node
+            ));
+            let Some(expression) = syntax.and_then(ast::PathExpr::cast) else {
+                return goal.needs(ValueGoalDemand::Occurrence);
+            };
+            goal.rooted = None;
+            goal.type_namespace = false;
+            qualified(db, goal, &expression)
+        }
+        ValueContinuation::Declaration { foreign: true, .. } => {
+            goal.needs(ValueGoalDemand::PathAdjustment)
+        }
+        ValueContinuation::Declaration {
+            selected,
+            foreign: false,
+        } => selected_declaration(db, goal, selected),
+        ValueContinuation::Module {
+            name,
+            raw,
+            edition,
+            name_range,
+        } => complete_module(db, goal, name, raw, edition, name_range),
+    }
+}
+/// Shared hygienic lexical selection. It never prepares a global declaration
+/// or callee signature/body. Capture discovery and entered reads share this memo.
+pub fn prepare_lexical(
+    db: &mut Database,
+    body: &BodyKey,
+    node: NodeId,
+) -> QueryPoll<EnteredValueGoal> {
     let actual = polled!(db.fetch(&SyntaxProvider, QueryKey::SourceLocalPlan(body.clone())));
     let QueryValue::SourceLocalPlan(plan) = actual.value.as_ref() else {
         return QueryPoll::Ready(Err(error("Value goal source-plan variant differs")));
@@ -479,6 +604,7 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
         },
         plan: Arc::clone(&plan),
         local: None,
+        continuation: None,
         target: None,
         declaration: None,
         facade: None,
@@ -648,7 +774,8 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
                     _ => None,
                 };
                 let Some((root, member)) = lexical else {
-                    return qualified(db, goal, &expression);
+                    goal.continuation = Some(ValueContinuation::Qualified);
+                    return QueryPoll::Ready(goal.finish());
                 };
                 goal.type_namespace = true;
                 goal.rooted = Some(member.text().to_string());
@@ -780,57 +907,38 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
     ));
     let lookup = match prefix {
         PrefixResolution::Name(lookup) => lookup,
-        PrefixResolution::ModuleTail if rooted_fallback.is_some() => {
-            let Some(expression) = rooted_fallback else {
-                return goal.needs(ValueGoalDemand::Occurrence);
-            };
-            goal.rooted = None;
-            goal.type_namespace = false;
-            return qualified(db, goal, &expression);
-        }
         PrefixResolution::ModuleTail => {
-            let request = match checked!(plan.lexical_module.route(&hygiene, raw)) {
-                ModuleRoute::Definition(expansion) => {
-                    let Some(request) = polled!(plan.definition_module_request(db, raw, &name, edition, namespace)) else {
-                        return goal.needs(ValueGoalDemand::DefinitionModule(expansion));
-                    };
-                    Some(request)
+            goal.continuation = Some(if rooted_fallback.is_some() {
+                ValueContinuation::Qualified
+            } else {
+                ValueContinuation::Module {
+                    name,
+                    raw,
+                    edition,
+                    name_range,
                 }
-                ModuleRoute::Lexical(_) => checked!(plan.lexical_module.request_in_namespace(&name, edition, namespace)),
-            };
-            let Some(request) = request else {
-                return goal.needs(ValueGoalDemand::ModulePublication);
-            };
-            let answer = polled!(db.fetch(
-                &SyntaxProvider,
-                QueryKey::CurrentModuleName(Box::new(request.clone()))
-            ));
-            let QueryValue::CurrentModuleName(answer) = answer.value.as_ref() else {
-                return QueryPoll::Ready(Err(error("Value goal module answer variant differs")));
-            };
-            if !answer.matches_request(&request) {
-                return QueryPoll::Ready(Err(error("Value goal module request differs")));
-            }
-            if answer.completion() != ModuleNameCompletion::Complete {
-                return goal.needs(ValueGoalDemand::ModuleCompletion(answer.request_identity()));
-            }
-            let Some(lookup) = answer.lookup() else {
-                return goal.needs(ValueGoalDemand::ModulePublication);
-            };
-            goal.reads = answer.semantic_identity();
-            if matches!(lookup, NameLookup::Absent) {
-                if goal.target.is_none() {
-                    return goal.needs(ValueGoalDemand::Prelude);
+            });
+            // Certify the lexical absence/rib decision as well as positive
+            // selections. A later local/item/import producer invalidates it.
+            match polled!(certify(
+                &reads,
+                db,
+                environment,
+                goal.occurrence,
+                goal.reads
+            )) {
+                NamespaceReadCertification::Complete(identity) => goal.reads = identity,
+                NamespaceReadCertification::PendingOwner(id) => {
+                    return goal.needs(ValueGoalDemand::SourceOwner(id));
                 }
-                let Some(prelude) = polled!(pattern_prelude(db, environment, &request)) else {
-                    return goal.needs(ValueGoalDemand::Prelude);
-                };
-                let mut identity = StableEncoder::new("lrr/v1/entered-pattern-module-prelude");
-                identity.digest(goal.reads);
-                identity.digest(prelude);
-                goal.reads = identity.finish();
+                NamespaceReadCertification::PendingScope(id) => {
+                    return goal.needs(ValueGoalDemand::ScopeCertificate(id));
+                }
+                NamespaceReadCertification::PendingName(id) => {
+                    return goal.needs(ValueGoalDemand::ModuleCompletion(id));
+                }
             }
-            lookup.clone()
+            return QueryPoll::Ready(goal.finish());
         }
         PrefixResolution::NeedImport(id) | PrefixResolution::NeedDeclaration(id) => {
             return goal.needs(ValueGoalDemand::Prefix(id));
@@ -857,6 +965,19 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
             return goal.needs(ValueGoalDemand::ModuleCompletion(id));
         }
     }
+    complete_lexical_lookup(db, goal, lookup, foreign, name_range)
+}
+fn complete_lexical_lookup(
+    db: &mut Database,
+    mut goal: EnteredValueGoal,
+    lookup: NameLookup,
+    foreign: bool,
+    name_range: SourceRange,
+) -> QueryPoll<EnteredValueGoal> {
+    let plan = Arc::clone(&goal.plan);
+    let adapter = plan.adapter();
+    let body = goal.key.body.clone();
+    let node = NodeId(goal.key.node);
     match lookup {
         NameLookup::LocalBinding(identity) => {
             goal.local = Some(
@@ -868,9 +989,8 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
         NameLookup::Absent if goal.target.is_some() => {
             goal.local = goal.target.as_ref().map(|target| target.identity)
         }
-        NameLookup::Defined(_) if foreign => return goal.needs(ValueGoalDemand::PathAdjustment),
         NameLookup::Defined(selected) => {
-            return selected_declaration(db, goal, selected);
+            goal.continuation = Some(ValueContinuation::Declaration { selected, foreign });
         }
         NameLookup::NeedInput(id) => {
             use crate::frontend::pattern_binding_occurrences::PatternLocalOccurrence;
@@ -915,6 +1035,83 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
     }
     QueryPoll::Ready(goal.finish())
 }
+fn complete_module(
+    db: &mut Database,
+    mut goal: EnteredValueGoal,
+    name: String,
+    raw: Key,
+    edition: u16,
+    name_range: SourceRange,
+) -> QueryPoll<EnteredValueGoal> {
+    let plan = Arc::clone(&goal.plan);
+    let (_, hygiene) = plan.entered.local_hygiene();
+    let Some(environment) = plan.environment() else {
+        return goal.needs(ValueGoalDemand::ModulePublication);
+    };
+    let environment = environment.macros().source_environment();
+    let namespace = if goal.type_namespace {
+        Namespace::Type
+    } else {
+        Namespace::Value
+    };
+    let request = match checked!(plan.lexical_module.route(&hygiene, raw)) {
+        ModuleRoute::Definition(expansion) => {
+            let Some(request) =
+                polled!(plan.definition_module_request(db, raw, &name, edition, namespace))
+            else {
+                return goal.needs(ValueGoalDemand::DefinitionModule(expansion));
+            };
+            Some(request)
+        }
+        ModuleRoute::Lexical(_) => checked!(
+            plan.lexical_module
+                .request_in_namespace(&name, edition, namespace)
+        ),
+    };
+    let Some(request) = request else {
+        return goal.needs(ValueGoalDemand::ModulePublication);
+    };
+    let answer = polled!(db.fetch(
+        &SyntaxProvider,
+        QueryKey::CurrentModuleName(Box::new(request.clone()))
+    ));
+    let QueryValue::CurrentModuleName(answer) = answer.value.as_ref() else {
+        return QueryPoll::Ready(Err(error("Value goal module answer variant differs")));
+    };
+    if !answer.matches_request(&request) {
+        return QueryPoll::Ready(Err(error("Value goal module request differs")));
+    }
+    if answer.completion() != ModuleNameCompletion::Complete {
+        return goal.needs(ValueGoalDemand::ModuleCompletion(answer.request_identity()));
+    }
+    let Some(lookup) = answer.lookup() else {
+        return goal.needs(ValueGoalDemand::ModulePublication);
+    };
+    let mut identity = StableEncoder::new("lrr/v1/entered-value-module-and-prefix");
+    identity.digest(goal.reads);
+    identity.digest(answer.semantic_identity());
+    goal.reads = identity.finish();
+    if matches!(lookup, NameLookup::Absent) {
+        if goal.target.is_none() {
+            return goal.needs(ValueGoalDemand::Prelude);
+        }
+        let Some(prelude) = polled!(pattern_prelude(db, environment, &request)) else {
+            return goal.needs(ValueGoalDemand::Prelude);
+        };
+        let mut identity = StableEncoder::new("lrr/v1/entered-pattern-module-prelude");
+        identity.digest(goal.reads);
+        identity.digest(prelude);
+        goal.reads = identity.finish();
+    }
+
+    let foreign = edition != plan.entered.parent.source().outline.parse.profile.edition;
+    match lookup.clone() {
+        NameLookup::Defined(_) if foreign => goal.needs(ValueGoalDemand::PathAdjustment),
+        NameLookup::Defined(selected) => selected_declaration(db, goal, selected),
+        lookup => complete_lexical_lookup(db, goal, lookup, foreign, name_range),
+    }
+}
+
 fn certify(
     reads: &NamespaceReads,
     db: &mut Database,

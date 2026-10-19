@@ -390,3 +390,57 @@ fn main() {
         }
     }
 }
+
+#[test]
+fn closure_captures_use_expanded_hygienic_local_identities_all_origins() {
+    // LRR route/hygiene control, outside unchanged upstream originals. Empty
+    // arguments cannot disclose `x`; its definition-site identity must select
+    // the parameter despite the later same-spelling local. The closure's own
+    // argument occupies another ordinal in its call frame.
+    const SOURCE: &str = r#"
+fn factory(x: i32) -> impl Fn(i32) -> i32 {
+    macro_rules! read { () => { x } }
+    let x = 99_i32;
+    move |delta: i32| {
+        assert_eq!(read!(), 7);
+        if false { cold() } else { read!() + delta }
+    }
+}
+fn cold() -> i32 { let _f = |x: i32| x.unsupported_method_xyz(); 123 }
+fn main() {
+    let f = factory(7);
+    assert_eq!(f(2), 9);
+    assert_eq!(f(3), 10);
+    let mut ignored = 1_i32;
+    macro_rules! ignore { ($v:ident) => { 0_i32 } }
+    let empty = || ignore!(ignored);
+    ignored = 2;
+    assert_eq!(empty(), 0);
+    assert_eq!(ignored, 2);
+    let mut count = 0_i32;
+    macro_rules! increment { ($v:ident) => { $v += 1 } }
+    let mut bump = || increment!(count);
+    bump(); bump();
+    assert_eq!(count, 2);
+    let item = 1_i32;
+    let local_item = || {
+        const C: i32 = value();
+        static S: i32 = value();
+        const fn value() -> i32 { 2 }
+        fn item() -> i32 { 8 }
+        item()
+    };
+    assert_eq!(local_item(), 8);
+    assert_eq!(item, 1);
+}
+"#;
+    let emitted = format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nemit! {{ {SOURCE} }}");
+    let wrapped = format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }}\nmacro_rules! wrapper {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }}\nwrapper! {{ {SOURCE} }}");
+    for edition in [2015, 2018, 2021, 2024] {
+        for source in [SOURCE, &emitted, &wrapped] {
+            let report = completed(source, edition);
+            assert_eq!(closures_made(&report), 4,
+                "ordinary MakeClosure count in edition {edition}");
+        }
+    }
+}

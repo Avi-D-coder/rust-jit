@@ -109,7 +109,7 @@ impl SourcePlanPins {
                     )
                 })
             }
-            QueryValue::EnteredValue(value) => {
+            QueryValue::EnteredValue(value) | QueryValue::LexicalValue(value) => {
                 value.retained_plan().environment().map(|environment| {
                     SourceArtifactRef::CompletedEnvironment(
                         environment.macros().source_environment(),
