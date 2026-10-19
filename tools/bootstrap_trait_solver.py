@@ -62,6 +62,8 @@ SUPPORT_SOURCES = (
     'compiler/rustc_infer/src/infer/outlives/mod.rs',
     'compiler/rustc_middle/src/infer/canonical.rs',
     'compiler/rustc_trait_selection/src/solve/delegate.rs',
+    'compiler/rustc_trait_selection/src/traits/util.rs',
+    'compiler/rustc_middle/src/ty/sty.rs',
     'compiler/rustc_infer/src/infer/region_constraints/mod.rs',
     'compiler/rustc_data_structures/src/graph/mod.rs',
     'compiler/rustc_data_structures/src/graph/reference.rs',

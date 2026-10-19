@@ -241,3 +241,5 @@ impl<'db> InferCtxtInner<'db> {
     }
 }
 mod region_response;
+
+mod fast_path;

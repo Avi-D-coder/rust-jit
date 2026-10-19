@@ -15,6 +15,7 @@ pub(crate) fn check_actual_storage<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, sp
     check_variable_resolution(cx, actual, span);
     check_inference_client(cx, actual, span);
     check_canonical_instantiation(cx, actual, span);
+    check_goal_fast_path(cx, actual, span);
     let storage = InferenceStorage::new();
     let root = ty::UniverseIndex::ROOT;
     let (a, b, integer, float, constant, first_region, second_region) = {
@@ -851,4 +852,107 @@ fn check_region_response<'cx>(context: &super::InferenceContext<'cx>, span: Span
     assert!(independent.make_deduplicated_region_constraints().is_empty());
     let a=ty::OutlivesClause(independent.next_ty_var(span).into(),independent.next_region_var(span));
     independent.register_region_assumption(a);assert_eq!(independent.take_registered_region_assumptions(),vec![a]);assert!(independent.take_registered_region_assumptions().is_empty());
+}
+
+// Actual compiler fast-path outcomes; no substitute relation or trait provider.
+fn check_goal_fast_path<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, span: Span) {
+    use super::InferenceContext;
+    use crate::traits::upstream::model::{ParamEnv,List,ValueConst,ScalarInt};
+    use ty::{InferCtxtLike as Client,inherent::Ty as _};
+    use ty::solve::{ComputeGoalFastPathOutcome::{NoFastPath,TriviallyHolds,TriviallyStalled},Goal,TyOrConstInferVar,GoalStalledOnOpaques,SizedTraitKind};
+    let owner=InferenceContext::new(cx,ty::TypingMode::PostAnalysis);
+    let env=ParamEnv(cx.clauses(List::default()));
+    let goal=|kind| Goal::new(cx,env,ty::Binder::dummy(kind));
+    let wf=|value: Ty<'cx>| goal(ty::PredicateKind::Clause(ty::ClauseKind::WellFormed(value.into())));
+    let boolean=cx.ty(ty::Bool);
+    assert!(boolean.has_trivial_sizedness(cx,SizedTraitKind::Sized));
+    assert!(boolean.is_trivially_pure_clone_copy());assert!(boolean.is_trivially_wf(cx));
+    let str_ty=cx.ty(ty::Str);
+    assert!(!str_ty.has_trivial_sizedness(cx,SizedTraitKind::Sized));
+    assert!(str_ty.has_trivial_sizedness(cx,SizedTraitKind::MetaSized));
+    assert!(!str_ty.is_trivially_pure_clone_copy());assert!(str_ty.is_trivially_wf(cx));
+    let reference=Ty::new_ref(cx,Region::new_static(cx),boolean,ty::Mutability::Not);
+    let mutable=Ty::new_ref(cx,Region::new_static(cx),boolean,ty::Mutability::Mut);
+    assert!(reference.is_trivially_pure_clone_copy());assert!(!mutable.is_trivially_pure_clone_copy());
+    assert!(Ty::new_ptr(cx,boolean,ty::Mutability::Mut).is_trivially_pure_clone_copy());
+    assert!(Ty::new_slice(cx,boolean).is_trivially_wf(cx));assert!(!Ty::new_slice(cx,str_ty).is_trivially_wf(cx));
+    for count in 0..=4 {
+        let tuple=Ty::new_tup(cx,&vec![boolean;count]);
+        assert_eq!(tuple.is_trivially_pure_clone_copy(),count<=3,"compiler optimization threshold is not a trait rejection");
+        assert!(tuple.has_trivial_sizedness(cx,SizedTraitKind::Sized));
+        assert!(matches!(owner.compute_goal_fast_path(wf(tuple),span),NoFastPath));
+    }
+    let unsized_tuple=Ty::new_tup(cx,&[boolean,str_ty]);
+    assert!(!unsized_tuple.has_trivial_sizedness(cx,SizedTraitKind::Sized));
+    assert!(unsized_tuple.has_trivial_sizedness(cx,SizedTraitKind::MetaSized));
+    assert!(matches!(owner.compute_goal_fast_path(wf(boolean),span),TriviallyHolds));
+    assert!(matches!(owner.compute_goal_fast_path(wf(reference),span),TriviallyHolds));
+    assert!(matches!(owner.compute_goal_fast_path(wf(owner.next_int_var()),span),TriviallyHolds));
+    assert!(matches!(owner.compute_goal_fast_path(wf(owner.next_float_var()),span),TriviallyHolds));
+    // Real source payload sits in an ordinary tuple that requires full WF work.
+    assert!(matches!(owner.compute_goal_fast_path(wf(Ty::new_tup(cx,&[actual])),span),NoFastPath));
+    let unknown=owner.next_ty_var(span);let vid=unknown.ty_vid().unwrap();
+    let TriviallyStalled{stalled_on}=owner.compute_goal_fast_path(wf(unknown),span) else {panic!("unknown WF must stall")};
+    assert_eq!(stalled_on.stalled_vars.as_slice(),&[TyOrConstInferVar::Ty(vid)]);
+    assert!(matches!(stalled_on.opaques,GoalStalledOnOpaques::No));
+    Client::instantiate_ty_var_raw(&owner,vid,boolean);
+    assert!(matches!(owner.compute_goal_fast_path(wf(unknown),span),TriviallyHolds));
+    let left=owner.next_region_var(span);let right=owner.next_region_var(span);
+    let outlives=goal(ty::PredicateKind::Clause(ty::ClauseKind::RegionOutlives(ty::OutlivesClause(left,right))));
+    assert!(matches!(owner.compute_goal_fast_path(outlives,span),TriviallyHolds));
+    owner.with_region_constraints(|data| {
+        assert_eq!(data.constraints.len(),1);let (constraint,origin)=data.constraints[0];assert_eq!(origin,span);
+        assert_eq!((constraint.sub,constraint.sup),(right,left));assert_eq!(constraint.visible_for_leak_check,ty::solve::VisibleForLeakCheck::No);
+    });
+    let bound=Region::new_bound(cx,ty::INNERMOST,ty::BoundRegion{var:ty::BoundVar::from_u32(0),kind:ty::BoundRegionKind::Anon});
+    let escaping=Goal::new(cx,env,ty::Binder::bind_with_vars(
+        ty::PredicateKind::Clause(ty::ClauseKind::RegionOutlives(ty::OutlivesClause(bound,right))),
+        cx.mk_bound_variable_kinds_from_iter([ty::BoundVariableKind::Region(ty::BoundRegionKind::Anon)])));
+    assert!(matches!(owner.compute_goal_fast_path(escaping,span),NoFastPath));
+    let direct=goal(ty::PredicateKind::Clause(ty::ClauseKind::TypeOutlives(ty::OutlivesClause(boolean,right))));
+    assert!(matches!(owner.compute_goal_fast_path(direct,span),TriviallyHolds));
+    assert!(owner.inner.borrow().region_obligations().is_empty());
+    let unknown_type=owner.next_ty_var(span);
+    let pending=goal(ty::PredicateKind::Clause(ty::ClauseKind::TypeOutlives(ty::OutlivesClause(unknown_type,right))));
+    let TriviallyStalled{stalled_on}=owner.compute_goal_fast_path(pending,span) else {panic!("type outlives must retain inference stall")};
+    assert_eq!(stalled_on.stalled_vars.as_slice(),&[TyOrConstInferVar::Ty(unknown_type.ty_vid().unwrap())]);
+    let constant=owner.next_const_var(span);let const_vid=constant.ct_vid().unwrap();
+    let array=Ty::new_array_with_const_len(cx,boolean,constant);
+    let pending=goal(ty::PredicateKind::Clause(ty::ClauseKind::TypeOutlives(ty::OutlivesClause(array,right))));
+    let TriviallyStalled{stalled_on}=owner.compute_goal_fast_path(pending,span) else {panic!("array const inference must stall")};
+    assert_eq!(stalled_on.stalled_vars.as_slice(),&[TyOrConstInferVar::Const(const_vid)]);
+    let const_goal=goal(ty::PredicateKind::Clause(ty::ClauseKind::ConstArgHasType(constant,boolean)));
+    assert!(matches!(owner.compute_goal_fast_path(const_goal,span),TriviallyStalled{..}));
+    let value=Const::new(cx,ty::ConstKind::Value(ValueConst{ty:boolean,tree:cx.valtree(ty::ValTreeKind::Leaf(ScalarInt{bits:1,bytes:1}))}));
+    Client::instantiate_const_var_raw(&owner,const_vid,value);
+    assert!(matches!(owner.compute_goal_fast_path(const_goal,span),NoFastPath),"known const still needs full solver validation");
+    for coerce in [false,true] {
+        let a=owner.next_ty_var(span);let b=owner.next_ty_var(span);
+        let kind=if coerce {ty::PredicateKind::Coerce(ty::CoercePredicate{a,b})}else{ty::PredicateKind::Subtype(ty::SubtypePredicate{a_is_expected:true,a,b})};
+        let TriviallyStalled{stalled_on}=owner.compute_goal_fast_path(goal(kind),span) else {panic!("two vars must stall")};
+        assert_eq!(stalled_on.stalled_vars.as_slice(),&[TyOrConstInferVar::Ty(a.ty_vid().unwrap()),TyOrConstInferVar::Ty(b.ty_vid().unwrap())]);
+        assert_eq!(Client::sub_unification_table_root_var(&owner,a.ty_vid().unwrap()),Client::sub_unification_table_root_var(&owner,b.ty_vid().unwrap()));
+        assert_ne!(Client::root_ty_var(&owner,a.ty_vid().unwrap()),Client::root_ty_var(&owner,b.ty_vid().unwrap()));
+    }
+    assert!(owner.known_no_opaque_types_in_storage());
+    let erased=InferenceContext::new(cx,ty::TypingMode::ErasedNotCoherence(ty::MayBeErased));
+    assert!(!erased.known_no_opaque_types_in_storage(),"empty storage is not enough in erased mode");
+    assert!(cx.services().ready(cx).is_err(),"actual fast-path operations are not full source facts/root readiness");
+}
+
+pub(crate) fn check_trait_fast_path<'cx>(cx: DbInterner<'cx>, reference: ty::TraitRef<DbInterner<'cx>>, span: Span) {
+    use super::InferenceContext;
+    use crate::traits::upstream::model::{ParamEnv,List};
+    use ty::solve::{ComputeGoalFastPathOutcome::TriviallyStalled,Goal,GoalStalledOnOpaques,SucceededInErased,TyOrConstInferVar};
+    let owner=InferenceContext::new(cx,ty::TypingMode::PostAnalysis);
+    let unknown=owner.next_ty_var(span);
+    let source_ref=reference.with_replaced_self_ty(cx,unknown);
+    let env=ParamEnv(cx.clauses(List::default()));
+    for polarity in [ty::ClausePolarity::Positive,ty::ClausePolarity::Negative] {
+        let goal=Goal::new(cx,env,ty::Binder::dummy(ty::TraitClause{trait_ref:source_ref,polarity}));
+        let TriviallyStalled{stalled_on}=owner.compute_goal_fast_path(goal,span) else {panic!("genuine source trait must stall on unresolved Self")};
+        assert_eq!(stalled_on.stalled_vars.as_slice(),&[TyOrConstInferVar::Ty(unknown.ty_vid().unwrap())]);
+        assert!(matches!(stalled_on.opaques,GoalStalledOnOpaques::Yes{num_opaques_in_storage:0,previously_succeeded_in_erased:SucceededInErased::No}));
+    }
+    assert!(cx.services().ready(cx).is_err(),"source TraitRef stall is not a proven trait/root");
 }

@@ -30,6 +30,7 @@ tracing.workspace = true
 ena.workspace = true
 indexmap.workspace = true
 rustc-hash.workspace = true
+thin-vec.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

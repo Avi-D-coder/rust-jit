@@ -927,6 +927,7 @@ dependencies = [
  "rustix",
  "serde",
  "serde_json",
+ "thin-vec",
  "toml",
  "toml_edit",
  "tracing",

@@ -1,0 +1,7 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Affected actual source fast-path matrix after correcting host higher-ranked binder construction; production unchanged, two unaffected V364 controls retain their original passing evidence.",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions"
+  ]
+}

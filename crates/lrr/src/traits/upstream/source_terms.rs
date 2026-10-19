@@ -253,9 +253,8 @@ pub(crate) fn check_actual_encodings(db: &mut Database, key: &crate::db::seals::
             let id = plan.bindings.definitions[&source_id];
             let QueryValue::DeclarationGenericTypes(generics) = plan.bindings.generics[&id].as_ref() else { unreachable!() };
             let (source, _, context, _) = generics.declaration().source_parts().expect("actual retained declaration source");
-            super::infer::tests::check_actual_storage(cx, actual.self_ty, model::Span {
-                origin: source.content, start: context.range.start, end: context.range.end,
-            });
+            let span = model::Span { origin: source.content, start: context.range.start, end: context.range.end };
+            super::infer::tests::check_actual_storage(cx, actual.self_ty, span);
 
             match (trait_ref, actual.trait_arguments) {
                 (None, None) => {},
@@ -273,6 +272,7 @@ pub(crate) fn check_actual_encodings(db: &mut Database, key: &crate::db::seals::
                     let definition = encoded.definition;
                     let args = encoded.args;
                     let reference = encoded.construct(cx);
+                    super::infer::tests::check_trait_fast_path(cx, reference, span);
                     references += 1;
                     assert_eq!(reference.def_id, definition);
                     assert_eq!(reference.args, args, "actual upstream TraitRef preserves Self and every source argument");
