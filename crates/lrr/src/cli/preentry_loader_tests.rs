@@ -1151,3 +1151,235 @@ fn unchanged_impl_receipts_reuse_actual_parse_inputs_without_claiming_solver_rea
         }
     }
 }
+
+#[test]
+fn unchanged_trait_root_requires_exact_captured_facade_sources_before_header_preparation() {
+    use crate::{
+        core::profile::ProfileIdentity,
+        expand::source_discovery::{
+            SourceDiscovery,
+            impl_catalog::{LiveImplCatalogPreparation, MandatoryTraitFacade},
+        },
+        source::{
+            embedded_crates::{EmbeddedFile, standard_facade_crates},
+            manifest::Namespace,
+        },
+    };
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/upstream/rustc-checkout/tests/ui/traits/safety-ok.rs");
+    for edition in [2015, 2018, 2021, 2024] {
+        for mutation in ["original", "missing", "changed", "extra"] {
+            let profile = ProfileIdentity {
+                edition,
+                ..ProfileIdentity::current()
+            };
+            let mut embedded = standard_facade_crates(&profile);
+            let count: usize = embedded.iter().map(|unit| unit.files.len()).sum();
+            let core = embedded
+                .iter_mut()
+                .find(|unit| unit.name == "core")
+                .unwrap();
+            match mutation {
+                "missing" => core
+                    .files
+                    .retain(|file| file.path != "<lrr-facade>/core/clone.rs"),
+                "changed" => {
+                    core.files
+                        .iter_mut()
+                        .find(|file| file.path == "<lrr-facade>/core/clone.rs")
+                        .unwrap()
+                        .text = "/* replaced facade source under the same identity */"
+                }
+                "extra" => core.files.push(EmbeddedFile {
+                    module_path: vec!["unregistered".into()],
+                    path: "<lrr-facade>/core/unregistered.rs",
+                    text: "/* undeclared module under a reserved facade unit */",
+                }),
+                "original" => {}
+                _ => unreachable!(),
+            }
+            let ((_, source, sources, _), _) = super::crate_graph::capture_with(
+                &path,
+                false,
+                edition,
+                &super::crate_graph::ExternCrates::default(),
+                embedded,
+                None,
+            )
+            .unwrap();
+            let discovery = SourceDiscovery::new_deferred_imports(
+                sources,
+                source.outline().root_scope.clone(),
+                Namespace::Value,
+                source.outline().root_scope.crate_key,
+                1,
+            )
+            .unwrap();
+            let prepared = discovery.prepare_live_impl_catalog_sources();
+            if matches!(mutation, "changed" | "extra") {
+                match prepared {
+                    Err(error) => assert_eq!(error.code, "LRR-E-IMPL-CATALOG-FACADE"),
+                    Ok(_) => panic!("invalid facade source accepted: {edition} {mutation}"),
+                }
+                continue;
+            }
+            let LiveImplCatalogPreparation::NeedConfiguredWorld {
+                captured: live,
+                trait_facade,
+            } = prepared.unwrap()
+            else {
+                panic!("actual root membership absent: {edition} {mutation}")
+            };
+            assert_eq!(live.selected_root(), source.selection());
+            match (mutation, trait_facade) {
+                ("original", MandatoryTraitFacade::NeedHeaders { captured }) => {
+                    assert_eq!(captured.sources().len(), count);
+                    assert_eq!(captured.owning_profile(), &profile);
+                    assert!(
+                        captured
+                            .sources()
+                            .iter()
+                            .all(|view| view.same_publication(&source))
+                    );
+                    assert!(
+                        captured.sources().iter().all(|view| view
+                            .selection()
+                            .outline
+                            .parse
+                            .profile
+                            .edition
+                            == edition)
+                    );
+                    assert_ne!(captured.fingerprint(), live.fingerprint());
+                    eprintln!(
+                        "edition{edition}: {count} actual facade files captured; header compatibility and complete catalog remain pending"
+                    );
+                }
+                ("missing", MandatoryTraitFacade::Missing) => {}
+                _ => panic!("source preparation demand differs: {edition} {mutation}"),
+            }
+        }
+    }
+}
+
+#[test]
+fn different_unchanged_roots_keep_facade_source_identity_and_distinct_world_membership() {
+    use crate::{
+        core::profile::ProfileIdentity,
+        expand::source_discovery::{
+            SourceDiscovery,
+            impl_catalog::{LiveImplCatalogPreparation, MandatoryTraitFacade},
+        },
+        source::{embedded_crates::standard_facade_crates, manifest::Namespace},
+    };
+    let root =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");
+    for edition in [2015, 2018, 2021, 2024] {
+        let mut previous = None;
+        for case in [
+            "tests/ui/traits/safety-ok.rs",
+            "tests/ui/methods/method-self-arg-trait.rs",
+        ] {
+            let profile = ProfileIdentity {
+                edition,
+                ..ProfileIdentity::current()
+            };
+            let ((_, source, sources, _), _) = super::crate_graph::capture_with(
+                &root.join(case),
+                false,
+                edition,
+                &super::crate_graph::ExternCrates::default(),
+                standard_facade_crates(&profile),
+                None,
+            )
+            .unwrap();
+            let discovery = SourceDiscovery::new_deferred_imports(
+                sources,
+                source.outline().root_scope.clone(),
+                Namespace::Value,
+                source.outline().root_scope.crate_key,
+                1,
+            )
+            .unwrap();
+            let LiveImplCatalogPreparation::NeedConfiguredWorld {
+                captured: live,
+                trait_facade: MandatoryTraitFacade::NeedHeaders { captured },
+            } = discovery.prepare_live_impl_catalog_sources().unwrap()
+            else {
+                panic!("actual facade sources not captured: {case}, edition{edition}")
+            };
+            let identity = (live.fingerprint(), captured.fingerprint());
+            if let Some((world, facade)) = previous {
+                assert_ne!(world, identity.0);
+                assert_eq!(
+                    facade, identity.1,
+                    "unrelated upstream root invalidates facade sources"
+                );
+            }
+            previous = Some(identity);
+        }
+    }
+}
+
+#[test]
+fn mixed_edition_capture_keeps_actual_facade_owning_profile_separate_from_consumers() {
+    use crate::{
+        core::profile::ProfileIdentity,
+        expand::source_discovery::{
+            SourceDiscovery,
+            impl_catalog::{LiveImplCatalogPreparation, MandatoryTraitFacade},
+        },
+        source::{embedded_crates::standard_facade_crates, manifest::Namespace},
+    };
+    let root =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");
+    for (edition, dependency_edition) in [(2015, 2024), (2018, 2015), (2021, 2018), (2024, 2015)] {
+        let profile = ProfileIdentity {
+            edition,
+            ..ProfileIdentity::current()
+        };
+        let external = super::crate_graph::ExternCrates::new(
+            vec![super::crate_graph::ExternArg {
+                name: "actual_auxiliary".into(),
+                path: root.join("tests/ui/consts/auxiliary/issue-17718-aux.rs"),
+                prelude: true,
+                proc_macro: false,
+            }],
+            vec![("actual_auxiliary".into(), dependency_edition)],
+        )
+        .unwrap();
+        let ((_, source, sources, _), _) = super::crate_graph::capture_with(
+            &root.join("tests/ui/traits/safety-ok.rs"),
+            false,
+            edition,
+            &external,
+            standard_facade_crates(&profile),
+            None,
+        )
+        .unwrap();
+        let discovery = SourceDiscovery::new_deferred_imports(
+            sources,
+            source.outline().root_scope.clone(),
+            Namespace::Value,
+            source.outline().root_scope.crate_key,
+            1,
+        )
+        .unwrap();
+        let LiveImplCatalogPreparation::NeedConfiguredWorld {
+            captured: live,
+            trait_facade: MandatoryTraitFacade::NeedHeaders { captured },
+        } = discovery.prepare_live_impl_catalog_sources().unwrap()
+        else {
+            panic!("actual mixed-edition sources absent")
+        };
+        assert_eq!(live.live_source_profiles().len(), 2);
+        assert_eq!(captured.owning_profile(), &profile);
+        assert!(
+            captured
+                .sources()
+                .iter()
+                .all(|view| view.selection().outline.parse.profile.edition == edition)
+        );
+        assert!(live.live_units().len() >= 2);
+    }
+}

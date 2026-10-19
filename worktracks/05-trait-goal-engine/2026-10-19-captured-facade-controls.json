@@ -1,0 +1,12 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "M019 actual captured live/facade source membership only; no catalog certificate, solver or guest execution",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_trait_root_requires_exact_captured_facade_sources_before_header_preparation",
+    "cli::preentry_loader_tests::different_unchanged_roots_keep_facade_source_identity_and_distinct_world_membership",
+    "cli::preentry_loader_tests::mixed_edition_capture_keeps_actual_facade_owning_profile_separate_from_consumers",
+    "expand::source_discovery::impl_catalog::tests::unchanged_cleanup_sources_never_prove_an_empty_trait_facade_all_editions",
+    "expand::source_discovery::impl_catalog::tests::actual_publication_includes_reachable_dependency_modules_not_unrelated_units",
+    "expand::source_discovery::impl_catalog::tests::captured_membership_does_not_discharge_cold_or_disabled_producer_frontiers"
+  ]
+}

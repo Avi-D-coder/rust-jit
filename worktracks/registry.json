@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19T11:26:08.497482+00:00",
+  "updated_at": "2026-10-19T11:43:53.454679+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -312,9 +312,10 @@
             "worktracks/evidence/2026-10-18-interpreter-v84-v85-predicate-requirements.json",
             "worktracks/evidence/2026-10-18-interpreter-v86-v88-sized-predicates.json",
             "worktracks/evidence/2026-10-18-interpreter-v89-v91-trait-declarations.json",
-            "worktracks/evidence/2026-10-19-v232-v233-source-trait-headers.json"
+            "worktracks/evidence/2026-10-19-v232-v233-source-trait-headers.json",
+            "worktracks/evidence/2026-10-19-v244-v248-captured-facade-sources.json"
           ],
-          "latest_component_scope": "V232/V233 partial M019 -> M020 source-fact transport: the existing actual TraitDeclaration memo now retains written generics, supertraits, predicates, attributes, auto/unsafe/alias syntax and actual source ranges, borrowing its retained parser/source/scope. Both builds and2/2source controls pass:13original/emit/wrapper/metadata worlds plus8auto/unsafe worlds across all4editions, with memo sharing, missing/non-trait headers, namespace/epoch and no-body assertions. Source/HEAD/binary guards pass; prior host-test shadowing build failure preserved. No concrete upstream SourceFacts provider, inference/delegate or root goal, new stock runtime gain, full M019/M020 or interpreter/JIT closure."
+          "latest_component_scope": "V244\u2013V248 partial M019: catalog preparation now retains the actual root-profile embedded facade files from the same publication, separately from the explicit live dependency closure, and advances only to NeedHeaders. Exact unit/module/path/profile/cfg/content checks reject changed/extra files and preserve Missing for absent files. Facade source identity excludes unrelated user roots; consumer editions remain separate from the captured facade owning profile. Removed accounting-only byte totals from this membership path and captured_declaration_sources under E-R5-006. Final library/CLI builds and 6/6 host controls pass, including 28 new source-capture worlds across all four editions and existing closure/cold-producer controls. Earlier compile and positive-control failures are preserved. No complete configured/header/catalog producer, inference/delegate/root solving, new stock runtime pass or interpreter/JIT closure."
         },
         {
           "id": "WT05-02",
@@ -361,10 +362,11 @@
         "worktracks/evidence/2026-10-19-v221-v224-upstream-parameters.json",
         "worktracks/evidence/2026-10-19-v225-v226-upstream-context-storage.json",
         "worktracks/evidence/2026-10-19-v227-v229-upstream-interner-core.json",
-        "worktracks/evidence/2026-10-19-v236-v243-prepared-solver-provider.json"
+        "worktracks/evidence/2026-10-19-v236-v243-prepared-solver-provider.json",
+        "worktracks/evidence/2026-10-19-v244-v248-captured-facade-sources.json"
       ],
       "solver_policy": "Pinned upstream next-generation rustc solver; E-R5-014. Adapter integration not implemented.",
-      "latest_component_scope": "V236\u2013V243 partial M019/M020: concrete immutable SourceFacts reader, exact retained source receipts, complete-catalog publication checks and derived pinned relevant-impl indexes. Actual scoped provider/context factory now type-checks after repairing the real ThinVec cache-drop lifetime failure with safe scoped cleanup. Final library/CLI builds and 2/2 host controls pass: normal/unwind cleanup and 8 source worlds (7,972 actual impl receipt observations) across all 4 editions, with parse-owner sharing, missing inputs, no body queries and real Scope certificate rejection. No complete M019 producer, positive source-backed ready instance, actual inference/delegate/root-goal execution, stock runtime gain or interpreter/JIT closure."
+      "latest_component_scope": "V244\u2013V248 partial M019: catalog preparation now retains the actual root-profile embedded facade files from the same publication, separately from the explicit live dependency closure, and advances only to NeedHeaders. Exact unit/module/path/profile/cfg/content checks reject changed/extra files and preserve Missing for absent files. Facade source identity excludes unrelated user roots; consumer editions remain separate from the captured facade owning profile. Removed accounting-only byte totals from this membership path and captured_declaration_sources under E-R5-006. Final library/CLI builds and 6/6 host controls pass, including 28 new source-capture worlds across all four editions and existing closure/cold-producer controls. Earlier compile and positive-control failures are preserved. No complete configured/header/catalog producer, inference/delegate/root solving, new stock runtime pass or interpreter/JIT closure."
     },
     {
       "id": "WT06",

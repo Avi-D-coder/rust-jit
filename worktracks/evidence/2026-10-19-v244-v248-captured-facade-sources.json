@@ -1,0 +1,552 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "at": "2026-10-19T11:43:16.990521+00:00",
+  "parent": "2f42884b037c6f80223de64c1d3a6f2589c38820",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "scope": "V244\u2013V248 partial M019: catalog preparation now retains the actual root-profile embedded facade files from the same publication, separately from the explicit live dependency closure, and advances only to NeedHeaders. Exact unit/module/path/profile/cfg/content checks reject changed/extra files and preserve Missing for absent files. Facade source identity excludes unrelated user roots; consumer editions remain separate from the captured facade owning profile. Removed accounting-only byte totals from this membership path and captured_declaration_sources under E-R5-006. Final library/CLI builds and 6/6 host controls pass, including 28 new source-capture worlds across all four editions and existing closure/cold-producer controls. Earlier compile and positive-control failures are preserved. No complete configured/header/catalog producer, inference/delegate/root solving, new stock runtime pass or interpreter/JIT closure.",
+  "precode": "worktracks/05-trait-goal-engine/2026-10-19-captured-trait-facade-sources.md",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-19-captured-facade-review.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-19-captured-facade-controls.json",
+  "selection_sha256": "93a337fc68a618be81795cb40ac5c753c744d88acfcfa00942b2027fd12629d5",
+  "cohorts": {
+    "244": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:31:48.231299+00:00",
+          "head": "2f42884b037c6f80223de64c1d3a6f2589c38820",
+          "file_count": 8474,
+          "source_sha256": "8366094c90e61870bca1877ea4ec23253b3db507c2521cf453e6855d4af29ea9",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:32:08.243378+00:00",
+          "head": "2f42884b037c6f80223de64c1d3a6f2589c38820",
+          "file_count": 8474,
+          "source_sha256": "8366094c90e61870bca1877ea4ec23253b3db507c2521cf453e6855d4af29ea9",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "success": false,
+        "session": 94243,
+        "exit": 101,
+        "errors": [
+          {
+            "code": "E0609",
+            "message": "no field `crate_key` on type `&outline::Outline`",
+            "primary_spans": [
+              {
+                "file": "crates/lrr/src/cli/preentry_loader_tests.rs",
+                "line": 1186
+              }
+            ]
+          }
+        ],
+        "messages_sha256": "7ab106cfc52f82740fa9361ba845ec3a2e28a48218991f9ff7836faf8b5d34f3"
+      }
+    },
+    "245": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:32:27.572524+00:00",
+          "head": "2f42884b037c6f80223de64c1d3a6f2589c38820",
+          "file_count": 8474,
+          "source_sha256": "6a87fc18e54622769f0da58eb9eb070673fb467eb27bb4f2fba6e27ca55a2d40",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:35:07.297632+00:00",
+          "head": "2f42884b037c6f80223de64c1d3a6f2589c38820",
+          "file_count": 8474,
+          "source_sha256": "6a87fc18e54622769f0da58eb9eb070673fb467eb27bb4f2fba6e27ca55a2d40",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "be2e8f81031716e5a5a1125cc2401585eaf589d07a967930a3ef75ee6c9c3651"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "f6653bb42af3016b9fec7c13a5772527b2c6cc8b4c1b7754dc39ff29d1b25952"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "success": true,
+        "session": 49944,
+        "exit": 0,
+        "errors": [],
+        "messages_sha256": "d217f8373eb1d5992625cbf841f8f8525d38a1efba196ac16f7c58e9fc786fac"
+      },
+      "cli_build": {
+        "command": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+        "success": true,
+        "session": 93307,
+        "exit": 0,
+        "errors": [],
+        "messages_sha256": "4a24fbe740a37072c703f5db25b35b492493e1a243d21f8fb51b34b278128ea8"
+      }
+    },
+    "246": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:35:07.975318+00:00",
+          "head": "2f42884b037c6f80223de64c1d3a6f2589c38820",
+          "file_count": 8474,
+          "source_sha256": "796a3667398309bd740f9f02e6a82ae39ffb90a9bccc89164eee313b934ab5e3",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:36:05.245904+00:00",
+          "head": "2f42884b037c6f80223de64c1d3a6f2589c38820",
+          "file_count": 8474,
+          "source_sha256": "796a3667398309bd740f9f02e6a82ae39ffb90a9bccc89164eee313b934ab5e3",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "3bd6abb8b90c31a1afd26f25e014b2a00de6b5d1f6fb801b4d7852f8e1678c86"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "bc8b782b9de81cc0e04d38bac555e835d8983a4c15ff0b916e29fbf4bd0cc04e"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:37:21.819836+00:00",
+          "head": "2f42884b037c6f80223de64c1d3a6f2589c38820",
+          "file_count": 8474,
+          "source_sha256": "796a3667398309bd740f9f02e6a82ae39ffb90a9bccc89164eee313b934ab5e3",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "3bd6abb8b90c31a1afd26f25e014b2a00de6b5d1f6fb801b4d7852f8e1678c86"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "bc8b782b9de81cc0e04d38bac555e835d8983a4c15ff0b916e29fbf4bd0cc04e"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "success": true,
+        "session": 89396,
+        "exit": 0,
+        "errors": [],
+        "messages_sha256": "17d4edd3469be0490114c90c98b0acd5373a2c7f453b22dde5357fb484b476aa"
+      },
+      "cli_build": {
+        "command": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+        "success": true,
+        "session": 21709,
+        "exit": 0,
+        "errors": [],
+        "messages_sha256": "cb998f31205533b890d397c5a5b2db4ac9c48deb89520f04a473a15e21167ccb"
+      },
+      "host_controls": {
+        "command": "python3.12 tools/validation/run_controls.py artifacts/validation-current-v246 worktracks/05-trait-goal-engine/2026-10-19-captured-facade-controls.json",
+        "session": 80742,
+        "exit": 1,
+        "results": [
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_trait_root_requires_exact_captured_facade_sources_before_header_preparation",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_trait_root_requires_exact_captured_facade_sources_before_header_preparation",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 101,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": false,
+            "seconds": 0.907,
+            "log": "control-0.log"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::different_unchanged_roots_keep_facade_source_identity_and_distinct_world_membership",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::different_unchanged_roots_keep_facade_source_identity_and_distinct_world_membership",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 101,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": false,
+            "seconds": 0.893,
+            "log": "control-1.log"
+          },
+          {
+            "selector": "expand::source_discovery::impl_catalog::tests::unchanged_cleanup_sources_never_prove_an_empty_trait_facade_all_editions",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "expand::source_discovery::impl_catalog::tests::unchanged_cleanup_sources_never_prove_an_empty_trait_facade_all_editions",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 0.687,
+            "log": "control-2.log"
+          },
+          {
+            "selector": "expand::source_discovery::impl_catalog::tests::actual_publication_includes_reachable_dependency_modules_not_unrelated_units",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "expand::source_discovery::impl_catalog::tests::actual_publication_includes_reachable_dependency_modules_not_unrelated_units",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 0.368,
+            "log": "control-3.log"
+          },
+          {
+            "selector": "expand::source_discovery::impl_catalog::tests::captured_membership_does_not_discharge_cold_or_disabled_producer_frontiers",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "expand::source_discovery::impl_catalog::tests::captured_membership_does_not_discharge_cold_or_disabled_producer_frontiers",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 0.448,
+            "log": "control-4.log"
+          }
+        ],
+        "exact_selectors_at_run": [
+          "cli::preentry_loader_tests::unchanged_trait_root_requires_exact_captured_facade_sources_before_header_preparation",
+          "cli::preentry_loader_tests::different_unchanged_roots_keep_facade_source_identity_and_distinct_world_membership",
+          "expand::source_discovery::impl_catalog::tests::unchanged_cleanup_sources_never_prove_an_empty_trait_facade_all_editions",
+          "expand::source_discovery::impl_catalog::tests::actual_publication_includes_reachable_dependency_modules_not_unrelated_units",
+          "expand::source_discovery::impl_catalog::tests::captured_membership_does_not_discharge_cold_or_disabled_producer_frontiers"
+        ]
+      },
+      "failure": "New controls honestly remain Missing because facade files were incorrectly searched only in explicit live closure; existing3 controls pass. Corrected using actual same-publication facet source input, no fabricated dependency edge."
+    },
+    "247": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:39:22.206836+00:00",
+          "head": "2f42884b037c6f80223de64c1d3a6f2589c38820",
+          "file_count": 8474,
+          "source_sha256": "56f9b68bffcc7d46b8316e56e61b770e4e54c1eb01c623186d447f370d3cd812",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:40:23.855808+00:00",
+          "head": "2f42884b037c6f80223de64c1d3a6f2589c38820",
+          "file_count": 8474,
+          "source_sha256": "56f9b68bffcc7d46b8316e56e61b770e4e54c1eb01c623186d447f370d3cd812",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "76c003afd385c99de56471a86f37989246c2e72ea5dd1379dd16773b65a5abd2"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "success": true,
+        "session": 67150,
+        "exit": 0,
+        "errors": [],
+        "messages_sha256": "8ea9c1a111317221fe45f3f13552dcd9a698a93ed08fd3f065c930311fde7fd8"
+      }
+    },
+    "248": {
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:40:24.460624+00:00",
+          "head": "2f42884b037c6f80223de64c1d3a6f2589c38820",
+          "file_count": 8474,
+          "source_sha256": "9209d3e97794da3f12617daf11b5f41db476a146a599c5eeabe9d89bae1054a2",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:42:04.837725+00:00",
+          "head": "2f42884b037c6f80223de64c1d3a6f2589c38820",
+          "file_count": 8474,
+          "source_sha256": "9209d3e97794da3f12617daf11b5f41db476a146a599c5eeabe9d89bae1054a2",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "1345afe88b378dbc2a6711f4fb41378c0f253f233842e1da265fa5056dadeb70"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "8b1e657d8473aedf73fde9d8954685555b9e77ce6ae57224427715dc8e5a13aa"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T11:42:38.786914+00:00",
+          "head": "2f42884b037c6f80223de64c1d3a6f2589c38820",
+          "file_count": 8474,
+          "source_sha256": "9209d3e97794da3f12617daf11b5f41db476a146a599c5eeabe9d89bae1054a2",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "sha256": "1345afe88b378dbc2a6711f4fb41378c0f253f233842e1da265fa5056dadeb70"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "8b1e657d8473aedf73fde9d8954685555b9e77ce6ae57224427715dc8e5a13aa"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build": {
+        "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "success": true,
+        "session": 49748,
+        "exit": 0,
+        "errors": [],
+        "messages_sha256": "e80fa38a9d853e2df873627e5dd6ccd78a7459ed9acdf33c5b4a49c2d0b071cd"
+      },
+      "cli_build": {
+        "command": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+        "success": true,
+        "session": 74355,
+        "exit": 0,
+        "errors": [],
+        "messages_sha256": "c5792f3149dee9bc406e6dc050c81e7b43484d74e2ccaba349d650c7abb1b2ad"
+      },
+      "host_controls": {
+        "command": "python3.12 tools/validation/run_controls.py artifacts/validation-current-v248 worktracks/05-trait-goal-engine/2026-10-19-captured-facade-controls.json",
+        "session": 41556,
+        "exit": 0,
+        "results": [
+          {
+            "selector": "cli::preentry_loader_tests::unchanged_trait_root_requires_exact_captured_facade_sources_before_header_preparation",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::unchanged_trait_root_requires_exact_captured_facade_sources_before_header_preparation",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 8.356,
+            "log": "control-0.log"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::different_unchanged_roots_keep_facade_source_identity_and_distinct_world_membership",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::different_unchanged_roots_keep_facade_source_identity_and_distinct_world_membership",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 4.36,
+            "log": "control-1.log"
+          },
+          {
+            "selector": "cli::preentry_loader_tests::mixed_edition_capture_keeps_actual_facade_owning_profile_separate_from_consumers",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "cli::preentry_loader_tests::mixed_edition_capture_keeps_actual_facade_owning_profile_separate_from_consumers",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 2.38,
+            "log": "control-2.log"
+          },
+          {
+            "selector": "expand::source_discovery::impl_catalog::tests::unchanged_cleanup_sources_never_prove_an_empty_trait_facade_all_editions",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "expand::source_discovery::impl_catalog::tests::unchanged_cleanup_sources_never_prove_an_empty_trait_facade_all_editions",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 0.674,
+            "log": "control-3.log"
+          },
+          {
+            "selector": "expand::source_discovery::impl_catalog::tests::actual_publication_includes_reachable_dependency_modules_not_unrelated_units",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "expand::source_discovery::impl_catalog::tests::actual_publication_includes_reachable_dependency_modules_not_unrelated_units",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 0.362,
+            "log": "control-4.log"
+          },
+          {
+            "selector": "expand::source_discovery::impl_catalog::tests::captured_membership_does_not_discharge_cold_or_disabled_producer_frontiers",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+              "expand::source_discovery::impl_catalog::tests::captured_membership_does_not_discharge_cold_or_disabled_producer_frontiers",
+              "--exact",
+              "--nocapture",
+              "--test-threads=1"
+            ],
+            "exit": 0,
+            "one_body": true,
+            "inputs_unchanged": true,
+            "pass": true,
+            "seconds": 0.438,
+            "log": "control-5.log"
+          }
+        ],
+        "exact_selectors_at_run": [
+          "cli::preentry_loader_tests::unchanged_trait_root_requires_exact_captured_facade_sources_before_header_preparation",
+          "cli::preentry_loader_tests::different_unchanged_roots_keep_facade_source_identity_and_distinct_world_membership",
+          "cli::preentry_loader_tests::mixed_edition_capture_keeps_actual_facade_owning_profile_separate_from_consumers",
+          "expand::source_discovery::impl_catalog::tests::unchanged_cleanup_sources_never_prove_an_empty_trait_facade_all_editions",
+          "expand::source_discovery::impl_catalog::tests::actual_publication_includes_reachable_dependency_modules_not_unrelated_units",
+          "expand::source_discovery::impl_catalog::tests::captured_membership_does_not_discharge_cold_or_disabled_producer_frontiers"
+        ]
+      }
+    }
+  },
+  "unchanged_fixtures": [
+    {
+      "path": "tests/ui/traits/safety-ok.rs",
+      "sha256": "a3be42a53118893e31d5b29c824d0843b639f0f164f24b321483c8cea3360e1a",
+      "unchanged_from_pin": true,
+      "scope": "actual source capture only, not guest execution/full fixture"
+    },
+    {
+      "path": "tests/ui/methods/method-self-arg-trait.rs",
+      "sha256": "51b379109a3aaf3ebd0523202a3784a441b3ce88e8d4b735f2da48f210b761f0",
+      "unchanged_from_pin": true,
+      "scope": "actual source capture only, not guest execution/full fixture"
+    },
+    {
+      "path": "tests/ui/consts/auxiliary/issue-17718-aux.rs",
+      "sha256": "0337a60e8e1be0f17a795a78e20e765663144c027fd036db115d425e9ce149db",
+      "unchanged_from_pin": true,
+      "scope": "actual source capture only, not guest execution/full fixture"
+    }
+  ],
+  "final_source_capture_worlds": {
+    "new": 28,
+    "manifest_files_per_positive_capture": 66,
+    "source_integrity_cases": 16,
+    "distinct_root_cases": 8,
+    "mixed_consumer_dependency_cases": 4,
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "mixed_pairs": [
+      [
+        2015,
+        2024
+      ],
+      [
+        2018,
+        2015
+      ],
+      [
+        2021,
+        2018
+      ],
+      [
+        2024,
+        2015
+      ]
+    ]
+  },
+  "new_distinct_upstream_runtime_passes": 0,
+  "guest_executions": 0,
+  "upstream_solver_invocations": 0,
+  "full_fixtures_passed": 0,
+  "suite_total_refreshed": false,
+  "milestone_gate": "not run or closed; this is partial cold source preparation",
+  "required_open": [
+    "actual configured compilation-unit/facade assignment for the complete world",
+    "exact trait/header/impl parity and language-item metadata",
+    "ordinary nested/generated producer fixed-point catalog completion",
+    "complete typed source facts and parent/lifetime translation",
+    "compatible inference/delegate and genuine upstream root evaluation",
+    "selected-member/continuation/relevant negative/source-epoch dependency integration",
+    "all origin contexts and complete applicable runtime/interpreter gates before JIT"
+  ],
+  "selection_sha256_scope": "final V248 selection; earlier cohorts retain their exact actual selectors/argv in their own control results"
+}

@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V236\u2013V243 partial M019/M020: concrete immutable SourceFacts reader, exact retained source receipts, complete-catalog publication checks and derived pinned relevant-impl indexes. Actual scoped provider/context factory now type-checks after repairing the real ThinVec cache-drop lifetime failure with safe scoped cleanup. Final library/CLI builds and 2/2 host controls pass: normal/unwind cleanup and 8 source worlds (7,972 actual impl receipt observations) across all 4 editions, with parse-owner sharing, missing inputs, no body queries and real Scope certificate rejection. No complete M019 producer, positive source-backed ready instance, actual inference/delegate/root-goal execution, stock runtime gain or interpreter/JIT closure.",
+      "scope": "V244\u2013V248 partial M019: catalog preparation now retains the actual root-profile embedded facade files from the same publication, separately from the explicit live dependency closure, and advances only to NeedHeaders. Exact unit/module/path/profile/cfg/content checks reject changed/extra files and preserve Missing for absent files. Facade source identity excludes unrelated user roots; consumer editions remain separate from the captured facade owning profile. Removed accounting-only byte totals from this membership path and captured_declaration_sources under E-R5-006. Final library/CLI builds and 6/6 host controls pass, including 28 new source-capture worlds across all four editions and existing closure/cold-producer controls. Earlier compile and positive-control failures are preserved. No complete configured/header/catalog producer, inference/delegate/root solving, new stock runtime pass or interpreter/JIT closure. Shared preentry host-control interface remains with LOCAL-046; solo root is the only writer. Source changes.rs reservation is limited to captured_declaration_sources.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1711,11 +1711,17 @@
         "worktracks/05-trait-goal-engine/2026-10-19-prepared-solver-provider.md",
         "worktracks/05-trait-goal-engine/2026-10-19-prepared-provider-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-prepared-provider-controls.json",
-        "tools/sync_upstream_candidates.py"
+        "tools/sync_upstream_candidates.py",
+        "crates/lrr/src/expand/source_discovery/impl_catalog.rs",
+        "crates/lrr/src/expand/source_discovery/trait_facade_sources.rs",
+        "worktracks/05-trait-goal-engine/2026-10-19-captured-trait-facade-sources.md",
+        "crates/lrr/src/source/changes.rs",
+        "worktracks/05-trait-goal-engine/2026-10-19-captured-facade-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-captured-facade-controls.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T11:26:08.497482+00:00",
+      "updated_at": "2026-10-19T11:43:53.454679+00:00",
       "review_after": "2026-10-20T08:52:46.617857+00:00"
     }
   ],

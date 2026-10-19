@@ -1,5 +1,5 @@
-//! Cold membership of actual captured live units. This is deliberately not an
-//! ImplCatalogSeal: configured-world authority and the trait facade are missing.
+//! Captured live-unit and actual embedded-facade source membership. Neither
+//! receipt establishes configured-world/header/producer catalog completion.
 use super::SourceDiscovery;
 use crate::{
     core::{
@@ -14,11 +14,13 @@ use crate::{
     },
 };
 use std::{collections::BTreeSet, sync::Arc};
-
+#[path = "trait_facade_sources.rs"]
+mod trait_facade_sources;
+pub(crate) use trait_facade_sources::CapturedTraitFacadeSources;
 
 /// Missing contributions are preparation demands, never complete empty catalogs.
-/// There is intentionally no Ready/Sealed case until configured-world authority,
-/// the real facade producer and the common producer closure have joined it.
+/// No Ready/Sealed variant exists before configured-world, exact header parity
+/// and the common nested producer closure are actually complete.
 pub(crate) enum LiveImplCatalogPreparation {
     NeedLiveUnit {
         expected: SourceSelection,
@@ -28,9 +30,13 @@ pub(crate) enum LiveImplCatalogPreparation {
         trait_facade: MandatoryTraitFacade,
     },
 }
-/// Explicitly missing authority, not a proof that the selected facade is empty.
 pub(crate) enum MandatoryTraitFacade {
     Missing,
+    /// Real source files are retained; their header/impl compatibility and
+    /// language-item translation must still be prepared before solving.
+    NeedHeaders {
+        captured: CapturedTraitFacadeSources,
+    },
 }
 
 /// Retains actual source-publication handles, exact source selectors and the
@@ -45,27 +51,13 @@ pub(crate) struct PreparedLiveImplCatalogSources {
     sources: Vec<PreparedSourceView>,
     profiles: Vec<ProfileIdentity>,
     fingerprint: Digest,
-    exclusive_bytes: usize,
 }
-
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-IMPL-CATALOG-SOURCES", message.into())
 }
-fn resource() -> Diagnostic {
-    crate::runtime::arena::resource()
-}
-fn add(bytes: &mut usize, amount: usize) -> Result<(), Diagnostic> {
-    *bytes = bytes
-        .checked_add(amount)
-        .ok_or_else(resource)?;
-    Ok(())
-}
-
 impl SourceDiscovery {
-    /// Derive live membership from the selected source's immutable publication,
-    /// rather than interpreting the caller's discovery source vector as a world.
-    /// This reads no bodies, performs no expansion, and never converts a prior
-    /// Scope/TestCatalog certificate into an ImplCatalog certificate.
+    /// Derive membership from the selected source's immutable publication,
+    /// never from a caller-selected discovery vector or a scope certificate.
     pub(crate) fn prepare_live_impl_catalog_sources(
         &self,
     ) -> Result<LiveImplCatalogPreparation, Diagnostic> {
@@ -112,46 +104,22 @@ impl SourceDiscovery {
         }) {
             return Err(fault("captured source/root ownership is duplicated"));
         }
-
-        // SourceDependencies already owns bounded immutable adjacency maps.
-        // Visit each reached unit once; no repeated full-world alias scan.
-        let mut reached = BTreeSet::new();
-        let mut pending = Vec::new();
-        let mut temporary_bytes = std::mem::size_of::<PreparedLiveImplCatalogSources>();
-        add(&mut temporary_bytes, selected.metadata_bytes()?)?;
-        add(
-            &mut temporary_bytes,
-            sources
-                .capacity()
-                .checked_mul(std::mem::size_of::<PreparedSourceView>())
-                .ok_or_else(resource)?,
-        )?;
-        for source in &sources {
-            add(
-                &mut temporary_bytes,
-                source
-                    .exclusive_metadata_bytes()?
-                    .checked_sub(std::mem::size_of::<PreparedSourceView>())
-                    .ok_or_else(resource)?,
-            )?;
-        }
-        add(&mut temporary_bytes, 256)?;
-        pending.try_reserve_exact(1).map_err(|_| resource())?;
-        pending.push(self.scope.crate_key);
-        reached.insert(self.scope.crate_key);
+        // The retained dependency graph already owns indexed adjacency. Visit
+        // each reached unit once; no alias-map copies or resource counters.
+        let mut reached = BTreeSet::from([self.scope.crate_key]);
+        let mut pending = vec![self.scope.crate_key];
         while let Some(unit) = pending.pop() {
             let root = dependencies
                 .root(unit)
                 .ok_or_else(|| fault("source dependency endpoint has no configured root"))?;
-            let source = sources.binary_search_by(|source| {
+            match sources.binary_search_by(|source| {
                 source
                     .selection()
                     .outline
                     .crate_key
                     .cmp(&unit)
                     .then_with(|| source.selection().outline.module_path.as_slice().cmp(&[]))
-            });
-            match source {
+            }) {
                 Ok(ordinal) if sources[ordinal].selection() == root => {}
                 Ok(_) => return Err(fault("captured live root differs from configured graph")),
                 Err(_) => {
@@ -160,98 +128,35 @@ impl SourceDiscovery {
                     });
                 }
             }
-            let aliases = dependencies.aliases_for(unit, root.outline.parse.profile.edition)?;
-            for target in aliases.values() {
-                if reached.contains(target) {
-                    continue;
+            for target in dependencies
+                .aliases_for(unit, root.outline.parse.profile.edition)?
+                .values()
+            {
+                if reached.insert(*target) {
+                    pending.push(*target);
                 }
-                // Account set nodes plus eventual final unit rows, and the
-                // pending queue before growth; shared alias maps are not copied.
-                add(&mut temporary_bytes, 256)?;
-                pending.try_reserve(1).map_err(|_| resource())?;
-                reached.insert(*target);
-                pending.push(*target);
             }
         }
-        let mut units = Vec::new();
-        units
-            .try_reserve_exact(reached.len())
-            .map_err(|_| resource())?;
-        units.extend(reached.iter().copied());
-        sources.retain(|source| {
-            units
-                .binary_search(&source.selection().outline.crate_key)
-                .is_ok()
-        });
-
+        let units: Vec<_> = reached.into_iter().collect();
+        // The mandatory synthetic facade is a separate catalog input: its
+        // captured files need not be reachable through explicit extern edges.
+        let publication = sources;
+        let sources: Vec<_> = publication
+            .iter()
+            .filter(|source| {
+                units
+                    .binary_search(&source.selection().outline.crate_key)
+                    .is_ok()
+            })
+            .map(PreparedSourceView::share)
+            .collect();
         let mut unique_profiles = BTreeSet::new();
         for source in &sources {
             let profile = &source.selection().outline.parse.profile;
             profile.validate_source()?;
-            if !unique_profiles.contains(profile) {
-                add(&mut temporary_bytes, 128)?;
-                unique_profiles.insert(profile);
-            }
+            unique_profiles.insert(profile);
         }
-        let mut profiles = Vec::new();
-        add(
-            &mut temporary_bytes,
-            unique_profiles
-                .len()
-                .checked_mul(std::mem::size_of::<ProfileIdentity>())
-                .ok_or_else(resource)?,
-        )?;
-        profiles
-            .try_reserve_exact(unique_profiles.len())
-            .map_err(|_| resource())?;
-        for profile in unique_profiles {
-            add(&mut temporary_bytes, profile.semantics.len())?;
-            profiles.push((*profile).clone());
-        }
-        let mut bytes = std::mem::size_of::<PreparedLiveImplCatalogSources>();
-        add(&mut bytes, selected.metadata_bytes()?)?;
-        add(
-            &mut bytes,
-            sources
-                .capacity()
-                .checked_mul(std::mem::size_of::<PreparedSourceView>())
-                .ok_or_else(resource)?,
-        )?;
-        for source in &sources {
-            add(
-                &mut bytes,
-                source
-                    .exclusive_metadata_bytes()?
-                    .checked_sub(std::mem::size_of::<PreparedSourceView>())
-                    .ok_or_else(resource)?,
-            )?;
-        }
-        add(
-            &mut bytes,
-            units
-                .capacity()
-                .checked_mul(std::mem::size_of::<Digest>())
-                .ok_or_else(resource)?,
-        )?;
-        add(
-            &mut bytes,
-            profiles
-                .capacity()
-                .checked_mul(std::mem::size_of::<ProfileIdentity>())
-                .ok_or_else(resource)?,
-        )?;
-        for profile in &profiles {
-            add(&mut bytes, profile.semantics.capacity())?;
-        }
-        // Actual final vectors and temporary structures coexist until return.
-        add(&mut temporary_bytes, bytes)?;
-        add(
-            &mut temporary_bytes,
-            pending
-                .capacity()
-                .checked_mul(std::mem::size_of::<Digest>())
-                .ok_or_else(resource)?,
-        )?;
+        let profiles: Vec<_> = unique_profiles.into_iter().cloned().collect();
         let fingerprint = encode_membership(
             selected,
             self.key.unit_graph,
@@ -270,15 +175,17 @@ impl SourceDiscovery {
             sources,
             profiles,
             fingerprint,
-            exclusive_bytes: bytes,
+        };
+        let trait_facade = match CapturedTraitFacadeSources::capture(&live, &publication)? {
+            Some(captured) => MandatoryTraitFacade::NeedHeaders { captured },
+            None => MandatoryTraitFacade::Missing,
         };
         Ok(LiveImplCatalogPreparation::NeedConfiguredWorld {
             captured: live,
-            trait_facade: MandatoryTraitFacade::Missing,
+            trait_facade,
         })
     }
 }
-
 impl PreparedLiveImplCatalogSources {
     pub(crate) fn selected_root(&self) -> &SourceSelection {
         &self.selected
@@ -295,14 +202,11 @@ impl PreparedLiveImplCatalogSources {
     pub(crate) fn live_units(&self) -> &[Digest] {
         &self.units
     }
-    pub(crate) fn required_trait_facade_profiles(&self) -> &[ProfileIdentity] {
+    pub(crate) fn live_source_profiles(&self) -> &[ProfileIdentity] {
         &self.profiles
     }
     pub(crate) fn fingerprint(&self) -> Digest {
         self.fingerprint
-    }
-    pub(crate) fn exclusive_metadata_bytes(&self) -> usize {
-        self.exclusive_bytes
     }
 }
 fn encode_membership(
@@ -354,6 +258,10 @@ mod tests {
                 captured,
                 trait_facade: MandatoryTraitFacade::Missing,
             } => captured,
+            LiveImplCatalogPreparation::NeedConfiguredWorld {
+                trait_facade: MandatoryTraitFacade::NeedHeaders { .. },
+                ..
+            } => panic!("control unexpectedly contains actual standard facade sources"),
             LiveImplCatalogPreparation::NeedLiveUnit { expected } => {
                 panic!("actual captured root was omitted: {expected:?}")
             }
@@ -384,11 +292,8 @@ mod tests {
                         .unwrap(),
                     text
                 );
-                assert_eq!(prepared.required_trait_facade_profiles().len(), 1);
-                assert_eq!(
-                    prepared.required_trait_facade_profiles()[0].edition,
-                    edition
-                );
+                assert_eq!(prepared.live_source_profiles().len(), 1);
+                assert_eq!(prepared.live_source_profiles()[0].edition, edition);
                 assert_eq!(prepared.selected_root(), source.selection());
                 assert_eq!(prepared.graph_epoch().1, 1);
             }
@@ -494,7 +399,7 @@ mod tests {
                 .iter()
                 .any(|s| s.selection() == &module_selection)
         );
-        assert_eq!(prepared.required_trait_facade_profiles().len(), 2);
+        assert_eq!(prepared.live_source_profiles().len(), 2);
         assert_eq!(prepared.fingerprint(), live(&discovery).fingerprint());
         assert_eq!(prepared.source_dependencies().root_count(), 3);
     }

@@ -20050,12 +20050,16 @@
         "worktracks/evidence/2026-10-18-interpreter-v86-v88-sized-predicates.json",
         "worktracks/05-trait-goal-engine/2026-10-18-sized-predicates.md",
         "worktracks/evidence/2026-10-18-interpreter-v89-v91-trait-declarations.json",
-        "worktracks/05-trait-goal-engine/2026-10-18-trait-declaration-identity.md"
+        "worktracks/05-trait-goal-engine/2026-10-18-trait-declaration-identity.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-captured-trait-facade-sources.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-captured-facade-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-captured-facade-controls.json",
+        "worktracks/evidence/2026-10-19-v244-v248-captured-facade-sources.json"
       ],
       "title": "Impl and trait header lowering",
       "acceptance_contract": "TR006 and indexed-versus-full-catalog property model. Depends: M018.",
       "release_complete": false,
-      "latest_component_scope": "V232/V233 partial M019 -> M020 source-fact transport: the existing actual TraitDeclaration memo now retains written generics, supertraits, predicates, attributes, auto/unsafe/alias syntax and actual source ranges, borrowing its retained parser/source/scope. Both builds and2/2source controls pass:13original/emit/wrapper/metadata worlds plus8auto/unsafe worlds across all4editions, with memo sharing, missing/non-trait headers, namespace/epoch and no-body assertions. Source/HEAD/binary guards pass; prior host-test shadowing build failure preserved. No concrete upstream SourceFacts provider, inference/delegate or root goal, new stock runtime gain, full M019/M020 or interpreter/JIT closure.",
+      "latest_component_scope": "V244\u2013V248 partial M019: catalog preparation now retains the actual root-profile embedded facade files from the same publication, separately from the explicit live dependency closure, and advances only to NeedHeaders. Exact unit/module/path/profile/cfg/content checks reject changed/extra files and preserve Missing for absent files. Facade source identity excludes unrelated user roots; consumer editions remain separate from the captured facade owning profile. Removed accounting-only byte totals from this membership path and captured_declaration_sources under E-R5-006. Final library/CLI builds and 6/6 host controls pass, including 28 new source-capture worlds across all four editions and existing closure/cold-producer controls. Earlier compile and positive-control failures are preserved. No complete configured/header/catalog producer, inference/delegate/root solving, new stock runtime pass or interpreter/JIT closure.",
       "source_baseline": "dcd056e542c86605f6a282470566952b2aea3c79",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",

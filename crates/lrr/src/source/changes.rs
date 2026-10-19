@@ -454,65 +454,21 @@ impl PreparedSourceView {
     /// This is not configured-world completeness or publication/currentness
     /// authority; generated/module roles and existing immutable roots stay intact.
     pub(crate) fn captured_declaration_sources(&self) -> Result<Vec<Self>, Diagnostic> {
-        let fail = crate::runtime::arena::resource;
-        let count = self.state.files.len();
-        let mut preflight = std::mem::size_of::<Vec<Self>>()
-            .checked_add(
-                count
-                    .checked_mul(std::mem::size_of::<Self>())
-                    .ok_or_else(fail)?,
-            )
-            .ok_or_else(fail)?;
-        let mut add = |bytes: usize| -> Result<(), Diagnostic> {
-            preflight = preflight
-                .checked_add(bytes)
-                .ok_or_else(fail)?;
-            Ok(())
-        };
-        // Bound every path/profile/module allocation before cloning any handle.
-        for (location, file) in &self.state.files {
-            add(location.path.heap_bytes().checked_mul(2).ok_or_else(fail)?)?;
-            add(file.key.parse.profile.semantics.capacity())?;
-            for path in [&location.module_path, &file.key.module_path] {
-                add(path
-                    .capacity()
-                    .checked_mul(std::mem::size_of::<String>())
-                    .ok_or_else(fail)?)?;
-                for part in path {
-                    add(part.capacity())?;
-                }
-            }
-        }
-        let mut sources = Vec::new();
-        sources.try_reserve_exact(count).map_err(|_| fail())?;
-        let mut actual = std::mem::size_of::<Vec<Self>>()
-            .checked_add(
-                sources
-                    .capacity()
-                    .checked_mul(std::mem::size_of::<Self>())
-                    .ok_or_else(fail)?,
-            )
-            .ok_or_else(fail)?;
-        for (location, file) in &self.state.files {
-            let source = Self {
+        // Share the actual immutable publication; allocation is bounded by the
+        // OS, without accounting-only preflight/final byte totals (E-R5-006).
+        Ok(self
+            .state
+            .files
+            .iter()
+            .map(|(location, file)| Self {
                 state: std::sync::Arc::clone(&self.state),
                 location: location.clone(),
                 selection: SourceSelection {
                     path: location.path.clone(),
                     outline: file.key.clone(),
                 },
-            };
-            actual = actual
-                .checked_add(
-                    source
-                        .exclusive_metadata_bytes()?
-                        .checked_sub(std::mem::size_of::<Self>())
-                        .ok_or_else(fail)?,
-                )
-                .ok_or_else(fail)?;
-            sources.push(source);
-        }
-        Ok(sources)
+            })
+            .collect())
     }
     /// Root hygiene may be prepared only for physically original source. A
     /// generated publication must retain its completed expansion contexts.
