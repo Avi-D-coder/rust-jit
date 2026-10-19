@@ -8,6 +8,7 @@ import argparse
 import hashlib
 from pathlib import Path
 import subprocess
+import re
 from sync_upstream_binders import method
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,7 +39,7 @@ def adapt(text):
     text = text.replace("Ty<'tcx>", "Ty<'db>")
     text = text.replace("TyCtxt<'tcx>", "DbInterner<'db>")
     text = text.replace("'tcx", "'db").replace('self.tcx', 'self.interner').replace('self.infcx.tcx', 'self.infcx.interner')
-    text = text.replace('InferCtxt', 'InferenceContext')
+    text = re.sub(r'\bInferCtxt\b', 'InferenceContext', text)
     text = text.replace('*ty.kind()', 'ty.kind()')
     text = text.replace('ConstKind::Unevaluated(_)', 'ConstKind::Alias(_, _)')
     text = text.replace('ConstVariableValue::Unknown { origin: _, universe }', 'ConstVariableValue::Unknown { span: _, universe }')

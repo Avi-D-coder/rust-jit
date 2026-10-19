@@ -12,7 +12,7 @@ use rustc_type_ir::IntVid;
 use tracing::debug;
 
 use crate::traits::upstream::infer::OpaqueTypeKey;
-use crate::traits::upstream::infer::opaque_types::OpaqueHiddenType;
+use crate::traits::upstream::infer::opaque_types::ProvisionalHiddenType;
 use crate::traits::upstream::infer::unify_key::ConstVidKey;
 use crate::traits::upstream::infer::unify_key::RegionVidKey;
 use crate::traits::upstream::infer::{InferCtxtInner, region_constraints, type_variable};
@@ -25,7 +25,7 @@ pub struct Snapshot {
 #[derive(Clone)]
 pub(crate) enum UndoLog<'db> {
     DuplicateOpaqueType,
-    OpaqueTypes(OpaqueTypeKey<'db>, Option<OpaqueHiddenType<'db>>),
+    OpaqueTypes(OpaqueTypeKey<'db>, Option<ProvisionalHiddenType<'db>>),
     TypeVariables(type_variable::UndoLog<'db>),
     ConstUnificationTable(sv::UndoLog<ut::Delegate<ConstVidKey<'db>>>),
     IntUnificationTable(sv::UndoLog<ut::Delegate<IntVid>>),

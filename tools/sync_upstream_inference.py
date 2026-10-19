@@ -12,6 +12,7 @@ import subprocess
 from upstream_solver_regions import extend_storage
 from upstream_region_collector import extend_collector
 from upstream_leak_check import extend_leak_check
+from upstream_obligation_state import extend_obligation_state
 
 ROOT = Path(__file__).resolve().parents[1]
 PIN = 'ae0fe511b15ab760d7e963b13389d1bc2ab42b18'
@@ -135,6 +136,7 @@ impl Span {
     outputs['mod.rs'] += b'\nmod context;\npub(crate) use context::InferenceContext;\nmod variables;\nmod resolve;\n'
     extend_storage(outputs, header, rustfmt)
     extend_leak_check(outputs, header, rustfmt)
+    extend_obligation_state(outputs, header, rustfmt)
     return outputs
 
 

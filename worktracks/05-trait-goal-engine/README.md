@@ -4,7 +4,9 @@ Integrate the pinned next-generation rustc trait solver with LRR's demand-driven
 
 ## Current boundary
 
-Latest held M020 component: V349 executes the actual compiler graph/SCC-based leak checker and preserves source Verify origins. Both builds and26controls pass:23adapted upstream graph bodies plus3source-context controls, with genuine failures/successes and snapshot/visibility behavior. Full inference/delegate/root/runtime migration remains open; zero new stock runtime gains. [Evidence](../evidence/2026-10-19-v347-v349-upstream-leak-check.json).
+Latest held M020 component: V352 adds current compiler source-origin opaque/outlives records/state and variable wake predicate. Final builds/affected source control pass; two untouched V351 controls retain their own evidence, production unchanged. Nonempty source opaques/full inference/delegate/root/runtime integration remain open; zero new stock runtime gains. [Evidence](../evidence/2026-10-19-v350-v352-upstream-obligation-state.json).
+
+Prior held M020 component: V349 executes the actual compiler graph/SCC-based leak checker and preserves source Verify origins. Both builds and26controls pass:23adapted upstream graph bodies plus3source-context controls, with genuine failures/successes and snapshot/visibility behavior. Full inference/delegate/root/runtime migration remains open; zero new stock runtime gains. [Evidence](../evidence/2026-10-19-v347-v349-upstream-leak-check.json).
 
 Prior held M020 component: V346 replaces the old region representation with current compiler constraint kinds/mutators and explicit source spans/visibility. Both builds and3source-context controls pass with guards. Graph/leak/inference/delegate/root/runtime migration remain incomplete; zero new stock runtime gains. [Evidence](../evidence/2026-10-19-v345-v346-upstream-region-collector.json).
 

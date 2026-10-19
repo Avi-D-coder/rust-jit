@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V347-V349 HELD M020 actual compiler graph/checker component. Complete pinned region leak algorithm consumes actual current constraints/visibility/equality and the same collector/combined snapshot, with actual shared TypeError failures and no RA all-success/empty-response stubs. Actual graph/reference/reversed/iterate/SCC/VecGraph reused;23upstream #[test] bodies pass through explicitly adapted stable packaging, one benchmark excluded/unexecuted. Actual Verify source origin/insertion/undo added. Final index primitives are exact compiler declarations compiled in shared dependency, preserving local unsafe confinement; vendor registry advances explicit stable-region-assumptions-v2-leak-indexes. All originals/fresh import verified8sharedcrates/170files/2406804bytes,0original edits/5registered compiled-file changes; rehashed arbitrary index edit rejected. Both macOS1.99.0 builds and26/26controls pass with exact guards:23graph+3source controls,140Types/136TraitRefs/48original-user-macro-wrapper edition worlds, genuine accepted/rejected/universe/static/equality/transitive/visibility/snapshot checks;20generic worlds/48rows/36consts/24early regions and prior cleanup pass. V347compile failure and V348build-only/unpromoted source preserved. Full inference/configuration/delegate/root/source facts/binders/generalizer/relations/canonical/member/currentness/VM migration and legacy removal remain incomplete. Zero new distinct stock runtime gain or refreshed suite total; no M020/milestone/interpreter/JIT/Linux/performance/diagnostic/benchmark acceptance. Post-validation normalization removes exactly one trailing LF after the index macro closing brace; tokens/positions are unchanged and generator/provenance audited. V349 runtime guards stay attached to their pre-normalization fingerprint; no test rerun for whitespace.",
+      "scope": "V350-V352 HELD M020 origin-aware obligation state. Actual current compiler ProvisionalHiddenType/table replaces old spanless OpaqueHiddenType production record/table and updates the same undo payload; real owner register/clone/drain/count/delta/duplicate/reset callbacks compile. No opaque key/definition is fabricated; only source Type/Span record and legitimate fresh empty owner state executed, nonempty source opaque paths held. Actual TypeOutlivesConstraint retains incoming source Span, global/no-op vs non-global registration and existing undo; diagnostic cause variants explicitly project to span, no checker. Exact compiler variable wake predicate retained across all4stores. Originals verify8sharedcrates/174files/2540862bytes,0original edits/5existing build projections. V351 builds and2untouched controls pass; supplemental stale-ID oracle fails on invalid removed handle. Production unchanged in V352; final builds and1/1affected source control pass after correcting oracle to valid ID reuse, exact guards retained for each cohort.140Types/136TraitRefs/48origin-edition worlds and prior20generic worlds/48rows/36consts/24early regions observed. Not a single all-three final-source run. V350mechanical compile failure and V351oracle failure preserved. Full source opaque identity/record traits/binders/facts/InferCtxtLike/generalizer/relations/canonical/delegate/root/member/currentness/VM migration and legacy removal held. Zero new distinct stock runtime gain or refreshed suite total; no M020/milestone/interpreter/JIT/Linux/performance/diagnostic acceptance.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1864,11 +1864,17 @@
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-leak-check.md",
         "worktracks/evidence/2026-10-19-v347-v349-upstream-leak-check.json",
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-leak-check-review.md",
-        "worktracks/05-trait-goal-engine/2026-10-19-upstream-leak-check-controls.json"
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-leak-check-controls.json",
+        "tools/upstream_obligation_state.py",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-obligation-state.md",
+        "worktracks/evidence/2026-10-19-v350-v352-upstream-obligation-state.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-obligation-state-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-obligation-state-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-obligation-state-final-controls.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T20:55:23.787308+00:00",
+      "updated_at": "2026-10-19T21:23:24.617637+00:00",
       "review_after": "2026-10-20T08:52:46.617857+00:00",
       "shared_interfaces": [
         {

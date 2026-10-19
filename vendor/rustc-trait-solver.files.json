@@ -383,11 +383,32 @@
       "upstream_sha256": "d168e6ea5a34f9aaf9e38502cc24c033dce15cdcc10a43cbe5f9f80ff04d6939"
     },
     {
+      "path": "compiler/rustc_infer/src/infer/context.rs",
+      "bytes": 17607,
+      "sha256": "ce9a4271702995747f262724abbfedeb2dbc353dd6ac24a1e726b742acabb886",
+      "upstream": "compiler/rustc_infer/src/infer/context.rs",
+      "upstream_sha256": "ce9a4271702995747f262724abbfedeb2dbc353dd6ac24a1e726b742acabb886"
+    },
+    {
       "path": "compiler/rustc_infer/src/infer/mod.rs",
       "bytes": 80359,
       "sha256": "0e3d962f0dae5a19ae4293de73a606c692e222eae08043bc1beb9d0cd0f6f327",
       "upstream": "compiler/rustc_infer/src/infer/mod.rs",
       "upstream_sha256": "0e3d962f0dae5a19ae4293de73a606c692e222eae08043bc1beb9d0cd0f6f327"
+    },
+    {
+      "path": "compiler/rustc_infer/src/infer/opaque_types/mod.rs",
+      "bytes": 16343,
+      "sha256": "5fa09869ec7c26a4065504a401729e05f588efdffe4bb74998faa14d9cd2a1a6",
+      "upstream": "compiler/rustc_infer/src/infer/opaque_types/mod.rs",
+      "upstream_sha256": "5fa09869ec7c26a4065504a401729e05f588efdffe4bb74998faa14d9cd2a1a6"
+    },
+    {
+      "path": "compiler/rustc_infer/src/infer/opaque_types/table.rs",
+      "bytes": 5582,
+      "sha256": "633e22af8b50fa814659215d25ff4d7bdfe6bc1973475092a3f565c213beab71",
+      "upstream": "compiler/rustc_infer/src/infer/opaque_types/table.rs",
+      "upstream_sha256": "633e22af8b50fa814659215d25ff4d7bdfe6bc1973475092a3f565c213beab71"
     },
     {
       "path": "compiler/rustc_infer/src/infer/outlives/obligations.rs",
@@ -493,6 +514,13 @@
       "sha256": "83f30406c92c7e2d92f8c2b439e37679fc9d5a33519bf3591e02932ec0250279",
       "upstream": "compiler/rustc_middle/src/ty/generic_args.rs",
       "upstream_sha256": "83f30406c92c7e2d92f8c2b439e37679fc9d5a33519bf3591e02932ec0250279"
+    },
+    {
+      "path": "compiler/rustc_middle/src/ty/mod.rs",
+      "bytes": 94526,
+      "sha256": "bd5acb8cd43199c1a97bce6ac9e699cecba9f5e26f18e3be96e28953283c97e7",
+      "upstream": "compiler/rustc_middle/src/ty/mod.rs",
+      "upstream_sha256": "bd5acb8cd43199c1a97bce6ac9e699cecba9f5e26f18e3be96e28953283c97e7"
     },
     {
       "path": "compiler/rustc_middle/src/ty/predicate.rs",
@@ -1231,6 +1259,10 @@
     "compiler/rustc_infer/src/infer/type_variable.rs",
     "compiler/rustc_infer/src/infer/resolve.rs",
     "compiler/rustc_middle/src/ty/generic_args.rs",
+    "compiler/rustc_middle/src/ty/mod.rs",
+    "compiler/rustc_infer/src/infer/context.rs",
+    "compiler/rustc_infer/src/infer/opaque_types/mod.rs",
+    "compiler/rustc_infer/src/infer/opaque_types/table.rs",
     "compiler/rustc_infer/src/infer/solver_region_constraints.rs",
     "compiler/rustc_infer/src/infer/solver_region_constraints/tests.rs",
     "compiler/rustc_infer/src/infer/snapshot/undo_log.rs",

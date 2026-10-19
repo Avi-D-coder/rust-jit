@@ -3,7 +3,7 @@
 use super::{InferenceStorage, DbInterner, Ty, Span, Const, Region};
 use super::unify_key::ConstVariableValue;
 use crate::traits::upstream::model::{ValueConst, ScalarInt};
-use rustc_type_ir::{self as ty, Interner, inherent::IntoKind};
+use rustc_type_ir::{self as ty, Interner, TypeVisitableExt, inherent::IntoKind};
 
 pub(crate) fn check_actual_storage<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, span: Span) {
     assert!(!span.is_dummy(), "actual retained declaration range supplies inference origin");
@@ -11,6 +11,7 @@ pub(crate) fn check_actual_storage<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, sp
     check_solver_region_transactions(cx, span);
     check_current_region_collector(cx, span);
     check_actual_leak_checker(cx, span);
+    check_obligation_state(cx, actual, span);
     check_variable_resolution(cx, actual, span);
     let storage = InferenceStorage::new();
     let root = ty::UniverseIndex::ROOT;
@@ -551,4 +552,87 @@ fn check_actual_leak_checker<'cx>(cx: DbInterner<'cx>, span: Span) {
     let fresh = InferenceContext::new(cx, ty::TypingMode::PostAnalysis);
     assert!(check(&fresh, root, None).is_ok());
     assert!(cx.services().ready(cx).is_err(), "leak checking grants no source facts/root readiness");
+}
+
+/// Host state controls with real source Type/Span, without inventing an opaque
+/// declaration/key or claiming source opaque execution.
+fn check_obligation_state<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, span: Span) {
+    use super::{InferenceContext, TypeOutlivesConstraint};
+    use super::opaque_types::ProvisionalHiddenType;
+    use ty::solve::TyOrConstInferVar;
+    use ty::inherent::{Ty as _, OpaqueTypeStorageEntries as _};
+    let context = InferenceContext::new(cx, ty::TypingMode::PostAnalysis);
+    let record = ProvisionalHiddenType { ty: actual, span };
+    assert_eq!(record.ty, actual); assert_eq!(record.span, span);
+    assert!(!context.opaque_types_storage_num_entries().needs_reevaluation(0));
+    assert!(context.clone_opaque_types().is_empty());
+    assert!(context.clone_opaque_types_lookup_table().is_empty());
+    assert!(context.clone_duplicate_opaque_types().is_empty());
+    assert!(context.clone_opaque_types_added_since(context.opaque_types_storage_num_entries()).is_empty());
+    assert!(context.take_opaque_types().is_empty());
+    context.reset_opaque_types();
+    let sub = context.next_region_var(span);
+    let inferred = context.next_ty_var(span);
+    let global = cx.ty(ty::TyKind::Bool);
+    assert!(global.is_global()); assert!(!inferred.is_global());
+    context.register_type_outlives_constraint(global, sub, span);
+    assert!(context.inner.borrow().region_obligations().is_empty());
+    let snapshot = context.start_snapshot();
+    context.register_type_outlives_constraint(inferred, sub, span);
+    {
+        let owner = context.inner.borrow(); let values = owner.region_obligations();
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].sup_type, inferred);assert_eq!(values[0].sub_region, sub);assert_eq!(values[0].origin, span);
+    }
+    let failed: Result<(), ()> = context.commit_if_ok(|_| {
+        context.register_type_outlives_constraint_inner(TypeOutlivesConstraint { sup_type: actual, sub_region: sub, origin: span });
+        Err(())
+    });
+    assert!(failed.is_err());assert_eq!(context.inner.borrow().region_obligations().len(), 1);
+    context.commit_if_ok::<(), (), _>(|_| {
+        context.register_type_outlives_constraint_inner(TypeOutlivesConstraint { sup_type: actual, sub_region: sub, origin: span });
+        Ok(())
+    }).unwrap();
+    assert_eq!(context.inner.borrow().region_obligations().len(), 2);
+    context.rollback_to(snapshot);
+    assert!(context.inner.borrow().region_obligations().is_empty());
+    context.commit_if_ok::<(), (), _>(|_| {
+        context.register_type_outlives_constraint(inferred, sub, span);
+        Ok(())
+    }).unwrap();
+    context.probe(|_| { context.register_type_outlives_constraint_inner(TypeOutlivesConstraint { sup_type: actual, sub_region: sub, origin: span }); });
+    assert_eq!(context.inner.borrow().region_obligations().len(), 1);
+    assert_eq!(context.inner.borrow().region_obligations()[0].origin, span);
+    // Genuine upstream wake predicate over all4table kinds and snapshot changes.
+    let a = context.next_ty_vid(span); let b = context.next_ty_vid(span);
+    let int = context.next_int_vid();let float = context.next_float_vid();let c = context.next_const_vid(span);
+    let variables = [TyOrConstInferVar::Ty(a), TyOrConstInferVar::TyInt(int), TyOrConstInferVar::TyFloat(float), TyOrConstInferVar::Const(c)];
+    assert!(variables.iter().all(|v| !context.ty_or_const_infer_var_changed(*v)));
+    let snapshot = context.start_snapshot();
+    let value = Const::new(cx, ty::ConstKind::Value(ValueConst {ty:global,
+        tree:cx.valtree(ty::ValTreeKind::Leaf(ScalarInt {bits:1,bytes:1}))}));
+    {
+        let mut owner = context.inner.borrow_mut();
+        owner.type_variables().instantiate(a, actual);
+        owner.int_unification_table().union_value(int, ty::IntVarValue::IntType(ty::IntTy::I32));
+        owner.float_unification_table().union_value(float, ty::FloatVarValue::Known(ty::FloatTy::F64));
+        owner.const_unification_table().union_value(c, ConstVariableValue::Known {value});
+    }
+    assert!(variables.iter().all(|v| context.ty_or_const_infer_var_changed(*v)));
+    context.rollback_to(snapshot);
+    assert!(variables.iter().all(|v| !context.ty_or_const_infer_var_changed(*v)));
+    context.inner.borrow_mut().type_variables().equate(a,b);
+    let root = context.root_var(a);let redirected = if root==a {b} else {a};
+    assert!(!context.ty_or_const_infer_var_changed(TyOrConstInferVar::Ty(root)));
+    assert!(context.ty_or_const_infer_var_changed(TyOrConstInferVar::Ty(redirected)));
+    let before = context.num_ty_vars();
+    let removed = context.probe(|_| context.next_ty_vid(span));
+    assert_eq!(context.num_ty_vars(), before);
+    // Rolled-back handles are invalid; the upstream table may reuse their ID.
+    // Only query the newly allocated live variable, never treat an absent ID
+    // as the readonly probe's redirected-root case.
+    let replacement = context.next_ty_vid(span);
+    assert_eq!(replacement, removed);
+    assert!(!context.ty_or_const_infer_var_changed(TyOrConstInferVar::Ty(replacement)));
+    assert!(cx.services().ready(cx).is_err(), "data state grants no full facts, source opaques or trait root");
 }

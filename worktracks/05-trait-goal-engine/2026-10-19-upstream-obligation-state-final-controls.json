@@ -1,0 +1,7 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Only affected actual source-context control rerun after host stale-handle oracle correction. V351 two unaffected controls remain attached to their own source; production sources unchanged between cohorts.",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions"
+  ]
+}

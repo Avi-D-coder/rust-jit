@@ -204,6 +204,7 @@ impl<'db> InferCtxtInner<'db> {
 pub struct TypeOutlivesConstraint<'db> {
     pub sub_region: Region<'db>,
     pub sup_type: Ty<'db>,
+    pub origin: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -240,3 +241,5 @@ mod variables;
 
 #[cfg(test)]
 mod solver_region_constraints_tests;
+
+mod obligation_state;
