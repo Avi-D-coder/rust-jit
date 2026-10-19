@@ -1,0 +1,11 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Actual completed annotation lexical effects, source ownership and cold original heads; full generated head gap remains enabled. Component controls are not runtime fixture passes.",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin",
+    "cli::preentry_loader_tests::unchanged_catalog_completed_annotations_publish_actual_local_declarations",
+    "cli::preentry_loader_tests::unchanged_cold_local_type_uses_shared_name_input_and_observed_preparation_all_editions",
+    "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+    "frontend::source_locals::owned_plan::tests::unchanged_box_local_type_keeps_its_actual_unfinished_macro_frontier"
+  ]
+}

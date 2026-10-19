@@ -13,6 +13,7 @@ impl Database {
         scope: &CapturedDeclarationScope<'_>,
         parent: &DeclarationMacroIndex,
         seal: &Seal,
+        completions: &BTreeMap<Digest, crate::frontend::impl_index::CompletedOriginalAnnotation>,
     ) -> Result<(), Diagnostic> {
         self.require_coordinator()?;
         if self.run_active || !matches!(seal.key().domain, SealDomain::ImplCatalog { .. }) {
@@ -41,7 +42,7 @@ impl Database {
             }
         });
         let reusable = match reusable {
-            Some(input) if input.reusable(scope, parent, seal)? => Some(input),
+            Some(input) if input.reusable(scope, parent, seal, completions)? => Some(input),
             _ => None,
         };
         let prepared = if let Some(input) = reusable {
@@ -53,7 +54,7 @@ impl Database {
                     "cold declaration name revision exhausted",
                 )
             })?;
-            ColdDeclarationNames::prepare(scope, parent, seal, publication)?
+            ColdDeclarationNames::prepare(scope, parent, seal, publication, completions)?
         };
         let mut staged = BTreeMap::new();
         for scope in prepared.scopes() {

@@ -104,6 +104,24 @@ enum HeaderOwnership<'a> {
     PendingParent(&'a super::generated_macros::GeneratedMacroCatalog),
 }
 impl GeneratedHeaderPlan {
+    /// Used only by a completed declaration fragment's projection. Surviving
+    /// headers have had their annotation decisions settled by that fragment;
+    /// replacement masks remain applied by the owning projection.
+    pub(crate) fn prepare_completed_declarations(
+        items: &GeneratedItems,
+        completed: &crate::expand::declaration_fragment::CompletedDeclarationNameSource<'_>,
+        root: &crate::syntax::token_wire::ContextRecord,
+        cfg: &CfgSet,
+    ) -> Result<Self, Diagnostic> {
+        let declarations = completed.output();
+        let settled = items.items().iter().map(|header| header.key.fingerprint()).collect();
+        Self::prepare_using(items, declarations.scan().scope().clone(),
+            Key(items.record().key().parent_context.0), root.key(), cfg, items.epoch(),
+            Some(root), &settled, HeaderOwnership::Declarations(declarations))
+    }
+    pub(crate) fn declared_names(&self) -> impl Iterator<Item = &Arc<DeclaredItemName>> {
+        self.routes.iter().map(|route| &route.declaration)
+    }
     pub fn prepare(
         items: &GeneratedItems,
         scope: ScopeKey,

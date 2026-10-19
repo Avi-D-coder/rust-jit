@@ -19,8 +19,52 @@ pub(crate) struct CompletedOriginalAnnotation {
     group: Arc<OriginalAnnotationGroup>,
     proof: SourceDeriveCompletionProof,
     local: Option<(BodyHandle, ScopeKey)>,
+    names: Option<Vec<Arc<crate::expand::declaration_fragment::CompletedDeclarationNameEffects>>>,
 }
 impl CompletedOriginalAnnotation {
+    pub(crate) fn with_name_effects(
+        mut self,
+        parent: &DeclarationMacroIndex,
+        source: &PreparedSourceView,
+        fragments: &std::collections::BTreeMap<Digest, Arc<crate::expand::declaration_fragment::CompletedDeclarationFragment>>,
+    ) -> Result<Self, Diagnostic> {
+        self.require_source(source)?;
+        // Revalidate this exact parent, including all actual adopted outputs.
+        // An otherwise matching fresh index cannot certify an empty effect set.
+        parent.completed_original_annotation(source, &self.group, &self.proof)?;
+        if self.group.scan_identity() != parent.scan.fingerprint() { return Err(fault()); }
+        let root = parent.facts.context(parent.context)?;
+        let mut names = Vec::new();
+        for annotation in self.group.annotations() {
+            for (occurrence, descriptor) in parent.appended_outputs.get(annotation).into_iter().flatten() {
+                let fragment = fragments.get(occurrence).ok_or_else(fault)?;
+                let output = fragment.index().output();
+                if !fragment.index().is_complete()
+                    || fragment.source_scan().fingerprint() != self.group.scan_identity()
+                    || output.parent_invocation() != *annotation
+                    || output.record().key().invocation != *occurrence
+                    || output.record().descriptor().fingerprint() != *descriptor
+                { return Err(fault()); }
+                names.push(fragment.declaration_name_effects(root, source.captured_macro_cfg()?)?);
+            }
+        }
+        self.names = Some(names);
+        Ok(self)
+    }
+    pub(crate) fn name_effects(&self) -> Option<&[Arc<crate::expand::declaration_fragment::CompletedDeclarationNameEffects>]> {
+        self.names.as_deref()
+    }
+    pub(crate) fn name_fingerprint(&self) -> Digest {
+        use crate::core::digest::StableEncoder;
+        let mut e = StableEncoder::new("lrr/v1/original-annotation-name-effects");
+        e.digest(self.group.fingerprint()); e.digest(self.proof.fingerprint);
+        e.bool(self.names.is_some());
+        for names in self.names.iter().flatten() { e.digest(names.fingerprint()); }
+        e.finish()
+    }
+    pub(crate) fn retired_names(&self) -> impl Iterator<Item = Digest> + '_ {
+        std::iter::once(self.group.call().item_input).chain(self.group.annotations().iter().copied())
+    }
     pub(crate) fn item(&self) -> Digest {
         self.group.item()
     }
@@ -90,6 +134,7 @@ impl DeclarationMacroIndex {
             group: Arc::clone(group),
             proof: proof.clone(),
             local,
+            names: None,
         })
     }
 }

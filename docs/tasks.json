@@ -20099,12 +20099,16 @@
         "worktracks/05-trait-goal-engine/2026-10-19-cold-declaration-name-controls.json",
         "worktracks/evidence/2026-10-19-v289-v293-cold-declaration-names.json",
         "worktracks/05-trait-goal-engine/2026-10-19-cold-declaration-name-final-controls.json",
-        "worktracks/evidence/2026-10-19-v294-v296-cold-declaration-names-final.json"
+        "worktracks/evidence/2026-10-19-v294-v296-cold-declaration-names-final.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-completed-annotation-names.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-completed-annotation-name-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-completed-annotation-name-controls.json",
+        "worktracks/evidence/2026-10-19-v297-v300-completed-annotation-names.json"
       ],
       "title": "Impl and trait header lowering",
       "acceptance_contract": "TR006 and indexed-versus-full-catalog property model. Depends: M018.",
       "release_complete": false,
-      "latest_component_scope": "V296 HELD M019/M020 cold declaration-name integration: actual coordinator inputs connect unentered original local declarations to the same lexical Type lookup and canonical alias/nominal services used by ordinary source. Genuine name/source/epoch/dependency identity retained without body entry or a second evaluator. Final macOS Rust1.99.0 library and CLI builds succeed; two targeted controls pass: Foo/Drop head input/cache/currentness control in all four editions, and actual annotated/generated canonical-source deferral including an unrelated stale original receipt. Unchanged zero-size-type-destructors main/assertion completes all four editions (141/141 operations each). V294 removes new size accounting; V296 defers other sources before original owner/epoch checks. Broader V293 24/26 results remain attached to their earlier exact source: complete annotated/generated head control20/32 and the preexisting wider import failure remain open, not rerun or claimed repaired. Zero measured new distinct stock gains; no refreshed suite total. Genuine producer/output-name and generated occurrence joins, local import/alias/owner coverage, full source-facts/inference/delegate and actual upstream next-solver invocation remain incomplete. No M019/M020/interpreter/JIT completion.",
+      "latest_component_scope": "V297-V300 HELD M019/M020 completed-original-annotation Type-name join: coordinator authenticates actual completed fragments against exact adopted occurrences, descriptors, parent scan/group and source proof. Surviving generated names use existing GeneratedHeaderPlan/DeclaredItemName capture and the same DeclarationNameTables/LocalTypeNames candidate/comparison engine; pending imports and unknown effects remain explicit. Completed projections share immutable root/cfg-bound Arcs. Actual named-output/replacement/import/descendant matrices remain unexecuted. Final macOS Rust1.99.0 library/CLI builds and2/2targeted controls pass across all four editions, including newly ready original annotated PartialEq self-Type head without body preparation and existing Foo/Drop input/cache/currentness. V299 broader4/5controls passed and complete head control improved20/32 ->24/32; eight actual generated local self-Type heads remain pending. That broader result is bound to V299 source, not rerun on final scope-filter/empty-merge delta. Final unchanged Drop main/assertion runtime4/4editions passes. V299 unchanged coherence-impl-in-fn runtime fails4/4before executor observation at local_containers::resolve_header_target pending selection; parent runtime baseline unmeasured. Zero newly measured distinct stock gains or refreshed suite total. Genuine generated occurrence/insertion-origin and ordinary entered local-header demand joins, source-facts/inference/delegate/upstream invocation and all interpreter/JIT gates remain incomplete.",
       "source_baseline": "dcd056e542c86605f6a282470566952b2aea3c79",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
@@ -20117,7 +20121,8 @@
         "worktracks/evidence/2026-10-19-v282-v283-cold-original-annotations.json",
         "worktracks/evidence/2026-10-19-v284-v288-shared-declaration-prefix.json",
         "worktracks/evidence/2026-10-19-v289-v293-cold-declaration-names.json",
-        "worktracks/evidence/2026-10-19-v294-v296-cold-declaration-names-final.json"
+        "worktracks/evidence/2026-10-19-v294-v296-cold-declaration-names-final.json",
+        "worktracks/evidence/2026-10-19-v297-v300-completed-annotation-names.json"
       ]
     },
     {
@@ -20181,7 +20186,11 @@
         "worktracks/05-trait-goal-engine/2026-10-19-cold-declaration-name-controls.json",
         "worktracks/evidence/2026-10-19-v289-v293-cold-declaration-names.json",
         "worktracks/05-trait-goal-engine/2026-10-19-cold-declaration-name-final-controls.json",
-        "worktracks/evidence/2026-10-19-v294-v296-cold-declaration-names-final.json"
+        "worktracks/evidence/2026-10-19-v294-v296-cold-declaration-names-final.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-completed-annotation-names.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-completed-annotation-name-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-completed-annotation-name-controls.json",
+        "worktracks/evidence/2026-10-19-v297-v300-completed-annotation-names.json"
       ],
       "title": "Pinned upstream solver bridge and transactions",
       "acceptance_contract": "TR007/TR008, source/type/binder round trips, genuine upstream invocation, failed-candidate isolation and cold-body/unused-bound controls. Depends: M019.",
@@ -20189,7 +20198,7 @@
       "implementation_contract": "Files: traits/upstream/, traits/term.rs, frontend/source_view.rs, Cargo.toml and provenance manifests. Build the pinned shared solver on macOS Rust1.99.0; adapt actual source Types/ParamEnv/headers, upstream inference transactions and canonical responses to LRR queries. Migrate custom inference/canonicalization consumers and remove superseded algorithms with explicit holds until verified.",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
-      "latest_component_scope": "V296 HELD M019/M020 cold declaration-name integration: actual coordinator inputs connect unentered original local declarations to the same lexical Type lookup and canonical alias/nominal services used by ordinary source. Genuine name/source/epoch/dependency identity retained without body entry or a second evaluator. Final macOS Rust1.99.0 library and CLI builds succeed; two targeted controls pass: Foo/Drop head input/cache/currentness control in all four editions, and actual annotated/generated canonical-source deferral including an unrelated stale original receipt. Unchanged zero-size-type-destructors main/assertion completes all four editions (141/141 operations each). V294 removes new size accounting; V296 defers other sources before original owner/epoch checks. Broader V293 24/26 results remain attached to their earlier exact source: complete annotated/generated head control20/32 and the preexisting wider import failure remain open, not rerun or claimed repaired. Zero measured new distinct stock gains; no refreshed suite total. Genuine producer/output-name and generated occurrence joins, local import/alias/owner coverage, full source-facts/inference/delegate and actual upstream next-solver invocation remain incomplete. No M019/M020/interpreter/JIT completion.",
+      "latest_component_scope": "V297-V300 HELD M019/M020 completed-original-annotation Type-name join: coordinator authenticates actual completed fragments against exact adopted occurrences, descriptors, parent scan/group and source proof. Surviving generated names use existing GeneratedHeaderPlan/DeclaredItemName capture and the same DeclarationNameTables/LocalTypeNames candidate/comparison engine; pending imports and unknown effects remain explicit. Completed projections share immutable root/cfg-bound Arcs. Actual named-output/replacement/import/descendant matrices remain unexecuted. Final macOS Rust1.99.0 library/CLI builds and2/2targeted controls pass across all four editions, including newly ready original annotated PartialEq self-Type head without body preparation and existing Foo/Drop input/cache/currentness. V299 broader4/5controls passed and complete head control improved20/32 ->24/32; eight actual generated local self-Type heads remain pending. That broader result is bound to V299 source, not rerun on final scope-filter/empty-merge delta. Final unchanged Drop main/assertion runtime4/4editions passes. V299 unchanged coherence-impl-in-fn runtime fails4/4before executor observation at local_containers::resolve_header_target pending selection; parent runtime baseline unmeasured. Zero newly measured distinct stock gains or refreshed suite total. Genuine generated occurrence/insertion-origin and ordinary entered local-header demand joins, source-facts/inference/delegate/upstream invocation and all interpreter/JIT gates remain incomplete.",
       "artifacts": [
         "worktracks/evidence/2026-10-19-v230-v231-pinned-binder-client.json",
         "worktracks/evidence/2026-10-19-v234-v235-pinned-client-relations.json",
@@ -20204,7 +20213,8 @@
         "worktracks/evidence/2026-10-19-v282-v283-cold-original-annotations.json",
         "worktracks/evidence/2026-10-19-v284-v288-shared-declaration-prefix.json",
         "worktracks/evidence/2026-10-19-v289-v293-cold-declaration-names.json",
-        "worktracks/evidence/2026-10-19-v294-v296-cold-declaration-names-final.json"
+        "worktracks/evidence/2026-10-19-v294-v296-cold-declaration-names-final.json",
+        "worktracks/evidence/2026-10-19-v297-v300-completed-annotation-names.json"
       ]
     },
     {

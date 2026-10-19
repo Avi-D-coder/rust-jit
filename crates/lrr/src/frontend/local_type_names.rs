@@ -388,6 +388,28 @@ impl LocalTypeNames {
             fingerprint: fingerprint.finish(),
         })
     }
+    pub(in crate::frontend::source_locals) fn with_declared(
+        self,
+        declarations: &[Arc<crate::frontend::generated_headers::declared_names::DeclaredItemName>],
+    ) -> Result<Self, Diagnostic> {
+        if declarations.is_empty() { return Ok(self); }
+        let Self { owner, mut items, generics, need_owner, .. } = self;
+        for declaration in declarations {
+            let actual = DeclarationName {
+                name: MacroName::parse(declaration.name(), declaration.definition().definition_edition)?,
+                context: declaration.comparison_context(), raw: declaration.raw_context(),
+                edition: declaration.definition().definition_edition, range: declaration.range(),
+            };
+            let id = declaration.definition().identity;
+            if let Some(old) = items.get(&id) {
+                if old.name != actual.name || old.context != actual.context || old.raw != actual.raw
+                    || old.edition != actual.edition || old.range != actual.range {
+                    return Err(error("declared local name occurrence differs"));
+                }
+            } else { items.insert(id, actual); }
+        }
+        Self::finish(owner, items, generics, need_owner)
+    }
     pub(in crate::frontend::source_locals) fn extra_bytes(&self) -> usize {
         self.bytes
     }

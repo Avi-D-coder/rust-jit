@@ -276,6 +276,13 @@ impl SourceDiscovery {
                 AssociatedDeclarationsPreparation, PreparedOriginalAssociatedDeclarations,
             },
         };
+        let mut completed_outputs = std::collections::BTreeMap::new();
+        for fragment in self.nested_completed.values() {
+            let occurrence = fragment.index().output().record().key().invocation;
+            if completed_outputs.insert(occurrence, fragment.clone()).is_some() {
+                return Err(fault("completed declaration occurrence repeats"));
+            }
+        }
         for (ordinal, source) in self.sources.iter().enumerate()
             .filter(|(ordinal, _)| !self.macro_export_sources.contains_key(ordinal)) {
             let AssociatedDeclarationsPreparation::Original(prepared) =
@@ -285,7 +292,8 @@ impl SourceDiscovery {
                 let Some(proof) = &state.proof else { continue };
                 let parent = self.nested_sources.get(&ordinal)
                     .ok_or_else(|| fault("completed annotation declaration parent absent"))?;
-                let receipt = parent.completed_original_annotation(source, &state.group, proof)?;
+                let receipt = parent.completed_original_annotation(source, &state.group, proof)?
+                    .with_name_effects(parent, source, &completed_outputs)?;
                 if completions.insert(receipt.item(), receipt).is_some() {
                     return Err(fault("original annotation declaration completion repeats"));
                 }
@@ -301,7 +309,7 @@ impl SourceDiscovery {
                 let parent = self.nested_sources.get(&ordinal)
                     .ok_or_else(|| fault("cold declaration namespace parent absent"))?;
                 let seal = self.seal.as_ref().ok_or_else(|| fault("cold declaration namespace seal absent"))?;
-                db.publish_cold_declaration_names(&scope, parent, seal)?;
+                db.publish_cold_declaration_names(&scope, parent, seal, &completions)?;
             }
         }
         Ok(())

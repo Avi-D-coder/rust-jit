@@ -151,7 +151,12 @@ pub struct CompletedDeclarationFragment {
     item_owner: Option<Arc<crate::frontend::generated_macros::GeneratedMacroCatalog>>,
     intrinsic_arguments: Vec<GeneratedIntrinsicArguments>,
     completed_arguments: Vec<CompletedGeneratedArguments>,
+    name_effects: std::sync::OnceLock<(crate::syntax::token_wire::Key, Digest,
+        Arc<CompletedDeclarationNameEffects>)>,
 }
+#[path = "completed_declaration_names.rs"]
+mod completed_names;
+pub(crate) use completed_names::{CompletedDeclarationNameEffects, CompletedDeclarationNameSource};
 impl std::fmt::Debug for CompletedDeclarationFragment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CompletedDeclarationFragment")
@@ -1517,6 +1522,7 @@ impl DeclarationFragment {
                         item_owner: self.item_owner.take(),
                         intrinsic_arguments: std::mem::take(&mut self.intrinsic_arguments),
                         completed_arguments: std::mem::take(&mut self.completed_arguments),
+                        name_effects: std::sync::OnceLock::new(),
                     });
                     self.complete = Some(Arc::clone(&complete));
                     return Ok(DeclarationFragmentStep::Complete(complete));

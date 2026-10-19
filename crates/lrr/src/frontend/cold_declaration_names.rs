@@ -30,6 +30,7 @@ pub struct ColdDeclarationNames {
     seal: crate::db::seals::SealKey,
     seal_value: Digest,
     identity: Digest,
+    completion: Digest,
 }
 impl std::fmt::Debug for ColdDeclarationNames {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -44,17 +45,43 @@ impl ColdDeclarationNames {
         parent: &DeclarationMacroIndex,
         seal: &crate::db::seals::Seal,
         publication: u64,
+        completions: &BTreeMap<Digest, crate::frontend::impl_index::CompletedOriginalAnnotation>,
     ) -> Result<Arc<Self>, Diagnostic> {
         let context = parent.original_name_context(scope.source())?;
+        let completion = Self::completion_identity(scope, completions)?;
         let names = owned_plan::LocalTypeNames::prepare_captured(scope, &context)?;
-        // These are genuine immutable syntax facts, not acknowledged producer
-        // outputs. Actual original/generated completion must join separately.
-        let tables = DeclarationNameTables::prepare(
+        let mut retired = BTreeSet::new();
+        for row in &scope.facts().items {
+            if let Some(receipt) = completions.get(&row.item.def_key.fingerprint())
+                && receipt.name_effects().is_some() {
+                retired.extend(receipt.retired_names());
+                retired.extend(row.attribute_input);
+            }
+        }
+        let mut tables = DeclarationNameTables::prepare(
             scope.facts(),
             scope.parsed()?.key().profile.edition,
             Some(&names),
-            |_| false,
+            |producer| retired.contains(&producer),
         )?;
+        let mut generated_names = Vec::new();
+        for row in &scope.facts().items {
+            let Some(receipt) = completions.get(&row.item.def_key.fingerprint()) else { continue };
+            for effect in receipt.name_effects().into_iter().flatten() {
+                for declaration in &effect.names {
+                    if declaration.scope() == &row.item.scope {
+                        tables.extend_declared(row.scope, declaration)?;
+                        generated_names.push(Arc::clone(declaration));
+                    }
+                    // Descendant names remain in their own admitted scope;
+                    // they are neither bindings nor producers in this rib.
+                }
+                for (owner, producer) in &effect.pending {
+                    if owner == &row.item.scope { tables.defer_names(row.scope, *producer); }
+                }
+            }
+        }
+        let names = names.with_declared(&generated_names)?;
         let mut scopes = BTreeMap::new();
         for row in &scope.facts().items {
             if scopes
@@ -76,6 +103,7 @@ impl ColdDeclarationNames {
         identity.record(&seal.key());
         identity.digest(seal.fingerprint());
         identity.u64(publication);
+        identity.digest(completion);
         for (scope, ordinal) in &scopes {
             identity.record(scope);
             identity.u32(*ordinal);
@@ -89,15 +117,32 @@ impl ColdDeclarationNames {
             seal: seal.key().clone(),
             seal_value: seal.fingerprint(),
             identity: identity.finish(),
+            completion,
         }))
+    }
+    fn completion_identity(
+        scope: &CapturedDeclarationScope<'_>,
+        completions: &BTreeMap<Digest, crate::frontend::impl_index::CompletedOriginalAnnotation>,
+    ) -> Result<Digest, Diagnostic> {
+        let mut e = StableEncoder::new("lrr/v1/cold-local-name-completions");
+        for row in &scope.facts().items {
+            if let Some(receipt) = completions.get(&row.item.def_key.fingerprint()) {
+                receipt.require_source(scope.source())?;
+                receipt.require_local_declaration(scope.parsed()?, scope.body(), scope.scope(), row)?;
+                e.digest(receipt.item()); e.digest(receipt.name_fingerprint());
+            }
+        }
+        Ok(e.finish())
     }
     pub(crate) fn reusable(
         &self,
         scope: &CapturedDeclarationScope<'_>,
         parent: &DeclarationMacroIndex,
         seal: &crate::db::seals::Seal,
+        completions: &BTreeMap<Digest, crate::frontend::impl_index::CompletedOriginalAnnotation>,
     ) -> Result<bool, Diagnostic> {
         let context = parent.original_name_context(scope.source())?;
+        let completion = Self::completion_identity(scope, completions)?;
         Ok(self.scope.captured().fingerprint() == scope.fingerprint()
             && self
                 .scope
@@ -107,7 +152,8 @@ impl ColdDeclarationNames {
             && self.context.root() == context.root()
             && self.context.comparison() == context.comparison()
             && self.seal == seal.key()
-            && self.seal_value == seal.fingerprint())
+            && self.seal_value == seal.fingerprint()
+            && self.completion == completion)
     }
     pub(crate) fn identity(&self) -> Digest {
         self.identity

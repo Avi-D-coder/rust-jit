@@ -1534,6 +1534,7 @@ fn unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origi
         let mut completed = std::collections::BTreeMap::new();
         let fresh_parent = parent.clone();
         let mut first_prefix = None;
+        let mut completed_name_fragments = std::collections::BTreeMap::new();
         let mut first_declarations: Option<std::sync::Arc<GeneratedDeclarations>> = None;
         let origin = DeriveDeclarationOrigin::Source {
             selection: source.selection().clone(),
@@ -1651,6 +1652,8 @@ fn unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origi
                         )
                         .unwrap();
                     assert!(child.index().is_complete());
+                    assert!(completed_name_fragments.insert(
+                        record.key().invocation, child.clone()).is_none());
                     parent
                         .adopt_completed_child_prefix(record.key(), child.index(), false)
                         .unwrap();
@@ -1706,6 +1709,22 @@ fn unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origi
                         .unwrap();
                     assert!(parent.is_complete());
                     let receipt = parent.completed_original_annotation(&source, &group, &proof).unwrap();
+                    assert!(parent.completed_original_annotation(&source, &group, &proof).unwrap()
+                        .with_name_effects(&parent, &source, &Default::default()).is_err(),
+                        "name completion requires the actual completed output fragments");
+                    assert!(parent.completed_original_annotation(&source, &group, &proof).unwrap()
+                        .with_name_effects(&fresh_parent, &source, &completed_name_fragments).is_err(),
+                        "a fresh parent cannot certify no name effects from adopted outputs");
+                    let names = parent.completed_original_annotation(&source, &group, &proof).unwrap()
+                        .with_name_effects(&parent, &source, &completed_name_fragments).unwrap();
+                    let repeat = parent.completed_original_annotation(&source, &group, &proof).unwrap()
+                        .with_name_effects(&parent, &source, &completed_name_fragments).unwrap();
+                    let (names, repeat) = (names.name_effects().unwrap(), repeat.name_effects().unwrap());
+                    assert_eq!(names.len(), 2);
+                    for (names, repeat) in names.iter().zip(repeat) {
+                        assert!(std::sync::Arc::ptr_eq(names, repeat),
+                            "completed fragments share immutable prepared name effects");
+                    }
                     let crate::frontend::associated_declarations::AssociatedDeclarationsPreparation::Original(prepared) =
                         crate::frontend::associated_declarations::PreparedOriginalAssociatedDeclarations::prepare(&source).unwrap()
                         else { panic!("actual original declaration scope absent") };
@@ -1870,12 +1889,34 @@ fn unchanged_catalog_completed_annotations_publish_actual_local_declarations() {
         }
         assert!(declarations >= 4, "actual enum, impl and both methods are published");
         assert_eq!(annotated, 1);
-        let key = QueryKey::PreparedScopeImplHeaders(seal);
+        let key = QueryKey::PreparedScopeImplHeaders(seal.clone());
         let headers = match db.fetch(&SyntaxProvider, key) {
             QueryPoll::Ready(Ok(value)) => value.value,
             other => panic!("actual local catalog headers: {other:?}"),
         };
         let QueryValue::PreparedScopeImplHeaders(headers) = headers.as_ref() else { panic!() };
+        let mut original_heads = 0;
+        for raw in headers.inventory_root().headers().iter().filter(|raw|
+            raw.scope.crate_key == root_scope.crate_key
+                && headers.header(raw.identity).unwrap().source().generated_origin().is_none()) {
+            let key = QueryKey::ImplHeadTypes(Box::new(crate::traits::header_syntax::ImplHeaderSyntaxKey {
+                inventory: seal.clone(), implementation: raw.identity,
+            }));
+            let first = match db.fetch(&SyntaxProvider, key.clone()) {
+                QueryPoll::Ready(Ok(value)) => value.value,
+                other => panic!("completed original Type demand: {other:?}"),
+            };
+            let QueryValue::ImplHeadTypes(head) = first.as_ref() else { panic!() };
+            assert!(matches!(head.result(), crate::frontend::impl_head_types::ImplHeadTypeResult::Resolved {
+                trait_ref: Some(_), .. }), "actual completed annotation name remains pending: {:?}", head.result());
+            let repeat = match db.fetch(&SyntaxProvider, key) {
+                QueryPoll::Ready(Ok(value)) => value.value,
+                other => panic!("completed original repeat: {other:?}"),
+            };
+            assert!(std::sync::Arc::ptr_eq(&first, &repeat));
+            original_heads += 1;
+        }
+        assert_eq!(original_heads, 1, "actual original PartialEq impl head, not derived output");
         let mut generated = 0;
         let mut generated_definitions = Vec::new();
         for raw in headers.inventory_root().headers().iter().filter(|raw| raw.scope.crate_key == root_scope.crate_key) {

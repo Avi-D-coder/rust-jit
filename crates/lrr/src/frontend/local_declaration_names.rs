@@ -55,7 +55,7 @@ impl DeclarationNameTables {
                         definition_edition,
                     });
             }
-            if let Some(producer) = row.attribute_input {
+            if let Some(producer) = row.attribute_input.filter(|producer| !retired(*producer)) {
                 item_bytes = item_bytes
                     .checked_add(128)
                     .ok_or_else(|| error("body attribute frontier metadata limit"))?;
@@ -117,7 +117,7 @@ impl DeclarationNameTables {
                     .or_default()
                     .push(index);
             }
-            if let Some(producer) = import.attribute_input {
+            if let Some(producer) = import.attribute_input.filter(|producer| !retired(*producer)) {
                 item_frontiers
                     .entry(import.scope)
                     .or_default()
@@ -131,6 +131,22 @@ impl DeclarationNameTables {
             item_candidates,
             item_frontiers,
         })
+    }
+    pub(super) fn extend_declared(
+        &mut self,
+        ordinal: u32,
+        declaration: &crate::frontend::generated_headers::declared_names::DeclaredItemName,
+    ) -> Result<(), Diagnostic> {
+        let definition = declaration.definition();
+        if definition.namespace == crate::source::manifest::Namespace::Macro { return Ok(()); }
+        let key = (ordinal, definition.namespace,
+            MacroName::parse(declaration.name(), definition.definition_edition)?);
+        let rows = self.item_candidates.entry(key).or_default();
+        if !rows.contains(definition) { rows.push(definition.clone()); }
+        Ok(())
+    }
+    pub(super) fn defer_names(&mut self, ordinal: u32, producer: Digest) {
+        self.item_frontiers.entry(ordinal).or_default().insert(producer);
     }
 }
 /// Borrowed view over the actual immutable declaration tables and facts. It
