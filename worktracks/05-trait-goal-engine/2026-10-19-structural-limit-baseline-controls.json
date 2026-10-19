@@ -1,0 +1,7 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Baseline actual upstream signature metadata boundary; no main execution or runtime pass",
+  "controls": [
+    "cli::crate_graph::generic_boundary_tests::upstream_generic_signature_has_no_structural_resource_limit"
+  ]
+}

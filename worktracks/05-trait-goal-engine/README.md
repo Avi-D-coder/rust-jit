@@ -4,6 +4,8 @@ Integrate the pinned next-generation rustc trait solver with LRR's demand-driven
 
 ## Current boundary
 
+Latest held E006/M020 prerequisite: V368 removes connected structural resource guards and uses one heap substitution/closed traversal; the unchanged depth300 signature boundary passes all4editions. Three stock runtime contracts pass all4editions/12rows at V368. V369 changes only a stale host region expectation; final builds/affected control pass, production unchanged, earlier source/runtime evidence stays at V368. No measured stock gain/refreshed total or full upstream root/VM integration. [Evidence](../evidence/2026-10-19-v366-v369-structural-resource-guards.json).
+
 Latest held M020 component: V352 adds current compiler source-origin opaque/outlives records/state and variable wake predicate. Final builds/affected source control pass; two untouched V351 controls retain their own evidence, production unchanged. Nonempty source opaques/full inference/delegate/root/runtime integration remain open; zero new stock runtime gains. [Evidence](../evidence/2026-10-19-v350-v352-upstream-obligation-state.json).
 
 Prior held M020 component: V349 executes the actual compiler graph/SCC-based leak checker and preserves source Verify origins. Both builds and26controls pass:23adapted upstream graph bodies plus3source-context controls, with genuine failures/successes and snapshot/visibility behavior. Full inference/delegate/root/runtime migration remains open; zero new stock runtime gains. [Evidence](../evidence/2026-10-19-v347-v349-upstream-leak-check.json).

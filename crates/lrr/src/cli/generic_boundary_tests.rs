@@ -10,6 +10,89 @@ use crate::{
 };
 use std::path::PathBuf;
 
+#[test]
+fn upstream_generic_signature_has_no_structural_resource_limit() {
+    use crate::{
+        core::digest::StableEncode,
+        db::{
+            key::QueryKey, memo::Database, poll::QueryPoll, provider::SyntaxProvider,
+            value::QueryValue,
+        },
+        frontend::signature_subst::SignatureSubstitution,
+        ir::op::PrimitiveType,
+        traits::{
+            subst::Substitution,
+            term::{GenericArg, RegionTerm, TyTerm},
+        },
+    };
+    // A host metadata boundary control using an unchanged upstream signature.
+    // This does not execute main or claim stock runtime/full-fixture acceptance.
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/upstream/rustc-checkout/tests/ui/generics/generic-fn.rs");
+    for edition in [2015, 2018, 2021, 2024] {
+        let profile = ProfileIdentity {
+            edition,
+            ..ProfileIdentity::current()
+        };
+        let (prepared, view, _, _) = capture_with(
+            &root,
+            false,
+            edition,
+            &super::ExternCrates::default(),
+            crate::source::embedded_crates::standard_facade_crates(&profile),
+            None,
+        )
+        .unwrap()
+        .0;
+        let declaration = view
+            .outline()
+            .items
+            .iter()
+            .find(|item| item.def_key.declared_name == "id")
+            .unwrap();
+        let definition = declaration.def_key.fingerprint();
+        let mut db = Database::default();
+        prepared.publish(&mut db).unwrap();
+        let outcome = match db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(definition)) {
+            QueryPoll::Ready(Ok(outcome)) => outcome,
+            other => panic!("edition {edition}, actual upstream signature: {other:?}"),
+        };
+        let QueryValue::FunctionSignature(signature) = outcome.value.as_ref() else {
+            panic!("actual upstream signature: {:?}", outcome.value);
+        };
+        let TyTerm::Param(parameter) = signature.parameters[0].symbolic.as_ref().unwrap() else {
+            panic!("actual upstream T parameter");
+        };
+        assert_eq!(
+            signature.result_symbolic.as_ref(),
+            Some(&TyTerm::Param(*parameter))
+        );
+        let nest = |mut term| {
+            for _ in 0..300 {
+                term = TyTerm::Ref(RegionTerm::Static, false, Box::new(term));
+            }
+            term
+        };
+        let actual = nest(TyTerm::Primitive(PrimitiveType::I32));
+        let mut call = SignatureSubstitution::new(signature, definition).unwrap();
+        call.constrain_argument(0, &actual).unwrap();
+        call.constrain_result(&actual).unwrap();
+        assert_eq!(call.binding(parameter.ordinal), Some(&actual));
+        let mut substitution = Substitution::default();
+        substitution
+            .insert(
+                *parameter,
+                GenericArg::Type(TyTerm::Primitive(PrimitiveType::I32)),
+            )
+            .unwrap();
+        let substituted = substitution
+            .apply(&nest(TyTerm::Param(*parameter)))
+            .unwrap();
+        assert_eq!(substituted, actual);
+        crate::traits::subst::validate_closed(&substituted).unwrap();
+    }
+}
+
 struct Temp(PathBuf);
 impl Temp {
     fn new(label: &str) -> Self {

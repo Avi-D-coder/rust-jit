@@ -6881,7 +6881,7 @@ mod tests {
         store.reset(2).unwrap();
     }
     #[test]
-    fn rustc_original_universal_region_cannot_enter_slot_parameter_or_binding_views() {
+    fn rustc_original_universal_region_is_retained_as_non_data_source_metadata() {
         use crate::{
             ir::op::{HintRecipe, PrimitiveType},
             syntax::outline::DeclarationContext,
@@ -6974,58 +6974,53 @@ mod tests {
             .set_binding_source(NodeId(0), &HintRecipe::Primitive(PrimitiveType::Unit))
             .unwrap();
         let before = (
-            frame.source_view(destination).unwrap(),
-            frame.binding_sources[0].clone(),
             frame.counters.operations_started,
             store.budget().handles(),
             frame.active_scopes.clone(),
         );
+        // Regions are non-data under E-R5-006. Preserve the actual binder's
+        // placeholder in all metadata views without imposing a static check.
+        frame
+            .set_source_view(destination, Some(reference.clone()))
+            .unwrap();
+        frame
+            .install_parameter_sources(vec![reference.clone()])
+            .unwrap();
+        frame
+            .set_binding_source(
+                NodeId(0),
+                &HintRecipe::Reference {
+                    region: RegionTerm::Placeholder(key),
+                    mutable,
+                    target: PrimitiveType::Unit,
+                },
+            )
+            .unwrap();
         assert_eq!(
-            frame
-                .set_source_view(destination, Some(reference.clone()))
-                .unwrap_err()
-                .code,
-            "LRR-E-INTERNAL-IR"
+            frame.source_view(destination).unwrap(),
+            Some(reference.clone())
         );
-        assert_eq!(
-            frame
-                .install_parameter_sources(vec![reference])
-                .unwrap_err()
-                .code,
-            "LRR-E-INTERNAL-IR"
-        );
-        assert_eq!(
-            frame
-                .set_binding_source(
-                    NodeId(0),
-                    &HintRecipe::Reference {
-                        region: RegionTerm::Placeholder(key),
-                        mutable,
-                        target: PrimitiveType::Unit,
-                    }
-                )
-                .unwrap_err()
-                .code,
-            "LRR-E-INTERNAL-IR"
-        );
+        assert_eq!(frame.parameter_sources, vec![reference.clone()]);
+        assert_eq!(frame.binding_sources[0], Some(reference));
         assert_eq!(
             before,
             (
-                frame.source_view(destination).unwrap(),
-                frame.binding_sources[0].clone(),
                 frame.counters.operations_started,
                 store.budget().handles(),
                 frame.active_scopes.clone()
             )
         );
-        assert!(frame.parameter_sources.is_empty());
-        frame.install_parameter_sources(vec![]).unwrap();
+        // Admission still belongs to a fresh parameter table, once.
+        assert_eq!(
+            frame.install_parameter_sources(vec![]).unwrap_err().code,
+            "LRR-E-INTERNAL-IR"
+        );
         frame
             .set_source_view(destination, Some(stable.clone()))
             .unwrap();
         assert_eq!(frame.source_view(destination).unwrap(), Some(stable));
-        // Source-derived metadata corruption guard only: the original's
-        // projection/outlives/check-pass/main execution remains unclaimed.
+        // Source-derived metadata control only: the original's projection/
+        // outlives/check-pass/main execution remains unclaimed.
     }
     #[test]
     fn rustc_array_reference_metadata_accounts_for_both_owned_source_boxes() {

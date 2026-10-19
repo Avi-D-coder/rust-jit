@@ -1,44 +1,15 @@
-//! Bounded simultaneous symbolic substitution; no runtime layout or goal effects.
+//! Simultaneous symbolic substitution; no runtime layout or goal effects.
 use super::term::{
     Binder, BoundKind, ConstTerm, FunctionSignature, GenericArg, ParamKey, PlaceholderKey,
     ProjectionKey, RegionTerm, TraitRef, TyTerm,
 };
 use crate::core::diagnostic::Diagnostic;
 use std::collections::BTreeMap;
-// Binder/type nesting guard (type recursion; rustc bounds type recursion by
-// `recursion_limit`, compiler/rustc_interface/src/limits.rs).
-const MAX_DEPTH: u32 = 256;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-GENERIC-BINDING", message.into())
 }
-fn limit() -> Diagnostic {
-    Diagnostic::new(
-        "LRR-E-METADATA-LIMIT",
-        "symbolic substitution budget exceeded".into(),
-    )
-}
-#[derive(Default)]
-struct Budget {
-    nodes: usize,
-    bytes: usize,
-}
-impl Budget {
-    fn charge(&mut self, nodes: usize, bytes: usize) -> Result<(), Diagnostic> {
-        self.nodes = self.nodes.checked_add(nodes).ok_or_else(limit)?;
-        self.bytes = self.bytes.checked_add(bytes).ok_or_else(limit)?;
-        Ok(())
-    }
-    fn vector<T>(&mut self, count: usize) -> Result<Vec<T>, Diagnostic> {
-        self.charge(
-            0,
-            count
-                .checked_mul(std::mem::size_of::<T>())
-                .ok_or_else(limit)?,
-        )?;
-        let mut values = Vec::new();
-        values.try_reserve_exact(count).map_err(|_| limit())?;
-        Ok(values)
-    }
+fn index_overflow() -> Diagnostic {
+    fault("symbolic binder index overflow")
 }
 fn kind(arg: &GenericArg) -> BoundKind {
     match arg {
@@ -51,8 +22,6 @@ fn kind(arg: &GenericArg) -> BoundKind {
 #[derive(Default)]
 pub struct Substitution {
     values: BTreeMap<(BoundKind, ParamKey), GenericArg>,
-    nodes: usize,
-    bytes: usize,
 }
 impl Substitution {
     pub fn insert(&mut self, key: ParamKey, value: GenericArg) -> Result<(), Diagnostic> {
@@ -60,53 +29,24 @@ impl Substitution {
         if self.values.contains_key(&entry) {
             return Err(fault("duplicate symbolic substitution"));
         }
-        // Pure typed-shape admission precedes both ownership and aggregate
-        // accounting. Free enclosing binders remain valid substitution inputs.
+        // Free enclosing binders remain valid substitution inputs.
         if let GenericArg::Type(term) = &value {
             term.validate_opaque_shape()?;
         }
-        // Existing values are owned and immutable. Recount only the incoming
-        // term, preserving the exact aggregate charge used by prior admission.
-        let mut nodes = self.nodes.checked_add(1).ok_or_else(limit)?;
-        let mut bytes = self
-            .bytes
-            .checked_add(std::mem::size_of::<((BoundKind, ParamKey), GenericArg)>() + 32)
-            .ok_or_else(limit)?;
-        if let GenericArg::Type(term) = &value {
-            let (n, b) = term.measure().ok_or_else(limit)?;
-            nodes = nodes.checked_add(n).ok_or_else(limit)?;
-            bytes = bytes.checked_add(b).ok_or_else(limit)?;
-        }
         self.values.insert(entry, value);
-        self.nodes = nodes;
-        self.bytes = bytes;
         Ok(())
     }
     pub fn apply(&self, term: &TyTerm) -> Result<TyTerm, Diagnostic> {
-        term.measure().ok_or_else(limit)?;
-        let result = transform(term, Some(self), 0, 0, 0, &mut Budget::default(), None)?;
-        result.measure().ok_or_else(limit)?;
-        Ok(result)
+        transform(term, Some(self), 0, 0, None)
     }
 }
 /// Shift only variables free relative to cutoff; nested binders raise cutoff.
 pub fn shift(term: &TyTerm, amount: u32, cutoff: u32) -> Result<TyTerm, Diagnostic> {
-    if cutoff > MAX_DEPTH {
-        return Err(limit());
-    }
-    term.measure().ok_or_else(limit)?;
-    let result = transform(term, None, amount, cutoff, 0, &mut Budget::default(), None)?;
-    result.measure().ok_or_else(limit)?;
-    Ok(result)
+    transform(term, None, amount, cutoff, None)
 }
 fn shifted(depth: u32, amount: u32, cutoff: u32) -> Result<u32, Diagnostic> {
-    let depth = if depth >= cutoff {
-        depth.checked_add(amount).ok_or_else(limit)?
-    } else {
-        depth
-    };
-    if depth > MAX_DEPTH {
-        Err(limit())
+    if depth >= cutoff {
+        depth.checked_add(amount).ok_or_else(index_overflow)
     } else {
         Ok(depth)
     }
@@ -173,282 +113,199 @@ fn constant(
         _ => term.clone(),
     })
 }
-fn transform(
-    term: &TyTerm,
-    subst: Option<&Substitution>,
+#[derive(Clone, Copy)]
+struct TransformContext<'a> {
+    subst: Option<&'a Substitution>,
     lift: u32,
     cutoff: u32,
-    depth: u32,
-    budget: &mut Budget,
-    inst: Option<&Instantiation<'_>>,
-) -> Result<TyTerm, Diagnostic> {
-    if depth > MAX_DEPTH {
-        return Err(limit());
+    inst: Option<&'a Instantiation<'a>>,
+}
+enum TransformTask<'a> {
+    Visit(&'a TyTerm, TransformContext<'a>),
+    Assemble(&'a TyTerm, TransformContext<'a>, usize),
+}
+// Child order is also the reconstruction order for mixed generic arguments.
+fn type_children(term: &TyTerm) -> Vec<&TyTerm> {
+    fn arguments(args: &[GenericArg]) -> Vec<&TyTerm> {
+        args.iter()
+            .filter_map(|arg| match arg {
+                GenericArg::Type(term) => Some(term),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
     }
-    if let (TyTerm::Param(key), Some(subst)) = (term, subst)
-        && let Some(GenericArg::Type(replacement)) = subst.values.get(&(BoundKind::Type, *key))
-    {
-        // Simultaneous substitution: do not recursively interpret keys inside
-        // replacement as a second substitution. Shift before entering a binder.
-        return transform(replacement, None, lift, 0, depth, budget, None);
-    }
-    budget.charge(1, 0)?;
-    let next = depth.checked_add(1).ok_or_else(limit)?;
     match term {
-        // Atomic unsized pointee; substitution never invents a numeric source,
-        // allocation, region or sizedness witness for it.
-        TyTerm::Str => Ok(TyTerm::Str),
-        TyTerm::Bound { depth, index } if inst.is_some() => {
-            match inst.expect("checked instantiation").bound(
-                BoundKind::Type,
-                *depth,
-                *index,
-                cutoff,
-            )? {
-                BoundReplacement::Bound(depth, index) => Ok(TyTerm::Bound { depth, index }),
-                BoundReplacement::Placeholder(key) => Ok(TyTerm::Placeholder(key)),
-            }
-        }
-        TyTerm::Bound { depth, index } if subst.is_none() => Ok(TyTerm::Bound {
-            depth: shifted(*depth, lift, cutoff)?,
-            index: *index,
-        }),
-        TyTerm::Function(function) => {
-            transform_function(function, subst, lift, cutoff, next, budget, inst)
-        }
-        TyTerm::Tuple(fields) => transform_tuple(fields, subst, lift, cutoff, next, budget, inst),
-        TyTerm::Projection(key) => {
-            transform_projection(key, subst, lift, cutoff, next, budget, inst)
-        }
-        TyTerm::Opaque(key, args) => {
-            transform_opaque((key, args), subst, lift, cutoff, next, budget, inst)
-        }
-        TyTerm::Nominal(identity, args) => {
-            transform_nominal((*identity, args), subst, lift, cutoff, next, budget, inst)
-        }
-        TyTerm::Array(t, c) => {
-            transform_array((t.as_ref(), c), subst, lift, cutoff, next, budget, inst)
-        }
-        TyTerm::Slice(t) => transform_slice(t.as_ref(), subst, lift, cutoff, next, budget, inst),
-        TyTerm::Ref(r, mutable, t) => transform_reference(
-            (r, *mutable, t.as_ref()),
+        TyTerm::Function(function) => function
+            .value
+            .parameters
+            .iter()
+            .chain(std::iter::once(function.value.result.as_ref()))
+            .collect(),
+        TyTerm::Projection(key) => std::iter::once(&key.trait_ref.self_ty)
+            .chain(key.arguments().filter_map(|arg| match arg {
+                GenericArg::Type(term) => Some(term),
+                _ => None,
+            }))
+            .collect(),
+        TyTerm::Nominal(_, args) | TyTerm::Opaque(_, args) => arguments(args),
+        TyTerm::Tuple(fields) => fields.iter().collect(),
+        TyTerm::Array(term, _) | TyTerm::Slice(term) | TyTerm::Ref(_, _, term) => vec![term],
+        _ => Vec::new(),
+    }
+}
+fn transform<'a>(
+    term: &'a TyTerm,
+    subst: Option<&'a Substitution>,
+    lift: u32,
+    cutoff: u32,
+    inst: Option<&'a Instantiation<'a>>,
+) -> Result<TyTerm, Diagnostic> {
+    let mut work = vec![TransformTask::Visit(
+        term,
+        TransformContext {
             subst,
             lift,
             cutoff,
-            next,
-            budget,
             inst,
-        ),
-        _ => Ok(term.clone()),
-    }
-}
-// Keep recursive dispatch results direct and large branch storage separate.
-// All budget charges and source/binder transitions are unchanged.
-fn transform_function(
-    function: &Binder<FunctionSignature>,
-    subst: Option<&Substitution>,
-    lift: u32,
-    cutoff: u32,
-    next: u32,
-    budget: &mut Budget,
-    inst: Option<&Instantiation<'_>>,
-) -> Result<TyTerm, Diagnostic> {
-    budget.charge(
-        function.variables.len(),
-        std::mem::size_of::<Binder<FunctionSignature>>(),
-    )?;
-    let mut variables = budget.vector(function.variables.len())?;
-    variables.extend_from_slice(&function.variables);
-    let mut parameters = budget.vector(function.value.parameters.len())?;
-    let (inside_lift, inside_cutoff) = if subst.is_some() {
-        (lift.checked_add(1).ok_or_else(limit)?, cutoff)
-    } else {
-        (lift, cutoff.checked_add(1).ok_or_else(limit)?)
-    };
-    for parameter in &function.value.parameters {
-        parameters.push(transform(
-            parameter,
-            subst,
-            inside_lift,
-            inside_cutoff,
-            next,
-            budget,
-            inst,
-        )?);
-    }
-    budget.charge(0, std::mem::size_of::<TyTerm>())?;
-    let result = Box::new(transform(
-        &function.value.result,
-        subst,
-        inside_lift,
-        inside_cutoff,
-        next,
-        budget,
-        inst,
-    )?);
-    Ok(TyTerm::Function(Box::new(Binder {
-        variables,
-        value: FunctionSignature { parameters, result },
-    })))
-}
-
-fn transform_tuple(
-    fields: &[TyTerm],
-    subst: Option<&Substitution>,
-    lift: u32,
-    cutoff: u32,
-    next: u32,
-    budget: &mut Budget,
-    inst: Option<&Instantiation<'_>>,
-) -> Result<TyTerm, Diagnostic> {
-    let mut values = budget.vector(fields.len())?;
-    for value in fields {
-        values.push(transform(value, subst, lift, cutoff, next, budget, inst)?);
-    }
-    Ok(TyTerm::Tuple(values))
-}
-
-fn transform_projection(
-    key: &ProjectionKey,
-    subst: Option<&Substitution>,
-    lift: u32,
-    cutoff: u32,
-    next: u32,
-    budget: &mut Budget,
-    inst: Option<&Instantiation<'_>>,
-) -> Result<TyTerm, Diagnostic> {
-    budget.charge(0, std::mem::size_of::<ProjectionKey>())?;
-    let self_ty = transform(
-        &key.trait_ref.self_ty,
-        subst,
-        lift,
-        cutoff,
-        next,
-        budget,
-        inst,
-    )?;
-    let args = arguments(&key.trait_ref.args, subst, lift, cutoff, next, budget, inst)?;
-    let item_args = arguments(&key.item_args, subst, lift, cutoff, next, budget, inst)?;
-    Ok(TyTerm::Projection(Box::new(ProjectionKey {
-        trait_ref: TraitRef {
-            trait_key: key.trait_ref.trait_key,
-            self_ty,
-            args,
         },
-        item: key.item,
-        item_args,
-    })))
-}
-
-fn transform_opaque(
-    source: (&super::term::OpaqueKey, &[GenericArg]),
-    subst: Option<&Substitution>,
-    lift: u32,
-    cutoff: u32,
-    next: u32,
-    budget: &mut Budget,
-    inst: Option<&Instantiation<'_>>,
-) -> Result<TyTerm, Diagnostic> {
-    let (key, args) = source;
-    key.validate_arguments(args)?;
-    budget.charge(key.captures().len(), key.heap_bytes().ok_or_else(limit)?)?;
-    Ok(TyTerm::Opaque(
-        key.clone(),
-        arguments(args, subst, lift, cutoff, next, budget, inst)?,
-    ))
-}
-
-fn transform_array(
-    source: (&TyTerm, &ConstTerm),
-    subst: Option<&Substitution>,
-    lift: u32,
-    cutoff: u32,
-    next: u32,
-    budget: &mut Budget,
-    inst: Option<&Instantiation<'_>>,
-) -> Result<TyTerm, Diagnostic> {
-    let (t, c) = source;
-    budget.charge(1, std::mem::size_of::<TyTerm>())?;
-    Ok(TyTerm::Array(
-        Box::new(transform(t, subst, lift, cutoff, next, budget, inst)?),
-        constant(c, subst, lift, cutoff, inst)?,
-    ))
-}
-
-fn transform_slice(
-    t: &TyTerm,
-    subst: Option<&Substitution>,
-    lift: u32,
-    cutoff: u32,
-    next: u32,
-    budget: &mut Budget,
-    inst: Option<&Instantiation<'_>>,
-) -> Result<TyTerm, Diagnostic> {
-    budget.charge(0, std::mem::size_of::<TyTerm>())?;
-    Ok(TyTerm::Slice(Box::new(transform(
-        t, subst, lift, cutoff, next, budget, inst,
-    )?)))
-}
-
-fn transform_reference(
-    source: (&RegionTerm, bool, &TyTerm),
-    subst: Option<&Substitution>,
-    lift: u32,
-    cutoff: u32,
-    next: u32,
-    budget: &mut Budget,
-    inst: Option<&Instantiation<'_>>,
-) -> Result<TyTerm, Diagnostic> {
-    let (r, mutable, t) = source;
-    budget.charge(1, std::mem::size_of::<TyTerm>())?;
-    Ok(TyTerm::Ref(
-        region(r, subst, lift, cutoff, inst)?,
-        mutable,
-        Box::new(transform(t, subst, lift, cutoff, next, budget, inst)?),
-    ))
-}
-
-fn transform_nominal(
-    source: (crate::core::digest::Digest, &[GenericArg]),
-    subst: Option<&Substitution>,
-    lift: u32,
-    cutoff: u32,
-    next: u32,
-    budget: &mut Budget,
-    inst: Option<&Instantiation<'_>>,
-) -> Result<TyTerm, Diagnostic> {
-    Ok(TyTerm::Nominal(
-        source.0,
-        arguments(source.1, subst, lift, cutoff, next, budget, inst)?,
-    ))
-}
-
-fn arguments(
-    args: &[GenericArg],
-    subst: Option<&Substitution>,
-    lift: u32,
-    cutoff: u32,
-    depth: u32,
-    budget: &mut Budget,
-    inst: Option<&Instantiation<'_>>,
-) -> Result<Vec<GenericArg>, Diagnostic> {
-    let mut values = budget.vector(args.len())?;
-    for argument in args {
-        values.push(match argument {
-            GenericArg::Type(t) => {
-                GenericArg::Type(transform(t, subst, lift, cutoff, depth, budget, inst)?)
+    )];
+    let mut results = Vec::new();
+    while let Some(task) = work.pop() {
+        match task {
+            TransformTask::Visit(term, context) => {
+                if let (TyTerm::Param(key), Some(subst)) = (term, context.subst)
+                    && let Some(GenericArg::Type(replacement)) =
+                        subst.values.get(&(BoundKind::Type, *key))
+                {
+                    // Simultaneous substitution: replacement keys do not become
+                    // another substitution. Shift free variables by this lift.
+                    work.push(TransformTask::Visit(
+                        replacement,
+                        TransformContext {
+                            subst: None,
+                            cutoff: 0,
+                            inst: None,
+                            ..context
+                        },
+                    ));
+                    continue;
+                }
+                if let TyTerm::Bound { depth, index } = term {
+                    let value = if let Some(inst) = context.inst {
+                        match inst.bound(BoundKind::Type, *depth, *index, context.cutoff)? {
+                            BoundReplacement::Bound(depth, index) => TyTerm::Bound { depth, index },
+                            BoundReplacement::Placeholder(key) => TyTerm::Placeholder(key),
+                        }
+                    } else if context.subst.is_none() {
+                        TyTerm::Bound {
+                            depth: shifted(*depth, context.lift, context.cutoff)?,
+                            index: *index,
+                        }
+                    } else {
+                        term.clone()
+                    };
+                    results.push(value);
+                    continue;
+                }
+                if let TyTerm::Opaque(key, args) = term {
+                    key.validate_arguments(args)?;
+                }
+                let mut inside = context;
+                if matches!(term, TyTerm::Function(_)) {
+                    if context.subst.is_some() {
+                        inside.lift = context.lift.checked_add(1).ok_or_else(index_overflow)?;
+                    } else {
+                        inside.cutoff = context.cutoff.checked_add(1).ok_or_else(index_overflow)?;
+                    }
+                }
+                let children = type_children(term);
+                work.push(TransformTask::Assemble(term, context, children.len()));
+                work.extend(
+                    children
+                        .into_iter()
+                        .rev()
+                        .map(|child| TransformTask::Visit(child, inside)),
+                );
             }
-            GenericArg::Region(r) => {
-                budget.charge(1, 0)?;
-                GenericArg::Region(region(r, subst, lift, cutoff, inst)?)
+            TransformTask::Assemble(term, context, count) => {
+                let mut children = results.split_off(results.len() - count).into_iter();
+                let mut next = || children.next().expect("scheduled symbolic child");
+                let value = match term {
+                    TyTerm::Function(function) => TyTerm::Function(Box::new(Binder {
+                        variables: function.variables.clone(),
+                        value: FunctionSignature {
+                            parameters: (0..function.value.parameters.len())
+                                .map(|_| next())
+                                .collect(),
+                            result: Box::new(next()),
+                        },
+                    })),
+                    TyTerm::Tuple(fields) => {
+                        TyTerm::Tuple((0..fields.len()).map(|_| next()).collect())
+                    }
+                    TyTerm::Projection(key) => TyTerm::Projection(Box::new(ProjectionKey {
+                        trait_ref: TraitRef {
+                            trait_key: key.trait_ref.trait_key,
+                            self_ty: next(),
+                            args: transformed_arguments(&key.trait_ref.args, context, &mut next)?,
+                        },
+                        item: key.item,
+                        item_args: transformed_arguments(&key.item_args, context, &mut next)?,
+                    })),
+                    TyTerm::Opaque(key, args) => TyTerm::Opaque(
+                        key.clone(),
+                        transformed_arguments(args, context, &mut next)?,
+                    ),
+                    TyTerm::Nominal(identity, args) => {
+                        TyTerm::Nominal(*identity, transformed_arguments(args, context, &mut next)?)
+                    }
+                    TyTerm::Array(_, c) => TyTerm::Array(
+                        Box::new(next()),
+                        constant(c, context.subst, context.lift, context.cutoff, context.inst)?,
+                    ),
+                    TyTerm::Slice(_) => TyTerm::Slice(Box::new(next())),
+                    TyTerm::Ref(r, mutable, _) => TyTerm::Ref(
+                        region(r, context.subst, context.lift, context.cutoff, context.inst)?,
+                        *mutable,
+                        Box::new(next()),
+                    ),
+                    // Only childless variants reach this clone.
+                    _ => term.clone(),
+                };
+                debug_assert!(children.next().is_none());
+                results.push(value);
             }
-            GenericArg::Const(c) => {
-                budget.charge(1, 0)?;
-                GenericArg::Const(constant(c, subst, lift, cutoff, inst)?)
-            }
-        });
+        }
     }
-    Ok(values)
+    debug_assert_eq!(results.len(), 1);
+    Ok(results.pop().expect("symbolic transform root"))
+}
+fn transformed_arguments(
+    args: &[GenericArg],
+    context: TransformContext<'_>,
+    next: &mut impl FnMut() -> TyTerm,
+) -> Result<Vec<GenericArg>, Diagnostic> {
+    args.iter()
+        .map(|arg| {
+            Ok(match arg {
+                GenericArg::Type(_) => GenericArg::Type(next()),
+                GenericArg::Region(r) => GenericArg::Region(region(
+                    r,
+                    context.subst,
+                    context.lift,
+                    context.cutoff,
+                    context.inst,
+                )?),
+                GenericArg::Const(c) => GenericArg::Const(constant(
+                    c,
+                    context.subst,
+                    context.lift,
+                    context.cutoff,
+                    context.inst,
+                )?),
+            })
+        })
+        .collect()
 }
 fn bound(
     scopes: &[&[BoundKind]],
@@ -457,9 +314,9 @@ fn bound(
     kind: BoundKind,
 ) -> Result<(), Diagnostic> {
     let distance = usize::try_from(depth)
-        .map_err(|_| limit())?
+        .map_err(|_| index_overflow())?
         .checked_add(1)
-        .ok_or_else(limit)?;
+        .ok_or_else(index_overflow)?;
     let scope = scopes
         .len()
         .checked_sub(distance)
@@ -471,83 +328,65 @@ fn bound(
 }
 /// Closed-term admission, separate from structural equality or region solving.
 pub fn validate_closed(term: &TyTerm) -> Result<(), Diagnostic> {
-    term.measure().ok_or_else(limit)?;
-    closed(term, &mut Vec::new(), 0)
+    closed(term, &mut Vec::new())
 }
-fn closed<'a>(
-    term: &'a TyTerm,
-    scopes: &mut Vec<&'a [BoundKind]>,
-    depth: u32,
-) -> Result<(), Diagnostic> {
-    if depth > MAX_DEPTH {
-        return Err(limit());
+fn closed<'a>(term: &'a TyTerm, scopes: &mut Vec<&'a [BoundKind]>) -> Result<(), Diagnostic> {
+    enum Task<'a> {
+        Visit(&'a TyTerm),
+        LeaveBinder,
     }
-    let region = |r: &RegionTerm, scopes: &[&[BoundKind]]| {
-        if let RegionTerm::Bound { depth, index } = r {
-            bound(scopes, *depth, *index, BoundKind::Region)
-        } else {
-            Ok(())
-        }
-    };
-    let constant = |c: &ConstTerm, scopes: &[&[BoundKind]]| {
-        if let ConstTerm::Bound { depth, index } = c {
-            bound(scopes, *depth, *index, BoundKind::Const)
-        } else {
-            Ok(())
-        }
-    };
-    if let TyTerm::Opaque(key, args) = term {
-        key.validate_arguments(args)?;
-    }
-    match term {
-        TyTerm::Bound { depth, index } => bound(scopes, *depth, *index, BoundKind::Type),
-        TyTerm::Function(function) => {
-            scopes.push(&function.variables);
-            for term in &function.value.parameters {
-                closed(term, scopes, depth + 1)?;
-            }
-            closed(&function.value.result, scopes, depth + 1)?;
+    let mut work = vec![Task::Visit(term)];
+    while let Some(task) = work.pop() {
+        let Task::Visit(term) = task else {
             scopes.pop();
-            Ok(())
-        }
-        TyTerm::Tuple(fields) => {
-            for term in fields {
-                closed(term, scopes, depth + 1)?;
+            continue;
+        };
+        let check_region = |r: &RegionTerm| {
+            if let RegionTerm::Bound { depth, index } = r {
+                bound(scopes, *depth, *index, BoundKind::Region)
+            } else {
+                Ok(())
             }
-            Ok(())
-        }
-        TyTerm::Projection(key) => {
-            closed(&key.trait_ref.self_ty, scopes, depth + 1)?;
-            for arg in key.arguments() {
+        };
+        let check_constant = |c: &ConstTerm| {
+            if let ConstTerm::Bound { depth, index } = c {
+                bound(scopes, *depth, *index, BoundKind::Const)
+            } else {
+                Ok(())
+            }
+        };
+        let check_arguments = |args: &[GenericArg]| -> Result<(), Diagnostic> {
+            for arg in args {
                 match arg {
-                    GenericArg::Type(t) => closed(t, scopes, depth + 1)?,
-                    GenericArg::Region(r) => region(r, scopes)?,
-                    GenericArg::Const(c) => constant(c, scopes)?,
+                    GenericArg::Region(r) => check_region(r)?,
+                    GenericArg::Const(c) => check_constant(c)?,
+                    GenericArg::Type(_) => {}
                 }
             }
             Ok(())
-        }
-        TyTerm::Nominal(_, arguments) | TyTerm::Opaque(_, arguments) => {
-            for arg in arguments {
-                match arg {
-                    GenericArg::Type(t) => closed(t, scopes, depth + 1)?,
-                    GenericArg::Region(r) => region(r, scopes)?,
-                    GenericArg::Const(c) => constant(c, scopes)?,
-                }
+        };
+        match term {
+            TyTerm::Bound { depth, index } => bound(scopes, *depth, *index, BoundKind::Type)?,
+            TyTerm::Projection(key) => {
+                check_arguments(&key.trait_ref.args)?;
+                check_arguments(&key.item_args)?;
             }
-            Ok(())
+            TyTerm::Opaque(key, args) => {
+                key.validate_arguments(args)?;
+                check_arguments(args)?;
+            }
+            TyTerm::Nominal(_, args) => check_arguments(args)?,
+            TyTerm::Array(_, c) => check_constant(c)?,
+            TyTerm::Ref(r, _, _) => check_region(r)?,
+            _ => {}
         }
-        TyTerm::Array(t, c) => {
-            constant(c, scopes)?;
-            closed(t, scopes, depth + 1)
+        if let TyTerm::Function(function) = term {
+            scopes.push(&function.variables);
+            work.push(Task::LeaveBinder);
         }
-        TyTerm::Slice(t) => closed(t, scopes, depth + 1),
-        TyTerm::Ref(r, _, t) => {
-            region(r, scopes)?;
-            closed(t, scopes, depth + 1)
-        }
-        _ => Ok(()),
+        work.extend(type_children(term).into_iter().rev().map(Task::Visit));
     }
+    Ok(())
 }
 
 struct Instantiation<'a> {
@@ -567,13 +406,10 @@ impl Instantiation<'_> {
         index: u32,
         cutoff: u32,
     ) -> Result<BoundReplacement, Diagnostic> {
-        if depth > MAX_DEPTH {
-            return Err(limit());
-        }
         if depth == cutoff {
             if self
                 .variables
-                .get(usize::try_from(index).map_err(|_| limit())?)
+                .get(usize::try_from(index).map_err(|_| index_overflow())?)
                 != Some(&kind)
             {
                 return Err(fault(
@@ -588,7 +424,7 @@ impl Instantiation<'_> {
         } else {
             Ok(BoundReplacement::Bound(
                 if depth > cutoff {
-                    depth.checked_sub(1).ok_or_else(limit)?
+                    depth.checked_sub(1).ok_or_else(index_overflow)?
                 } else {
                     depth
                 },
@@ -604,8 +440,8 @@ pub fn instantiate_binder(
     transaction: crate::core::digest::Digest,
     universe: u32,
 ) -> Result<TyTerm, Diagnostic> {
-    if universe == 0 || universe > MAX_DEPTH {
-        return Err(limit());
+    if universe == 0 {
+        return Err(fault("binder instantiation requires a non-root universe"));
     }
     validate_binder_type(binder)?;
     let inst = Instantiation {
@@ -613,38 +449,8 @@ pub fn instantiate_binder(
         transaction,
         universe,
     };
-    let term = transform(
-        &binder.value,
-        None,
-        0,
-        0,
-        0,
-        &mut Budget::default(),
-        Some(&inst),
-    )?;
-    term.measure().ok_or_else(limit)?;
-    Ok(term)
+    transform(&binder.value, None, 0, 0, Some(&inst))
 }
 pub fn validate_binder_type(binder: &Binder<TyTerm>) -> Result<(), Diagnostic> {
-    let (nodes, bytes) = binder.value.measure().ok_or_else(limit)?;
-    // Pure metadata preflight: the outer binder owns its value inline and its
-    // actual vector capacity. The value measurement covers only nested heaps.
-    // Use the same aggregate limits as a binder embedded in a function term.
-    Budget::default().charge(
-        nodes
-            .checked_add(binder.variables.len())
-            .ok_or_else(limit)?,
-        bytes
-            .checked_add(std::mem::size_of::<Binder<TyTerm>>())
-            .and_then(|bytes| {
-                bytes.checked_add(
-                    binder
-                        .variables
-                        .capacity()
-                        .checked_mul(std::mem::size_of::<BoundKind>())?,
-                )
-            })
-            .ok_or_else(limit)?,
-    )?;
-    closed(&binder.value, &mut vec![&binder.variables], 0)
+    closed(&binder.value, &mut vec![&binder.variables])
 }

@@ -422,13 +422,6 @@ impl TyTerm {
     /// to be closed: retained views may have a valid enclosing binder context.
     /// Measurement remains independent, so a shape error is not a size error.
     pub fn validate_opaque_shape(&self) -> Result<(), crate::core::diagnostic::Diagnostic> {
-        self.measure().ok_or_else(|| {
-            crate::core::diagnostic::Diagnostic::new(
-                "LRR-E-METADATA-LIMIT",
-                "symbolic shape validation exceeds metadata bounds".into(),
-            )
-        })?;
-        // Shape/depth/work were bounded above before expanding this stack.
         let mut stack = vec![self];
         while let Some(term) = stack.pop() {
             if let Self::Opaque(key, arguments) = term {
@@ -464,14 +457,11 @@ impl TyTerm {
         self.measure().map(|(_, bytes)| bytes)
     }
     pub(crate) fn measure(&self) -> Option<(usize, usize)> {
-        let mut stack = vec![(self, 0usize)];
+        let mut stack = vec![self];
         let mut bytes = 0usize;
         let mut nodes = 0usize;
-        while let Some((term, depth)) = stack.pop() {
+        while let Some(term) = stack.pop() {
             nodes = nodes.checked_add(1)?;
-            if depth > 256 {
-                return None;
-            }
             // Capture keys own declaration metadata in addition to arguments.
             if let Self::Opaque(key, _) = term {
                 bytes = bytes.checked_add(key.heap_bytes()?)?;
@@ -492,20 +482,14 @@ impl TyTerm {
                                 .capacity()
                                 .checked_mul(std::mem::size_of::<GenericArg>())?,
                         )?;
-                    let arguments = key.trait_ref.args.len().checked_add(key.item_args.len())?;
-                    // Both argument vectors and the trait's self type are part
-                    // of the owned term. Check work before extending the stack.
-                    if arguments.checked_add(1)? > 100_000usize.checked_sub(nodes)? {
-                        return None;
-                    }
                     nodes = nodes.checked_add(
                         key.arguments()
                             .filter(|a| !matches!(a, GenericArg::Type(_)))
                             .count(),
                     )?;
-                    stack.push((&key.trait_ref.self_ty, depth + 1));
+                    stack.push(&key.trait_ref.self_ty);
                     stack.extend(key.arguments().filter_map(|a| match a {
-                        GenericArg::Type(t) => Some((t, depth + 1)),
+                        GenericArg::Type(t) => Some(t),
                         _ => None,
                     }));
                 }
@@ -527,13 +511,13 @@ impl TyTerm {
                         )?
                         .checked_add(std::mem::size_of::<Self>())?;
                     nodes = nodes.checked_add(function.variables.len())?;
-                    stack.extend(function.value.parameters.iter().map(|t| (t, depth + 1)));
-                    stack.push((&function.value.result, depth + 1));
+                    stack.extend(&function.value.parameters);
+                    stack.push(&function.value.result);
                 }
                 Self::Tuple(fields) => {
                     bytes = bytes
                         .checked_add(fields.capacity().checked_mul(std::mem::size_of::<Self>())?)?;
-                    stack.extend(fields.iter().map(|t| (t, depth + 1)));
+                    stack.extend(fields);
                 }
                 Self::Nominal(_, args) | Self::Opaque(_, args) => {
                     bytes = bytes.checked_add(
@@ -547,7 +531,7 @@ impl TyTerm {
                     )?;
                     stack.extend(args.iter().filter_map(|a| {
                         if let GenericArg::Type(t) = a {
-                            Some((t, depth + 1))
+                            Some(t)
                         } else {
                             None
                         }
@@ -555,7 +539,7 @@ impl TyTerm {
                 }
                 Self::Array(t, _) | Self::Slice(t) | Self::Ref(_, _, t) => {
                     bytes = bytes.checked_add(std::mem::size_of::<Self>())?;
-                    stack.push((t, depth + 1));
+                    stack.push(t);
                 }
                 _ => {}
             }

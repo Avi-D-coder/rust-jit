@@ -2,17 +2,8 @@
 use super::term::{ConstTerm, GenericArg, InferVarKey, PlaceholderKey, RegionTerm, TyTerm};
 use crate::core::{diagnostic::Diagnostic, digest::Digest};
 use std::collections::BTreeMap;
-// Structural-nesting guard for symbolic type terms (type recursion; rustc bounds
-// type recursion by `recursion_limit`, compiler/rustc_interface/src/limits.rs).
-const MAX_DEPTH: usize = 256;
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-GENERIC-BINDING", message.into())
-}
-fn limit() -> Diagnostic {
-    Diagnostic::new(
-        "LRR-E-METADATA-LIMIT",
-        "signature unification budget exceeded".into(),
-    )
 }
 fn children(term: &TyTerm) -> Vec<&TyTerm> {
     match term {
@@ -38,15 +29,9 @@ fn children(term: &TyTerm) -> Vec<&TyTerm> {
         _ => vec![],
     }
 }
-fn validate(term: &TyTerm, transaction: Digest, universe: u32) -> Result<usize, Diagnostic> {
-    let (node_count, _) = term.measure().ok_or_else(limit)?;
-    let mut stack = vec![(term, 0)];
-    let mut count = 0usize;
-    while let Some((term, depth)) = stack.pop() {
-        count = count.checked_add(1).ok_or_else(limit)?;
-        if depth > MAX_DEPTH {
-            return Err(limit());
-        }
+fn validate(term: &TyTerm, transaction: Digest, universe: u32) -> Result<(), Diagnostic> {
+    let mut stack = vec![term];
+    while let Some(term) = stack.pop() {
         if let TyTerm::Infer(v) = term
             && v.transaction != transaction
         {
@@ -90,9 +75,9 @@ fn validate(term: &TyTerm, transaction: Digest, universe: u32) -> Result<usize, 
                 "bound regions require the ordered binder/universe integration",
             ));
         }
-        stack.extend(children(term).into_iter().map(|t| (t, depth + 1)));
+        stack.extend(children(term));
     }
-    Ok(node_count)
+    Ok(())
 }
 #[derive(Debug, Clone)]
 pub struct Unifier {
@@ -117,7 +102,10 @@ impl Unifier {
         })
     }
     pub fn fresh_universe(&mut self) -> Result<u32, Diagnostic> {
-        let next = self.universe.checked_add(1).ok_or_else(limit)?;
+        let next = self
+            .universe
+            .checked_add(1)
+            .ok_or_else(|| fault("universe index overflow"))?;
         self.universe = next;
         Ok(next)
     }
@@ -152,11 +140,9 @@ impl Unifier {
         admit_variables(left, &mut universes)?;
         admit_variables(right, &mut universes)?;
         let mut work = vec![(left.clone(), right.clone())];
-        let mut steps = 0usize;
         while let Some((left, right)) = work.pop() {
-            charge(&mut steps)?;
-            let left = resolve_head(&staged, &left, &mut steps)?.clone();
-            let right = resolve_head(&staged, &right, &mut steps)?.clone();
+            let left = resolve_head(&staged, &left).clone();
+            let right = resolve_head(&staged, &right).clone();
             if left == right {
                 continue;
             }
@@ -165,10 +151,10 @@ impl Unifier {
                 // generic argument (`Box::new(8)` under `Box<dyn Foo>`).
                 (TyTerm::Infer(_), TyTerm::Dyn(_)) | (TyTerm::Dyn(_), TyTerm::Infer(_)) => {}
                 (TyTerm::Infer(v), t) | (t, TyTerm::Infer(v)) => {
-                    if occurs(&staged, v, &t, &mut steps)? {
+                    if occurs(&staged, v, &t) {
                         return Err(fault("recursive inference substitution"));
                     }
-                    visible_substitution(&staged, &mut universes, v, &t, &mut steps)?;
+                    visible_substitution(&staged, &mut universes, v, &t)?;
                     staged.insert(v, t);
                 }
                 (TyTerm::Tuple(a), TyTerm::Tuple(b)) if a.len() == b.len() => {
@@ -234,41 +220,26 @@ impl Unifier {
         Ok(())
     }
 }
-fn charge(steps: &mut usize) -> Result<(), Diagnostic> {
-    *steps = steps.checked_add(1).ok_or_else(limit)?;
-    Ok(())
-}
 fn resolve_head<'a>(
     bindings: &'a BTreeMap<InferVarKey, TyTerm>,
     mut term: &'a TyTerm,
-    steps: &mut usize,
-) -> Result<&'a TyTerm, Diagnostic> {
+) -> &'a TyTerm {
     while let TyTerm::Infer(v) = term {
-        charge(steps)?;
         let Some(next) = bindings.get(v) else { break };
         term = next;
     }
-    Ok(term)
+    term
 }
-fn occurs(
-    bindings: &BTreeMap<InferVarKey, TyTerm>,
-    variable: InferVarKey,
-    term: &TyTerm,
-    steps: &mut usize,
-) -> Result<bool, Diagnostic> {
-    let mut stack = vec![(term, 0)];
-    while let Some((term, depth)) = stack.pop() {
-        charge(steps)?;
-        if depth > MAX_DEPTH {
-            return Err(limit());
-        }
-        let term = resolve_head(bindings, term, steps)?;
+fn occurs(bindings: &BTreeMap<InferVarKey, TyTerm>, variable: InferVarKey, term: &TyTerm) -> bool {
+    let mut stack = vec![term];
+    while let Some(term) = stack.pop() {
+        let term = resolve_head(bindings, term);
         if matches!(term,TyTerm::Infer(v)if *v==variable) {
-            return Ok(true);
+            return true;
         }
-        stack.extend(children(term).into_iter().map(|t| (t, depth + 1)));
+        stack.extend(children(term));
     }
-    Ok(false)
+    false
 }
 
 // Type children are visited separately. Region/const namespaces retain their
@@ -294,16 +265,11 @@ fn visible_substitution(
     universes: &mut BTreeMap<InferVarKey, u32>,
     variable: InferVarKey,
     term: &TyTerm,
-    steps: &mut usize,
 ) -> Result<(), Diagnostic> {
     let visible = universes.get(&variable).copied().unwrap_or(0);
-    let mut work = vec![(term, 0usize)];
-    while let Some((term, depth)) = work.pop() {
-        charge(steps)?;
-        if depth > MAX_DEPTH {
-            return Err(limit());
-        }
-        let term = resolve_head(bindings, term, steps)?;
+    let mut work = vec![term];
+    while let Some(term) = work.pop() {
+        let term = resolve_head(bindings, term);
         for key in placeholders(term) {
             if key.universe > visible {
                 return Err(fault("newer placeholder would escape its universe"));
@@ -316,7 +282,7 @@ fn visible_substitution(
             // younger-placeholder binding cannot leak through this alias.
             universes.insert(*key, visible);
         }
-        work.extend(children(term).into_iter().map(|t| (t, depth + 1)));
+        work.extend(children(term));
     }
     Ok(())
 }
@@ -325,7 +291,7 @@ fn admit_variables(
     term: &TyTerm,
     universes: &mut BTreeMap<InferVarKey, u32>,
 ) -> Result<(), Diagnostic> {
-    // The caller validated shape, depth, transaction and input size first.
+    // The caller validated typed shape and transaction identity first.
     let mut work = vec![term];
     while let Some(term) = work.pop() {
         if let TyTerm::Infer(key) = term {

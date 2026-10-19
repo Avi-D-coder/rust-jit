@@ -51,19 +51,6 @@ pub struct SignatureSubstitution {
 }
 impl SignatureSubstitution {
     pub fn new(signature: &FunctionSignature, transaction: Digest) -> Result<Self, Diagnostic> {
-        for term in signature
-            .parameters
-            .iter()
-            .filter_map(|p| p.symbolic.as_ref())
-            .chain(signature.result_symbolic.iter())
-        {
-            if term.heap_bytes().is_none() {
-                return Err(Diagnostic::new(
-                    "LRR-E-METADATA-LIMIT",
-                    "signature substitution input exceeds term budgets".into(),
-                ));
-            }
-        }
         let mut variables = BTreeMap::new();
         for parameter in &signature.generics {
             if parameter.kind == GenericKind::Type {

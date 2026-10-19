@@ -1,0 +1,21 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Connected structural limit removal over real upstream signature, existing ordinary/user-macro generic call and region/binder source controls; supplemental, no stock main acceptance",
+  "controls": [
+    "cli::crate_graph::generic_boundary_tests::upstream_generic_signature_has_no_structural_resource_limit",
+    "cli::crate_graph::generic_boundary_tests::generic_callers_pass_their_instantiation_to_generic_callees",
+    "cli::crate_graph::generic_boundary_tests::lifetime_arguments_name_the_bare_nominal_inside_macro_arguments",
+    "vm::frame::tests::rustc_original_universal_region_cannot_enter_slot_parameter_or_binding_views"
+  ],
+  "runtime_cases": [
+    "tests/ui/generics/generic-fn.rs",
+    "tests/ui/methods/method-two-trait-defer-resolution-1.rs",
+    "tests/ui/traits/method-on-deeply-nested-struct-perf.rs"
+  ],
+  "editions": [
+    2015,
+    2018,
+    2021,
+    2024
+  ]
+}
