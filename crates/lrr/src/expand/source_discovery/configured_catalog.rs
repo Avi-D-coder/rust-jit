@@ -279,6 +279,24 @@ impl SourceDiscovery {
         ),
         Diagnostic,
     > {
+        self.inspect_original_derive_selection_with_completed(source, producer, &Default::default())
+    }
+    pub(crate) fn inspect_original_derive_selection_with_completed(
+        &mut self,
+        source: &SourceSelection,
+        producer: Digest,
+        completed: &std::collections::BTreeMap<
+            Digest,
+            Arc<crate::service::source_derive_requests::SourceDeriveSelection>,
+        >,
+    ) -> Result<
+        (
+            crate::expand::source_derives::SourceDerivePoll,
+            Digest,
+            Digest,
+        ),
+        Diagnostic,
+    > {
         let ordinal = self
             .sources
             .iter()
@@ -301,10 +319,78 @@ impl SourceDiscovery {
             &providers[ordinal],
             producer,
             &names,
-            &Default::default(),
+            completed,
             &self.helper_declarations,
         )?;
         Ok((poll, *environment, *engine))
+    }
+    pub(crate) fn original_declaration_parent_for_control(
+        &self,
+        source: &SourceSelection,
+    ) -> Result<Arc<crate::frontend::impl_index::DeclarationMacroIndex>, Diagnostic> {
+        let ordinal = self
+            .sources
+            .iter()
+            .position(|view| view.selection() == source)
+            .ok_or_else(|| fault("original control source absent"))?;
+        self.nested_sources
+            .get(&ordinal)
+            .cloned()
+            .ok_or_else(|| fault("original control parent absent"))
+    }
+    /// Exercise the real declaration-fragment producer closure. The selected
+    /// fixture output needs no external invocation; an outstanding demand fails
+    /// this control instead of manufacturing a completed child.
+    pub(crate) fn complete_original_derive_output_for_control(
+        &mut self,
+        source: &SourceSelection,
+        parent: Arc<crate::frontend::impl_index::DeclarationMacroIndex>,
+        output: Arc<crate::expand::generated_declarations::GeneratedDeclarations>,
+    ) -> Result<Arc<crate::expand::declaration_fragment::CompletedDeclarationFragment>, Diagnostic>
+    {
+        let ordinal = self
+            .sources
+            .iter()
+            .position(|view| view.selection() == source)
+            .ok_or_else(|| fault("derive control source absent"))?;
+        let (environment, engine, providers) = self
+            .declarative
+            .as_ref()
+            .ok_or_else(|| fault("derive control compiler preparation absent"))?;
+        let names = Self::install_macro_routes_with_modules(
+            crate::expand::source_discovery::unique_graph(&mut self.graph)?,
+            providers,
+            &self.module_routes,
+            &self.nested_sources,
+            &self.nested_inert_proofs,
+            &mut self.route_install,
+        )?;
+        let mut fragment =
+            crate::expand::declaration_fragment::DeclarationFragment::from_item_output(
+                parent,
+                crate::expand::declaration_fragment::DeclarationFragmentInput {
+                    invocation: output.record().key().invocation,
+                    request: self.expansion_budget.request_identity(),
+                    graph: self.key.unit_graph,
+                    compile_env: *environment,
+                    engine: *engine,
+                    epoch: self.epoch,
+                    cfg: self.sources[ordinal].captured_macro_cfg()?.clone(),
+                },
+                self.expansion_budget.clone(),
+                output,
+            )?;
+        match fragment.poll_with_sources(&providers[ordinal], &names, Some(&self.included_views))? {
+            crate::expand::declaration_fragment::DeclarationFragmentStep::Complete(output) => {
+                Ok(output)
+            }
+            crate::expand::declaration_fragment::DeclarationFragmentStep::NeedInput(input) => Err(
+                fault(&format!("actual derive output input pending: {input:?}")),
+            ),
+            _ => Err(fault(
+                "actual derive output has an unexecuted expansion demand",
+            )),
+        }
     }
     /// Source-only failure evidence; no alternate resolution or execution.
     pub(crate) fn catalog_pending_source_evidence(&self) -> Vec<String> {

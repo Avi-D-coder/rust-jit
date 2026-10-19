@@ -64,6 +64,32 @@ impl SourceEmptyDeriveProof {
 pub(crate) struct SourceDeriveCompletionProof {
     pub(crate) item: Digest,
     pub(crate) fingerprint: Digest,
+    group: Digest,
+    occurrences: std::collections::BTreeSet<Digest>,
+}
+impl SourceDeriveCompletionProof {
+    pub(crate) fn require_occurrences(
+        &self,
+        occurrences: &std::collections::BTreeSet<Digest>,
+    ) -> Result<(), Diagnostic> {
+        if occurrences != &self.occurrences {
+            return Err(fault(
+                "source derive completion lacks its actual appended outputs",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn require_group(
+        &self,
+        group: &crate::source::original_items::OriginalAnnotationGroup,
+        source: &PreparedSourceView,
+    ) -> Result<(), Diagnostic> {
+        group.require_source(source)?;
+        if self.item != group.item() || self.group != group.fingerprint() {
+            return Err(fault("source derive completion group differs"));
+        }
+        Ok(())
+    }
 }
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-EXPANSION-INPUT", message.into())
@@ -769,6 +795,11 @@ pub(crate) fn prepare_group(
     };
     // Procedural derives need the run's catalog; builtin derives do not.
     let catalog = provider.procedural.as_ref();
+    let Some(group) = source.original_annotation_group(producer)? else {
+        return Ok(SourceDerivePoll::Pending);
+    };
+    group.require_source(source)?;
+    let producer = group.call().item_input;
     let Some(target) = source.original_annotation_producer(producer)? else {
         return Ok(SourceDerivePoll::Pending);
     };
@@ -821,12 +852,14 @@ pub(crate) fn prepare_group(
     )?;
     let mut helpers = SourceHelperScope::default();
     let mut completed_count = 0usize;
-    let mut completion = StableEncoder::new("lrr/v2/source-derive-completion");
+    let mut completed_occurrences = std::collections::BTreeSet::new();
+    let mut completion = StableEncoder::new("lrr/v3/source-derive-completion");
     completion.digest(
         crate::db::key::QueryKey::Outline(source.selection().outline.clone()).fingerprint(),
     );
     completion.string(source.selection().path.as_str());
     completion.digest(producer);
+    completion.digest(group.fingerprint());
     completion.record(&item.header);
     completion.digest(item_macro_inputs::derive_facts_fingerprint(&inputs)?);
     for (index, attr) in facts.attributes.iter().enumerate() {
@@ -1086,6 +1119,9 @@ pub(crate) fn prepare_group(
                     completed_count = completed_count
                         .checked_add(1)
                         .ok_or_else(|| fault("source completion occurrence limit"))?;
+                    if !completed_occurrences.insert(selection.input().identity()) {
+                        return Err(fault("source derive occurrence completed twice"));
+                    }
                     completion.digest(selection.fingerprint());
                     continue;
                 }
@@ -1102,6 +1138,8 @@ pub(crate) fn prepare_group(
     Ok(SourceDerivePoll::Complete(SourceDeriveCompletionProof {
         item: item.def_key.fingerprint(),
         fingerprint: completion.finish(),
+        group: group.fingerprint(),
+        occurrences: completed_occurrences,
     }))
 }
 

@@ -1512,15 +1512,26 @@ fn unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origi
             item.scope, producer.scope,
             "the scan's coarse function owner is not the local item scope"
         );
-        let (poll, environment, engine) = discovery
-            .inspect_original_derive_selection(source.selection(), producer.identity)
+        let group = source
+            .original_annotation_group(producer.identity)
+            .unwrap()
             .unwrap();
-        let SourceDerivePoll::Ready(selection) = poll else {
-            panic!("edition{edition}: actual local derive selection remains pending")
-        };
-        assert!(selection.is_builtin());
-        assert_eq!(selection.scope(), &item.scope);
-        selection.validate_database(&mut db).unwrap();
+        group.require_source(&source).unwrap();
+        assert_eq!(group.annotations(), &[producer.identity]);
+        assert_eq!(group.item(), item.def_key.fingerprint());
+        assert_ne!(group.call().item_input, producer.identity);
+        let canonical = source
+            .original_annotation_group(group.call().item_input)
+            .unwrap()
+            .unwrap();
+        assert!(std::sync::Arc::ptr_eq(&group, &canonical));
+        let mut parent = (*discovery
+            .original_declaration_parent_for_control(source.selection())
+            .unwrap())
+        .clone();
+        let mut completed = std::collections::BTreeMap::new();
+        let fresh_parent = parent.clone();
+        let mut first_prefix = None;
         let origin = DeriveDeclarationOrigin::Source {
             selection: source.selection().clone(),
             producer: producer.identity,
@@ -1548,53 +1559,142 @@ fn unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origi
             bad_producer.validate_database(&mut db).unwrap_err().code,
             "LRR-E-CATALOG-INCOMPLETE"
         );
-        let request = selection.builtin_request(environment, engine).unwrap();
-        let record = std::sync::Arc::new(request.expand().unwrap());
-        let generated = GeneratedItems::admit(record.key(), record.clone(), 1).unwrap();
-        let declarations = GeneratedDeclarations::admit_source_derive_output(
-            &selection,
-            record.clone(),
-            1,
-            &source,
-            source.captured_macro_cfg().unwrap(),
-        )
-        .unwrap();
-        assert_eq!(declarations.parent_inventory(), scan.fingerprint());
-        assert_eq!(declarations.parent_invocation(), producer.identity);
-        assert_eq!(declarations.scan().scope(), &item.scope);
-        assert!(
-            GeneratedHeaderPlan::prepare(
-                &generated,
-                item.scope.clone(),
-                Key(record.key().parent_context.0),
-                source.captured_macro_cfg().unwrap(),
-                1,
-            )
-            .is_err(),
-            "a bare local scope key does not supply insertion provenance"
-        );
-        let plan = GeneratedHeaderPlan::prepare_admitted(
-            &generated,
-            &declarations,
-            source.captured_macro_cfg().unwrap(),
-            1,
-        )
-        .unwrap();
-        let headers = declarations
-            .item_impl_headers(&generated, source.captured_macro_cfg().unwrap(), &plan)
-            .unwrap();
-        assert_eq!(headers.len(), 1, "actual first derived impl header");
-        assert!(
-            GeneratedHeaderPlan::prepare(
-                &generated,
-                producer.scope.clone(),
-                Key(record.key().parent_context.0),
-                source.captured_macro_cfg().unwrap(),
-                1,
-            )
-            .is_err(),
-            "the coarse function owner cannot authorize a local insertion"
-        );
+        loop {
+            let (poll, environment, engine) = discovery
+                .inspect_original_derive_selection_with_completed(
+                    source.selection(),
+                    group.call().item_input,
+                    &completed,
+                )
+                .unwrap();
+            match poll {
+                SourceDerivePoll::Ready(selection) => {
+                    assert!(selection.is_builtin());
+                    assert_eq!(selection.scope(), &item.scope);
+                    selection.validate_database(&mut db).unwrap();
+                    let request = selection.builtin_request(environment, engine).unwrap();
+                    let record = std::sync::Arc::new(request.expand().unwrap());
+                    let generated = GeneratedItems::admit(record.key(), record.clone(), 1).unwrap();
+                    let declarations = std::sync::Arc::new(
+                        GeneratedDeclarations::admit_source_derive_output(
+                            &selection,
+                            record.clone(),
+                            1,
+                            &source,
+                            source.captured_macro_cfg().unwrap(),
+                        )
+                        .unwrap(),
+                    );
+                    assert_eq!(declarations.parent_inventory(), scan.fingerprint());
+                    assert_eq!(declarations.parent_invocation(), producer.identity);
+                    assert_eq!(declarations.scan().scope(), &item.scope);
+                    assert!(
+                        GeneratedHeaderPlan::prepare(
+                            &generated,
+                            item.scope.clone(),
+                            Key(record.key().parent_context.0),
+                            source.captured_macro_cfg().unwrap(),
+                            1,
+                        )
+                        .is_err(),
+                        "a bare local scope key does not supply insertion provenance"
+                    );
+                    let plan = GeneratedHeaderPlan::prepare_admitted(
+                        &generated,
+                        &declarations,
+                        source.captured_macro_cfg().unwrap(),
+                        1,
+                    )
+                    .unwrap();
+                    let headers = declarations
+                        .item_impl_headers(&generated, source.captured_macro_cfg().unwrap(), &plan)
+                        .unwrap();
+                    assert_eq!(headers.len(), 1, "actual selected derived impl header");
+                    let view = parent
+                        .derive_prefix_view(declarations.parent_invocation())
+                        .unwrap();
+                    let lexical_parent =
+                        crate::frontend::impl_index::DeclarationMacroParent::Source(
+                            std::sync::Arc::new(view.clone()),
+                        );
+                    let outer = lexical_parent
+                        .outer(declarations.parent_invocation())
+                        .unwrap();
+                    assert_eq!(outer.before, u64::from(producer.range.start) + 1);
+                    assert!(
+                        !view.is_complete(),
+                        "a private prefix is not source completion"
+                    );
+                    let child = discovery
+                        .complete_original_derive_output_for_control(
+                            source.selection(),
+                            std::sync::Arc::new(view),
+                            declarations,
+                        )
+                        .unwrap();
+                    assert!(child.index().is_complete());
+                    parent
+                        .adopt_completed_child_prefix(record.key(), child.index(), false)
+                        .unwrap();
+                    assert!(
+                        !parent.is_complete(),
+                        "an appended output cannot finish the item group"
+                    );
+                    assert!(
+                        parent
+                            .adopt_completed_child_prefix(record.key(), child.index(), false)
+                            .is_err(),
+                        "duplicate occurrence append must fail without changing the prefix"
+                    );
+                    if first_prefix.is_none() {
+                        first_prefix = Some(parent.clone());
+                    }
+                    assert!(
+                        completed
+                            .insert(selection.input().identity(), selection)
+                            .is_none(),
+                        "the same occurrence must not execute twice"
+                    );
+                }
+                SourceDerivePoll::Complete(proof) => {
+                    assert_eq!(
+                        completed.len(),
+                        2,
+                        "both unchanged upstream derive occurrences ran"
+                    );
+                    proof.require_group(&group, &source).unwrap();
+                    assert!(
+                        fresh_parent
+                            .clone()
+                            .complete_original_annotation_group(&source, &group, &proof)
+                            .is_err(),
+                        "a proof cannot complete an index that never adopted its outputs"
+                    );
+                    assert!(
+                        first_prefix
+                            .as_ref()
+                            .unwrap()
+                            .clone()
+                            .complete_original_annotation_group(&source, &group, &proof)
+                            .is_err(),
+                        "one appended output cannot complete a two-occurrence group"
+                    );
+                    parent
+                        .complete_original_annotation_group(&source, &group, &proof)
+                        .unwrap();
+                    assert!(parent.is_complete());
+                    assert!(parent.derive_prefix_view(producer.identity).is_err());
+                    assert!(
+                        parent
+                            .complete_original_annotation_group(&source, &group, &proof)
+                            .is_err(),
+                        "group completion is exact once"
+                    );
+                    break;
+                }
+                _ => panic!("edition{edition}: actual item group has an unfinished demand"),
+            }
+        }
         assert!(db.trace.events.iter().all(|event| !matches!(
             event.key,
             QueryKey::BodyStructure(_)
@@ -1603,8 +1703,8 @@ fn unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origi
                 | QueryKey::FunctionSignature(_)
         )));
         eprintln!(
-            "local derive component edition{edition}: actual selected output admitted; {} impl header; no guest execution",
-            headers.len()
+            "local derive component edition{edition}: {} real outputs appended and the item group completed; no coordinator publication or guest execution",
+            completed.len()
         );
     }
 }

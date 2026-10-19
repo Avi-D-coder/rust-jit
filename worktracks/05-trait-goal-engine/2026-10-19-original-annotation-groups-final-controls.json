@@ -1,0 +1,10 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "V262 source identity split in replacing-attribute grammar attachment; rerun group/Meta and exact-once component controls, prior broad V261 evidence remains source-bound",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin",
+    "source::original_items::tests::unchanged_local_derive_target_reuses_the_entered_canonical_declarations",
+    "source::original_items::tests::unchanged_module_derive_target_keeps_the_real_outline_row",
+    "source::original_items::tests::unchanged_multiple_annotations_share_one_original_item_group"
+  ]
+}

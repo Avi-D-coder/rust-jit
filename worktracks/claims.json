@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V257/V258 HELD M019/M020 local-annotation prerequisite: module and actual cold attribute producers share retained canonical item attachment, derive group selection and source-origin replay. Selected local builtin output now admits Items from real Statements context without modifying the parent scan, using authenticated canonical insertion scope. The same generated-header kernel accepts an actual declaration receipt, preserves that local owner and continues to reject bare owned scope keys; ordinary module derives use this admitted route too. V257 builds pass with 8/10 controls, exposing the existing module-only header refusal; V258 builds pass with 9/10 controls. The new unchanged coherence fixture control selects, expands, validates and projects one real derived impl header in all four editions with no body/signature/thunk/pattern query or guest execution. Existing copy runtime direct/user-macro/wrapper regression passes 12 worlds. The complete global catalog source matrix still FAILS on the nested derive in all four editions, with eight other source worlds successful. Item-group ownership, real cold prefix/adoption, append/completion and full catalog/solver/runtime/JIT integration remain held. Zero new distinct stock runtime gains; no refreshed suite total. All source/HEAD/binary guards match. Solo root remains the only writer; shared syntax/derive/discovery/header interfaces remain under existing root reservations.",
+      "scope": "V259-V262 HELD M019/M020 original item group/prefix prerequisite. Genuine module/body item producers now own ordered scan Meta aliases; prepare_group normalizes them to one real producer. Source parents share the existing declaration publication/prefix mechanism, retain actual adopted occurrence custody and reject zero/partial-output, duplicate append and repeated completion. Real two-output local group closure passes across four editions with ordinary declaration fragments and no guest execution. V261 builds and 11/12 broad controls pass; full catalog remains FAILED on all four nested-derive worlds (8/12 other source worlds successful). V262 source review fixes the affected replacing-attribute grammar lookup to use actual input Meta range instead of searching for a canonical group ID in raw scan IDs. Final builds and 4/4 relevant controls pass; procedural attribute execution remains unexercised. V261 runtime/catalog evidence stays attached to V261. Coordinator work/call/frontier/catalog/body-name integration remains open, with zero new distinct stock gains and no full solver/interpreter/JIT acceptance. Source/HEAD/binary guards match. Solo root only; shared declaration-index/derive/attribute interfaces remain under their existing root-owned reservations.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1734,11 +1734,15 @@
         "crates/lrr/src/expand/derive_origin.rs",
         "worktracks/05-trait-goal-engine/2026-10-19-local-derive-selection.md",
         "worktracks/05-trait-goal-engine/2026-10-19-local-derive-selection-review.md",
-        "worktracks/05-trait-goal-engine/2026-10-19-local-derive-selection-controls.json"
+        "worktracks/05-trait-goal-engine/2026-10-19-local-derive-selection-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-original-annotation-groups.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-original-annotation-groups-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-original-annotation-groups-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-original-annotation-groups-final-controls.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T13:07:35.436125+00:00",
+      "updated_at": "2026-10-19T13:34:02.621014+00:00",
       "review_after": "2026-10-20T08:52:46.617857+00:00"
     }
   ],

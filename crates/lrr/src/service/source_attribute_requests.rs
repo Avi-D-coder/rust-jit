@@ -740,7 +740,10 @@ impl SourceAttributeSelection {
             let row = scan
                 .producers()
                 .iter()
-                .find(|row| row.identity == producer)
+                // The group identity names the ordinary item producer; the
+                // selected Meta keeps its own actual declaration-scan ID.
+                .find(|row| row.kind == crate::syntax::declaration_scan::DeclarationProducerKind::Attribute
+                    && row.range == input.source_selection.meta)
                 .ok_or_else(|| fault("source attribute cold producer attachment absent"))?;
             let grammar = row.grammar;
             (Some(scan), grammar)

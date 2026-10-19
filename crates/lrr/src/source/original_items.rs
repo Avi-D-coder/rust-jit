@@ -20,6 +20,66 @@ enum ProducerAttachment {
 }
 struct OriginalAnnotationProducers {
     attachments: BTreeMap<Digest, ProducerAttachment>,
+    groups: BTreeMap<Digest, Arc<OriginalAnnotationGroup>>,
+    producer_groups: BTreeMap<Digest, Digest>,
+}
+
+/// One genuine ordinary item producer and its distinct scan annotations.
+/// Pure immutable syntax ownership; no producer completion or source authority.
+pub(crate) struct OriginalAnnotationGroup {
+    source: SourceSelection,
+    scan: Digest,
+    item: Digest,
+    header: Digest,
+    call: crate::syntax::outline::ItemInvocation,
+    annotations: Arc<[Digest]>,
+}
+impl OriginalAnnotationGroup {
+    pub(crate) fn call(&self) -> &crate::syntax::outline::ItemInvocation {
+        &self.call
+    }
+    pub(crate) fn annotations(&self) -> &[Digest] {
+        &self.annotations
+    }
+    pub(crate) fn item(&self) -> Digest {
+        self.item
+    }
+    pub(crate) fn scan_identity(&self) -> Digest {
+        self.scan
+    }
+    pub(crate) fn require_source(&self, source: &PreparedSourceView) -> Result<(), Diagnostic> {
+        if source.selection() != &self.source {
+            return Err(fault("original item group source differs"));
+        }
+        // The private group was captured from this exact immutable source.
+        // Replay the retained attachment receipt, not the entire declaration
+        // scan or a body traversal on every annotation phase.
+        let actual = source
+            .original_annotation_group(self.call.item_input)?
+            .ok_or_else(|| fault("original item group canonical producer absent"))?;
+        if actual.fingerprint() != self.fingerprint() {
+            return Err(fault("original item group target changed"));
+        }
+        Ok(())
+    }
+}
+impl StableEncode for OriginalAnnotationGroup {
+    const DOMAIN: &'static str = "lrr/v1/original-annotation-group";
+    fn encode_fields(&self, key: &mut StableEncoder) {
+        key.digest(self.source.location_identity());
+        key.record(&self.source.outline.parse);
+        key.digest(self.source.outline.cfg);
+        key.digest(self.scan);
+        key.digest(self.item);
+        key.digest(self.header);
+        key.record(&self.call.scope);
+        key.u32(self.call.range.start);
+        key.u32(self.call.range.end);
+        key.digest(self.call.item_input);
+        key.digest(self.call.frontier);
+        key.option(&self.call.attribute_input, |key, input| key.digest(*input));
+        key.sequence(&self.annotations, |key, annotation| key.digest(*annotation));
+    }
 }
 
 enum Location<'a> {
@@ -36,6 +96,22 @@ pub(crate) struct OriginalItemTarget<'a> {
 impl OriginalItemTarget<'_> {
     pub(crate) fn source(&self) -> &SourceSelection {
         self.source
+    }
+    pub(crate) fn annotation_invocation(&self) -> Option<crate::syntax::outline::ItemInvocation> {
+        match &self.location {
+            Location::Outline(item) => crate::syntax::outline::potential_attribute_producer(item),
+            Location::Local { plan, range } => {
+                let row = plan.item_at(*range)?;
+                let producer = row.attribute_input?;
+                Some(crate::syntax::outline::ItemInvocation {
+                    scope: row.item.scope.clone(),
+                    range: row.item.declaration_span,
+                    item_input: producer,
+                    frontier: row.item.header.fingerprint(),
+                    attribute_input: Some(producer),
+                })
+            }
+        }
     }
     pub(crate) fn item(&self) -> &ItemOutline {
         match &self.location {
@@ -60,8 +136,27 @@ impl PreparedSourceView {
         &self,
         producer: Digest,
     ) -> Result<Option<OriginalItemTarget<'_>>, Diagnostic> {
+        let index = self.original_annotation_index()?;
+        match index.attachments.get(&producer) {
+            Some(ProducerAttachment::Item(range)) => self.original_item_at(*range),
+            Some(ProducerAttachment::Meta(range)) => self.original_annotation_target(*range),
+            None => Ok(None),
+        }
+    }
+    pub(crate) fn original_annotation_group(
+        &self,
+        producer: Digest,
+    ) -> Result<Option<Arc<OriginalAnnotationGroup>>, Diagnostic> {
+        let index = self.original_annotation_index()?;
+        Ok(index
+            .producer_groups
+            .get(&producer)
+            .and_then(|group| index.groups.get(group))
+            .cloned())
+    }
+    fn original_annotation_index(&self) -> Result<Arc<OriginalAnnotationProducers>, Diagnostic> {
         self.require_original_hygiene()?;
-        let mut key = StableEncoder::new("lrr/v1/original-annotation-producer-index");
+        let mut key = StableEncoder::new("lrr/v2/original-annotation-producer-index");
         key.digest(self.selection().location_identity());
         key.record(&self.selection().outline.parse);
         key.digest(self.selection().outline.cfg);
@@ -86,6 +181,16 @@ impl PreparedSourceView {
                 }
             }
             let scan = self.declaration_inventory(Default::default())?;
+            let mut groups = BTreeMap::<
+                Digest,
+                (
+                    crate::syntax::outline::ItemInvocation,
+                    Digest,
+                    Digest,
+                    Vec<Digest>,
+                ),
+            >::new();
+            let mut producer_groups = BTreeMap::new();
             for row in scan.producers() {
                 if row.kind != crate::syntax::declaration_scan::DeclarationProducerKind::Attribute {
                     continue;
@@ -97,15 +202,82 @@ impl PreparedSourceView {
                     return Err(fault("original annotation producer is duplicated"));
                 }
             }
-            let index = Arc::new(OriginalAnnotationProducers { attachments });
+            for row in scan.producers().iter().filter(|row| {
+                row.kind == crate::syntax::declaration_scan::DeclarationProducerKind::Attribute
+            }) {
+                let Some(range) = self
+                    .retained_declaration_parser()?
+                    .attribute_item_range_at(row.range)?
+                else {
+                    continue;
+                };
+                let Some(target) = self.original_item_at(range)? else {
+                    continue;
+                };
+                // Field/parameter/expression annotations are not whole-item
+                // producer groups. Their existing owning grammar handles them.
+                if !target
+                    .item()
+                    .header
+                    .attributes
+                    .iter()
+                    .any(|attribute| attribute.source_meta == Some(row.range))
+                {
+                    continue;
+                }
+                let Some(call) = target.annotation_invocation() else {
+                    continue;
+                };
+                let group_id = call.item_input;
+                let attachment = ProducerAttachment::Item(target.item().declaration_span);
+                if attachments
+                    .get(&group_id)
+                    .is_some_and(|old| old != &attachment)
+                {
+                    return Err(fault(
+                        "original group identity has conflicting source attachments",
+                    ));
+                }
+                attachments.insert(group_id, attachment);
+                let item = target.item().def_key.fingerprint();
+                let header = target.item().header.fingerprint();
+                let group = groups
+                    .entry(group_id)
+                    .or_insert_with(|| (call, item, header, Vec::new()));
+                if group.1 != item || group.2 != header {
+                    return Err(fault("original group canonical item/header is ambiguous"));
+                }
+                group.3.push(row.identity);
+                if producer_groups.insert(row.identity, group_id).is_some() {
+                    return Err(fault("original annotation has multiple item groups"));
+                }
+            }
+            let groups = groups
+                .into_iter()
+                .map(|(identity, (call, item, header, annotations))| {
+                    producer_groups.insert(identity, identity);
+                    (
+                        identity,
+                        Arc::new(OriginalAnnotationGroup {
+                            source: self.selection().clone(),
+                            scan: scan.fingerprint(),
+                            item,
+                            header,
+                            call,
+                            annotations: annotations.into(),
+                        }),
+                    )
+                })
+                .collect();
+            let index = Arc::new(OriginalAnnotationProducers {
+                attachments,
+                groups,
+                producer_groups,
+            });
             self.retain_publication_prepared(key, index.clone());
             index
         };
-        match index.attachments.get(&producer) {
-            Some(ProducerAttachment::Item(range)) => self.original_item_at(*range),
-            Some(ProducerAttachment::Meta(range)) => self.original_annotation_target(*range),
-            None => Ok(None),
-        }
+        Ok(index)
     }
     pub(crate) fn original_annotation_target(
         &self,
@@ -233,6 +405,9 @@ mod tests {
     const MODULE: &[u8] = include_bytes!(
         "../../../../fixtures/upstream/rustc-checkout/tests/ui/methods/method-self-arg-trait.rs"
     );
+    const MULTIPLE: &[u8] = include_bytes!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/proc-macro/derive-expand-order.rs"
+    );
 
     fn prepared(bytes: &[u8], edition: u16) -> (PreparedSourceInputs, SourceSelection) {
         let blob = SourceBlob::new(bytes.to_vec()).unwrap();
@@ -301,6 +476,22 @@ mod tests {
                 .unwrap()
                 .unwrap();
             assert_eq!(from_producer.item(), item);
+            let group = source
+                .original_annotation_group(annotation.identity)
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                group.call().item_input,
+                target.annotation_invocation().unwrap().item_input
+            );
+            assert_eq!(group.annotations(), &[annotation.identity]);
+            assert_ne!(group.call().item_input, annotation.identity);
+            let same_group = source
+                .original_annotation_group(group.call().item_input)
+                .unwrap()
+                .unwrap();
+            assert!(Arc::ptr_eq(&group, &same_group));
+            group.require_source(&source).unwrap();
             assert!(
                 source
                     .original_annotation_producer(Digest([0; 32]))
@@ -357,11 +548,67 @@ mod tests {
                     .attribute_input
                     .is_some()
             );
-            let (changed, _) = prepared(MODULE, edition);
+            let (changed, changed_selection) = prepared(MODULE, edition);
+            let SourceSelectionOutcome::Selected(changed_source) =
+                changed.select(&changed_selection).unwrap()
+            else {
+                panic!()
+            };
+            assert!(group.require_source(&changed_source).is_err());
             assert!(matches!(
                 changed.select(&selection).unwrap(),
                 SourceSelectionOutcome::Changed { .. }
             ));
+        }
+    }
+
+    #[test]
+    fn unchanged_multiple_annotations_share_one_original_item_group() {
+        // Source ownership only: executing the retained procedural auxiliaries
+        // and the full stock fixture remains a separate runtime contract.
+        for edition in [2015, 2018, 2021, 2024] {
+            let (inputs, selection) = prepared(MULTIPLE, edition);
+            let SourceSelectionOutcome::Selected(source) = inputs.select(&selection).unwrap()
+            else {
+                panic!("unchanged source missing")
+            };
+            let scan = source.declaration_inventory(Default::default()).unwrap();
+            let rows: Vec<_> = scan
+                .producers()
+                .iter()
+                .filter(|row| {
+                    row.kind == DeclarationProducerKind::Attribute
+                        && row.unqualified_attribute.as_deref() == Some("derive")
+                })
+                .collect();
+            assert_eq!(rows.len(), 4);
+            let group = source
+                .original_annotation_group(rows[0].identity)
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                group.annotations(),
+                rows.iter().map(|row| row.identity).collect::<Vec<_>>()
+            );
+            let mut end = 0;
+            for row in rows {
+                assert!(row.range.start >= end);
+                end = row.range.end;
+                let same = source
+                    .original_annotation_group(row.identity)
+                    .unwrap()
+                    .unwrap();
+                assert!(Arc::ptr_eq(&group, &same));
+                assert_ne!(row.identity, group.call().item_input);
+            }
+            assert!(Arc::ptr_eq(
+                &group,
+                &source
+                    .original_annotation_group(group.call().item_input)
+                    .unwrap()
+                    .unwrap()
+            ));
+            group.require_source(&source).unwrap();
         }
     }
 
@@ -399,6 +646,14 @@ mod tests {
                 .unwrap()
                 .unwrap();
             assert!(std::ptr::eq(from_producer.item(), item));
+            let group = source
+                .original_annotation_group(call.item_input)
+                .unwrap()
+                .unwrap();
+            assert_eq!(group.call().item_input, call.item_input);
+            assert_eq!(group.call().scope, call.scope);
+            assert_eq!(group.item(), item.def_key.fingerprint());
+            group.require_source(&source).unwrap();
             assert!(matches!(target.location, Location::Outline(_)));
         }
     }

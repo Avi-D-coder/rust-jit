@@ -1,0 +1,160 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "at": "2026-10-19T13:34:02.621014+00:00",
+  "parent": "c700e0939a469b34720c5abfa14b3b65a5565aef",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "integration_status": "held",
+  "scope": "V259-V262 HELD M019/M020 original item group/prefix prerequisite. Genuine module/body item producers now own ordered scan Meta aliases; prepare_group normalizes them to one real producer. Source parents share the existing declaration publication/prefix mechanism, retain actual adopted occurrence custody and reject zero/partial-output, duplicate append and repeated completion. Real two-output local group closure passes across four editions with ordinary declaration fragments and no guest execution. V261 builds and 11/12 broad controls pass; full catalog remains FAILED on all four nested-derive worlds (8/12 other source worlds successful). V262 source review fixes the affected replacing-attribute grammar lookup to use actual input Meta range instead of searching for a canonical group ID in raw scan IDs. Final builds and 4/4 relevant controls pass; procedural attribute execution remains unexercised. V261 runtime/catalog evidence stays attached to V261. Coordinator work/call/frontier/catalog/body-name integration remains open, with zero new distinct stock gains and no full solver/interpreter/JIT acceptance. Source/HEAD/binary guards match.",
+  "prior_evidence": "worktracks/evidence/2026-10-19-v259-v261-original-annotation-groups.json",
+  "precode": "worktracks/05-trait-goal-engine/2026-10-19-original-annotation-groups.md",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-19-original-annotation-groups-review.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-19-original-annotation-groups-final-controls.json",
+  "new_distinct_stock_runtime_gains": 0,
+  "refreshed_suite_total": null,
+  "manifests": {
+    "before": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-19T13:30:43.141616+00:00",
+      "head": "c700e0939a469b34720c5abfa14b3b65a5565aef",
+      "file_count": 8476,
+      "source_sha256": "3f98b2eca6d52a9da67b28a6df448755123b0979ae1f77bd269bdcf6b30dc52b",
+      "binaries": {}
+    },
+    "after-build": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-19T13:33:14.958216+00:00",
+      "head": "c700e0939a469b34720c5abfa14b3b65a5565aef",
+      "file_count": 8476,
+      "source_sha256": "3f98b2eca6d52a9da67b28a6df448755123b0979ae1f77bd269bdcf6b30dc52b",
+      "binaries": {
+        "test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+          "sha256": "4779424b79f3f58568d51d385dd09c80d8ea17339536b3fd5c715fc969d42788"
+        },
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "3661e2141b5ea433e74df544b5e511ee48d4a503a8916f42539e93b6c1c307ac"
+        }
+      },
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": []
+    },
+    "after-runtime": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-19T13:34:02.401147+00:00",
+      "head": "c700e0939a469b34720c5abfa14b3b65a5565aef",
+      "file_count": 8476,
+      "source_sha256": "3f98b2eca6d52a9da67b28a6df448755123b0979ae1f77bd269bdcf6b30dc52b",
+      "binaries": {
+        "test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+          "sha256": "4779424b79f3f58568d51d385dd09c80d8ea17339536b3fd5c715fc969d42788"
+        },
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "3661e2141b5ea433e74df544b5e511ee48d4a503a8916f42539e93b6c1c307ac"
+        }
+      },
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": [],
+      "binaries_match_build": true
+    }
+  },
+  "builds": {
+    "lib": {
+      "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+      "session": 8007,
+      "exit": 0,
+      "success": true,
+      "messages_sha256": "2ea135e8d4a0b50f0d5e9d01d645813bcc7b9c98e355d6e584842c779b3249e1",
+      "terminal": "Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.29s"
+    },
+    "cli": {
+      "command": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+      "session": 25958,
+      "exit": 0,
+      "success": true,
+      "messages_sha256": "3d522f847aac5ee606e65365af0c0e0a150a414b71da94431ece234ea4b66f25",
+      "terminal": "Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.57s"
+    }
+  },
+  "control_session": 98479,
+  "control_exit": 0,
+  "control_results": [
+    {
+      "selector": "cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 15.41,
+      "log": "control-0.log"
+    },
+    {
+      "selector": "source::original_items::tests::unchanged_local_derive_target_reuses_the_entered_canonical_declarations",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "source::original_items::tests::unchanged_local_derive_target_reuses_the_entered_canonical_declarations",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 0.365,
+      "log": "control-1.log"
+    },
+    {
+      "selector": "source::original_items::tests::unchanged_module_derive_target_keeps_the_real_outline_row",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "source::original_items::tests::unchanged_module_derive_target_keeps_the_real_outline_row",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 0.366,
+      "log": "control-2.log"
+    },
+    {
+      "selector": "source::original_items::tests::unchanged_multiple_annotations_share_one_original_item_group",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-163c58c20ffa9672",
+        "source::original_items::tests::unchanged_multiple_annotations_share_one_original_item_group",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 0.361,
+      "log": "control-3.log"
+    }
+  ],
+  "terminal_output": {
+    "cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin": "\nrunning 1 test\ntest cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin ... local derive component edition2015: catalog preparation LRR-E-CATALOG-INCOMPLETE\nlocal derive component edition2015: 2 real outputs appended and the item group completed; no coordinator publication or guest execution\nlocal derive component edition2018: catalog preparation LRR-E-CATALOG-INCOMPLETE\nlocal derive component edition2018: 2 real outputs appended and the item group completed; no coordinator publication or guest execution\nlocal derive component edition2021: catalog preparation LRR-E-CATALOG-INCOMPLETE\nlocal derive component edition2021: 2 real outputs appended and the item group completed; no coordinator publication or guest execution\nlocal derive component edition2024: catalog preparation LRR-E-CATALOG-INCOMPLETE\nlocal derive component edition2024: 2 real outputs appended and the item group completed; no coordinator publication or guest execution\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1743 filtered out; finished in 15.05s\n\n",
+    "source::original_items::tests::unchanged_local_derive_target_reuses_the_entered_canonical_declarations": "\nrunning 1 test\ntest source::original_items::tests::unchanged_local_derive_target_reuses_the_entered_canonical_declarations ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1743 filtered out; finished in 0.01s\n\n",
+    "source::original_items::tests::unchanged_module_derive_target_keeps_the_real_outline_row": "\nrunning 1 test\ntest source::original_items::tests::unchanged_module_derive_target_keeps_the_real_outline_row ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1743 filtered out; finished in 0.01s\n\n",
+    "source::original_items::tests::unchanged_multiple_annotations_share_one_original_item_group": "\nrunning 1 test\ntest source::original_items::tests::unchanged_multiple_annotations_share_one_original_item_group ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1743 filtered out; finished in 0.00s\n\n"
+  },
+  "selection_sha256": "8649a1b52db20674257d6dcec80e963e5b0eeeabae31f4422943db8289b2f73b"
+}

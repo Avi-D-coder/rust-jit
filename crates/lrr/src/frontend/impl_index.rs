@@ -308,6 +308,10 @@ pub struct DeclarationMacroIndex {
     facts: super::hygiene::HygieneFacts,
     ancestry: super::macro_origins::ExpansionAncestry,
     context: crate::syntax::token_wire::Key,
+    derive_prefix: Option<crate::core::digest::Digest>,
+    // Actual admitted occurrence records, indexed by their original Meta owner.
+    appended_outputs: std::collections::BTreeMap<crate::core::digest::Digest,
+        std::collections::BTreeMap<crate::core::digest::Digest, crate::core::digest::Digest>>,
     producer_rows: std::collections::BTreeMap<crate::core::digest::Digest, usize>,
     definition_rows: std::collections::BTreeMap<crate::core::digest::Digest, usize>,
     retained_bytes: usize,
@@ -408,6 +412,8 @@ impl DeclarationMacroIndex {
             declarations,
             facts,
             context: root.context,
+            derive_prefix: None,
+            appended_outputs: Default::default(),
             producer_rows,
             definition_rows,
             retained_bytes,
@@ -471,6 +477,34 @@ impl DeclarationMacroIndex {
         expected: &crate::expand::identity::ExpansionKey,
         child: &GeneratedDeclarationMacroIndex,
     ) -> Result<(), Diagnostic> {
+        self.adopt_completed_child_prefix(expected, child, true)
+    }
+    pub(crate) fn derive_prefix_view(
+        &self,
+        invocation: crate::core::digest::Digest,
+    ) -> Result<Self, Diagnostic> {
+        let producer = self.producer(invocation)?;
+        if !self.pending.contains(&invocation) {
+            return Err(fault());
+        }
+        let mut view = self.clone();
+        view.scopes = self.scopes.prefix_view(
+            producer.lexical_scope, u64::from(producer.range.start), invocation,
+        )?;
+        view.derive_prefix = Some(invocation);
+        Ok(view)
+    }
+    pub(crate) fn adopt_completed_child_prefix(
+        &mut self,
+        expected: &crate::expand::identity::ExpansionKey,
+        child: &GeneratedDeclarationMacroIndex,
+        complete: bool,
+    ) -> Result<(), Diagnostic> {
+        let owner = child.output.parent_invocation();
+        let occurrence = child.output.record().key().invocation;
+        if self.appended_outputs.get(&owner).is_some_and(|outputs| outputs.contains_key(&occurrence)) {
+            return Err(fault());
+        }
         let mut publication = DeclarationPublication {
             scopes: self.scopes.clone(),
             declarations: self.declarations.clone(),
@@ -480,7 +514,10 @@ impl DeclarationMacroIndex {
             pending: self.pending.clone(),
             retained_bytes: self.retained_bytes,
         };
-        publication.adopt(&self.scan, expected, child, true)?;
+        publication.adopt(&self.scan, expected, child, complete)?;
+        self.appended_outputs.entry(owner).or_default().insert(
+            occurrence, child.output.record().descriptor().fingerprint(),
+        );
         self.scopes = publication.scopes;
         self.declarations = publication.declarations;
         self.facts = publication.facts;
@@ -488,6 +525,37 @@ impl DeclarationMacroIndex {
         self.published_bodies = publication.bodies;
         self.pending = publication.pending;
         self.retained_bytes = publication.retained_bytes;
+        Ok(())
+    }
+    /// Retire only the actual scan annotations owned by a fully replayed
+    /// original item group. Appended definitions survive pending retirement.
+    pub(crate) fn complete_original_annotation_group(
+        &mut self,
+        source: &crate::source::changes::PreparedSourceView,
+        group: &crate::source::original_items::OriginalAnnotationGroup,
+        proof: &crate::expand::source_derives::SourceDeriveCompletionProof,
+    ) -> Result<(), Diagnostic> {
+        proof.require_group(group, source)?;
+        if group.scan_identity() != self.scan.fingerprint() || group.annotations().is_empty() {
+            return Err(fault());
+        }
+        let occurrences = group.annotations().iter()
+            .filter_map(|annotation| self.appended_outputs.get(annotation))
+            .flat_map(|outputs| outputs.keys().copied()).collect();
+        proof.require_occurrences(&occurrences)?;
+        let mut scopes = self.scopes.clone();
+        let mut pending = self.pending.clone();
+        for annotation in group.annotations() {
+            let producer = self.producer(*annotation)?;
+            if producer.kind != crate::syntax::declaration_scan::DeclarationProducerKind::Attribute
+                || !group.call().range.contains(producer.range)
+                || !pending.remove(annotation) {
+                return Err(fault());
+            }
+            scopes.complete_prefix(producer.lexical_scope, u64::from(producer.range.start), *annotation)?;
+        }
+        self.scopes = scopes;
+        self.pending = pending;
         Ok(())
     }
     /// Transfer an original-item frontier to its existing discovery owner.
@@ -1034,7 +1102,9 @@ impl DeclarationMacroParent {
                     scopes: &index.scopes,
                     declarations: &index.declarations,
                     scope: producer.lexical_scope,
-                    before: u64::from(producer.range.start),
+                    before: u64::from(producer.range.start)
+                        .checked_add(u64::from(index.derive_prefix == Some(invocation)))
+                        .ok_or_else(fault)?,
                 })
             }
             Self::Argument(index) => {
