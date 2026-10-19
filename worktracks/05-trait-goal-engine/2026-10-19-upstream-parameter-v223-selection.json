@@ -1,0 +1,9 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "V223 host-control selector correction only; V222 production/CLI unchanged, earlier runtime/3 positive controls remain tied to V222",
+  "controls": [
+    "frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::upstream_parameter_order_preserves_real_impl_trait_and_method_identities",
+    "frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::upstream_parameter_order_retains_const_regions_and_pending_function_binders"
+  ],
+  "runtime_cases": []
+}

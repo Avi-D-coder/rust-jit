@@ -1806,6 +1806,7 @@ pub(super) fn deferred_alias_type(
     // edition, with the target as the only written Type.
     let signature = FunctionSignature {
         definition,
+        generic_source_layout: None,
         scope: alias.scope.clone(),
         header: alias.header.clone(),
         generics: alias.generics.clone(),

@@ -184,6 +184,7 @@ fn normalize_with_bindings(
             let mut bindings = std::collections::BTreeMap::new();
             let signature = FunctionSignature {
                 definition: alias,
+                generic_source_layout: None,
                 scope: row.scope.clone(),
                 header: row.header.clone(),
                 generics: owner
@@ -365,6 +366,7 @@ fn impl_matches(
     }
     let signature = FunctionSignature {
         definition: alias,
+        generic_source_layout: None,
         scope: row.scope.clone(),
         header: row.header.clone(),
         generics,

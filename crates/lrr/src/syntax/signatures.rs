@@ -1,6 +1,6 @@
 //! Owned, demand-captured function declarations; no bound solving or body analysis.
 use super::{
-    ast_adapter::{TokenRecipe, semantic_name, tokens},
+    ast_adapter::{semantic_name, tokens, TokenRecipe},
     outline::{BodyHandle, DeclarationContext, HeaderRecipe, ScopeKey},
     parse::ParsedFile,
 };
@@ -9,8 +9,8 @@ use crate::core::{
     digest::{Digest, StableEncode, StableEncoder},
 };
 use ra_ap_syntax::{
-    AstNode, SyntaxNode,
     ast::{self, HasAttrs, HasGenericParams, HasName, HasTypeBounds},
+    AstNode, SyntaxNode,
 };
 use std::collections::BTreeSet;
 
@@ -37,12 +37,38 @@ pub struct ParameterRecipe {
     pub receiver: bool,
     pub variadic: bool,
 }
+/// Real declaration ownership, captured with its generic header. LRR keeps
+/// own parameters first so written call arguments retain their source ordinals.
+/// A backend may use a different order without changing these identities.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct GenericSourceLayout {
+    pub own: u32,
+    pub inherited: u32,
+    pub implicit_self: bool,
+}
+impl GenericSourceLayout {
+    pub fn count(self) -> Option<u32> {
+        self.own
+            .checked_add(self.inherited)?
+            .checked_add(u32::from(self.implicit_self))
+    }
+}
+impl StableEncode for GenericSourceLayout {
+    const DOMAIN: &'static str = "lrr/v1/generic-source-layout";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        e.u32(self.own);
+        e.u32(self.inherited);
+        e.bool(self.implicit_self);
+    }
+}
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FunctionSignature {
     pub definition: Digest,
     pub scope: ScopeKey,
     pub header: HeaderRecipe,
     pub generics: Vec<DefinitionParameter>,
+    /// None identifies a legacy synthetic signature, not an empty source binder.
+    pub generic_source_layout: Option<GenericSourceLayout>,
     pub parameters: Vec<ParameterRecipe>,
     /// Empty means the declared unit result, not a fresh inference variable.
     pub result: Vec<TokenRecipe>,
@@ -125,11 +151,11 @@ impl ParsedFile {
     fn declaration_generics(
         &self,
         declaration: &SyntaxNode,
-    ) -> Result<Vec<DefinitionParameter>, Diagnostic> {
+    ) -> Result<(Vec<DefinitionParameter>, GenericSourceLayout), Diagnostic> {
         let own = capture_generics(declaration.children().find_map(ast::GenericParamList::cast))?;
-        let mut generics = associated_owner_generics(declaration, own)?;
+        let (mut generics, layout) = associated_generics_with_layout(declaration, own)?;
         self.spell_generic_bounds(declaration, &mut generics)?;
-        Ok(generics)
+        Ok((generics, layout))
     }
     /// Own and immediate impl/trait where clauses belong to the same
     /// declared Type scope. This prepares signature facts, never a body.
@@ -189,6 +215,7 @@ impl ParsedFile {
             return Err(fault("initializer declaration/header/source mismatch"));
         }
         self.declaration_generics(&item)
+            .map(|(generics, _)| generics)
     }
     /// A `const`/`static` item's initializer as a call signature: no
     /// parameters, its declared type the result (E-R5-007). `None` when the
@@ -219,7 +246,7 @@ impl ParsedFile {
         let Some(ty) = ty else {
             return Err(fault("constant declaration lacks its declared type"));
         };
-        let generics = self.declaration_generics(&item)?;
+        let (generics, layout) = self.declaration_generics(&item)?;
         Ok(Some(FunctionSignature {
             definition,
             scope: context.scope.clone(),
@@ -227,6 +254,7 @@ impl ParsedFile {
             result_symbolic: lower_type(&ty, definition, &generics, 0)?,
             result: self.type_tokens(Some(ty.syntax().clone()))?,
             generics,
+            generic_source_layout: Some(layout),
             parameters: Vec::new(),
             predicates: self.declaration_predicates(&item)?,
         }))
@@ -291,6 +319,11 @@ impl ParsedFile {
                 text: spelling.into(),
             }],
             generics: Vec::new(),
+            generic_source_layout: Some(GenericSourceLayout {
+                own: 0,
+                inherited: 0,
+                implicit_self: false,
+            }),
             parameters: Vec::new(),
             predicates: Vec::new(),
         })
@@ -326,7 +359,7 @@ impl ParsedFile {
                 "signature declaration is not in its immutable source",
             ));
         }
-        let generics = self.declaration_generics(function.syntax())?;
+        let (generics, layout) = self.declaration_generics(function.syntax())?;
         let list = function
             .param_list()
             .ok_or_else(|| fault("function lacks its parameter list"))?;
@@ -408,6 +441,7 @@ impl ParsedFile {
                 )),
             },
             generics,
+            generic_source_layout: Some(layout),
             parameters,
             result: self.type_tokens(
                 function
@@ -421,11 +455,12 @@ impl ParsedFile {
     }
 }
 impl StableEncode for FunctionSignature {
-    const DOMAIN: &'static str = "lrr/v2/function-signature";
+    const DOMAIN: &'static str = "lrr/v3/function-signature";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.definition);
         e.record(&self.scope);
         e.record(&self.header);
+        e.option(&self.generic_source_layout, |e, layout| e.record(layout));
         e.sequence(&self.generics, |e, p| {
             e.u32(p.ordinal);
             e.u32(match p.kind {
@@ -692,10 +727,22 @@ fn associated_owner(declaration: &SyntaxNode) -> Option<SyntaxNode> {
 }
 fn associated_owner_generics(
     declaration: &SyntaxNode,
-    mut generics: Vec<DefinitionParameter>,
+    generics: Vec<DefinitionParameter>,
 ) -> Result<Vec<DefinitionParameter>, Diagnostic> {
+    associated_generics_with_layout(declaration, generics).map(|(generics, _)| generics)
+}
+fn associated_generics_with_layout(
+    declaration: &SyntaxNode,
+    mut generics: Vec<DefinitionParameter>,
+) -> Result<(Vec<DefinitionParameter>, GenericSourceLayout), Diagnostic> {
+    let mut layout = GenericSourceLayout {
+        own: u32::try_from(generics.len())
+            .map_err(|_| fault("generic parameter index overflow"))?,
+        inherited: 0,
+        implicit_self: false,
+    };
     let Some(owner) = associated_owner(declaration) else {
-        return Ok(generics);
+        return Ok((generics, layout));
     };
     let (inherited, implicit_self) = if let Some(implementation) = ast::Impl::cast(owner.clone()) {
         (
@@ -705,8 +752,11 @@ fn associated_owner_generics(
     } else if let Some(definition) = ast::Trait::cast(owner) {
         (capture_generics(definition.generic_param_list())?, true)
     } else {
-        return Ok(generics);
+        return Ok((generics, layout));
     };
+    layout.inherited =
+        u32::try_from(inherited.len()).map_err(|_| fault("generic parameter index overflow"))?;
+    layout.implicit_self = implicit_self;
     for mut parameter in inherited {
         parameter.ordinal =
             u32::try_from(generics.len()).map_err(|_| fault("generic parameter index overflow"))?;
@@ -723,7 +773,7 @@ fn associated_owner_generics(
             const_type: Vec::new(),
         });
     }
-    Ok(generics)
+    Ok((generics, layout))
 }
 pub(crate) fn capture_generics(
     list: Option<ast::GenericParamList>,
@@ -832,12 +882,10 @@ mod tests {
             range: y.declaration_span,
         };
         let body = y.body.as_ref().unwrap();
-        assert!(
-            parsed
-                .initializer_parameters(&y.header, &context, body)
-                .unwrap()
-                .is_empty()
-        );
+        assert!(parsed
+            .initializer_parameters(&y.header, &context, body)
+            .unwrap()
+            .is_empty());
         assert_eq!(
             parsed
                 .initializer_parameters(&x.header, &context, body)

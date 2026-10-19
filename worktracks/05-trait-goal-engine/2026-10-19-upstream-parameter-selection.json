@@ -1,0 +1,17 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "M020 actual source generic ownership and parent-first identity transport only; concrete Interner/delegate and solver execution unimplemented",
+  "controls": [
+    "frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::upstream_parameter_order_preserves_real_impl_trait_and_method_identities",
+    "frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::upstream_parameter_order_retains_const_regions_and_pending_function_binders",
+    "frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::contextual_parameter_goals_bind_the_actual_caller_and_reject_local_receipt_substitution",
+    "cli::crate_graph::trait_path_call_tests::trait_paths_select_the_impl_of_their_self_type",
+    "cli::callable_value_tests::upstream_trait_self_arguments_share_declared_types_all_editions_and_origins"
+  ],
+  "runtime_cases": [
+    "tests/ui/generics/mid-path-type-params.rs",
+    "tests/ui/methods/method-self-arg-trait.rs",
+    "tests/ui/closures/closure-capture-after-clone.rs",
+    "tests/ui/let-else/let-else-source-expr-nomove-pass.rs"
+  ]
+}

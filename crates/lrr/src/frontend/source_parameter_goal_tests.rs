@@ -10,6 +10,208 @@ use crate::{
 const SUFFIX: &str = include_str!(
     "../../../../fixtures/upstream/rustc-checkout/tests/ui/numbers-arithmetic/integer-literal-suffix-inference.rs"
 );
+
+#[test]
+fn upstream_parameter_order_preserves_real_impl_trait_and_method_identities() {
+    use crate::traits::{
+        term::BoundKind,
+        upstream::parameters::{ParameterPending, ParameterPreparation, SignatureParameters},
+    };
+    use rustc_type_ir::inherent::ParamLike;
+    const ORIGINAL: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/generics/mid-path-type-params.rs"
+    );
+    // Keep the original unchanged. The macro adaptations move only the crate
+    // lint attribute outside the item-producing macro, where Rust permits it.
+    let items = ORIGINAL.replace("#![allow(dead_code)]", "");
+    let emitted = format!(
+        "#![allow(dead_code)] macro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} emit!{{{items}}}"
+    );
+    let wrapped = format!(
+        "#![allow(dead_code)] macro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} macro_rules! wrap {{($($t:tt)*)=>{{emit!{{$($t)*}}}}}} wrap!{{{items}}}"
+    );
+    for edition in [2015, 2018, 2021, 2024] {
+        for text in [ORIGINAL, &emitted, &wrapped] {
+            let (mut db, plan) = world(text, edition, false);
+            let mut methods = 0;
+            for (name, definition) in published_source_declarations(&plan, &["new"]) {
+                if name != "new" {
+                    continue;
+                }
+                let key = QueryKey::FunctionSignature(definition);
+                let start = db.trace.events.len();
+                let owner = ready(db.fetch(&SyntaxProvider, key.clone()));
+                let QueryValue::FunctionSignature(signature) = owner.value.as_ref() else {
+                    panic!()
+                };
+                let ParameterPreparation::Ready(mapping) =
+                    SignatureParameters::prepare(signature).unwrap()
+                else {
+                    panic!("actual source method must have a complete type-only binder")
+                };
+                let expected: &[&str] = match signature.generics.len() {
+                    1 => &["U"],
+                    2 => &["T", "U"],
+                    3 => &["Self", "T", "U"],
+                    _ => panic!("stock source generic header differs"),
+                };
+                assert_eq!(mapping.count() as usize, expected.len());
+                assert_eq!(mapping.parent_count() as usize, expected.len() - 1);
+                for (index, name) in expected.iter().enumerate() {
+                    let parameter = mapping.from_upstream(index as u32).unwrap();
+                    assert_eq!(parameter.index(), index as u32);
+                    assert_eq!(parameter.source().definition, definition);
+                    assert_eq!(
+                        signature.generics[parameter.source().ordinal as usize].name,
+                        *name
+                    );
+                    assert_eq!(parameter.kind(), BoundKind::Type);
+                    assert_eq!(
+                        mapping
+                            .from_source(parameter.source(), BoundKind::Type)
+                            .unwrap(),
+                        parameter
+                    );
+                    assert!(mapping
+                        .from_source(parameter.source(), BoundKind::Region)
+                        .is_err());
+                    assert!(mapping
+                        .from_source(
+                            ParamKey {
+                                definition: Digest::of_bytes(b"foreign parameter declaration"),
+                                ordinal: parameter.source().ordinal,
+                            },
+                            BoundKind::Type
+                        )
+                        .is_err());
+                }
+                assert!(mapping.from_upstream(mapping.count()).is_err());
+                let again = ready(db.fetch(&SyntaxProvider, key));
+                assert!(Arc::ptr_eq(&owner.value, &again.value));
+                no_child_code(&db, start);
+                let mut synthetic = signature.as_ref().clone();
+                synthetic.generic_source_layout = None;
+                assert!(matches!(
+                    SignatureParameters::prepare(&synthetic).unwrap(),
+                    ParameterPreparation::Pending(ParameterPending::SourceLayout)
+                ));
+                let mut changed = signature.as_ref().clone();
+                changed.generic_source_layout.as_mut().unwrap().own += 1;
+                assert!(SignatureParameters::prepare(&changed).is_err());
+                methods += 1;
+            }
+            assert_eq!(methods, 3, "edition {edition}, source: {text}");
+        }
+    }
+}
+
+#[test]
+fn upstream_parameter_order_retains_const_regions_and_pending_function_binders() {
+    use crate::traits::{
+        term::BoundKind,
+        upstream::parameters::{ParameterPending, ParameterPreparation, SignatureParameters},
+    };
+    use rustc_type_ir::inherent::ParamLike;
+    const ORIGINAL: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/const-generics/type-dependent/issue-61936.rs"
+    );
+    for edition in [2015, 2018, 2021, 2024] {
+        let (mut db, plan) = world(ORIGINAL, edition, false);
+        let mut methods = 0;
+        for (name, definition) in
+            published_source_declarations(&plan, &["next", "array_windows_example"])
+        {
+            if name != "next" && name != "array_windows_example" {
+                continue;
+            }
+            let start = db.trace.events.len();
+            let owner = ready(db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(definition)));
+            let QueryValue::FunctionSignature(signature) = owner.value.as_ref() else {
+                panic!()
+            };
+            let mapping = SignatureParameters::prepare(signature).unwrap();
+            if name == "array_windows_example" {
+                assert!(matches!(
+                    mapping,
+                    ParameterPreparation::Pending(ParameterPending::FunctionRegionBinders)
+                ));
+            } else {
+                let ParameterPreparation::Ready(mapping) = mapping else {
+                    panic!("inherited regions are early bound")
+                };
+                assert_eq!(mapping.parent_count(), 3);
+                for (index, kind) in [BoundKind::Region, BoundKind::Type, BoundKind::Const]
+                    .into_iter()
+                    .enumerate()
+                {
+                    let parameter = mapping.from_upstream(index as u32).unwrap();
+                    assert_eq!(parameter.index(), index as u32);
+                    assert_eq!(parameter.kind(), kind);
+                    assert_eq!(
+                        mapping.from_source(parameter.source(), kind).unwrap(),
+                        parameter
+                    );
+                }
+            }
+            no_child_code(&db, start);
+            methods += 1;
+        }
+        assert_eq!(methods, 3);
+    }
+}
+/// The completed environment owns module/associated declarations; the entered
+/// body's local item facts alone are not the module's member inventory.
+fn published_source_declarations(
+    plan: &PreparedSourceLocalPlan,
+    member_names: &[&str],
+) -> Vec<(String, Digest)> {
+    let environment = plan.environment().unwrap().macros().source_environment();
+    let mut declarations = std::collections::BTreeMap::new();
+    let mut types = std::collections::BTreeSet::new();
+    for source in environment.sources() {
+        for item in &source.outline().items {
+            if item.def_key.item_kind == ItemKind::Function {
+                declarations.insert(
+                    item.def_key.fingerprint(),
+                    item.def_key.declared_name.clone(),
+                );
+            }
+            if matches!(
+                item.def_key.item_kind,
+                ItemKind::Struct | ItemKind::Enum | ItemKind::Trait
+            ) {
+                types.insert(item.def_key.fingerprint());
+            }
+        }
+    }
+    for item in environment.names().declared_item_names() {
+        if item.definition().namespace == crate::source::manifest::Namespace::Value {
+            declarations.insert(item.definition().identity, item.name().to_owned());
+        } else if item.definition().namespace == crate::source::manifest::Namespace::Type {
+            types.insert(item.definition().identity);
+        }
+    }
+    // Generated associated declarations are owned by the actual member index,
+    // not the module-level item-name inventory. Use its ordinary source IDs.
+    let members = environment.member_index().unwrap();
+    for owner in types {
+        for name in member_names {
+            for definition in members.inherent(owner, name) {
+                declarations.insert(definition, (*name).to_owned());
+            }
+            for (_, definition) in members.trait_functions(owner, name) {
+                declarations.insert(definition, (*name).to_owned());
+            }
+            if let Some(definition) = members.trait_declaration(owner, name) {
+                declarations.insert(definition, (*name).to_owned());
+            }
+        }
+    }
+    declarations
+        .into_iter()
+        .map(|(definition, name)| (name, definition))
+        .collect()
+}
 fn declarations(plan: &PreparedSourceLocalPlan) -> Vec<(String, Digest)> {
     plan.context()
         .facts()
@@ -116,9 +318,16 @@ fn contextual_parameter_goals_bind_the_actual_caller_and_reject_local_receipt_su
         let (mut db, plan) = world(SUFFIX, edition, false);
         let definition = declarations(&plan)[0].1;
         let body = plan.context().source().index().body().clone();
-        let local_key = QueryKey::DeclaredParameterGoal { definition, ordinal: 0 };
+        let local_key = QueryKey::DeclaredParameterGoal {
+            definition,
+            ordinal: 0,
+        };
         let local = ready(db.fetch(&SyntaxProvider, local_key.clone()));
-        let key = QueryKey::ContextParameterGoal { body: body.clone(), definition, ordinal: 0 };
+        let key = QueryKey::ContextParameterGoal {
+            body: body.clone(),
+            definition,
+            ordinal: 0,
+        };
         let start = db.trace.events.len();
         let actual = ready(db.fetch(&SyntaxProvider, key.clone()));
         assert!(actual.value.matches(&key));
@@ -127,7 +336,9 @@ fn contextual_parameter_goals_bind_the_actual_caller_and_reject_local_receipt_su
         let mut foreign = body;
         foreign.exact_body_bytes = Digest::of_bytes(b"foreign caller body");
         assert!(!actual.value.matches(&QueryKey::ContextParameterGoal {
-            body: foreign, definition, ordinal: 0,
+            body: foreign,
+            definition,
+            ordinal: 0,
         }));
         let again = ready(db.fetch(&SyntaxProvider, key.clone()));
         assert!(Arc::ptr_eq(&actual.value, &again.value));

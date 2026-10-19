@@ -12,6 +12,8 @@ use rustc_type_ir::{
     solve::{Goal, NoSolution},
 };
 
+pub(crate) mod parameters;
+
 pub(crate) const SOURCE_REVISION: &str = "ae0fe511b15ab760d7e963b13389d1bc2ab42b18";
 
 /// Called only for an external demanded goal; recursive child goals stay in
