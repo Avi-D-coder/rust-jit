@@ -11,6 +11,7 @@ pub(crate) struct CompletedDeclarationNameEffects {
     pub(crate) names: Vec<Arc<DeclaredItemName>>,
     pub(crate) pending: Vec<(ScopeKey, Digest)>,
     fingerprint: Digest,
+    outputs: std::collections::BTreeMap<(Digest, Digest), ScopeKey>,
 }
 /// A direct index of the actual completed fragment, minted only below. An
 /// arbitrary admitted output or an empty pending set is not this receipt.
@@ -20,6 +21,7 @@ impl CompletedDeclarationNameSource<'_> {
 }
 impl CompletedDeclarationNameEffects {
     pub(crate) fn fingerprint(&self) -> Digest { self.fingerprint }
+    pub(crate) fn outputs(&self) -> impl Iterator<Item = (&(Digest, Digest), &ScopeKey)> { self.outputs.iter() }
 }
 impl CompletedDeclarationFragment {
     pub(crate) fn declaration_name_effects(
@@ -32,8 +34,9 @@ impl CompletedDeclarationFragment {
             return Ok(Arc::clone(effects));
         }
         let mut names = Vec::new();
+        let mut outputs = std::collections::BTreeMap::new();
         let mut unresolved = BTreeSet::new();
-        let mut fingerprint = StableEncoder::new("lrr/v1/completed-declaration-name-effects");
+        let mut fingerprint = StableEncoder::new("lrr/v2/completed-declaration-name-effects/active-output-declarations");
         fingerprint.digest(Digest(root.key().0)); fingerprint.digest(cfg.fingerprint());
         let mut fragments = vec![self];
         while let Some(fragment) = fragments.pop() {
@@ -47,6 +50,17 @@ impl CompletedDeclarationFragment {
                 let completed = CompletedDeclarationNameSource(output);
                 let plan = GeneratedHeaderPlan::prepare_completed_declarations(&items, &completed, root, cfg)?;
                 fingerprint.digest(output.fingerprint());
+                let descriptor = output.record().descriptor().fingerprint();
+                let active = plan.declared_names().map(|name| name.range())
+                    .chain(plan.active_impl_ranges(&items, cfg, output.scan().scope(), output.epoch())?.iter().copied())
+                    .chain(plan.active_trait_ranges(&items, cfg, output.scan().scope(), output.epoch())?.iter().copied())
+                    .map(|range| (range.start, range.end)).collect::<BTreeSet<_>>();
+                for header in items.items() {
+                    let range = crate::syntax::spans::SourceRange::checked(header.start, header.end)?;
+                    if !active.contains(&(range.start, range.end)) || masks.covers(output.scan().fingerprint(), range) { continue; }
+                    if outputs.insert((descriptor, header.key.fingerprint()), output.scan().scope().clone())
+                        .is_some_and(|scope| scope != *output.scan().scope()) { return Err(limit()); }
+                }
                 for declaration in plan.declared_names() {
                     if !masks.covers(output.scan().fingerprint(), declaration.range()) {
                         fingerprint.digest(declaration.fingerprint());
@@ -75,7 +89,10 @@ impl CompletedDeclarationFragment {
         }
         let pending = unresolved.into_iter().collect::<Vec<_>>();
         for (scope, id) in &pending { fingerprint.record(scope); fingerprint.digest(*id); }
-        let effects = Arc::new(CompletedDeclarationNameEffects { names, pending, fingerprint: fingerprint.finish() });
+        fingerprint.map(&outputs, |encoder, (record, declaration), scope| {
+            encoder.digest(*record); encoder.digest(*declaration); encoder.record(scope);
+        });
+        let effects = Arc::new(CompletedDeclarationNameEffects { names, pending, outputs, fingerprint: fingerprint.finish() });
         let _ = self.name_effects.set((root.key(), cfg.fingerprint(), effects));
         let (owner, configuration, effects) = self.name_effects.get().ok_or_else(limit)?;
         if *owner != root.key() || *configuration != cfg.fingerprint() { return Err(limit()); }

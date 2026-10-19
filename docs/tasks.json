@@ -20106,12 +20106,15 @@
         "worktracks/evidence/2026-10-19-v297-v300-completed-annotation-names.json",
         "worktracks/evidence/2026-10-19-v301-v307-entered-annotation-completion.json",
         "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-completion.md",
-        "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-review.md"
+        "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-review.md",
+        "worktracks/evidence/2026-10-19-v308-v311-generated-local-types.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-generated-local-type-lookup.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-generated-local-type-review.md"
       ],
       "title": "Impl and trait header lowering",
       "acceptance_contract": "TR006 and indexed-versus-full-catalog property model. Depends: M018.",
       "release_complete": false,
-      "latest_component_scope": "V301-V307 HELD M019/M020 entered annotation completion: actual completed original groups now join structurally retained local declarations, the common lexical tables and ordinary declaration metadata/lowering/VM. Immutable prepared contexts and initial declaration projections are retained, not rebuilt per phase. Exact OpaqueItem admissions use ordinary Op::Declaration; generated publication is reused only with identical actual units and boundary outcomes. Final V307 macOS Rust1.99.0 library/CLI builds succeed; all5 targeted controls pass, including unchanged local annotated impl main in all4 editions, actual header/node/source/epoch/generation refusals, plan reuse and physical context retirement. Direct CLI runs complete unchanged coherence-impl-in-fn and zero-size-type-destructors all4 editions (4 and141 operations):8/8 runtime worlds, two roots. One newly verified distinct stock runtime gain relative to recorded V299 failure, no refreshed suite total. V306 broader12/16 controls remains attached to its own fingerprint: full selected heads24/32 with eight generated self Types pending; two structural-occurrence controls fail during request setup, no measured parent attribution. V306 root-retirement failure led to a physical ownership-edge correction, not resource accounting or a raised budget; final old retirement and new Weak-release controls pass. Generated origin/insertion joins, complete source facts/inference/delegate, actual upstream next-solver invocation and interpreter/JIT gates remain incomplete.",
+      "latest_component_scope": "V308-V311 HELD M019/M020 common generated local Type lookup. Actual completed fragments retain exact active record/declaration/insertion membership after cfg and replacement masks; cold preparation binds that membership to the actual original target lexical ordinal. Canonical metadata and parser-owned Type occurrences use the output identifier pinned item comparison class and the same DeclarationNameIndex/LocalTypeNames prefix as original source. Generated declaration locations are retained direct indexes; no runtime parser, macro/trait-name rule, synthetic scope, checker, resource accounting or evaluator. Final V311 library/CLI builds and4/4targeted controls pass: selected unchanged-fixture impl heads32/32 (previous24/32),16generated occurrence checks, all4edition real generated input/owner/header/epoch/revocation/restoration/memo guards, entered receipt/retirement and unchanged local runtime main. V310 broader8/8controls, including12Copy origin/edition worlds and old root/source replacement checks, retain their own pre-map-count-encoding source. One V309 mechanical compile failure preserved. Zero new distinct stock runtime gains or refreshed suite total; eight newly ready heads are source facts, not new runtime tests. Actual upstream source/inference/delegate/root-goal integration, arbitrary generated/import/parent/replacing-attribute matrices, complete interpreter and guest JIT remain incomplete. Next repair: PreparedProvider publication must preserve the complete raw inventory while accepting demand-prepared typed candidate dependencies, rather than requiring eager translation of every impl.",
       "source_baseline": "dcd056e542c86605f6a282470566952b2aea3c79",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
@@ -20128,7 +20131,10 @@
         "worktracks/evidence/2026-10-19-v297-v300-completed-annotation-names.json",
         "worktracks/evidence/2026-10-19-v301-v307-entered-annotation-completion.json",
         "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-completion.md",
-        "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-review.md"
+        "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-review.md",
+        "worktracks/evidence/2026-10-19-v308-v311-generated-local-types.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-generated-local-type-lookup.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-generated-local-type-review.md"
       ]
     },
     {
@@ -20199,7 +20205,10 @@
         "worktracks/evidence/2026-10-19-v297-v300-completed-annotation-names.json",
         "worktracks/evidence/2026-10-19-v301-v307-entered-annotation-completion.json",
         "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-completion.md",
-        "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-review.md"
+        "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-review.md",
+        "worktracks/evidence/2026-10-19-v308-v311-generated-local-types.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-generated-local-type-lookup.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-generated-local-type-review.md"
       ],
       "title": "Pinned upstream solver bridge and transactions",
       "acceptance_contract": "TR007/TR008, source/type/binder round trips, genuine upstream invocation, failed-candidate isolation and cold-body/unused-bound controls. Depends: M019.",
@@ -20207,7 +20216,7 @@
       "implementation_contract": "Files: traits/upstream/, traits/term.rs, frontend/source_view.rs, Cargo.toml and provenance manifests. Build the pinned shared solver on macOS Rust1.99.0; adapt actual source Types/ParamEnv/headers, upstream inference transactions and canonical responses to LRR queries. Migrate custom inference/canonicalization consumers and remove superseded algorithms with explicit holds until verified.",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
-      "latest_component_scope": "V301-V307 HELD M019/M020 entered annotation completion: actual completed original groups now join structurally retained local declarations, the common lexical tables and ordinary declaration metadata/lowering/VM. Immutable prepared contexts and initial declaration projections are retained, not rebuilt per phase. Exact OpaqueItem admissions use ordinary Op::Declaration; generated publication is reused only with identical actual units and boundary outcomes. Final V307 macOS Rust1.99.0 library/CLI builds succeed; all5 targeted controls pass, including unchanged local annotated impl main in all4 editions, actual header/node/source/epoch/generation refusals, plan reuse and physical context retirement. Direct CLI runs complete unchanged coherence-impl-in-fn and zero-size-type-destructors all4 editions (4 and141 operations):8/8 runtime worlds, two roots. One newly verified distinct stock runtime gain relative to recorded V299 failure, no refreshed suite total. V306 broader12/16 controls remains attached to its own fingerprint: full selected heads24/32 with eight generated self Types pending; two structural-occurrence controls fail during request setup, no measured parent attribution. V306 root-retirement failure led to a physical ownership-edge correction, not resource accounting or a raised budget; final old retirement and new Weak-release controls pass. Generated origin/insertion joins, complete source facts/inference/delegate, actual upstream next-solver invocation and interpreter/JIT gates remain incomplete.",
+      "latest_component_scope": "V308-V311 HELD M019/M020 common generated local Type lookup. Actual completed fragments retain exact active record/declaration/insertion membership after cfg and replacement masks; cold preparation binds that membership to the actual original target lexical ordinal. Canonical metadata and parser-owned Type occurrences use the output identifier pinned item comparison class and the same DeclarationNameIndex/LocalTypeNames prefix as original source. Generated declaration locations are retained direct indexes; no runtime parser, macro/trait-name rule, synthetic scope, checker, resource accounting or evaluator. Final V311 library/CLI builds and4/4targeted controls pass: selected unchanged-fixture impl heads32/32 (previous24/32),16generated occurrence checks, all4edition real generated input/owner/header/epoch/revocation/restoration/memo guards, entered receipt/retirement and unchanged local runtime main. V310 broader8/8controls, including12Copy origin/edition worlds and old root/source replacement checks, retain their own pre-map-count-encoding source. One V309 mechanical compile failure preserved. Zero new distinct stock runtime gains or refreshed suite total; eight newly ready heads are source facts, not new runtime tests. Actual upstream source/inference/delegate/root-goal integration, arbitrary generated/import/parent/replacing-attribute matrices, complete interpreter and guest JIT remain incomplete. Next repair: PreparedProvider publication must preserve the complete raw inventory while accepting demand-prepared typed candidate dependencies, rather than requiring eager translation of every impl.",
       "artifacts": [
         "worktracks/evidence/2026-10-19-v230-v231-pinned-binder-client.json",
         "worktracks/evidence/2026-10-19-v234-v235-pinned-client-relations.json",
@@ -20226,7 +20235,10 @@
         "worktracks/evidence/2026-10-19-v297-v300-completed-annotation-names.json",
         "worktracks/evidence/2026-10-19-v301-v307-entered-annotation-completion.json",
         "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-completion.md",
-        "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-review.md"
+        "worktracks/05-trait-goal-engine/2026-10-19-entered-annotation-review.md",
+        "worktracks/evidence/2026-10-19-v308-v311-generated-local-types.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-generated-local-type-lookup.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-generated-local-type-review.md"
       ]
     },
     {

@@ -2446,3 +2446,88 @@ fn unchanged_cold_local_type_uses_shared_name_input_and_observed_preparation_all
         eprintln!("cold original Type input edition{edition}: actual local Foo/Drop head resolved after observed absence; memo reused, wrong scope/header/epoch and raw publication refused; no executable preparation or guest execution");
     }
 }
+
+#[test]
+fn unchanged_generated_local_heads_observe_actual_completion_input_and_epoch_all_editions() {
+    use ra_ap_syntax::{AstNode, ast};
+    use crate::{
+        db::{dependency::{InputKey, InputValue}, key::QueryKey, poll::QueryPoll,
+            provider::SyntaxProvider, value::QueryValue},
+        frontend::{impl_head_types::ImplHeadTypeResult, names::NameLookup,
+            type_name_namespace::SourceTypeOwner},
+        traits::header_syntax::ImplHeaderSyntaxKey,
+    };
+    fn ready<T>(poll: QueryPoll<T>) -> T {
+        match poll {
+            QueryPoll::Ready(Ok(value)) => value,
+            other => panic!("actual generated local Type demand: {}", match other {
+                QueryPoll::Ready(Err(error)) => error.to_string(),
+                QueryPoll::NeedInput(input) => format!("{input:?}"),
+                _ => unreachable!(),
+            }),
+        }
+    }
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/upstream/rustc-checkout/tests/ui/coherence/coherence-impl-in-fn.rs");
+    for edition in [2015, 2018, 2021, 2024] {
+        let (mut db, discovery, root) = configured_impl_catalog_discovery(&path, edition).unwrap();
+        discovery.publish(&mut db).unwrap();
+        db.trace.detailed = true;
+        let start = db.trace.events.len();
+        let headers = ready(db.fetch(&SyntaxProvider,
+            QueryKey::PreparedScopeImplHeaders(discovery.key().clone()))).value;
+        let QueryValue::PreparedScopeImplHeaders(headers) = headers.as_ref() else { panic!() };
+        let mut selected = 0;
+        for raw in headers.inventory_root().headers().iter().filter(|raw|
+            raw.scope.crate_key == root.crate_key && raw.scope.owner.is_some()
+                && headers.header(raw.identity).unwrap().source().generated_origin().is_some()) {
+            let definition = headers.canonical_owner(raw.identity).unwrap().identity();
+            let context = db.input(&InputKey::DeclarationContext(definition)).unwrap();
+            let header = db.input(&InputKey::DefinitionHeader(definition)).unwrap();
+            let (InputValue::DeclarationContext(context), InputValue::DefinitionHeader(header)) =
+                (context.as_ref(), header.as_ref()) else { panic!() };
+            let key = QueryKey::ImplHeadTypes(Box::new(ImplHeaderSyntaxKey {
+                inventory: discovery.key().clone(), implementation: raw.identity,
+            }));
+            let first = ready(db.fetch(&SyntaxProvider, key.clone())).value;
+            let QueryValue::ImplHeadTypes(head) = first.as_ref() else { panic!() };
+            assert!(matches!(head.result(), ImplHeadTypeResult::Resolved { .. }));
+            let syntax = head.syntax();
+            let implementation = ast::Impl::cast(syntax.parsed().syntax_at(context.range,
+                |node| ast::Impl::can_cast(node.kind())).unwrap().unwrap()).unwrap();
+            let name = implementation.self_ty().unwrap().syntax().descendants()
+                .find_map(ast::NameRef::cast).unwrap();
+            let owner = SourceTypeOwner { definition, scope: &context.scope, header };
+            let input_key = InputKey::DeclarationNames(context.scope.clone());
+            let input = db.input(&input_key).unwrap();
+            let InputValue::DeclarationNames(input) = input.as_ref() else { panic!() };
+            assert!(matches!(ready(input.lookup(&mut db, owner, &name)), Some(NameLookup::Defined(_))));
+            let mut wrong = header.clone(); wrong.tokens.clear();
+            assert!(matches!(input.lookup(&mut db, SourceTypeOwner { header: &wrong, ..owner }, &name),
+                QueryPoll::Ready(Err(_))));
+            let mut wrong_scope = context.scope.clone(); wrong_scope.owner = Some(Digest([0; 32]));
+            assert!(matches!(input.lookup(&mut db, SourceTypeOwner { scope: &wrong_scope, ..owner }, &name),
+                QueryPoll::Ready(Err(_))));
+            let removed = db.take_cold_declaration_names_for_control(&context.scope).unwrap();
+            let missing = ready(db.fetch(&SyntaxProvider, key.clone())).value;
+            assert!(matches!(missing.as_ref(), QueryValue::ImplHeadTypes(head)
+                if matches!(head.result(), ImplHeadTypeResult::Pending(_))));
+            assert!(matches!(input.lookup(&mut db, owner, &name), QueryPoll::Ready(Err(_))));
+            assert!(db.publish_inputs(std::collections::BTreeMap::from([
+                (input_key.clone(), removed.as_ref().clone())])).is_err());
+            discovery.publish(&mut db).unwrap();
+            let restored = ready(db.fetch(&SyntaxProvider, key.clone())).value;
+            assert!(matches!(restored.as_ref(), QueryValue::ImplHeadTypes(head)
+                if matches!(head.result(), ImplHeadTypeResult::Resolved { .. })));
+            assert!(std::sync::Arc::ptr_eq(&restored, &ready(db.fetch(&SyntaxProvider, key)).value));
+            selected += 1;
+        }
+        assert_eq!(selected, 2, "both real generated local headers, edition{edition}");
+        db.begin_expansion_epoch(2).unwrap();
+        assert!(matches!(db.fetch(&SyntaxProvider,
+            QueryKey::PreparedScopeImplHeaders(discovery.key().clone())), QueryPoll::Ready(Err(_))));
+        assert!(db.trace.events[start..].iter().all(|event| !matches!(event.key,
+            QueryKey::BodyStructure(_) | QueryKey::Thunk(_) | QueryKey::PatternPlan(_) | QueryKey::FunctionSignature(_))));
+        eprintln!("generated local heads edition{edition}: exact actual output membership, header/scope, observed absence, restoration, memo and stale epoch; no body preparation or guest execution");
+    }
+}

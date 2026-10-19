@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V301-V307 HELD M019/M020 entered annotation completion: actual completed original groups now join structurally retained local declarations, the common lexical tables and ordinary declaration metadata/lowering/VM. Immutable prepared contexts and initial declaration projections are retained, not rebuilt per phase. Exact OpaqueItem admissions use ordinary Op::Declaration; generated publication is reused only with identical actual units and boundary outcomes. Final V307 macOS Rust1.99.0 library/CLI builds succeed; all5 targeted controls pass, including unchanged local annotated impl main in all4 editions, actual header/node/source/epoch/generation refusals, plan reuse and physical context retirement. Direct CLI runs complete unchanged coherence-impl-in-fn and zero-size-type-destructors all4 editions (4 and141 operations):8/8 runtime worlds, two roots. One newly verified distinct stock runtime gain relative to recorded V299 failure, no refreshed suite total. V306 broader12/16 controls remains attached to its own fingerprint: full selected heads24/32 with eight generated self Types pending; two structural-occurrence controls fail during request setup, no measured parent attribution. V306 root-retirement failure led to a physical ownership-edge correction, not resource accounting or a raised budget; final old retirement and new Weak-release controls pass. Generated origin/insertion joins, complete source facts/inference/delegate, actual upstream next-solver invocation and interpreter/JIT gates remain incomplete.",
+      "scope": "V308-V311 HELD M019/M020 common generated local Type lookup. Actual completed fragments retain exact active record/declaration/insertion membership after cfg and replacement masks; cold preparation binds that membership to the actual original target lexical ordinal. Canonical metadata and parser-owned Type occurrences use the output identifier pinned item comparison class and the same DeclarationNameIndex/LocalTypeNames prefix as original source. Generated declaration locations are retained direct indexes; no runtime parser, macro/trait-name rule, synthetic scope, checker, resource accounting or evaluator. Final V311 library/CLI builds and4/4targeted controls pass: selected unchanged-fixture impl heads32/32 (previous24/32),16generated occurrence checks, all4edition real generated input/owner/header/epoch/revocation/restoration/memo guards, entered receipt/retirement and unchanged local runtime main. V310 broader8/8controls, including12Copy origin/edition worlds and old root/source replacement checks, retain their own pre-map-count-encoding source. One V309 mechanical compile failure preserved. Zero new distinct stock runtime gains or refreshed suite total; eight newly ready heads are source facts, not new runtime tests. Actual upstream source/inference/delegate/root-goal integration, arbitrary generated/import/parent/replacing-attribute matrices, complete interpreter and guest JIT remain incomplete. Next repair: PreparedProvider publication must preserve the complete raw inventory while accepting demand-prepared typed candidate dependencies, rather than requiring eager translation of every impl.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1800,11 +1800,18 @@
         "crates/lrr/src/db/body_environment_inputs.rs",
         "crates/lrr/src/db/body_environment_provider.rs",
         "crates/lrr/src/expand/source_discovery/completed_source_syntax.rs",
-        "worktracks/evidence/2026-10-19-v301-v307-entered-annotation-completion.json"
+        "worktracks/evidence/2026-10-19-v301-v307-entered-annotation-completion.json",
+        "crates/lrr/src/frontend/generated_cold_declaration_names.rs",
+        "worktracks/05-trait-goal-engine/2026-10-19-generated-local-type-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-generated-local-type-lookup.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-generated-local-type-probe.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-generated-local-type-review.md",
+        "worktracks/evidence/2026-10-19-v308-v311-generated-local-types.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-generated-local-type-final-controls.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T17:06:35.984449+00:00",
+      "updated_at": "2026-10-19T17:18:54.116745+00:00",
       "review_after": "2026-10-20T08:52:46.617857+00:00",
       "shared_interfaces": [
         {
@@ -1876,5 +1883,5 @@
       ]
     }
   ],
-  "updated_at": "2026-10-19T17:06:35.984449+00:00"
+  "updated_at": "2026-10-19T17:18:54.116745+00:00"
 }

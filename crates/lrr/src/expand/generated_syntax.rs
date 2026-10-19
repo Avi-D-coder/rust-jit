@@ -27,6 +27,7 @@ pub struct GeneratedSyntaxInput {
     pub(crate) definitions: BTreeMap<Digest, crate::source::manifest::DefKey>,
     // Prepared once with the actual admitted root and shared by consumers.
     outline: Arc<crate::syntax::outline::Outline>,
+    declaration_locations: BTreeMap<Digest, usize>,
 }
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-INTERNAL-SNAPSHOT", message.into())
@@ -123,7 +124,8 @@ impl GeneratedSyntaxInput {
         }
         let mut declarations = BTreeMap::new();
         let mut definitions = BTreeMap::new();
-        for item in &outline.items {
+        let mut declaration_locations = BTreeMap::new();
+        for (location, item) in outline.items.iter().enumerate() {
             if item.scope.crate_key != scope.crate_key
                 || !(item.scope == scope && admitted || item.scope.owner.is_none_or(|owner| {
                     owners.get(&owner).is_some_and(|parents| {
@@ -144,6 +146,9 @@ impl GeneratedSyntaxInput {
                 .ok_or_else(|| fault("generated query structural header absent"))?;
             let id = header.key.fingerprint();
             definitions.insert(id, item.def_key.clone());
+            if declaration_locations.insert(id, location).is_some() {
+                return Err(fault("generated canonical declaration location repeats"));
+            }
             declarations.insert(
                 InputKey::DefinitionHeader(id),
                 InputValue::DefinitionHeader(item.header.clone()),
@@ -178,9 +183,13 @@ impl GeneratedSyntaxInput {
                 producer_origin,
                 included_source,
                 outline: Arc::new(outline),
+                declaration_locations,
             }),
             declarations,
         ))
+    }
+    pub(crate) fn declaration(&self, identity: Digest) -> Option<&crate::syntax::outline::ItemOutline> {
+        self.outline.items.get(*self.declaration_locations.get(&identity)?)
     }
     /// The unit's outline (already computed at preparation).
     pub(crate) fn outline(&self) -> Result<Arc<crate::syntax::outline::Outline>, Diagnostic> {

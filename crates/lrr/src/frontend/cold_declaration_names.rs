@@ -16,7 +16,11 @@ use crate::{
 };
 use ra_ap_syntax::ast;
 
+#[path = "generated_cold_declaration_names.rs"]
+mod generated;
+
 enum ColdNameStep {
+    Demand(crate::db::poll::InputRequest),
     Pending,
     Name(crate::frontend::names::NameLookup),
     Module(crate::db::key::CurrentModuleNameKey),
@@ -31,6 +35,7 @@ pub struct ColdDeclarationNames {
     seal_value: Digest,
     identity: Digest,
     completion: Digest,
+    outputs: BTreeMap<(Digest, Digest), (SourceScope, u32)>,
 }
 impl std::fmt::Debug for ColdDeclarationNames {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -65,9 +70,21 @@ impl ColdDeclarationNames {
             |producer| retired.contains(&producer),
         )?;
         let mut generated_names = Vec::new();
+        let mut outputs = BTreeMap::new();
         for row in &scope.facts().items {
             let Some(receipt) = completions.get(&row.item.def_key.fingerprint()) else { continue };
             generated_names.extend(tables.extend_annotation_names(row.scope, &row.item.scope, receipt)?);
+            for effect in receipt.name_effects().into_iter().flatten() {
+                for (record, output_scope) in effect.outputs() {
+                    // Child-module/local outputs retain their own actual owner;
+                    // this original row cannot grant an unrelated lexical rib.
+                    if output_scope != &row.item.scope { continue; }
+                    let owner = (row.item.scope.clone(), row.scope);
+                    if outputs.insert(*record, owner.clone()).is_some_and(|old| old != owner) {
+                        return Err(error("completed output has conflicting local insertion owners"));
+                    }
+                }
+            }
         }
         let names = names.with_declared(&generated_names)?;
         let mut scopes = BTreeMap::new();
@@ -106,6 +123,7 @@ impl ColdDeclarationNames {
             seal_value: seal.fingerprint(),
             identity: identity.finish(),
             completion,
+            outputs,
         }))
     }
     fn completion_identity(
@@ -264,6 +282,40 @@ impl ColdDeclarationNames {
             lookup,
         }))
     }
+    fn lookup_prefix(&self, ordinal: u32, name: &MacroName,
+        comparison: crate::syntax::token_wire::NameContextKey,
+    ) -> Result<ColdNameStep, Diagnostic> {
+        let scope = self.scope.captured();
+        let index = DeclarationNameIndex::new(&self.tables, scope.facts(), scope.scope(),
+            scope.parsed()?.key().profile.edition);
+        let found = index.lookup_prefix::<crate::frontend::names::NameNamespaces>(
+            ordinal, crate::source::manifest::Namespace::Type, name,
+            || Ok(comparison), None, Some(&self.names), |_| None,
+        )?;
+        Ok(match found {
+                PrefixResolution::Name(found) => ColdNameStep::Name(found),
+                PrefixResolution::NeedImport(id) | PrefixResolution::NeedDeclaration(id) => {
+                    ColdNameStep::Name(crate::frontend::names::NameLookup::NeedInput(id))
+                }
+                PrefixResolution::ModuleTail if scope.scope().owner.is_none() => {
+                    ColdNameStep::Module(crate::db::key::CurrentModuleNameKey {
+                        source: scope.source().selection().outline.clone(),
+                        path: scope.source().selection().path.as_str().into(),
+                        bucket: crate::db::key::BucketKey {
+                            scope: scope.scope().clone(),
+                            namespace: crate::source::manifest::Namespace::Type,
+                            name: name.as_str().into(),
+                        },
+                    })
+                }
+                PrefixResolution::ModuleTail | PrefixResolution::NeedOwnerGeneric => {
+                    ColdNameStep::Pending
+                }
+                PrefixResolution::Parameter(_) => {
+                    return Err(error("cold lexical tail cannot invent a header parameter"));
+                }
+            })
+    }
     pub(crate) fn lookup(
         &self,
         db: &mut Database,
@@ -272,7 +324,7 @@ impl ColdDeclarationNames {
     ) -> QueryPoll<Option<crate::frontend::names::NameLookup>> {
         let step = (|| {
             if !self.covers_declaration_source(db, declaration.definition)? {
-                return Ok(ColdNameStep::Pending);
+                return self.lookup_generated(db, declaration, name);
             }
             self.require_current(db)?;
             self.require_scope_slot(db, declaration.scope)?;
@@ -333,48 +385,12 @@ impl ColdDeclarationNames {
                 return Err(error("cold Type lexical ordinal differs"));
             }
             let name = MacroName::local(name.text(), parsed.token_edition(proof.range())?)?;
-            let index = DeclarationNameIndex::new(
-                &self.tables,
-                scope.facts(),
-                scope.scope(),
-                parsed.key().profile.edition,
-            );
-            let found = index.lookup_prefix::<crate::frontend::names::NameNamespaces>(
-                ordinal,
-                crate::source::manifest::Namespace::Type,
-                &name,
-                || Ok(self.context.comparison()),
-                None,
-                Some(&self.names),
-                |_| None,
-            )?;
-            Ok(match found {
-                PrefixResolution::Name(found) => ColdNameStep::Name(found),
-                PrefixResolution::NeedImport(id) | PrefixResolution::NeedDeclaration(id) => {
-                    ColdNameStep::Name(crate::frontend::names::NameLookup::NeedInput(id))
-                }
-                PrefixResolution::ModuleTail if scope.scope().owner.is_none() => {
-                    ColdNameStep::Module(crate::db::key::CurrentModuleNameKey {
-                        source: scope.source().selection().outline.clone(),
-                        path: scope.source().selection().path.as_str().into(),
-                        bucket: crate::db::key::BucketKey {
-                            scope: scope.scope().clone(),
-                            namespace: crate::source::manifest::Namespace::Type,
-                            name: name.as_str().into(),
-                        },
-                    })
-                }
-                PrefixResolution::ModuleTail | PrefixResolution::NeedOwnerGeneric => {
-                    ColdNameStep::Pending
-                }
-                PrefixResolution::Parameter(_) => {
-                    return Err(error("cold lexical tail cannot invent a header parameter"));
-                }
-            })
+            self.lookup_prefix(ordinal, &name, self.context.comparison())
         })();
         match step {
             Err(error) => QueryPoll::Ready(Err(error)),
             Ok(ColdNameStep::Pending) => QueryPoll::Ready(Ok(None)),
+            Ok(ColdNameStep::Demand(input)) => QueryPoll::NeedInput(input),
             Ok(ColdNameStep::Name(found)) => QueryPoll::Ready(Ok(Some(found))),
             Ok(ColdNameStep::Module(key)) => {
                 match db.fetch(

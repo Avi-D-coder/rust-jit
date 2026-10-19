@@ -1,0 +1,7 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Existing full unchanged32-head control; no skips, no guest execution or solver claim.",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation"
+  ]
+}

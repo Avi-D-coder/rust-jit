@@ -1,0 +1,10 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Final explicit map-count encoding delta: recheck complete32-head witness, generated input/epoch guards, retained entered receipt and unchanged runtime main. V310 broader8-control evidence remains tied to its own source.",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_global_catalog_impl_heads_use_actual_source_types_without_body_preparation",
+    "cli::preentry_loader_tests::unchanged_generated_local_heads_observe_actual_completion_input_and_epoch_all_editions",
+    "cli::type_preparation::tests::unchanged_local_annotation_receipts_bind_actual_headers_nodes_and_generations_all_editions",
+    "cli::type_preparation::tests::unchanged_local_annotated_impl_main_executes_through_ordinary_entry_all_editions"
+  ]
+}
