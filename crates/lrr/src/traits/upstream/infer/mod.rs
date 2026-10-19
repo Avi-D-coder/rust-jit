@@ -207,21 +207,6 @@ pub struct TypeOutlivesConstraint<'db> {
     pub origin: Span,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MemberConstraint<'db> {
-    /// The `DefId` and args of the opaque type causing this constraint.
-    /// Used for error reporting.
-    pub key: OpaqueTypeKey<'db>,
-
-    /// The hidden type in which `member_region` appears: used for error reporting.
-    pub hidden_ty: Ty<'db>,
-
-    /// The region `R0`.
-    pub member_region: Region<'db>,
-
-    /// The options `O1..On`.
-    pub choice_regions: Arc<Vec<Region<'db>>>,
-}
 impl<'db> InferenceStorage<'db> {
     pub fn universe(&self) -> UniverseIndex {
         self.universe.get()
@@ -249,3 +234,10 @@ mod client_operations;
 mod generalize;
 
 pub(crate) mod canonical;
+
+impl<'db> InferCtxtInner<'db> {
+    pub fn region_assumptions(&self) -> &[ArgOutlivesPredicate<'db>] {
+        &self.region_assumptions
+    }
+}
+mod region_response;

@@ -432,6 +432,7 @@ fn check_current_region_collector<'cx>(cx: DbInterner<'cx>, span: Span) {
         assert_eq!(data.constraints[5].0.sub, Region::new_static(cx));
         assert_eq!(data.constraints[6].0.kind, ConstraintKind::RegSubVar);
     }
+    check_region_response(&context, span);
     context.rollback_to(snapshot);
     assert_eq!(context.universe(), root);
     assert_eq!(context.num_region_vars(), 3);
@@ -797,4 +798,57 @@ fn check_canonical_instantiation<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, span
     let (same,none) = owner.instantiate_canonical(span,&empty);
     assert_eq!(same,actual);assert!(none.var_values.items().is_empty());
     assert!(cx.services().ready(cx).is_err(),"canonical transport cannot grant full source facts or a solver answer");
+}
+
+// Actual current compiler response conversion, non-consuming dedup and undo.
+fn check_region_response<'cx>(context: &super::InferenceContext<'cx>, span: Span) {
+    use super::region_response::make_query_region_constraints;
+    use super::region_constraints::ConstraintKind;
+    use ty::solve::VisibleForLeakCheck::{Yes,No,Unreachable};
+    use ty::inherent::GenericArg as _;
+    let before = context.make_deduplicated_region_constraints();
+    let raw = context.with_region_constraints(|data| make_query_region_constraints(vec![],data,vec![]));
+    assert_eq!(raw.constraints.len(),8);assert!(raw.assumptions.is_empty());
+    context.with_region_constraints(|data| {
+        for ((source,origin),response) in data.constraints.iter().zip(&raw.constraints) {
+            assert_eq!(*origin,span);assert_eq!(response.origin,span);
+            assert_eq!(response.visible_for_leak_check,source.visible_for_leak_check);
+            match (source.kind,response.constraint) {
+                (ConstraintKind::VarEqVar|ConstraintKind::VarEqReg|ConstraintKind::RegEqReg,ty::RegionConstraint::Eq(eq)) => assert_eq!((eq.0,eq.1),(source.sup,source.sub)),
+                (ConstraintKind::VarSubVar|ConstraintKind::RegSubVar|ConstraintKind::VarSubReg|ConstraintKind::RegSubReg,ty::RegionConstraint::Outlives(out)) => assert_eq!((out.0.expect_region(),out.1),(source.sup,source.sub)),
+                other=>panic!("equality/outlives source identity changed: {other:?}"),
+            }
+        }
+    });
+    let first = context.with_region_constraints(|data| data.constraints[0].0);
+    assert_eq!(first.visible_for_leak_check,No);
+    let snapshot = context.start_snapshot();
+    let unknown = context.next_ty_var(span);
+    let assumption = ty::OutlivesClause(unknown.into(),first.sub);
+    context.register_region_assumption(assumption);
+    context.register_type_outlives_constraint(unknown,first.sub,span);
+    context.inner.borrow_mut().unwrap_region_constraints().make_eqregion(span,first.sub,first.sup,Yes);
+    let obligations=context.inner.borrow().region_obligations().to_vec();
+    let assumptions=context.inner.borrow().region_assumptions().to_vec();
+    let collected = context.with_region_constraints(|data| make_query_region_constraints(obligations,data,assumptions));
+    assert_eq!(collected.constraints.len(),10);assert_eq!(collected.assumptions,vec![assumption]);
+    let last=collected.constraints.last().unwrap();assert_eq!(last.visible_for_leak_check,Unreachable);assert_eq!(last.origin,span);
+    assert!(matches!(last.constraint,ty::RegionConstraint::Outlives(out) if out.0.expect_ty()==unknown && out.1==first.sub));
+    let dedup=context.make_deduplicated_region_constraints();
+    assert_eq!(dedup.len(),9);assert_eq!(dedup[0].0,before[0].0);assert_eq!(dedup[0].1,Yes);
+    assert_eq!(context.make_deduplicated_region_constraints(),dedup,"collection is non-consuming and stable");
+    assert_eq!(context.inner.borrow().region_obligations().len(),1);assert_eq!(context.inner.borrow().region_assumptions(),&[assumption]);
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| context.take_registered_region_assumptions())).is_err());
+    let probe=context.probe(|_| {
+        context.register_region_assumption(assumption);
+        assert_eq!(context.inner.borrow().region_assumptions().len(),2);
+        context.make_deduplicated_region_constraints()
+    });assert_eq!(probe,dedup);assert_eq!(context.inner.borrow().region_assumptions(),&[assumption]);
+    context.rollback_to(snapshot);
+    assert_eq!(context.make_deduplicated_region_constraints(),before);
+    assert!(context.inner.borrow().region_obligations().is_empty());assert!(context.inner.borrow().region_assumptions().is_empty());
+    let independent=super::InferenceContext::new(context.interner,ty::TypingMode::PostAnalysis);
+    assert!(independent.make_deduplicated_region_constraints().is_empty());
+    let a=ty::OutlivesClause(independent.next_ty_var(span).into(),independent.next_region_var(span));
+    independent.register_region_assumption(a);assert_eq!(independent.take_registered_region_assumptions(),vec![a]);assert!(independent.take_registered_region_assumptions().is_empty());
 }

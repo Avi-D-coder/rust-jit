@@ -19,7 +19,6 @@ use tracing::{debug, instrument};
 
 use self::CombineMapType::*;
 use self::UndoLog::*;
-use super::MemberConstraint;
 use super::unify_key::RegionVidKey;
 use crate::traits::upstream::infer::unify_key::RegionVariableValue;
 use crate::traits::upstream::infer::{
@@ -78,11 +77,6 @@ pub struct RegionConstraintData<'db> {
     /// Constraints of the form `A <= B`, where either `A` or `B` can
     /// be a region variable (or neither, as it happens).
     pub constraints: Vec<(Constraint<'db>, Span)>,
-
-    /// Constraints of the form `R0 member of [R1, ..., Rn]`, meaning that
-    /// `R0` must be equal to one of the regions `R1..Rn`. These occur
-    /// with `impl Trait` quite frequently.
-    pub member_constraints: Vec<MemberConstraint<'db>>,
 
     /// A "verify" is something that we need to verify after inference
     /// is done, but which does not directly affect inference in any
@@ -887,10 +881,9 @@ impl<'db> RegionConstraintData<'db> {
     pub fn is_empty(&self) -> bool {
         let RegionConstraintData {
             constraints,
-            member_constraints,
             verifys,
         } = self;
-        constraints.is_empty() && member_constraints.is_empty() && verifys.is_empty()
+        constraints.is_empty() && verifys.is_empty()
     }
 }
 

@@ -1,0 +1,202 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "recorded_at": "2026-10-19T22:03:00.817480+00:00",
+  "parent": "9f7b82df4826a66cfae9c19e9119da7f4c59a338",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "integration_status": "held_component_validated",
+  "architecture_record": "worktracks/05-trait-goal-engine/2026-10-19-upstream-region-response.md",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-19-upstream-region-response-review.md",
+  "new_distinct_stock_runtime_gains": 0,
+  "refreshed_suite_total": null,
+  "root_solver_evaluations": 0,
+  "attempts": {
+    "361": {
+      "sessions": {
+        "lib": 45200
+      },
+      "terminal_exits": {
+        "lib": 101
+      },
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T21:56:46.592328+00:00",
+          "head": "9f7b82df4826a66cfae9c19e9119da7f4c59a338",
+          "file_count": 8597,
+          "source_sha256": "990ab467dbabc491529b78e93a7942d3d4a3e6289d4e945bbb66e589cdeffe46",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T21:57:32.019337+00:00",
+          "head": "9f7b82df4826a66cfae9c19e9119da7f4c59a338",
+          "file_count": 8597,
+          "source_sha256": "990ab467dbabc491529b78e93a7942d3d4a3e6289d4e945bbb66e589cdeffe46",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "compiler_errors": [
+        "error[E0308]: mismatched types\n  --> crates/lrr/src/traits/upstream/infer/region_response.rs:42:19\n   |\n42 |         .map(|(c, &origin)| match c.kind {\n   |               ----^^^^^^^-\n   |               |   |\n   |               |   expected `Span`, found `&_`\n   |               expected due to this\n   |\n   = note: expected struct `model::Span`\n           found reference `&_`\nhelp: consider removing `&` from the pattern\n   |\n42 -         .map(|(c, &origin)| match c.kind {\n42 +         .map(|(c, origin)| match c.kind {\n   |\n\n"
+      ],
+      "build_terminals": {
+        "lib": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 1 previous error; 48 warnings emitted\n"
+      },
+      "commands": {
+        "lib": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json"
+      }
+    },
+    "362": {
+      "sessions": {
+        "lib": 6481,
+        "cli": 56913,
+        "controls": 79393
+      },
+      "terminal_exits": {
+        "lib": 0,
+        "cli": 0,
+        "controls": 0
+      },
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T21:57:34.444997+00:00",
+          "head": "9f7b82df4826a66cfae9c19e9119da7f4c59a338",
+          "file_count": 8597,
+          "source_sha256": "f3e88ba5d9399eed48ee7601b413d02548ace8caef8a2f48451009ba2b99aae2",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T21:59:35.077190+00:00",
+          "head": "9f7b82df4826a66cfae9c19e9119da7f4c59a338",
+          "file_count": 8597,
+          "source_sha256": "f3e88ba5d9399eed48ee7601b413d02548ace8caef8a2f48451009ba2b99aae2",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+              "sha256": "b8a20fa934ce66ab2690b1988cc8026622f597b5f466d31045a61b9d58bf35ea"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "cec22c9736993c3e9ab239b88e11b02d12bef53e30735d434f75227d40586961"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T22:03:00.620786+00:00",
+          "head": "9f7b82df4826a66cfae9c19e9119da7f4c59a338",
+          "file_count": 8597,
+          "source_sha256": "f3e88ba5d9399eed48ee7601b413d02548ace8caef8a2f48451009ba2b99aae2",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+              "sha256": "b8a20fa934ce66ab2690b1988cc8026622f597b5f466d31045a61b9d58bf35ea"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "cec22c9736993c3e9ab239b88e11b02d12bef53e30735d434f75227d40586961"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "compiler_errors": [],
+      "build_terminals": {
+        "lib": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 29.90s\n",
+        "cli": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 19.96s\n"
+      },
+      "commands": {
+        "lib": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+        "cli": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+        "controls": "python3.12 tools/validation/run_controls.py artifacts/validation-current-v362 worktracks/05-trait-goal-engine/2026-10-19-upstream-region-response-controls.json"
+      },
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 121.991,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 46.509,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.377,
+          "log": "control-2.log"
+        }
+      ],
+      "control_terminal_tails": {
+        "control-0.log": "assertion failed: self.compatible(self.ordinary_layout(id), args)\nactual guarded upstream TraitRefs:2; actual pinned inference storage/rollback per source head; ordinary generic metadata and actual constructor, no ready facts or solver evaluation\nactual guarded shared IR tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs,edition2024,origin2: 2source heads; intern reuse, canonical/parameter/TraitRef identity and stale/foreign context guards; no solver or guest execution\nactual shared source heads encoded:140; no typed source-fact publication or upstream solving\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1781 filtered out; finished in 121.57s\n\n",
+        "control-1.log": "actual typed source generics: 3rows/2consts/2regions; 7source identity refusals; actual generics_of and identity_for_item, no full facts or solver root\nactual generic Type facts tests/ui/const-generics/type-dependent/issue-61936.rs,edition2024,origin1: 3rows/2consts/2regions; original main unexecuted\nactual typed source generics: 3rows/2consts/2regions; 7source identity refusals; actual generics_of and identity_for_item, no full facts or solver root\nactual generic Type facts tests/ui/const-generics/type-dependent/issue-61936.rs,edition2024,origin2: 3rows/2consts/2regions; original main unexecuted\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1781 filtered out; finished in 46.09s\n\n",
+        "control-2.log": "test traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind ... \nthread 'traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind' (18685516) panicked at crates/lrr/src/traits/upstream/storage.rs:162:21:\nexercise cache cleanup while unwinding\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1781 filtered out; finished in 0.00s\n\n"
+      }
+    }
+  },
+  "vendor_provenance": {
+    "command": "python3.12 tools/bootstrap_trait_solver.py --verify-upstream",
+    "session": 35964,
+    "exit": 0,
+    "output": "{\"commit\": \"ae0fe511b15ab760d7e963b13389d1bc2ab42b18\", \"crates\": 8, \"files\": 181, \"source_bytes\": 2655462, \"rust_source_changes\": 5, \"retained_original_rust_changes\": 0, \"registered_rust_adaptation\": \"stable-region-assumptions-v2-leak-indexes\", \"upstream_git_objects_verified\": true}\n",
+    "projection_command": "python3.12 tools/sync_upstream_inference.py",
+    "projection_output": "Pinned inference storage: exact originals and registered mechanical port; no local undo/commit/unification algorithm or solver delegate.\n"
+  },
+  "removed_production_routes": [
+    "Old unwritten RA RegionConstraintData.member_constraints vector and is_empty dependency",
+    "Unused RA MemberConstraint record/import; actual compiler data/is_empty replace it, no compatibility alias or silent field discard"
+  ],
+  "source_route": "Q69/Q70/Encoder -> actual Cx -> InferenceContext/shared region collector -> pinned make_query_region_constraints -> actual next-solver make_deduplicated_region_constraints; register/take use existing combined undo and owner",
+  "known_gaps": [
+    "No full SolverDelegate/root/trait answer or selected-member/VM integration",
+    "No complete relevant source facts/ParamEnv/ADT/variance/function binder/source opaque/response/canonical/currentness/dictionary bridge",
+    "Query record diagnostic category maps explicitly to actual Span origin; exact category/record Fold/Visit/serialization fidelity unclaimed",
+    "No original mains executed by host source matrix; prior V356 configured multidispatch1 ambiguous get runtime failure remains latest, not rerun for untouched call paths",
+    "Zero stock runtime gain/suite total/full fixture/M020/interpreter/JIT/Linux/performance/diagnostic closure"
+  ]
+}

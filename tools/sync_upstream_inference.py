@@ -15,6 +15,7 @@ from upstream_leak_check import extend_leak_check
 from upstream_obligation_state import extend_obligation_state
 from upstream_infer_client import extend_infer_client
 from upstream_canonical_instantiation import extend_canonical_instantiation
+from upstream_region_response import extend_region_response
 
 ROOT = Path(__file__).resolve().parents[1]
 PIN = 'ae0fe511b15ab760d7e963b13389d1bc2ab42b18'
@@ -141,6 +142,7 @@ impl Span {
     extend_obligation_state(outputs, header, rustfmt)
     extend_infer_client(outputs, header, rustfmt)
     extend_canonical_instantiation(outputs, header, rustfmt)
+    extend_region_response(outputs, header, rustfmt)
     return outputs
 
 

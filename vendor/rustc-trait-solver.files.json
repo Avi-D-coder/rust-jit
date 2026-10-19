@@ -397,6 +397,13 @@
       "upstream_sha256": "6d521765f1c5630f1c4eac6478250e523a91d31b80e82455e5d026b1756a7a2d"
     },
     {
+      "path": "compiler/rustc_infer/src/infer/canonical/query_response.rs",
+      "bytes": 29764,
+      "sha256": "56b972b5a87fd18c3494cc015f6c9a95cdd136090da623b298db45dd7ca0239f",
+      "upstream": "compiler/rustc_infer/src/infer/canonical/query_response.rs",
+      "upstream_sha256": "56b972b5a87fd18c3494cc015f6c9a95cdd136090da623b298db45dd7ca0239f"
+    },
+    {
       "path": "compiler/rustc_infer/src/infer/context.rs",
       "bytes": 17607,
       "sha256": "ce9a4271702995747f262724abbfedeb2dbc353dd6ac24a1e726b742acabb886",
@@ -423,6 +430,13 @@
       "sha256": "633e22af8b50fa814659215d25ff4d7bdfe6bc1973475092a3f565c213beab71",
       "upstream": "compiler/rustc_infer/src/infer/opaque_types/table.rs",
       "upstream_sha256": "633e22af8b50fa814659215d25ff4d7bdfe6bc1973475092a3f565c213beab71"
+    },
+    {
+      "path": "compiler/rustc_infer/src/infer/outlives/mod.rs",
+      "bytes": 5080,
+      "sha256": "fae5c371428bd36956a2da21627ce44205c0eeadb87b5b22d541d2c094d2f346",
+      "upstream": "compiler/rustc_infer/src/infer/outlives/mod.rs",
+      "upstream_sha256": "fae5c371428bd36956a2da21627ce44205c0eeadb87b5b22d541d2c094d2f346"
     },
     {
       "path": "compiler/rustc_infer/src/infer/outlives/obligations.rs",
@@ -493,6 +507,13 @@
       "sha256": "2e5f26dba08abf4f96c52975f1ac0fba42c37d2e650de96f9a182314e7b88f53",
       "upstream": "compiler/rustc_infer/src/infer/type_variable.rs",
       "upstream_sha256": "2e5f26dba08abf4f96c52975f1ac0fba42c37d2e650de96f9a182314e7b88f53"
+    },
+    {
+      "path": "compiler/rustc_middle/src/infer/canonical.rs",
+      "bytes": 8347,
+      "sha256": "a93e513ae058def7ec200af342b23a1f3088417ffdd335bbbf6345fd8953d4c0",
+      "upstream": "compiler/rustc_middle/src/infer/canonical.rs",
+      "upstream_sha256": "a93e513ae058def7ec200af342b23a1f3088417ffdd335bbbf6345fd8953d4c0"
     },
     {
       "path": "compiler/rustc_middle/src/mir/syntax.rs",
@@ -759,6 +780,13 @@
       "sha256": "30b279f3b182ad08a00889b98525219f7db9b7f99ad04170d648b5d317d537f4",
       "upstream": "compiler/rustc_next_trait_solver/src/solve/trait_goals.rs",
       "upstream_sha256": "30b279f3b182ad08a00889b98525219f7db9b7f99ad04170d648b5d317d537f4"
+    },
+    {
+      "path": "compiler/rustc_trait_selection/src/solve/delegate.rs",
+      "bytes": 24761,
+      "sha256": "ad43375618c2e3a7c5ff6f69abfc8a4af33ae1d003cb003d350aea0bb0d17095",
+      "upstream": "compiler/rustc_trait_selection/src/solve/delegate.rs",
+      "upstream_sha256": "ad43375618c2e3a7c5ff6f69abfc8a4af33ae1d003cb003d350aea0bb0d17095"
     },
     {
       "path": "compiler/rustc_type_ir/Cargo.toml",
@@ -1292,6 +1320,10 @@
     "compiler/rustc_infer/src/infer/relate/generalize.rs",
     "compiler/rustc_infer/src/infer/canonical/mod.rs",
     "compiler/rustc_infer/src/infer/canonical/instantiate.rs",
+    "compiler/rustc_infer/src/infer/canonical/query_response.rs",
+    "compiler/rustc_infer/src/infer/outlives/mod.rs",
+    "compiler/rustc_middle/src/infer/canonical.rs",
+    "compiler/rustc_trait_selection/src/solve/delegate.rs",
     "compiler/rustc_infer/src/infer/region_constraints/mod.rs",
     "compiler/rustc_data_structures/src/graph/mod.rs",
     "compiler/rustc_data_structures/src/graph/reference.rs",
