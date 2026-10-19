@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V255/V256 HELD M019/M020 prerequisite: original module/local annotation targets now retain actual Outline or canonical lexical plan rows, with all-four-edition source/entry identity and shared Arc controls. The ordinary collector retains immutable plans and direct pinned deferred-binding locations; four alternate original derive/attribute full-source parses are removed. V255 library/CLI builds pass and 9/10 controls pass, including the existing unchanged copy contract direct/user-macro/wrapper across all four editions (12 runtime worlds, no new distinct stock gain). Its complete global source matrix still fails on coherence-impl-in-fn in all four editions, while eight other source worlds succeed. V256 tightens exact Meta attachment; both builds and 4/4 targeted controls pass. V255 runtime/catalog evidence stays attached to V255 fingerprint. Guards match. Local derive grouping/origin/append/completion, local container target gaps, existing O(body) identity validation, full catalog/solver/runtime/milestone/JIT gates remain incomplete. Solo root remains the only writer; existing shared syntax/derive/discovery interfaces remain under their root-owned reservations.",
+      "scope": "V257/V258 HELD M019/M020 local-annotation prerequisite: module and actual cold attribute producers share retained canonical item attachment, derive group selection and source-origin replay. Selected local builtin output now admits Items from real Statements context without modifying the parent scan, using authenticated canonical insertion scope. The same generated-header kernel accepts an actual declaration receipt, preserves that local owner and continues to reject bare owned scope keys; ordinary module derives use this admitted route too. V257 builds pass with 8/10 controls, exposing the existing module-only header refusal; V258 builds pass with 9/10 controls. The new unchanged coherence fixture control selects, expands, validates and projects one real derived impl header in all four editions with no body/signature/thunk/pattern query or guest execution. Existing copy runtime direct/user-macro/wrapper regression passes 12 worlds. The complete global catalog source matrix still FAILS on the nested derive in all four editions, with eight other source worlds successful. Item-group ownership, real cold prefix/adoption, append/completion and full catalog/solver/runtime/JIT integration remain held. Zero new distinct stock runtime gains; no refreshed suite total. All source/HEAD/binary guards match. Solo root remains the only writer; shared syntax/derive/discovery/header interfaces remain under existing root reservations.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1730,11 +1730,15 @@
         "worktracks/05-trait-goal-engine/2026-10-19-original-local-annotation-targets.md",
         "worktracks/05-trait-goal-engine/2026-10-19-original-local-annotation-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-original-local-annotation-controls.json",
-        "worktracks/05-trait-goal-engine/2026-10-19-original-local-annotation-final-controls.json"
+        "worktracks/05-trait-goal-engine/2026-10-19-original-local-annotation-final-controls.json",
+        "crates/lrr/src/expand/derive_origin.rs",
+        "worktracks/05-trait-goal-engine/2026-10-19-local-derive-selection.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-local-derive-selection-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-local-derive-selection-controls.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T12:49:16.479532+00:00",
+      "updated_at": "2026-10-19T13:07:35.436125+00:00",
       "review_after": "2026-10-20T08:52:46.617857+00:00"
     }
   ],

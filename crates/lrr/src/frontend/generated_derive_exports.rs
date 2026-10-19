@@ -291,7 +291,9 @@ impl GeneratedDeriveExports {
             preparation: catalog.preparation(),
         })
     }
-    pub(crate) fn catalog_identity(&self) -> Digest { self.catalog }
+    pub(crate) fn catalog_identity(&self) -> Digest {
+        self.catalog
+    }
     pub fn rows(&self) -> &[GeneratedDeriveExportRow] {
         &self.rows
     }
@@ -313,7 +315,13 @@ impl GeneratedDeriveExports {
                 "generated derive path is inaccessible",
             )),
             PathLookup::NeedInput(input) => Ok(Some(*input)),
-            _ if row.selected.as_ref().is_some_and(|selected| selected.builtin.is_some()) => Ok(None),
+            _ if row
+                .selected
+                .as_ref()
+                .is_some_and(|selected| selected.builtin.is_some()) =>
+            {
+                Ok(None)
+            }
             _ => Ok(Some(row.helper_demand.unwrap_or(row.occurrence))),
         }
     }
@@ -400,6 +408,20 @@ impl DeriveDeclarationRequest {
             return Err(fault(
                 "LRR-E-EXPANSION-INPUT",
                 "source derive catalog consumer differs",
+            ));
+        }
+        let target = source
+            .original_annotation_producer(producer)?
+            .ok_or_else(|| {
+                fault(
+                    "LRR-E-EXPANSION-INPUT",
+                    "source derive canonical target unavailable",
+                )
+            })?;
+        if target.item() != item {
+            return Err(fault(
+                "LRR-E-EXPANSION-INPUT",
+                "source derive item differs from actual producer target",
             ));
         }
         let Some(export) = catalog.select(&definition, ProceduralKind::Derive)? else {

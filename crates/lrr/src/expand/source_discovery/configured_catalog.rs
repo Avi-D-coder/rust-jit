@@ -264,6 +264,48 @@ impl SourceDiscovery {
 
 #[cfg(test)]
 impl SourceDiscovery {
+    /// Pure selection replay against the actual configured source/compiler
+    /// namespace. This control does not append output, settle the source job
+    /// or assert catalog completeness.
+    pub(crate) fn inspect_original_derive_selection(
+        &mut self,
+        source: &SourceSelection,
+        producer: Digest,
+    ) -> Result<
+        (
+            crate::expand::source_derives::SourceDerivePoll,
+            Digest,
+            Digest,
+        ),
+        Diagnostic,
+    > {
+        let ordinal = self
+            .sources
+            .iter()
+            .position(|view| view.selection() == source)
+            .ok_or_else(|| fault("derive control actual source absent"))?;
+        let (environment, engine, providers) = self
+            .declarative
+            .as_ref()
+            .ok_or_else(|| fault("derive control actual compiler preparation absent"))?;
+        let names = Self::install_macro_routes_with_modules(
+            crate::expand::source_discovery::unique_graph(&mut self.graph)?,
+            providers,
+            &self.module_routes,
+            &self.nested_sources,
+            &self.nested_inert_proofs,
+            &mut self.route_install,
+        )?;
+        let poll = crate::expand::source_derives::prepare_group(
+            &self.sources[ordinal],
+            &providers[ordinal],
+            producer,
+            &names,
+            &Default::default(),
+            &self.helper_declarations,
+        )?;
+        Ok((poll, *environment, *engine))
+    }
     /// Source-only failure evidence; no alternate resolution or execution.
     pub(crate) fn catalog_pending_source_evidence(&self) -> Vec<String> {
         let mut rows = vec![format!(

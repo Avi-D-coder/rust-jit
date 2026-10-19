@@ -2914,12 +2914,8 @@ impl SourceDiscovery {
         let mut encoded = crate::core::digest::StableEncoder::new("lrr/v2/item-declaration-job");
         encoded.digest(declaration.fingerprint());
         let declaration_job = encoded.finish();
-        let plan = crate::frontend::generated_headers::GeneratedHeaderPlan::prepare(
-            &items,
-            call.scope.clone(),
-            crate::syntax::token_wire::Key(record.key().parent_context.0),
-            self.sources[ordinal].captured_macro_cfg()?,
-            self.epoch,
+        let plan = crate::frontend::generated_headers::GeneratedHeaderPlan::prepare_admitted(
+            &items, &declaration, cfg, self.epoch,
         )?;
         let impl_headers = declaration.item_impl_headers(&items, cfg, &plan)?;
         let trait_headers = declaration.item_trait_headers(&items, cfg, &plan)?;

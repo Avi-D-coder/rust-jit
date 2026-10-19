@@ -225,7 +225,8 @@ impl SourceDeriveSelection {
         )
         .map_err(|e| fault(&e.message))?;
         let input_identity = crate::expand::builtin_derives::input_identity(
-            &input.encode().map_err(|e| fault(&e.message))?, *facts,
+            &input.encode().map_err(|e| fault(&e.message))?,
+            *facts,
         )?;
         let key = crate::expand::identity::ExpansionKey {
             macro_identity: MacroIdentity::BuiltinDerive {
@@ -278,6 +279,19 @@ impl SourceDeriveSelection {
         db: &mut crate::db::memo::Database,
     ) -> Result<(), Diagnostic> {
         self.origin.validate_database(db)
+    }
+    pub(crate) fn original_item_target<'a>(
+        &self,
+        source: &'a PreparedSourceView,
+    ) -> Result<crate::source::original_items::OriginalItemTarget<'a>, Diagnostic> {
+        if self.source.selection() != source.selection() || !self.source.same_publication(source) {
+            return Err(fault("source derive retained publication differs"));
+        }
+        let target = self.origin.source_target(source)?;
+        if &target.item().scope != self.scope() {
+            return Err(fault("source derive canonical insertion scope differs"));
+        }
+        Ok(target)
     }
     pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
         Self::selection_bytes(

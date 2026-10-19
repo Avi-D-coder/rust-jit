@@ -726,15 +726,25 @@ impl SourceAttributeSelection {
             Arc<crate::frontend::generated_derive_helpers::OriginalDeriveHelpers>,
         >,
     ) -> Result<Self, Diagnostic> {
-        let (item_index, item) = source
-            .outline()
-            .items
-            .iter()
-            .enumerate()
-            .find(|(_, item)| {
-                selected_attribute_producer(item).is_some_and(|call| call.item_input == producer)
-            })
-            .ok_or_else(|| fault("source attribute producer absent"))?;
+        let target = source
+            .original_annotation_producer(producer)?
+            .ok_or_else(|| fault("source attribute canonical producer target absent"))?;
+        let item = target.item();
+        let item_index = source.outline().items.iter().position(|row| {
+            row.def_key == item.def_key && row.declaration_span == item.declaration_span
+        });
+        let (cold_scan, grammar) = if item_index.is_some() {
+            (None, crate::expand::identity::GrammarSlot::Items)
+        } else {
+            let scan = source.declaration_inventory(Default::default())?;
+            let row = scan
+                .producers()
+                .iter()
+                .find(|row| row.identity == producer)
+                .ok_or_else(|| fault("source attribute cold producer attachment absent"))?;
+            let grammar = row.grammar;
+            (Some(scan), grammar)
+        };
         if input.source_selection.owner != item.def_key.fingerprint() {
             return Err(fault("source attribute input owner differs"));
         }
@@ -755,7 +765,7 @@ impl SourceAttributeSelection {
             source: source.share(),
             producer,
             scope: item.scope.clone(),
-            grammar: crate::expand::identity::GrammarSlot::Items,
+            grammar,
             input,
             registry: (*registry).clone(),
             call_site,
@@ -763,8 +773,8 @@ impl SourceAttributeSelection {
             catalog: catalog.clone(),
             completed_derives,
             consumed_tests: Vec::new(),
-            source_item_index: Some(item_index),
-            cold_scan: None,
+            source_item_index: item_index,
+            cold_scan,
             generated_parent: None,
             generated_sources: Vec::new(),
             inherited_helpers,

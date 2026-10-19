@@ -769,25 +769,16 @@ pub(crate) fn prepare_group(
     };
     // Procedural derives need the run's catalog; builtin derives do not.
     let catalog = provider.procedural.as_ref();
-    let item = source
-        .outline()
-        .items
-        .iter()
-        .find(|item| {
-            crate::syntax::outline::potential_attribute_producer(item)
-                .is_some_and(|c| c.item_input == producer)
-        })
-        .ok_or_else(|| fault("original derive producer absent"))?;
+    let Some(target) = source.original_annotation_producer(producer)? else {
+        return Ok(SourceDerivePoll::Pending);
+    };
+    let item = target.item();
     if !matches!(
         item.def_key.item_kind,
         ItemKind::Struct | ItemKind::Enum | ItemKind::Union
     ) {
         return Ok(SourceDerivePoll::Pending);
     }
-    let target = source
-        .original_item_at(item.declaration_span)?
-        .ok_or_else(|| fault("source derive canonical item target absent"))?;
-    let item = target.item();
     let parsed = source.retained_declaration_parser()?.as_ref();
     let inputs =
         parsed.derive_item_inputs_at(item.declaration_span, source.captured_macro_cfg()?)?;

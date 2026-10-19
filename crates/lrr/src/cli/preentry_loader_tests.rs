@@ -976,14 +976,35 @@ fn unchanged_trait_declarations_share_actual_parser_and_namespace_across_origins
                         "T5" | "T7" => &["X", "Y"],
                         _ => unreachable!(),
                     };
-                    assert_eq!(facts.generics().iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), expected_generics);
+                    assert_eq!(
+                        facts
+                            .generics()
+                            .iter()
+                            .map(|p| p.name.as_str())
+                            .collect::<Vec<_>>(),
+                        expected_generics
+                    );
                     assert_eq!(facts.generic_ranges().len(), expected_generics.len());
                     assert_eq!(facts.supertraits_range().is_some(), name == "T3");
                     assert!(facts.predicates_range().is_none());
                     assert!(facts.attribute_ranges().is_empty());
-                    assert_eq!(facts.supertraits().iter().map(|t| t.text.as_str()).collect::<String>(), if name == "T3" { "T2" } else { "" });
+                    assert_eq!(
+                        facts
+                            .supertraits()
+                            .iter()
+                            .map(|t| t.text.as_str())
+                            .collect::<String>(),
+                        if name == "T3" { "T2" } else { "" }
+                    );
                     if name == "T3" {
-                        assert_eq!(facts.generics()[0].bounds.iter().map(|t| t.text.as_str()).collect::<String>(), "T1");
+                        assert_eq!(
+                            facts.generics()[0]
+                                .bounds
+                                .iter()
+                                .map(|t| t.text.as_str())
+                                .collect::<String>(),
+                            "T1"
+                        );
                     }
                     let parse = db.input(&InputKey::DefinitionSource(definition)).unwrap();
                     let header = db.input(&InputKey::DefinitionHeader(definition)).unwrap();
@@ -1101,27 +1122,46 @@ fn unchanged_auto_and_unsafe_trait_headers_keep_actual_modifiers_without_body_pr
             QueryPoll::NeedInput(input) => panic!("{input:?}"),
         }
     }
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");
+    let root =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");
     for edition in [2015, 2018, 2021, 2024] {
         for (case, expected) in [
-            ("tests/ui/auto-traits/auto-traits.rs", &[("Auto", true, false), ("AutoUnsafe", true, true)][..]),
+            (
+                "tests/ui/auto-traits/auto-traits.rs",
+                &[("Auto", true, false), ("AutoUnsafe", true, true)][..],
+            ),
             ("tests/ui/traits/safety-ok.rs", &[("Foo", false, true)][..]),
         ] {
             let (mut db, seal, scope) = prepared_impl_header_world(&root.join(case), edition);
-            let inventory = ready(db.fetch(&SyntaxProvider, QueryKey::PreparedScopeImplHeaders(seal)));
-            let QueryValue::PreparedScopeImplHeaders(inventory) = inventory.value.as_ref() else { panic!() };
+            let inventory =
+                ready(db.fetch(&SyntaxProvider, QueryKey::PreparedScopeImplHeaders(seal)));
+            let QueryValue::PreparedScopeImplHeaders(inventory) = inventory.value.as_ref() else {
+                panic!()
+            };
             let environment = inventory.inventory_root().environment().unwrap();
             db.trace.detailed = true;
             let start = db.trace.events.len();
             for (name, auto_trait, unsafe_trait) in expected {
-                let NameLookup::Defined(selected) = environment.names().lookup_source_path(
-                    Namespace::Type, &[ImportSegment::Name((*name).into())], false, &scope, edition,
-                ).unwrap() else { panic!("actual upstream trait absent") };
+                let NameLookup::Defined(selected) = environment
+                    .names()
+                    .lookup_source_path(
+                        Namespace::Type,
+                        &[ImportSegment::Name((*name).into())],
+                        false,
+                        &scope,
+                        edition,
+                    )
+                    .unwrap()
+                else {
+                    panic!("actual upstream trait absent")
+                };
                 let key = QueryKey::TraitDeclaration(selected.identity);
                 let first = ready(db.fetch(&SyntaxProvider, key.clone()));
                 let second = ready(db.fetch(&SyntaxProvider, key));
                 assert!(std::sync::Arc::ptr_eq(&first.value, &second.value));
-                let QueryValue::TraitDeclaration(declaration) = first.value.as_ref() else { panic!() };
+                let QueryValue::TraitDeclaration(declaration) = first.value.as_ref() else {
+                    panic!()
+                };
                 let header = declaration.header().unwrap();
                 assert_eq!(header.is_auto(), *auto_trait);
                 assert_eq!(header.is_unsafe(), *unsafe_trait);
@@ -1129,25 +1169,40 @@ fn unchanged_auto_and_unsafe_trait_headers_keep_actual_modifiers_without_body_pr
                 assert!(header.generics().is_empty());
                 assert!(header.supertraits().is_empty());
                 assert!(header.predicates().is_empty());
-                assert_eq!(header.fingerprint(), declaration.header().unwrap().fingerprint());
+                assert_eq!(
+                    header.fingerprint(),
+                    declaration.header().unwrap().fingerprint()
+                );
             }
             assert!(db.trace.events[start..].iter().all(|event| !matches!(
-                event.key, QueryKey::BodyStructure(_) | QueryKey::Thunk(_) | QueryKey::PatternPlan(_) | QueryKey::FunctionSignature(_)
+                event.key,
+                QueryKey::BodyStructure(_)
+                    | QueryKey::Thunk(_)
+                    | QueryKey::PatternPlan(_)
+                    | QueryKey::FunctionSignature(_)
             )));
         }
     }
 }
 
-
 #[test]
 fn unchanged_impl_receipts_reuse_actual_parse_inputs_without_claiming_solver_readiness() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");
+    let root =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");
     for edition in [2015, 2018, 2021, 2024] {
-        for case in ["tests/ui/methods/method-self-arg-trait.rs", "tests/ui/traits/safety-ok.rs"] {
+        for case in [
+            "tests/ui/methods/method-self-arg-trait.rs",
+            "tests/ui/traits/safety-ok.rs",
+        ] {
             let (mut db, seal, _) = prepared_impl_header_world(&root.join(case), edition);
             let count = crate::traits::upstream::check_scope_receipts(&mut db, seal);
-            assert!(count > 0, "no actual impl receipts for {case}, edition{edition}");
-            eprintln!("actual source receipts {case}, edition{edition}: {count}; no solver or guest execution");
+            assert!(
+                count > 0,
+                "no actual impl receipts for {case}, edition{edition}"
+            );
+            eprintln!(
+                "actual source receipts {case}, edition{edition}: {count}; no solver or guest execution"
+            );
         }
     }
 }
@@ -1381,6 +1436,176 @@ fn mixed_edition_capture_keeps_actual_facade_owning_profile_separate_from_consum
                 .all(|view| view.selection().outline.parse.profile.edition == edition)
         );
         assert!(live.live_units().len() >= 2);
+    }
+}
+
+#[test]
+fn unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin() {
+    use crate::{
+        core::{digest::StableEncode, profile::ProfileIdentity},
+        db::{key::QueryKey, memo::Database},
+        expand::{
+            derive_origin::DeriveDeclarationOrigin,
+            generated_declarations::GeneratedDeclarations,
+            generated_items::GeneratedItems,
+            source_derives::SourceDerivePoll,
+            source_discovery::{SourceCompilerPreparation, SourceDiscovery},
+        },
+        frontend::generated_headers::GeneratedHeaderPlan,
+        syntax::{declaration_scan::DeclarationProducerKind, token_wire::Key},
+    };
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/upstream/rustc-checkout/tests/ui/coherence/coherence-impl-in-fn.rs");
+    for edition in [2015, 2018, 2021, 2024] {
+        let profile = ProfileIdentity {
+            edition,
+            ..ProfileIdentity::current()
+        };
+        let ((inputs, source, sources, _), _) = super::crate_graph::capture_with(
+            &path,
+            false,
+            edition,
+            &super::crate_graph::ExternCrates::default(),
+            crate::source::embedded_crates::standard_facade_crates(&profile),
+            None,
+        )
+        .unwrap();
+        let (compiler, inputs, source, _) =
+            super::compile_inputs::PreparedCompileInputs::prepare(&path, inputs, source, sources)
+                .unwrap();
+        let mut db = Database::default();
+        inputs.publish(&mut db).unwrap();
+        db.begin_expansion_epoch(1).unwrap();
+        db.trace.detailed = true;
+        let mut discovery = match SourceDiscovery::for_impl_catalog(&compiler, &source, 1, &db)
+            .unwrap()
+        {
+            SourceCompilerPreparation::Ready(discovery) => discovery,
+            SourceCompilerPreparation::NeedModule { .. } => panic!("actual source module pending"),
+        };
+        // Drive the real configured preparation, retaining its actual result.
+        // This control validates selection/admission, never treats incomplete
+        // catalog discovery as a runtime or full source-contract pass.
+        let catalog = compiler.discover(&mut discovery, &mut db);
+        eprintln!(
+            "local derive component edition{edition}: catalog preparation {}",
+            match &catalog {
+                Ok(()) => "ready",
+                Err(error) => error.code,
+            }
+        );
+        let scan = source.declaration_inventory(Default::default()).unwrap();
+        let producer = scan
+            .producers()
+            .iter()
+            .find(|row| {
+                row.kind == DeclarationProducerKind::Attribute
+                    && row.unqualified_attribute.as_deref() == Some("derive")
+            })
+            .unwrap();
+        let target = source
+            .original_annotation_producer(producer.identity)
+            .unwrap()
+            .unwrap();
+        let item = target.item();
+        assert_ne!(
+            item.scope, producer.scope,
+            "the scan's coarse function owner is not the local item scope"
+        );
+        let (poll, environment, engine) = discovery
+            .inspect_original_derive_selection(source.selection(), producer.identity)
+            .unwrap();
+        let SourceDerivePoll::Ready(selection) = poll else {
+            panic!("edition{edition}: actual local derive selection remains pending")
+        };
+        assert!(selection.is_builtin());
+        assert_eq!(selection.scope(), &item.scope);
+        selection.validate_database(&mut db).unwrap();
+        let origin = DeriveDeclarationOrigin::Source {
+            selection: source.selection().clone(),
+            producer: producer.identity,
+            item: item.def_key.fingerprint(),
+            header: item.header.fingerprint(),
+        };
+        origin.validate_database(&mut db).unwrap();
+        let bad_header = DeriveDeclarationOrigin::Source {
+            selection: source.selection().clone(),
+            producer: producer.identity,
+            item: item.def_key.fingerprint(),
+            header: Digest([3; 32]),
+        };
+        assert_eq!(
+            bad_header.validate_database(&mut db).unwrap_err().code,
+            "LRR-E-CATALOG-INCOMPLETE"
+        );
+        let bad_producer = DeriveDeclarationOrigin::Source {
+            selection: source.selection().clone(),
+            producer: Digest([0; 32]),
+            item: item.def_key.fingerprint(),
+            header: item.header.fingerprint(),
+        };
+        assert_eq!(
+            bad_producer.validate_database(&mut db).unwrap_err().code,
+            "LRR-E-CATALOG-INCOMPLETE"
+        );
+        let request = selection.builtin_request(environment, engine).unwrap();
+        let record = std::sync::Arc::new(request.expand().unwrap());
+        let generated = GeneratedItems::admit(record.key(), record.clone(), 1).unwrap();
+        let declarations = GeneratedDeclarations::admit_source_derive_output(
+            &selection,
+            record.clone(),
+            1,
+            &source,
+            source.captured_macro_cfg().unwrap(),
+        )
+        .unwrap();
+        assert_eq!(declarations.parent_inventory(), scan.fingerprint());
+        assert_eq!(declarations.parent_invocation(), producer.identity);
+        assert_eq!(declarations.scan().scope(), &item.scope);
+        assert!(
+            GeneratedHeaderPlan::prepare(
+                &generated,
+                item.scope.clone(),
+                Key(record.key().parent_context.0),
+                source.captured_macro_cfg().unwrap(),
+                1,
+            )
+            .is_err(),
+            "a bare local scope key does not supply insertion provenance"
+        );
+        let plan = GeneratedHeaderPlan::prepare_admitted(
+            &generated,
+            &declarations,
+            source.captured_macro_cfg().unwrap(),
+            1,
+        )
+        .unwrap();
+        let headers = declarations
+            .item_impl_headers(&generated, source.captured_macro_cfg().unwrap(), &plan)
+            .unwrap();
+        assert_eq!(headers.len(), 1, "actual first derived impl header");
+        assert!(
+            GeneratedHeaderPlan::prepare(
+                &generated,
+                producer.scope.clone(),
+                Key(record.key().parent_context.0),
+                source.captured_macro_cfg().unwrap(),
+                1,
+            )
+            .is_err(),
+            "the coarse function owner cannot authorize a local insertion"
+        );
+        assert!(db.trace.events.iter().all(|event| !matches!(
+            event.key,
+            QueryKey::BodyStructure(_)
+                | QueryKey::Thunk(_)
+                | QueryKey::PatternPlan(_)
+                | QueryKey::FunctionSignature(_)
+        )));
+        eprintln!(
+            "local derive component edition{edition}: actual selected output admitted; {} impl header; no guest execution",
+            headers.len()
+        );
     }
 }
 

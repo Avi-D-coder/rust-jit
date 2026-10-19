@@ -1,0 +1,16 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "M019/M020 held original local derive selection, source origin and authenticated item insertion; no completed local producer/catalog/runtime claim",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_local_derive_selects_real_output_with_canonical_insertion_and_origin",
+    "source::original_items::tests::unchanged_local_derive_target_reuses_the_entered_canonical_declarations",
+    "source::original_items::tests::unchanged_module_derive_target_keeps_the_real_outline_row",
+    "expand::generated_declarations::scope_replay_tests::generated_module_builtin_inert_attribute_keeps_retained_scope_kind_without_producer",
+    "expand::generated_derives::tests::generated_derive_exports_resolve_raw_absolute_crate_self_and_dollar_crate_paths",
+    "expand::source_derives::compiler_test_inert_binding_tests::compiler_test_proof_fingerprint_binds_negative_attribute_facet_identity",
+    "cli::crate_graph::builtin_derive_tests::unchanged_copy_contract_survives_generated_derives_all_origins_and_editions",
+    "cli::preentry_loader_tests::unchanged_roots_publish_real_global_catalogs_through_common_discovery_and_header_queries",
+    "cli::preentry_loader_tests::global_catalog_rejects_changed_owning_compiler_input_before_publication",
+    "cli::preentry_loader_tests::global_catalog_does_not_complete_an_unknown_cold_macro_or_prepare_cold_call_bodies"
+  ]
+}

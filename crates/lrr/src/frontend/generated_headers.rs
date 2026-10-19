@@ -89,7 +89,8 @@ struct GeneratedRoute {
     enumeration: bool,
 }
 fn contained_scope(scope: &ScopeKey, owner: &ScopeKey) -> bool {
-    scope.owner.is_none()
+    (scope.owner == owner.owner
+        || scope.owner.is_none() && scope.module_path.len() > owner.module_path.len())
         && scope.crate_key == owner.crate_key
         && scope.module_path.starts_with(&owner.module_path)
 }
@@ -105,6 +106,28 @@ impl GeneratedHeaderPlan {
         epoch: u64,
     ) -> Result<Self, Diagnostic> {
         Self::prepare_owned(items, scope, owner_context, owner_context, cfg, epoch)
+    }
+    /// Header projection of actual admitted item output. The declaration
+    /// receipt supplies its insertion scope; arbitrary owner keys are not a
+    /// substitute for an admitted source/producer attachment.
+    pub(crate) fn prepare_admitted(
+        items: &GeneratedItems,
+        declarations: &crate::expand::generated_declarations::GeneratedDeclarations,
+        cfg: &CfgSet,
+        epoch: u64,
+    ) -> Result<Self, Diagnostic> {
+        let context = Key(items.record().key().parent_context.0);
+        Self::prepare_using(
+            items,
+            declarations.scan().scope().clone(),
+            context,
+            context,
+            cfg,
+            epoch,
+            None,
+            &BTreeSet::new(),
+            Some(declarations),
+        )
     }
     /// The caller scope comes from its captured parent fragment, never from a hygiene mark.
     pub(crate) fn prepare_owned(
@@ -124,6 +147,7 @@ impl GeneratedHeaderPlan {
             epoch,
             None,
             &BTreeSet::new(),
+            None,
         )
     }
     pub(crate) fn prepare_with_captured_root(
@@ -143,6 +167,7 @@ impl GeneratedHeaderPlan {
             epoch,
             Some(root),
             &BTreeSet::new(),
+            None,
         )
     }
     pub(crate) fn prepare_catalog(
@@ -158,6 +183,7 @@ impl GeneratedHeaderPlan {
             items.epoch(),
             Some(root),
             catalog.settled_derive_items(),
+            None,
         )
     }
     pub(crate) fn settled_originals(
@@ -188,6 +214,7 @@ impl GeneratedHeaderPlan {
         epoch: u64,
         captured_root: Option<&crate::syntax::token_wire::ContextRecord>,
         settled_derives: &BTreeSet<Digest>,
+        admitted: Option<&crate::expand::generated_declarations::GeneratedDeclarations>,
     ) -> Result<Self, Diagnostic> {
         if epoch != items.epoch() {
             return Err(fault(
@@ -195,7 +222,22 @@ impl GeneratedHeaderPlan {
                 "generated header publication epoch differs",
             ));
         }
-        if scope.owner.is_some() || items.record().key().parent_context != Digest(call_context.0) {
+        if let Some(declarations) = admitted {
+            if declarations.record().descriptor().fingerprint()
+                != items.record().descriptor().fingerprint()
+                || declarations.epoch() != epoch
+                || declarations.scan().cfg() != cfg.fingerprint()
+                || declarations.scan().scope() != &scope
+            {
+                return Err(fault(
+                    "LRR-E-EXPANSION-INPUT",
+                    "generated header admitted insertion differs",
+                ));
+            }
+        }
+        if scope.owner.is_some() && admitted.is_none()
+            || items.record().key().parent_context != Digest(call_context.0)
+        {
             return Err(fault(
                 "LRR-E-EXPANSION-INPUT",
                 "generated header parent scope/context differs",
@@ -242,7 +284,11 @@ impl GeneratedHeaderPlan {
         let edition = items.record().key().call_edition;
         let parsed = ParsedFile::from_generated_items(items)?;
         let source_parse = parsed.key();
-        let outline = parsed.outline(scope.crate_key, scope.module_path.clone(), cfg)?;
+        let outline = if admitted.is_some() {
+            parsed.outline_item_fragment(&scope, cfg)?
+        } else {
+            parsed.outline(scope.crate_key, scope.module_path.clone(), cfg)?
+        };
         let owner_class = items.item_class(if captured_root.is_some() {
             call_context
         } else {
@@ -819,7 +865,11 @@ impl GeneratedHeaderPlan {
     ) -> Result<Arc<ActiveImplProjection>, Diagnostic> {
         let ranges = self.active_trait_ranges(items, cfg, &self.scope, self.epoch)?;
         Ok(Arc::new(ActiveImplProjection::prepare(
-            items, cfg, &self.scope, self.epoch, ranges.to_vec(),
+            items,
+            cfg,
+            &self.scope,
+            self.epoch,
+            ranges.to_vec(),
         )?))
     }
     pub fn publish(self, graph: &mut NameNamespaces) -> Result<(), Diagnostic> {
@@ -862,7 +912,6 @@ impl GeneratedHeaderPlan {
         graph.release_generated_frontier(&self.scope, self.guard);
         Ok(())
     }
-
 }
 
 #[cfg(test)]

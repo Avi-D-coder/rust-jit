@@ -88,7 +88,7 @@ impl GeneratedDeclarations {
                     "declaration expansion parent producer absent",
                 )
             })?;
-        Self::admit_attached(expected, record, epoch, parent, cfg, limits, producer)
+        Self::admit_attached(expected, record, epoch, parent, cfg, limits, producer, None)
     }
     pub(crate) fn admit_item_output(
         record: Arc<ExpansionRecord>,
@@ -150,7 +150,9 @@ impl GeneratedDeclarations {
                     "original item declaration producer attachment absent",
                 )
             })?;
-        Self::admit_attached(&expected, record, epoch, &parent, cfg, limits, producer)
+        Self::admit_attached(
+            &expected, record, epoch, &parent, cfg, limits, producer, None,
+        )
     }
     pub(crate) fn admit_source_derive_output(
         selection: &crate::service::source_derive_requests::SourceDeriveSelection,
@@ -173,6 +175,7 @@ impl GeneratedDeclarations {
                 "source derive declaration origin differs",
             ));
         }
+        let target = selection.original_item_target(source)?;
         let parent = source.declaration_inventory(Default::default())?;
         let producer = parent
             .producers()
@@ -196,6 +199,7 @@ impl GeneratedDeclarations {
             cfg,
             Default::default(),
             producer,
+            Some(&target),
         )
     }
     pub(crate) fn item_impl_headers(
@@ -427,6 +431,7 @@ impl GeneratedDeclarations {
             cfg,
             DeclarationScanLimits::default(),
             producer,
+            None,
         )
     }
     fn admit_attached(
@@ -437,8 +442,32 @@ impl GeneratedDeclarations {
         cfg: &CfgSet,
         limits: DeclarationScanLimits,
         producer: &crate::syntax::declaration_scan::DeclarationProducer,
+        item_target: Option<&crate::source::original_items::OriginalItemTarget<'_>>,
     ) -> Result<Self, Diagnostic> {
         expected.validate()?;
+        // An actual original item can sit in statement grammar. Its item
+        // producer still emits Items, and the canonical insertion owner comes
+        // from the same retained item plan ordinary entry uses. Never rewrite
+        // the parent's scan row or pretend it was a module producer.
+        let (insertion_scope, grammar_matches) = if let Some(target) = item_target {
+            let source = target.source();
+            if source.outline.parse != *parent.parse()
+                || source.outline.cfg != parent.cfg()
+                || &source.path != parent.path()
+                || parent.generated_origin().is_some()
+                || producer.kind
+                    != crate::syntax::declaration_scan::DeclarationProducerKind::Attribute
+                || !target.item().declaration_span.contains(producer.range)
+            {
+                return Err(fault(
+                    "LRR-E-EXPANSION-INPUT",
+                    "original item insertion attachment differs",
+                ));
+            }
+            (&target.item().scope, expected.grammar == GrammarSlot::Items)
+        } else {
+            (&producer.scope, producer.grammar == expected.grammar)
+        };
         if epoch == 0
             || expected
                 .procedural_epoch
@@ -450,7 +479,7 @@ impl GeneratedDeclarations {
             ));
         }
         if record.key() != expected
-            || producer.grammar != expected.grammar
+            || !grammar_matches
             || cfg.fingerprint() != parent.cfg()
             // Generated calls retain their actual token-context edition, which
             // can differ from the enclosing fragment's parse edition. Their
@@ -523,9 +552,9 @@ impl GeneratedDeclarations {
         // Items inherit their retained insertion scope. Other grammar slots
         // keep the scanner's explicit grammar-derived root kind.
         let scan = Arc::new(if let Some(kind) = root_kind {
-            parsed.scan_declarations_at_root(path, producer.scope.clone(), cfg, limits, kind)?
+            parsed.scan_declarations_at_root(path, insertion_scope.clone(), cfg, limits, kind)?
         } else {
-            parsed.scan_declarations(path, producer.scope.clone(), cfg, limits)?
+            parsed.scan_declarations(path, insertion_scope.clone(), cfg, limits)?
         });
         let mut definition_rows = BTreeMap::new();
         for definition in output.definitions {
@@ -1018,11 +1047,9 @@ impl GeneratedDeclarations {
                 cfg,
                 DeclarationScanLimits::default(),
             )?);
-            bytes = bytes
-                .checked_add(scan.retained_bytes())
-                .ok_or_else(|| {
-                    fault("LRR-E-METADATA-LIMIT", "generated argument inventory limit")
-                })?;
+            bytes = bytes.checked_add(scan.retained_bytes()).ok_or_else(|| {
+                fault("LRR-E-METADATA-LIMIT", "generated argument inventory limit")
+            })?;
             scans.push(scan);
         }
         Ok(scans)

@@ -2,12 +2,25 @@
 //! A target is source metadata, never body entry or expansion completion.
 use super::changes::{PreparedSourceView, SourceSelection};
 use crate::{
-    core::diagnostic::Diagnostic,
+    core::{
+        diagnostic::Diagnostic,
+        digest::{Digest, StableEncode, StableEncoder},
+    },
     syntax::{
         declaration_scope_plan::DeclarationScopePlan, outline::ItemOutline, spans::SourceRange,
     },
 };
+use std::collections::BTreeMap;
 use std::sync::Arc;
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum ProducerAttachment {
+    Item(SourceRange),
+    Meta(SourceRange),
+}
+struct OriginalAnnotationProducers {
+    attachments: BTreeMap<Digest, ProducerAttachment>,
+}
 
 enum Location<'a> {
     Outline(&'a ItemOutline),
@@ -40,6 +53,60 @@ fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-ORIGINAL-ANNOTATION", message.into())
 }
 impl PreparedSourceView {
+    /// Real module worklist identities and cold DeclarationScan identities
+    /// resolve through the same canonical item service. This only attaches
+    /// syntax; it does not settle a producer or grant expansion authority.
+    pub(crate) fn original_annotation_producer(
+        &self,
+        producer: Digest,
+    ) -> Result<Option<OriginalItemTarget<'_>>, Diagnostic> {
+        self.require_original_hygiene()?;
+        let mut key = StableEncoder::new("lrr/v1/original-annotation-producer-index");
+        key.digest(self.selection().location_identity());
+        key.record(&self.selection().outline.parse);
+        key.digest(self.selection().outline.cfg);
+        let key = key.finish();
+        let index = if let Some(retained) = self.publication_prepared(key) {
+            retained
+                .downcast::<OriginalAnnotationProducers>()
+                .map_err(|_| fault("original producer cache variant differs"))?
+        } else {
+            let mut attachments = BTreeMap::new();
+            for item in &self.outline().items {
+                if let Some(call) = crate::syntax::outline::potential_attribute_producer(item) {
+                    if attachments
+                        .insert(
+                            call.item_input,
+                            ProducerAttachment::Item(item.declaration_span),
+                        )
+                        .is_some()
+                    {
+                        return Err(fault("original item producer is duplicated"));
+                    }
+                }
+            }
+            let scan = self.declaration_inventory(Default::default())?;
+            for row in scan.producers() {
+                if row.kind != crate::syntax::declaration_scan::DeclarationProducerKind::Attribute {
+                    continue;
+                }
+                if attachments
+                    .insert(row.identity, ProducerAttachment::Meta(row.range))
+                    .is_some()
+                {
+                    return Err(fault("original annotation producer is duplicated"));
+                }
+            }
+            let index = Arc::new(OriginalAnnotationProducers { attachments });
+            self.retain_publication_prepared(key, index.clone());
+            index
+        };
+        match index.attachments.get(&producer) {
+            Some(ProducerAttachment::Item(range)) => self.original_item_at(*range),
+            Some(ProducerAttachment::Meta(range)) => self.original_annotation_target(*range),
+            None => Ok(None),
+        }
+    }
     pub(crate) fn original_annotation_target(
         &self,
         meta: SourceRange,
@@ -229,6 +296,17 @@ mod tests {
                 .unwrap();
             assert_eq!(target.source(), source.selection());
             let item = target.item();
+            let from_producer = source
+                .original_annotation_producer(annotation.identity)
+                .unwrap()
+                .unwrap();
+            assert_eq!(from_producer.item(), item);
+            assert!(
+                source
+                    .original_annotation_producer(Digest([0; 32]))
+                    .unwrap()
+                    .is_none()
+            );
             assert!(
                 source
                     .original_annotation_target(item.declaration_span)
@@ -315,6 +393,12 @@ mod tests {
             let target = source.original_annotation_target(meta).unwrap().unwrap();
             assert_eq!(target.source(), source.selection());
             assert!(std::ptr::eq(target.item(), item));
+            let call = crate::syntax::outline::potential_attribute_producer(item).unwrap();
+            let from_producer = source
+                .original_annotation_producer(call.item_input)
+                .unwrap()
+                .unwrap();
+            assert!(std::ptr::eq(from_producer.item(), item));
             assert!(matches!(target.location, Location::Outline(_)));
         }
     }

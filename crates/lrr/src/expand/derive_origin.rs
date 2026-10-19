@@ -17,6 +17,36 @@ pub(crate) enum DeriveDeclarationOrigin {
     },
 }
 impl DeriveDeclarationOrigin {
+    pub(crate) fn source_target<'a>(
+        &self,
+        source: &'a crate::source::changes::PreparedSourceView,
+    ) -> Result<crate::source::original_items::OriginalItemTarget<'a>, Diagnostic> {
+        let Self::Source {
+            selection,
+            producer,
+            item,
+            header,
+        } = self
+        else {
+            return Err(fault(
+                "generated derive requires its admitted expansion parent",
+            ));
+        };
+        if source.selection() != selection {
+            return Err(fault("derive declaration source selection differs"));
+        }
+        let target = source
+            .original_annotation_producer(*producer)?
+            .ok_or_else(|| fault("derive declaration original producer has no canonical target"))?;
+        if target.item().def_key.fingerprint() != *item
+            || target.item().header.fingerprint() != *header
+        {
+            return Err(fault(
+                "derive declaration original item or producer differs",
+            ));
+        }
+        Ok(target)
+    }
     pub(crate) fn metadata_bytes(&self) -> Result<usize, Diagnostic> {
         match self {
             Self::Generated(record) => Ok(record.estimated_bytes()),
@@ -45,12 +75,7 @@ impl DeriveDeclarationOrigin {
                     return Err(fault("derive declaration generated parent is not adopted"));
                 }
             }
-            Self::Source {
-                selection,
-                producer,
-                item,
-                header,
-            } => {
+            Self::Source { selection, .. } => {
                 if db
                     .input(&InputKey::GeneratedSyntax(selection.outline.parse.content))
                     .is_some()
@@ -70,19 +95,13 @@ impl DeriveDeclarationOrigin {
                 ) else {
                     return Err(fault("derive declaration source outline unavailable"));
                 };
-                let QueryValue::Outline(outline) = outcome.value.as_ref() else {
+                let QueryValue::Outline(_) = outcome.value.as_ref() else {
                     return Err(fault("derive declaration source outline variant differs"));
                 };
-                if !outline.items.iter().any(|row| {
-                    row.def_key.fingerprint() == *item
-                        && row.header.fingerprint() == *header
-                        && crate::syntax::outline::attribute_producer(row)
-                            .is_some_and(|call| call.item_input == *producer)
-                }) {
-                    return Err(fault(
-                        "derive declaration original item or producer differs",
-                    ));
-                }
+                let source = db
+                    .prepared_source(selection)?
+                    .ok_or_else(|| fault("derive declaration retained source unavailable"))?;
+                self.source_target(&source)?;
             }
         }
         Ok(())
