@@ -396,3 +396,5 @@ impl<'db> ut::UnifyValue for TypeVariableValue<'db> {
         }
     }
 }
+
+include!("root_probe.rs");

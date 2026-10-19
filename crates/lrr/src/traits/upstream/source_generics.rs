@@ -118,6 +118,11 @@ pub(super) fn check_materialized<'cx>(cx: Cx<'cx>, layouts: &SourceGenericLayout
         let actual = cx.generics_of(id);
         let args = model::Args::identity_for_item(cx, id);
         let source = &layouts.declarations[&id];
+        let (parse, _, context, _) = source.types().declaration().source_parts().expect("actual declaration source");
+        super::infer::tests::check_actual_fresh_arguments(cx, id, model::Span {
+            origin: parse.content, start: context.range.start, end: context.range.end,
+        });
+
         assert_eq!(actual.parent_count, source.parent_count);
         assert_eq!(actual.count(), source.upstream.len()); assert_eq!(args.len(), actual.count());
         cx.services().require_generic_value(id, actual).unwrap();

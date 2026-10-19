@@ -127,6 +127,8 @@ impl Span {
 ''')
     # The span representation implements the pinned dummy-span preference.
     outputs['mod.rs'] = rustfmt(outputs['mod.rs'].decode().replace('pub(crate) mod type_variable;', 'mod span;\npub(crate) mod type_variable;'))
+    outputs['type_variable.rs'] += b'\ninclude!(\"root_probe.rs\");\n'
+    outputs['mod.rs'] += b'\nmod context;\npub(crate) use context::InferenceContext;\nmod variables;\nmod resolve;\n'
     return outputs
 
 

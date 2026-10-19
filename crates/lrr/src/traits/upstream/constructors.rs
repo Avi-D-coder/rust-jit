@@ -218,33 +218,19 @@ impl<'cx, F: SourceFacts<'cx>> GenericArgs<Context<'cx, F>> for Args<'cx, F> {
         self.items()[i].expect_const()
     }
     fn identity_for_item(cx: Context<'cx, F>, definition: DefinitionId) -> Self {
-        cx.mk_args_from_iter(
-            cx.generics_of(definition)
-                .parameters
-                .iter()
-                .map(|p| match p {
-                    GenericParameter::Type(p) => Arg::Type(Ty::new_param(cx, p)),
-                    GenericParameter::Region(p) => {
-                        Arg::Region(cx.intern_region(RegionKind::ReEarlyParam(p)))
-                    }
-                    GenericParameter::Const(p, _) => {
-                        Arg::Const(Const::new(cx, ConstKind::Param(p)))
-                    }
-                }),
-        )
+        Self::for_item(cx, definition, |p, _| match p {
+            GenericParameter::Type(p) => Arg::Type(Ty::new_param(cx, p)),
+            GenericParameter::Region(p) => Arg::Region(cx.intern_region(RegionKind::ReEarlyParam(p))),
+            GenericParameter::Const(p, _) => Arg::Const(Const::new(cx, ConstKind::Param(p))),
+        })
     }
     fn extend_with_error(
         cx: Context<'cx, F>,
         definition: DefinitionId,
         args: &[Arg<'cx, F>],
     ) -> Self {
-        cx.mk_args_from_iter(
-            cx.generics_of(definition)
-                .parameters
-                .iter()
-                .enumerate()
-                .map(|(i, p)| {
-                    if let Some(arg) = args.get(i) {
+        Self::for_item(cx, definition, |p, _| {
+                    if let Some(arg) = args.get(p.index() as usize) {
                         return *arg;
                     }
                     let error = cx.delay_bug("missing generic argument in prepared upstream IR");
@@ -257,8 +243,7 @@ impl<'cx, F: SourceFacts<'cx>> GenericArgs<Context<'cx, F>> for Args<'cx, F> {
                             Const::new(cx, ConstKind::Error(error)).into()
                         }
                     }
-                }),
-        )
+        })
     }
     fn split_closure_args(self) -> ClosureArgsParts<Context<'cx, F>> {
         match self.items() {

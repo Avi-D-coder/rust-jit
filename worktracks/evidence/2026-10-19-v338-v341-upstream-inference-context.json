@@ -1,0 +1,496 @@
+{
+  "schema": "lrr/v5/bounded-interpreter-evidence/v1",
+  "recorded_at": "2026-10-19T20:00:14.837624+00:00",
+  "parent": "d0ae450d4e5a69248984b9616a50a6a3763ac7cb",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "solo": true,
+  "integration_status": "held_component_validated",
+  "architecture_record": "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-context.md",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-context-review.md",
+  "new_distinct_stock_runtime_gains": 0,
+  "refreshed_suite_total": null,
+  "root_solver_evaluations": 0,
+  "attempts": {
+    "338": {
+      "scope": "Compile failure: included inner docs, missing explicit shadowed traits/TypeVariableValue import, compiler/RA constructor API transport, Vec iterator. No execution.",
+      "sessions": {
+        "lib": 24054
+      },
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T19:48:51.362780+00:00",
+          "head": "d0ae450d4e5a69248984b9616a50a6a3763ac7cb",
+          "file_count": 8531,
+          "source_sha256": "9c65f2e819bbdc3db2a57c1bf19ae25c205d8620c6e3727353dbe417cad0ca09",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T19:49:50.774805+00:00",
+          "head": "d0ae450d4e5a69248984b9616a50a6a3763ac7cb",
+          "file_count": 8531,
+          "source_sha256": "9c65f2e819bbdc3db2a57c1bf19ae25c205d8620c6e3727353dbe417cad0ca09",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "--no-run",
+          "--message-format=json"
+        ],
+        "exit": 101,
+        "cargo_terminal": [
+          {
+            "reason": "build-finished",
+            "success": false
+          }
+        ],
+        "messages_sha256": "bd19c1a042daa8844cdb1cb27f946fa8e60140de613aca5e44f17e9fe0005c28",
+        "stderr_sha256": "2579ab311e4ffb9b6f937cd298f4befc329831bd9e0ab9016740af88d84bf66a",
+        "stderr_terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\nerror: could not compile `lrr` (lib test) due to 25 previous errors; 38 warnings emitted\n",
+        "errors": [
+          "error[E0753]: expected outer doc comment\n --> crates/lrr/src/traits/upstream/infer/root_probe.rs:1:1\n  |\n1 | //! Pinned inference variable/resolution client; MIT OR Apache-2.0.\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: inner doc comments like this (starting with `//!` or `/*!`) can only appear before items\nhelp: you might have meant to write a regular comment\n  |\n1 - //! Pinned inference variable/resolution client; MIT OR Apache-2.0.\n1 + // Pinned inference variable/resolution client; MIT OR Apache-2.0.\n  |\n\n",
+          "error[E0753]: expected outer doc comment\n --> crates/lrr/src/traits/upstream/infer/root_probe.rs:2:1\n  |\n2 | //! Pin ae0fe511b15ab760d7e963b13389d1bc2ab42b18; originals/licenses in vendor/rustc-trait-solver.\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  |\n  = note: inner doc comments like this (starting with `//!` or `/*!`) can only appear before items\nhelp: you might have meant to write a regular comment\n  |\n2 - //! Pin ae0fe511b15ab760d7e963b13389d1bc2ab42b18; originals/licenses in vendor/rustc-trait-solver.\n2 + // Pin ae0fe511b15ab760d7e963b13389d1bc2ab42b18; originals/licenses in vendor/rustc-trait-solver.\n  |\n\n",
+          "error[E0753]: expected outer doc comment\n  --> crates/lrr/src/traits/upstream/infer/root_probe.rs:3:1\n   |\n 3 |   //! Registered mechanical port: tools/sync_upstream_inference_context.py.\n   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n 4 | / impl<'a, 'db> TypeVariableTable<'a, 'db> {\n 5 | |     pub(crate) fn probe_with_root_vid(&mut self, vid: TyVid) -> (TyVid, TypeVariableValue<'db>) {\n 6 | |         self.inlined_probe_with_vid(vid)\n...  |\n15 | | }\n   | |_- the inner doc comment doesn't annotate this implementation\n   |\nhelp: to annotate the implementation, change the doc comment from inner to outer style\n   |\n 3 - //! Registered mechanical port: tools/sync_upstream_inference_context.py.\n 3 + /// Registered mechanical port: tools/sync_upstream_inference_context.py.\n   |\n\n",
+          "error[E0433]: cannot find type `TypeVariableValue` in this scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:205:13\n    |\n205 |             TypeVariableValue::Known { value } => Ok(value),\n    |             ^^^^^^^^^^^^^^^^^ use of undeclared type `TypeVariableValue`\n    |\nhelp: an enum with a similar name exists\n    |\n205 -             TypeVariableValue::Known { value } => Ok(value),\n205 +             ConstVariableValue::Known { value } => Ok(value),\n    |\nhelp: consider importing this enum\n    |\n  4 + use crate::traits::upstream::infer::type_variable::TypeVariableValue;\n    |\n\n",
+          "error[E0433]: cannot find type `TypeVariableValue` in this scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:206:13\n    |\n206 |             TypeVariableValue::Unknown { universe: _ } => Err(root),\n    |             ^^^^^^^^^^^^^^^^^ use of undeclared type `TypeVariableValue`\n    |\nhelp: an enum with a similar name exists\n    |\n206 -             TypeVariableValue::Unknown { universe: _ } => Err(root),\n206 +             ConstVariableValue::Unknown { universe: _ } => Err(root),\n    |\nhelp: consider importing this enum\n    |\n  4 + use crate::traits::upstream::infer::type_variable::TypeVariableValue;\n    |\n\n",
+          "error[E0599]: no associated function or constant named `new_var` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:38:13\n    |\n 38 |         Ty::new_var(self.interner, vid)\n    |             ^^^^^^^ associated function or constant not found in `model::Ty<'_, PreparedProvider<'_>>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_var` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, PreparedProvider<'_>>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    = help: items from traits can only be used if the trait is in scope\nhelp: there is an associated function `new_pat` with a similar name\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/inherent.rs:130:5\n    |\n130 |     fn new_pat(interner: I, ty: Self, pat: I::Pat) -> Self;\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: trait `Ty` which provides `new_var` is implemented but not in scope; perhaps you want to import it\n    |\n  4 + use rustc_type_ir::inherent::Ty;\n    |\n\n",
+          "error[E0599]: no associated function or constant named `new_var` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:51:13\n    |\n 51 |         Ty::new_var(self.interner, vid)\n    |             ^^^^^^^ associated function or constant not found in `model::Ty<'_, PreparedProvider<'_>>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_var` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, PreparedProvider<'_>>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    = help: items from traits can only be used if the trait is in scope\nhelp: there is an associated function `new_pat` with a similar name\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/inherent.rs:130:5\n    |\n130 |     fn new_pat(interner: I, ty: Self, pat: I::Pat) -> Self;\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: trait `Ty` which provides `new_var` is implemented but not in scope; perhaps you want to import it\n    |\n  4 + use rustc_type_ir::inherent::Ty;\n    |\n\n",
+          "error[E0599]: no associated function or constant named `new_int_var` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:73:13\n    |\n 73 |         Ty::new_int_var(self.interner, vid)\n    |             ^^^^^^^^^^^ associated function or constant not found in `model::Ty<'_, PreparedProvider<'_>>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_int_var` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, PreparedProvider<'_>>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: there is an associated function `new_var` with a similar name\n    |\n 73 -         Ty::new_int_var(self.interner, vid)\n 73 +         Ty::new_var(self.interner, vid)\n    |\n\n",
+          "error[E0599]: no associated function or constant named `new_float_var` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:82:13\n    |\n 82 |         Ty::new_float_var(self.interner, self.next_float_vid())\n    |             ^^^^^^^^^^^^^ associated function or constant not found in `model::Ty<'_, PreparedProvider<'_>>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_float_var` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, PreparedProvider<'_>>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: there is an associated function `new_var` with a similar name\n    |\n 82 -         Ty::new_float_var(self.interner, self.next_float_vid())\n 82 +         Ty::new_var(self.interner, self.next_float_vid())\n    |\n\n",
+          "error[E0599]: no method named `expect_region` found for enum `model::Arg<'cx, F>` in the current scope\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/inherent.rs:291:8\n    |\n291 |     fn expect_region(&self) -> Region<I> {\n    |        ------------- the method is available for `model::Arg<'db, PreparedProvider<'db>>` here\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:283:1\n    |\n283 | pub(crate) enum Arg<'cx, F: SourceFacts<'cx>> {\n    | --------------------------------------------- method `expect_region` not found for this enum\n    |\n   ::: crates/lrr/src/traits/upstream/infer/variables.rs:177:43\n    |\n177 |                 self.args[br.var.index()].expect_region()\n    |                                           ^^^^^^^^^^^^^\n    |\n    = help: items from traits can only be used if the trait is in scope\nhelp: trait `GenericArg` which provides `expect_region` is implemented but not in scope; perhaps you want to import it\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:4:1\n    |\n  4 + use rustc_type_ir::inherent::GenericArg;\n    |\nhelp: there is a method `as_region` with a similar name\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:177:43\n    |\n177 -                 self.args[br.var.index()].expect_region()\n177 +                 self.args[br.var.index()].as_region()\n    |\n\n",
+          "error[E0599]: no method named `expect_ty` found for enum `model::Arg<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:180:43\n    |\n180 |                 self.args[bt.var.index()].expect_ty()\n    |                                           ^^^^^^^^^ method not found in `model::Arg<'db, PreparedProvider<'db>>`\n    |\n   ::: vendor/rustc-trait-solver/compiler/rustc_type_ir/src/inherent.rs:275:8\n    |\n275 |     fn expect_ty(&self) -> I::Ty {\n    |        --------- the method is available for `model::Arg<'db, PreparedProvider<'db>>` here\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:283:1\n    |\n283 | pub(crate) enum Arg<'cx, F: SourceFacts<'cx>> {\n    | --------------------------------------------- method `expect_ty` not found for this enum\n    |\n    = help: items from traits can only be used if the trait is in scope\nhelp: trait `GenericArg` which provides `expect_ty` is implemented but not in scope; perhaps you want to import it\n    |\n  4 + use rustc_type_ir::inherent::GenericArg;\n    |\n\n",
+          "error[E0599]: no method named `expect_const` found for enum `model::Arg<'cx, F>` in the current scope\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/inherent.rs:283:8\n    |\n283 |     fn expect_const(&self) -> Const<I> {\n    |        ------------ the method is available for `model::Arg<'db, PreparedProvider<'db>>` here\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:283:1\n    |\n283 | pub(crate) enum Arg<'cx, F: SourceFacts<'cx>> {\n    | --------------------------------------------- method `expect_const` not found for this enum\n    |\n   ::: crates/lrr/src/traits/upstream/infer/variables.rs:183:43\n    |\n183 |                 self.args[bv.var.index()].expect_const()\n    |                                           ^^^^^^^^^^^^\n    |\n    = help: items from traits can only be used if the trait is in scope\nhelp: trait `GenericArg` which provides `expect_const` is implemented but not in scope; perhaps you want to import it\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:4:1\n    |\n  4 + use rustc_type_ir::inherent::GenericArg;\n    |\nhelp: there is a method `expect_ty` with a similar name\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:183:43\n    |\n183 -                 self.args[bv.var.index()].expect_const()\n183 +                 self.args[bv.var.index()].expect_ty()\n    |\n\n",
+          "error[E0599]: no associated function or constant named `new_var` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:235:37\n    |\n235 | ...                   Ty::new_var(self.interner, root_vid)\n    |                           ^^^^^^^ associated function or constant not found in `model::Ty<'_, PreparedProvider<'_>>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_var` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, PreparedProvider<'_>>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    = help: items from traits can only be used if the trait is in scope\nhelp: there is an associated function `new_pat` with a similar name\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/inherent.rs:130:5\n    |\n130 |     fn new_pat(interner: I, ty: Self, pat: I::Pat) -> Self;\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: trait `Ty` which provides `new_var` is implemented but not in scope; perhaps you want to import it\n    |\n  4 + use rustc_type_ir::inherent::Ty;\n    |\n\n",
+          "error[E0599]: no associated function or constant named `new_int` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:249:61\n    |\n249 |                         ty::IntVarValue::IntType(ty) => Ty::new_int(self.interner, ty),\n    |                                                             ^^^^^^^ associated function or constant not found in `model::Ty<'_, PreparedProvider<'_>>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_int` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, PreparedProvider<'_>>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: there is an associated function `new_adt` with a similar name\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/inherent.rs:87:5\n    |\n 87 |     fn new_adt(interner: I, adt_def: I::AdtDef, args: I::GenericArgs) -> Self;\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n",
+          "error[E0599]: no associated function or constant named `new_uint` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:250:62\n    |\n250 |                         ty::IntVarValue::UintType(ty) => Ty::new_uint(self.interner, ty),\n    |                                                              ^^^^^^^^ associated function or constant not found in `model::Ty<'_, PreparedProvider<'_>>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_uint` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, PreparedProvider<'_>>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: there is an associated function `new_unit` with a similar name\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/inherent.rs:35:5\n    |\n 35 |     fn new_unit(interner: I) -> Self;\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n",
+          "error[E0599]: no associated function or constant named `new_int_var` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:255:37\n    |\n255 | ...                   Ty::new_int_var(self.interner, root)\n    |                           ^^^^^^^^^^^ associated function or constant not found in `model::Ty<'_, PreparedProvider<'_>>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_int_var` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, PreparedProvider<'_>>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: there is an associated function `new_var` with a similar name\n    |\n255 -                                 Ty::new_int_var(self.interner, root)\n255 +                                 Ty::new_var(self.interner, root)\n    |\n\n",
+          "error[E0599]: no associated function or constant named `new_float` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:268:61\n    |\n268 |                         ty::FloatVarValue::Known(ty) => Ty::new_float(self.interner, ty),\n    |                                                             ^^^^^^^^^ associated function or constant not found in `model::Ty<'_, PreparedProvider<'_>>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_float` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, PreparedProvider<'_>>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: there is an associated function `new_pat` with a similar name\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/inherent.rs:130:5\n    |\n130 |     fn new_pat(interner: I, ty: Self, pat: I::Pat) -> Self;\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n",
+          "error[E0599]: no associated function or constant named `new_float_var` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:273:37\n    |\n273 | ...                   Ty::new_float_var(self.interner, root)\n    |                           ^^^^^^^^^^^^^ associated function or constant not found in `model::Ty<'_, PreparedProvider<'_>>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_float_var` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, PreparedProvider<'_>>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: there is an associated function `new_var` with a similar name\n    |\n273 -                                 Ty::new_float_var(self.interner, root)\n273 +                                 Ty::new_var(self.interner, root)\n    |\n\n",
+          "error[E0599]: no associated function or constant named `new_var` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:351:27\n    |\n351 |             Err(_) => Ty::new_var(self.interner, self.root_var(vid)),\n    |                           ^^^^^^^ associated function or constant not found in `model::Ty<'_, PreparedProvider<'_>>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_var` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, PreparedProvider<'_>>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    = help: items from traits can only be used if the trait is in scope\nhelp: there is an associated function `new_pat` with a similar name\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/inherent.rs:130:5\n    |\n130 |     fn new_pat(interner: I, ty: Self, pat: I::Pat) -> Self;\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: trait `Ty` which provides `new_var` is implemented but not in scope; perhaps you want to import it\n    |\n  4 + use rustc_type_ir::inherent::Ty;\n    |\n\n",
+          "error[E0599]: no associated function or constant named `new_int` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:358:49\n    |\n358 |             ty::IntVarValue::IntType(ty) => Ty::new_int(self.interner, ty),\n    |                                                 ^^^^^^^ associated function or constant not found in `model::Ty<'_, PreparedProvider<'_>>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_int` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, PreparedProvider<'_>>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: there is an associated function `new_adt` with a similar name\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/inherent.rs:87:5\n    |\n 87 |     fn new_adt(interner: I, adt_def: I::AdtDef, args: I::GenericArgs) -> Self;\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n",
+          "error[E0599]: no associated function or constant named `new_uint` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:359:50\n    |\n359 |             ty::IntVarValue::UintType(ty) => Ty::new_uint(self.interner, ty),\n    |                                                  ^^^^^^^^ associated function or constant not found in `model::Ty<'_, PreparedProvider<'_>>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_uint` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, PreparedProvider<'_>>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: there is an associated function `new_unit` with a similar name\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/inherent.rs:35:5\n    |\n 35 |     fn new_unit(interner: I) -> Self;\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n",
+          "error[E0599]: no associated function or constant named `new_int_var` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:361:21\n    |\n361 |                 Ty::new_int_var(self.interner, inner.int_unification_table().find(vid))\n    |                     ^^^^^^^^^^^ associated function or constant not found in `model::Ty<'_, PreparedProvider<'_>>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_int_var` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, PreparedProvider<'_>>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: there is an associated function `new_var` with a similar name\n    |\n361 -                 Ty::new_int_var(self.interner, inner.int_unification_table().find(vid))\n361 +                 Ty::new_var(self.interner, inner.int_unification_table().find(vid))\n    |\n\n",
+          "error[E0599]: no associated function or constant named `new_float` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:369:49\n    |\n369 |             ty::FloatVarValue::Known(ty) => Ty::new_float(self.interner, ty),\n    |                                                 ^^^^^^^^^ associated function or constant not found in `model::Ty<'_, PreparedProvider<'_>>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_float` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, PreparedProvider<'_>>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: there is an associated function `new_pat` with a similar name\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/inherent.rs:130:5\n    |\n130 |     fn new_pat(interner: I, ty: Self, pat: I::Pat) -> Self;\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n",
+          "error[E0599]: no associated function or constant named `new_float_var` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/infer/variables.rs:371:21\n    |\n371 |                 Ty::new_float_var(self.interner, inner.float_unification_table().find(vid))\n    |                     ^^^^^^^^^^^^^ associated function or constant not found in `model::Ty<'_, PreparedProvider<'_>>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_float_var` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, PreparedProvider<'_>>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: there is an associated function `new_var` with a similar name\n    |\n371 -                 Ty::new_float_var(self.interner, inner.float_unification_table().find(vid))\n371 +                 Ty::new_var(self.interner, inner.float_unification_table().find(vid))\n    |\n\n",
+          "error[E0277]: `Vec<model::Arg<'_, F>>` is not an iterator\n   --> crates/lrr/src/traits/upstream/generic_args.rs:17:30\n    |\n 17 |         cx.mk_args_from_iter(args)\n    |            ----------------- ^^^^ `Vec<model::Arg<'_, F>>` is not an iterator\n    |            |\n    |            required by a bound introduced by this call\n    |\n    = help: the trait `std::iter::Iterator` is not implemented for `Vec<model::Arg<'_, F>>`\nnote: required by a bound in `mk_args_from_iter`\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/interner.rs:310:12\n    |\n308 |     fn mk_args_from_iter<I, T>(self, args: I) -> T::Output\n    |        ----------------- required by a bound in this associated function\n309 |     where\n310 |         I: Iterator<Item = T>,\n    |            ^^^^^^^^^^^^^^^^^^ required by this bound in `Interner::mk_args_from_iter`\n\n"
+        ]
+      }
+    },
+    "339": {
+      "scope": "Library build-only initial variable/deep resolver and binder controls; no controls or CLI.",
+      "sessions": {
+        "lib": 37873
+      },
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T19:50:58.236980+00:00",
+          "head": "d0ae450d4e5a69248984b9616a50a6a3763ac7cb",
+          "file_count": 8531,
+          "source_sha256": "fa291f3a1c3f87e0ceec5eff15eb8d5736be54851de6a7e1eb5dca3ea1e79f20",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T19:51:38.131029+00:00",
+          "head": "d0ae450d4e5a69248984b9616a50a6a3763ac7cb",
+          "file_count": 8531,
+          "source_sha256": "fa291f3a1c3f87e0ceec5eff15eb8d5736be54851de6a7e1eb5dca3ea1e79f20",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+              "sha256": "3dc0c08924998b014874bd459bddb86cf4d6c8f26c7853b10a636618f5f6bbf3"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "--no-run",
+          "--message-format=json"
+        ],
+        "exit": 0,
+        "cargo_terminal": [
+          {
+            "reason": "build-finished",
+            "success": true
+          }
+        ],
+        "messages_sha256": "75f662058d704ef49f545a95c2732f55886c286f11c4b135fa478e557ab07323",
+        "stderr_sha256": "d6c21f813b0b5aa409bfef99bb94e5d4680f4e6fd488b6d67130dccc86d33431",
+        "stderr_terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 30.09s\n",
+        "errors": []
+      }
+    },
+    "340": {
+      "scope": "Library build-only registered shared GenericArgs constructor and source-fresh tests; no controls or CLI.",
+      "sessions": {
+        "lib": 70614
+      },
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T19:52:36.117998+00:00",
+          "head": "d0ae450d4e5a69248984b9616a50a6a3763ac7cb",
+          "file_count": 8531,
+          "source_sha256": "abbbd639c10dc6c3771482b00c0bd7613edb12b748562f46ea3e452c62e433af",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T19:53:41.888123+00:00",
+          "head": "d0ae450d4e5a69248984b9616a50a6a3763ac7cb",
+          "file_count": 8531,
+          "source_sha256": "abbbd639c10dc6c3771482b00c0bd7613edb12b748562f46ea3e452c62e433af",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+              "sha256": "8d4c04e03feea4af2b5c550b893d59685fb6b4068ac35661e99ea2ca899e4d37"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build": {
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "--no-run",
+          "--message-format=json"
+        ],
+        "exit": 0,
+        "cargo_terminal": [
+          {
+            "reason": "build-finished",
+            "success": true
+          }
+        ],
+        "messages_sha256": "1d5827b1d69daaf1d1344d9df4eeaf844aea435cdc17480c31bb3928c368e5f1",
+        "stderr_sha256": "3713ca788b2d09db8f353c29d83d848ce7c8fd7b4b0be4861f0f28e0b8e513f0",
+        "stderr_terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.38s\n",
+        "errors": []
+      }
+    },
+    "341": {
+      "scope": "Final both builds and5/5focused controls pass with exact source/HEAD/both binary guards. Actual20generic declaration worlds and48source Type worlds use source-bound context constructors/probes/root/shallow/deep resolution and fresh binder/argument transport; no actual solver or new stock runtime gain.",
+      "sessions": {
+        "lib": 3993,
+        "cli": 10628,
+        "controls": 19038
+      },
+      "manifests": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T19:53:42.496302+00:00",
+          "head": "d0ae450d4e5a69248984b9616a50a6a3763ac7cb",
+          "file_count": 8531,
+          "source_sha256": "0ba803ea18450097bf912c32fb84584834e08eeff18a8da0fca991d88f0d4114",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T19:55:39.084067+00:00",
+          "head": "d0ae450d4e5a69248984b9616a50a6a3763ac7cb",
+          "file_count": 8531,
+          "source_sha256": "0ba803ea18450097bf912c32fb84584834e08eeff18a8da0fca991d88f0d4114",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+              "sha256": "b3e02ced09b20df20740afbb1c86f4830c11b02a91a8b51a5aa607e7e0488e25"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "e4182c500a9248ccc04fecd4d505898be8606b1ad4d9695f736efc08526b960c"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-19T20:00:14.621718+00:00",
+          "head": "d0ae450d4e5a69248984b9616a50a6a3763ac7cb",
+          "file_count": 8531,
+          "source_sha256": "0ba803ea18450097bf912c32fb84584834e08eeff18a8da0fca991d88f0d4114",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+              "sha256": "b3e02ced09b20df20740afbb1c86f4830c11b02a91a8b51a5aa607e7e0488e25"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "e4182c500a9248ccc04fecd4d505898be8606b1ad4d9695f736efc08526b960c"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build": {
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "test",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--lib",
+          "--no-run",
+          "--message-format=json"
+        ],
+        "exit": 0,
+        "cargo_terminal": [
+          {
+            "reason": "build-finished",
+            "success": true
+          }
+        ],
+        "messages_sha256": "a3b892c8f8c792a545a7492ee35ecb548bbf8ff8ffbc5b03b3561710e93a2d86",
+        "stderr_sha256": "98783cd0ce6a7d1daf2e323453cebd3a5c719b94ed124bb710eb9da46db23a26",
+        "stderr_terminal": "   Compiling lrr v0.2.0 (/Users/avi/Code/rust-jit/crates/lrr)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.24s\n",
+        "errors": []
+      },
+      "cli_build": {
+        "argv": [
+          "cargo",
+          "+1.99.0",
+          "build",
+          "--offline",
+          "--locked",
+          "-p",
+          "lrr",
+          "--bin",
+          "lrr"
+        ],
+        "exit": 0,
+        "log_sha256": "c5965185182ee95b96e8e205aa723af7fc04a38572241b502fa05bb37431d475",
+        "log_terminal": "(place)?;\n     |\nhelp: if you meant to clone `place::Place`, implement `Clone` for it\n    -->  crates/lrr/src/runtime/place.rs:93:1\n     |\n  93 + #[derive(Clone)]\n  94 | pub struct Place {\n     |\n\nwarning: this lint expectation is unfulfilled\n   --> crates/lrr/src/traits/upstream/infer/region_constraints/mod.rs:262:14\n    |\n262 |     #[expect(dead_code, reason = \"this is used in rustc\")]\n    |              ^^^^^^^^^\n    |\n    = note: this is used in rustc\n    = note: `#[warn(unfulfilled_lint_expectations)]` on by default\n\nwarning: `lrr` (lib) generated 444 warnings (run `cargo fix --lib -p lrr` to apply 24 suggestions)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 27.82s\n"
+      },
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 50.329,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 120.349,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::upstream_parameter_order_preserves_real_impl_trait_and_method_identities",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::upstream_parameter_order_preserves_real_impl_trait_and_method_identities",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.965,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::upstream_parameter_order_retains_const_regions_and_pending_function_binders",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::upstream_parameter_order_retains_const_regions_and_pending_function_binders",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.953,
+          "log": "control-3.log"
+        },
+        {
+          "selector": "traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-a9c34a79449e6886",
+            "traits::upstream::storage::tests::scoped_cache_releases_live_values_on_return_and_unwind",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 0.372,
+          "log": "control-4.log"
+        }
+      ],
+      "completed_controls": 5,
+      "passed_controls": 5,
+      "logs": {
+        "control-0.log": "0980523c80dca963c5233266b0ee88489fe03b691c6f028cd7dddf203bff873f",
+        "control-1.log": "232085a2e45fd5edcee0190c0c66b71af4de4267155ab3e6c216e64062f0e092",
+        "control-2.log": "80999d4d35cf260a428b6ff47da145254082d06cc16e302dca7724c7927f54a3",
+        "control-3.log": "14c213f8d6839b3fed3c17220116bde6add6c358422a74d1367c7f1e7e327afe",
+        "control-4.log": "fe0ea75ba40b9dd43388cc99042619f2aec199d5a60e1d8c1ef3f8486cad31f4"
+      },
+      "control_terminal_exit": 0
+    }
+  },
+  "provenance": {
+    "pin": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "shared_crates": 8,
+    "retained_files": 144,
+    "source_bytes": 2130891,
+    "upstream_original_Rust_source_changes": 0,
+    "original_git_objects_verified": true,
+    "new_compiler_supports": [
+      {
+        "path": "compiler/rustc_infer/src/infer/mod.rs",
+        "bytes": 80359,
+        "sha256": "0e3d962f0dae5a19ae4293de73a606c692e222eae08043bc1beb9d0cd0f6f327",
+        "upstream": "compiler/rustc_infer/src/infer/mod.rs",
+        "upstream_sha256": "0e3d962f0dae5a19ae4293de73a606c692e222eae08043bc1beb9d0cd0f6f327"
+      },
+      {
+        "path": "compiler/rustc_infer/src/infer/resolve.rs",
+        "bytes": 5320,
+        "sha256": "7ce8d8532e4357552be548f1a66e81b3c89aff0c8f934785c0492daa6282dcac",
+        "upstream": "compiler/rustc_infer/src/infer/resolve.rs",
+        "upstream_sha256": "7ce8d8532e4357552be548f1a66e81b3c89aff0c8f934785c0492daa6282dcac"
+      },
+      {
+        "path": "compiler/rustc_infer/src/infer/type_variable.rs",
+        "bytes": 15196,
+        "sha256": "2e5f26dba08abf4f96c52975f1ac0fba42c37d2e650de96f9a182314e7b88f53",
+        "upstream": "compiler/rustc_infer/src/infer/type_variable.rs",
+        "upstream_sha256": "2e5f26dba08abf4f96c52975f1ac0fba42c37d2e650de96f9a182314e7b88f53"
+      },
+      {
+        "path": "compiler/rustc_middle/src/ty/generic_args.rs",
+        "bytes": 27377,
+        "sha256": "83f30406c92c7e2d92f8c2b439e37679fc9d5a33519bf3591e02932ec0250279",
+        "upstream": "compiler/rustc_middle/src/ty/generic_args.rs",
+        "upstream_sha256": "83f30406c92c7e2d92f8c2b439e37679fc9d5a33519bf3591e02932ec0250279"
+      }
+    ],
+    "registered_context_port": "tools/sync_upstream_inference_context.py",
+    "registered_context_port_sha256": "0480a473b0d434649b43e9e52318c962b420cb420c939890ab7c6ac1f47a3f49",
+    "registered_storage_port": "tools/sync_upstream_inference.py",
+    "registered_storage_port_sha256": "ef82792a73c96d0cce3042c4fb181ba5f597da2ceea9ff41a260fd2be941bdda"
+  },
+  "selection": {
+    "path": "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-context-controls.json",
+    "sha256": "4b0a4252cce1f3a73e11b442414a98c4282c4db58223ee0af3b53d90fbb33282"
+  },
+  "reproduce": [
+    "python3.12 tools/bootstrap_trait_solver.py --verify-upstream",
+    "python3.12 tools/sync_upstream_inference.py",
+    "python3.12 tools/sync_upstream_inference_context.py",
+    "python3.12 tools/validation/source_manifest.py artifacts/validation-reproduction before",
+    "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json > artifacts/validation-reproduction/lib-build.jsonl 2> artifacts/validation-reproduction/lib-build.log",
+    "cargo +1.99.0 build --offline --locked -p lrr --bin lrr > artifacts/validation-reproduction/cli-build.log 2>&1",
+    "python3.12 tools/validation/source_manifest.py artifacts/validation-reproduction after-build --cargo-messages artifacts/validation-reproduction/lib-build.jsonl --cli-binary target/debug/lrr",
+    "python3.12 tools/validation/run_controls.py artifacts/validation-reproduction worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-context-controls.json",
+    "python3.12 tools/validation/source_manifest.py artifacts/validation-reproduction after-runtime"
+  ],
+  "reproduction_constraints": "New output directory, direct checkout, sequential asynchronous build phases, one Cargo owner, source/tools/fixtures/HEAD/binaries frozen to terminal. No old artifacts/frozen source input. Required optional upstream library checkout and exact pin are reproducible per tools/validation/README.md.",
+  "holds": [
+    "Full InferCtxtLike/SolverDelegate, generic relations/generalizer, canonical responses and actual root evaluation unimplemented",
+    "Complete source facts/parameter DefIds/ADT/trait/predicates/ParamEnv/lang-items/currentness producer absent",
+    "Forall/placeholder assumptions, compiler-compatible visible-region/leak checks and full opaque/region/const/binder matrices incomplete",
+    "Mixed anonymous/no-bound binder cases are explicit host IR controls; source function early/late classification and stock higher-ranked runtime acceptance remain open",
+    "Runtime member/witness/continuation/currentness integration and held custom inference removal unfinished",
+    "No new distinct stock runtime/full-fixture/diagnostic/tooling pass, refreshed suite total, full milestone/interpreter/JIT/Linux/performance acceptance"
+  ],
+  "source_contracts": {
+    "actual_generic_declaration_worlds": 20,
+    "actual_generic_rows": 48,
+    "actual_const_rows": 36,
+    "actual_early_region_rows": 24,
+    "actual_impl_source_worlds": 48,
+    "actual_prepared_type_heads": 140,
+    "actual_guarded_trait_refs": 136,
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "root_solver_evaluations": 0,
+    "anonymous_mixed_binder_controls": "Supplementary host IR only; not actual source binder or higher-ranked runtime acceptance",
+    "original_main_execution": "unexecuted by this context matrix"
+  },
+  "audits": {
+    "original_vendor_git_objects": "pass;8crates/144files/2130891bytes, zero original Rust changes",
+    "inference_storage_port": "pass",
+    "inference_context_and_generic_constructor_port": "pass",
+    "type_traversal_port": "pass",
+    "binder_port": "pass",
+    "relations_port": "pass",
+    "candidate_port": "pass",
+    "worktracks_check": "pass;12tracks/60items/49claims",
+    "spec_consistency": "pass; documents only",
+    "git_diff_check": "pass"
+  }
+}

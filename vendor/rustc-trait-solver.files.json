@@ -292,6 +292,27 @@
       "upstream_sha256": "d168e6ea5a34f9aaf9e38502cc24c033dce15cdcc10a43cbe5f9f80ff04d6939"
     },
     {
+      "path": "compiler/rustc_infer/src/infer/mod.rs",
+      "bytes": 80359,
+      "sha256": "0e3d962f0dae5a19ae4293de73a606c692e222eae08043bc1beb9d0cd0f6f327",
+      "upstream": "compiler/rustc_infer/src/infer/mod.rs",
+      "upstream_sha256": "0e3d962f0dae5a19ae4293de73a606c692e222eae08043bc1beb9d0cd0f6f327"
+    },
+    {
+      "path": "compiler/rustc_infer/src/infer/resolve.rs",
+      "bytes": 5320,
+      "sha256": "7ce8d8532e4357552be548f1a66e81b3c89aff0c8f934785c0492daa6282dcac",
+      "upstream": "compiler/rustc_infer/src/infer/resolve.rs",
+      "upstream_sha256": "7ce8d8532e4357552be548f1a66e81b3c89aff0c8f934785c0492daa6282dcac"
+    },
+    {
+      "path": "compiler/rustc_infer/src/infer/type_variable.rs",
+      "bytes": 15196,
+      "sha256": "2e5f26dba08abf4f96c52975f1ac0fba42c37d2e650de96f9a182314e7b88f53",
+      "upstream": "compiler/rustc_infer/src/infer/type_variable.rs",
+      "upstream_sha256": "2e5f26dba08abf4f96c52975f1ac0fba42c37d2e650de96f9a182314e7b88f53"
+    },
+    {
       "path": "compiler/rustc_middle/src/mir/syntax.rs",
       "bytes": 84423,
       "sha256": "b2f38c58405cfb5999cbdf50770e151910c796a7f20c82456d37a3f39481f4e1",
@@ -325,6 +346,13 @@
       "sha256": "e07cb2d26e76490d9a5cb6af659d993f5a95e4ccc99088ed90f233e2842f50b4",
       "upstream": "compiler/rustc_middle/src/ty/fold.rs",
       "upstream_sha256": "e07cb2d26e76490d9a5cb6af659d993f5a95e4ccc99088ed90f233e2842f50b4"
+    },
+    {
+      "path": "compiler/rustc_middle/src/ty/generic_args.rs",
+      "bytes": 27377,
+      "sha256": "83f30406c92c7e2d92f8c2b439e37679fc9d5a33519bf3591e02932ec0250279",
+      "upstream": "compiler/rustc_middle/src/ty/generic_args.rs",
+      "upstream_sha256": "83f30406c92c7e2d92f8c2b439e37679fc9d5a33519bf3591e02932ec0250279"
     },
     {
       "path": "compiler/rustc_middle/src/ty/predicate.rs",
@@ -1012,6 +1040,10 @@
     "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/snapshot/undo_log.rs",
     "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/opaque_types/mod.rs",
     "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/opaque_types/table.rs",
-    "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/snapshot/mod.rs"
+    "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/snapshot/mod.rs",
+    "compiler/rustc_infer/src/infer/mod.rs",
+    "compiler/rustc_infer/src/infer/type_variable.rs",
+    "compiler/rustc_infer/src/infer/resolve.rs",
+    "compiler/rustc_middle/src/ty/generic_args.rs"
   ]
 }

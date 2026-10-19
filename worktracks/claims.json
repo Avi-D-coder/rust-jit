@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V334-V337 HELD M020 pinned inference storage client. Actual pinned rust-analyzer next_solver Type/const/int/float/region/opaque stores, InferCtxtInner, combined undo log and CombinedSnapshot methods are reused through a deterministic mechanical port over actual LRR Cx/IR. InferenceStorage is a mutable owner, not InferCtxtLike/SolverDelegate or a ready source-fact provider. Nine additional original licensed Git objects retained;8sharedcrates/140files/2002639bytes verified with zero original Rust changes. Only direct dependency edges to already locked ena/indexmap/rustc-hash were added. V337 both macOS Rust1.99.0 builds and4/4focused controls pass; final source/HEAD/test/CLI guards match. Actual140source head Types/136guarded TraitRefs in48original/user-macro/wrapper edition worlds exercise Type binding/root restoration, const/int/float rollback, region vars/edges, real cross-universe region-table failure, nested failure, nested commit+outer rollback, root commit, probe and universe restoration. Generic ordering and scoped owner controls pass. V334 mechanical compile failure, V3353/4invalid numeric NoError-table negative case and V336private placeholder compile failure retain exact evidence. No upstream algorithms were changed to accommodate host mistakes. Known RA stubbed leak-check/empty region-response callbacks were not ported; real compiler-compatible leak/visibility/assumptions-on-binders, relation/canonical/delegate/source-fact integration, real opaque/fold/member/verify/cancellation matrices, currentness/witness/VM integration and legacy removal remain open. No real root evaluation, new distinct stock runtime gain, refreshed suite total, M020/milestone/interpreter/JIT/Linux or performance acceptance.",
+      "scope": "V338-V341 HELD M020 actual source-bound inference context. InferenceContext retains real Cx/caller TypingMode and the single upstream storage owner. Registered selected variable creation/span/binder operations reuse the compatible pinned RA client; canonical-root shallow/deep resolution uses the current compiler, including exact root probes and the existing shared BoundVarReplacer. Actual GenericArgs::for_item/fill_single is reused over the retained flat parent-first table; duplicate identity/error constructor loops are removed and fresh construction shares the same route. Original8sharedcrates/144files/2130891bytes and registered ports verify with zero original Rust changes. Final macOS Rust1.99.0 builds and5/5focused controls pass with source/HEAD/both binary guards.20actual generic declaration worlds/48rows/36const rows/24early-region rows exercise fresh namespace/index/span/uniqueness and rollback;140actual impl Type heads/136guarded TraitRefs in48original/user-macro/wrapper edition worlds exercise canonical roots, type-to-numeric chains, deep tuple/array resolution with regions preserved, real error taint, mixed/no-bound host binder controls and existing snapshots/order/cleanup. Anonymous binders are supplemental host IR, not source binder or stock higher-ranked runtime passes. V338mechanical compile failure and V339/V340build-only cohorts retain exact evidence. Full InferCtxtLike, generic relations/generalizer, forall/placeholder/visible-region/leak behavior, canonical responses, real delegate/full source facts/parameter IDs/witness/currentness/runtime migration and legacy removal remain incomplete. No actual root evaluation, new distinct stock runtime gain, refreshed suite total, M020/milestone/interpreter/JIT/Linux/performance acceptance.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1839,7 +1839,12 @@
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-storage-controls.json",
         "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-storage-probe.json",
         "crates/lrr/Cargo.toml",
-        "worktracks/evidence/2026-10-19-v334-v337-upstream-inference-storage.json"
+        "worktracks/evidence/2026-10-19-v334-v337-upstream-inference-storage.json",
+        "tools/sync_upstream_inference_context.py",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-context.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-context-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-upstream-inference-context-controls.json",
+        "worktracks/evidence/2026-10-19-v338-v341-upstream-inference-context.json"
       ],
       "issue": null,
       "pull_request": null,
@@ -1935,5 +1940,5 @@
       ]
     }
   ],
-  "updated_at": "2026-10-19T19:41:50.897794+00:00"
+  "updated_at": "2026-10-19T20:01:08.573867+00:00"
 }

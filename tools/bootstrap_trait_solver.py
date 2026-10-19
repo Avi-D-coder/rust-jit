@@ -40,6 +40,10 @@ SUPPORT_SOURCES = (
     'src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/opaque_types/mod.rs',
     'src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/opaque_types/table.rs',
     'src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/snapshot/mod.rs',
+    'compiler/rustc_infer/src/infer/mod.rs',
+    'compiler/rustc_infer/src/infer/type_variable.rs',
+    'compiler/rustc_infer/src/infer/resolve.rs',
+    'compiler/rustc_middle/src/ty/generic_args.rs',
 )
 
 
