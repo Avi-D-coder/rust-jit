@@ -1,0 +1,9 @@
+{
+  "controls": [
+    "cli::crate_graph::generic_boundary_tests::lifetime_arguments_name_the_bare_nominal_inside_macro_arguments",
+    "vm::frame::tests::rustc_original_universal_region_is_retained_as_non_data_source_metadata",
+    "engine::run::returning::reference_result_tests::named_declared_lifetime_uses_the_same_source_selected_projection_return",
+    "engine::run::return_tests::original_alias_return_contracts_preserve_source_identity_at_equal_descriptor",
+    "cli::preentry_loader_tests::unchanged_generic_annotation_preserves_actual_frame_owner_all_editions_and_origins"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "controls": [
+    "vm::frame::source_types_frame::tests::nominal_region_metadata_preserves_exact_runtime_type_and_argument_guards",
+    "vm::frame::source_types_frame::tests::composite_call_source_batch_admits_distinct_arguments_and_refuses_aliases",
+    "vm::frame::source_types_frame::tests::ordinary_tuple_projection_preserves_admitted_nested_source_and_does_not_consume_fields",
+    "frontend::call_contracts::closed_reference_calls::tests::reference_result_source_certificate_rejects_public_packet_tampering",
+    "frontend::call_contracts::closed_reference_calls::tests::shared_header_plan_does_not_share_actual_caller_regions_or_target_receipts",
+    "vm::frame::source_types_frame::tests::composite_source_views_replace_and_clear_without_guest_allocations",
+    "vm::frame::source_types_frame::tests::source_views_move_with_places_and_cleanup_clears_them_once",
+    "vm::frame::source_types_frame::tests::scope_cleanup_releases_composite_annotations_but_keeps_the_return_source_owned",
+    "vm::frame::source_types_frame::tests::original_inner_tuple_constructor_retains_actual_field_sources_through_guard_and_finish"
+  ]
+}

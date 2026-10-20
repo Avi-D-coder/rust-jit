@@ -1,0 +1,1843 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-20T06:29:33.785168+00:00",
+  "baseline": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+  "status": "held_component_checkpoint",
+  "solo": true,
+  "claims": [
+    "LOCAL-049"
+  ],
+  "task_ids": [
+    "M018",
+    "T040",
+    "T053"
+  ],
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "source_sha256": "1b25c372e2f1a2885b6368d4a22f5ea1de0d4bab385208393a6becaf89a39ead",
+  "summary": "V462-V470 HELD M018/T040/T053/E006 common rigid source answers and nominal region metadata. Actual same-body rigid answers use the existing source application finalizer and retained WrittenType::Frame; body result parameters feed existing source relations. Common call closedness, runtime region projection and frame descriptor membership preserve source regions separately from physical Type slots. Source-view heap measurement/counters/transient preflights and cleanup bookkeeping are removed under E006 rather than extending a false resource refusal. Final V470 both macOS1.99.0 builds and9/9scoped controls pass; actual view publication, source identity/arity/foreign-Type/placeholder refusals, call-slot alias checks, tuple transfer, return/scope cleanup and reference certificate guards exercised. Unchanged owning2015 union-generic-rpass advances18->265matched VM operations/16source calls, through generic union transmute, iterator creation and first next; still fails at nested explicit Type inference hole std::slice::Iter<_>. Maintained struct-aliases/generic-derived-type/union-drop-assign pass961/199/317operations with complete captures. V467/V468 lifetime/frame-owner controls retain their own exact source evidence. V469 false resource failure and earlier diagnostic probes remain recorded. No newly complete distinct upstream runtime case or refreshed suite/morning total. Full nested inference/projections, upstream solver root/member/VM migration, origin matrix, source/currentness/cleanup and all task/milestone/interpreter/JIT gates remain incomplete. No Linux/performance/full-fixture/diagnostic/tooling closure.",
+  "architecture_record": "worktracks/04-calls-source-views/2026-10-19-rigid-open-results.md",
+  "source_review": "worktracks/04-calls-source-views/2026-10-19-rigid-open-source-review.md",
+  "cohorts": {
+    "462": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T05:54:13.812506+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "a3f99d2e875426a9e0824b4cb72a8d110bfcd57ad5ed554b8d7d35c745b40cad",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T05:54:14.215170+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "a3f99d2e875426a9e0824b4cb72a8d110bfcd57ad5ed554b8d7d35c745b40cad",
+          "binaries": {
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "28f222106488d02a5af14e72a76e00aad714e911c48f3d3f95f47ec8a37c7247"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T05:56:05.152209+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "a3f99d2e875426a9e0824b4cb72a8d110bfcd57ad5ed554b8d7d35c745b40cad",
+          "binaries": {
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "28f222106488d02a5af14e72a76e00aad714e911c48f3d3f95f47ec8a37c7247"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "runtime_report_local": "/private/tmp/lrr-v462-union-frontier-runtime/report.json",
+      "runtime_terminal_exit": 1,
+      "selected_batch_passed": false,
+      "runtime_cases": [
+        {
+          "case": "tests/ui/union/union-modification.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "1d695ff6f3c91845afbe5b886875786e26aeb2496a4628b30cc881bc3825f4f9",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 849,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 2,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 453,
+            "vm_outcomes": 453
+          }
+        },
+        {
+          "case": "tests/ui/union/union-nonzero.rs",
+          "status": "interpreter_failure",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "96dfc0d9afa93863bc30cde8c32468b017d2eedc070ad5c251a038bcd4faecc2",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "executor",
+            "code": "LRR-E-UNSUPPORTED",
+            "message": "mem::transmute::<*const u8, U2<&u8, ()>> requires supported byte images and pointer provenance"
+          },
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 246,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 24,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 161,
+            "vm_outcomes": 161
+          }
+        },
+        {
+          "case": "tests/ui/union/union-generic-rpass.rs",
+          "status": "interpreter_failure",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "f59d90d6dad771e639a8ff498e0475e10e126c1b81342c3a14c08263458356b8",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "executor",
+            "code": "LRR-E-TYPE-CONTEXT",
+            "message": "generic type argument is not determined by any constructed field"
+          },
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 23,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 18,
+            "vm_outcomes": 18
+          }
+        },
+        {
+          "case": "tests/ui/union/union-backcomp.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "c95ba38dbc5add8c9737c4972456d3105ae6998d660581793341e8d032815d2d",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 27,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 19,
+            "vm_outcomes": 19
+          }
+        },
+        {
+          "case": "tests/ui/union/union-packed.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "ef047f9e701667a453dd99364c4535f3fa4be657564eecd648feb6330c47e21a",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 40906,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 7,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 109,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 17756,
+            "vm_outcomes": 17756
+          }
+        },
+        {
+          "case": "tests/ui/union/union-trait-impl.rs",
+          "status": "interpreter_failure",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "c6bf3366a02c5a9472b9709b2fb7fc50c6e559e1809ffc47a949d8fd1eb62e9f",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "executor",
+            "code": "LRR-E-UNSUPPORTED",
+            "message": "symbolic return syntax awaits body-hint integration: `Formatter<'static>`"
+          },
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 23,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 18,
+            "vm_outcomes": 18
+          }
+        },
+        {
+          "case": "tests/ui/union/union-inherent-method.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "73528ec30c5038eeeae935d3eb607480a0e51807c13e9856a692483598eaa7ee",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 111,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 74,
+            "vm_outcomes": 74
+          }
+        },
+        {
+          "case": "tests/ui/union/union_destructure.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "7240f33d0cecf1896c6c5d6c980af78f348384606626376794f09ab5969f4902",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 406,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 3,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 221,
+            "vm_outcomes": 221
+          }
+        },
+        {
+          "case": "tests/ui/union/union-nodrop.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "d2b3089c0760cbc0d1898daa98e290df1032a20f5563da7ba4522c6da02ae153",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 176,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 12,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 116,
+            "vm_outcomes": 116
+          }
+        },
+        {
+          "case": "tests/ui/union/union-const-eval-field.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "ba8ef6dea7e096d0f57741971ea427bd8e0798122eefcd17d3848e8c734c9c1e",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 1163,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 6,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 630,
+            "vm_outcomes": 630
+          }
+        }
+      ]
+    },
+    "463": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T05:58:47.918417+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "8248771d4d2ae5d438910de24e010c7ef20dc16243f70b502b67650336f370cd",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:00:03.419839+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "8248771d4d2ae5d438910de24e010c7ef20dc16243f70b502b67650336f370cd",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "fce469f56ec27676b5c49a0f832299905902722d646df8e8934040801a069975"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "ba32f892ee66ffa52ace7944dae75ae141b77156972ffa60b3099f610c29d866"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:01:53.340998+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "8248771d4d2ae5d438910de24e010c7ef20dc16243f70b502b67650336f370cd",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "fce469f56ec27676b5c49a0f832299905902722d646df8e8934040801a069975"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "ba32f892ee66ffa52ace7944dae75ae141b77156972ffa60b3099f610c29d866"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        },
+        "after-controls": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:03:09.051248+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "8248771d4d2ae5d438910de24e010c7ef20dc16243f70b502b67650336f370cd"
+        }
+      },
+      "lib_build_success": true,
+      "cli_build_success": true,
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_explicit_alias_keeps_shared_application_guard_all_editions_and_origins",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 30.66
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::official_three_call_plans_keep_nominal_identity_shared_rows_and_guarded_caller",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.8
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::type_argument_plan_keeps_real_unsupported_body_and_field_cold_and_resolves_caller_alias",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.466
+        },
+        {
+          "selector": "cli::callable_value_tests::upstream_generic_annotation_and_explicit_application_share_all_origins",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 83.657
+        }
+      ],
+      "runtime_report_local": "/private/tmp/lrr-v463-rigid-open-runtime/report.json",
+      "runtime_terminal_exit": 1,
+      "selected_batch_passed": false,
+      "runtime_cases": [
+        {
+          "case": "tests/ui/union/union-generic-rpass.rs",
+          "status": "interpreter_failure",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "f59d90d6dad771e639a8ff498e0475e10e126c1b81342c3a14c08263458356b8",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "executor",
+            "code": "LRR-E-TYPE-CONTEXT",
+            "message": "generic type argument is not determined by any constructed field"
+          },
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 23,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 18,
+            "vm_outcomes": 18
+          }
+        },
+        {
+          "case": "tests/ui/structs-enums/struct-aliases.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "8da894106e96817d0e10bea2b1668090bd62f661804742b32ff0d474ccb59ab3",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 1952,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 4,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 961,
+            "vm_outcomes": 961
+          }
+        },
+        {
+          "case": "tests/ui/generics/generic-derived-type.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "59e07d17994d57e0175737319e69637680861a13e39a162cc2c12fe53e0ac06b",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 312,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 5,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 199,
+            "vm_outcomes": 199
+          }
+        }
+      ],
+      "guard_note": "after-runtime preceded final control terminal; after-controls independently confirms source/HEAD/binaries unchanged after all controls terminal"
+    },
+    "464": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:03:09.638667+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "78f7149e10dd09253e6af10a442571da53e084019dcc262fc782d08498a1c400",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:03:30.166275+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "78f7149e10dd09253e6af10a442571da53e084019dcc262fc782d08498a1c400",
+          "binaries": {
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "b57e24eb92679bff1dcfebd58f30412facb5ad7c179397c51fd52699aa8084a6"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:04:44.057625+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "78f7149e10dd09253e6af10a442571da53e084019dcc262fc782d08498a1c400",
+          "binaries": {
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "b57e24eb92679bff1dcfebd58f30412facb5ad7c179397c51fd52699aa8084a6"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "cli_build_success": true,
+      "runtime_report_local": "/private/tmp/lrr-v464-rigid-open-probe/report.json",
+      "runtime_terminal_exit": 1,
+      "selected_batch_passed": false,
+      "runtime_cases": [
+        {
+          "case": "tests/ui/union/union-generic-rpass.rs",
+          "status": "interpreter_failure",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "f59d90d6dad771e639a8ff498e0475e10e126c1b81342c3a14c08263458356b8",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "executor",
+            "code": "LRR-E-TYPE-CONTEXT",
+            "message": "generic type argument is not determined by any constructed field"
+          },
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 23,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 18,
+            "vm_outcomes": 18
+          }
+        }
+      ],
+      "scope": "temporary cold-query diagnostic probe only; hooks removed before V466, no acceptance"
+    },
+    "465": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:04:59.064892+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "8cbc5f4317b25aac691cd3c03d889f84370c007c6ff4bfd329cdc0183fcbb761",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:05:32.433987+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "8cbc5f4317b25aac691cd3c03d889f84370c007c6ff4bfd329cdc0183fcbb761",
+          "binaries": {
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "301749e1a818a139ff9aeab3b126ffa017353d1d9729f9f387a88e7a2a75e6ca"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:06:28.311529+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "8cbc5f4317b25aac691cd3c03d889f84370c007c6ff4bfd329cdc0183fcbb761",
+          "binaries": {
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "301749e1a818a139ff9aeab3b126ffa017353d1d9729f9f387a88e7a2a75e6ca"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "cli_build_success": true,
+      "runtime_report_local": "/private/tmp/lrr-v465-rigid-open-probe/report.json",
+      "runtime_terminal_exit": 1,
+      "selected_batch_passed": false,
+      "runtime_cases": [
+        {
+          "case": "tests/ui/union/union-generic-rpass.rs",
+          "status": "interpreter_failure",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "f59d90d6dad771e639a8ff498e0475e10e126c1b81342c3a14c08263458356b8",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "executor",
+            "code": "LRR-E-TYPE-CONTEXT",
+            "message": "generic type argument is not determined by any constructed field"
+          },
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 23,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 18,
+            "vm_outcomes": 18
+          }
+        }
+      ],
+      "scope": "temporary cold-query diagnostic probe only; hooks removed before V466, no acceptance"
+    },
+    "466": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:06:28.863577+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "2f367454e9de6cc95b3dab62fea7d5788cf4234e197b928bed00481e5523933d",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:08:35.052886+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "2f367454e9de6cc95b3dab62fea7d5788cf4234e197b928bed00481e5523933d",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "3cd62dd410fb40ff206144892186e4246468395b9f0d5043e1d48e23cb846b7f"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "3015e12720fd82a50c3dc0f757443105fbd749c401739e6d96fc0ed88ef61070"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:13:51.364144+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "2f367454e9de6cc95b3dab62fea7d5788cf4234e197b928bed00481e5523933d",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "3cd62dd410fb40ff206144892186e4246468395b9f0d5043e1d48e23cb846b7f"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "3015e12720fd82a50c3dc0f757443105fbd749c401739e6d96fc0ed88ef61070"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build_success": true,
+      "cli_build_success": true,
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_explicit_alias_keeps_shared_application_guard_all_editions_and_origins",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 30.862
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::official_three_call_plans_keep_nominal_identity_shared_rows_and_guarded_caller",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.798
+        },
+        {
+          "selector": "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::type_argument_plan_keeps_real_unsupported_body_and_field_cold_and_resolves_caller_alias",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.469
+        },
+        {
+          "selector": "cli::callable_value_tests::upstream_generic_annotation_and_explicit_application_share_all_origins",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 83.338
+        }
+      ],
+      "runtime_report_local": "/private/tmp/lrr-v466-rigid-open-runtime/report.json",
+      "runtime_terminal_exit": 1,
+      "selected_batch_passed": false,
+      "runtime_cases": [
+        {
+          "case": "tests/ui/union/union-generic-rpass.rs",
+          "status": "interpreter_failure",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "f59d90d6dad771e639a8ff498e0475e10e126c1b81342c3a14c08263458356b8",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "executor",
+            "code": "LRR-E-CALL-CONTEXT",
+            "message": "definition/call environment identity or arity mismatch (definition true, parameters 1/1/1, result false [Some(Nominal(Digest(884d7cec1c10be23fb83f8101ca5c608c641cee061f11661240fc44b83248ace), [Region(Local { definition: Digest(9aecdf5b6ad1c0fb36da802c4b783f428a2205a8454ddf23bd07b60e2b4277b6), start: 25, end: 27 }), Type(Param(ParamKey { definition: Digest(9aecdf5b6ad1c0fb36da802c4b783f428a2205a8454ddf23bd07b60e2b4277b6), ordinal: 0 }))])) vs None], substitution 1/1)"
+          },
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 293,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 11,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 185,
+            "vm_outcomes": 185
+          }
+        },
+        {
+          "case": "tests/ui/structs-enums/struct-aliases.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "8da894106e96817d0e10bea2b1668090bd62f661804742b32ff0d474ccb59ab3",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 1952,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 4,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 961,
+            "vm_outcomes": 961
+          }
+        },
+        {
+          "case": "tests/ui/generics/generic-derived-type.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "59e07d17994d57e0175737319e69637680861a13e39a162cc2c12fe53e0ac06b",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 312,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 5,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 199,
+            "vm_outcomes": 199
+          }
+        },
+        {
+          "case": "tests/ui/impl-trait/nesting.rs",
+          "status": "interpreter_failure",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "453a7890e9f8a59f60f3650af88831a14070f2cb066ea7515b65a30247ea831d",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "executor",
+            "code": "LRR-E-TYPE-CONTEXT",
+            "message": "generic parameter `U` has no reached binding for its path call"
+          },
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 32,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 2,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 22,
+            "vm_outcomes": 22
+          }
+        }
+      ]
+    },
+    "467": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:14:52.208996+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "72a1d68bf5f059eac33a7377a3859d04a2acc4b08bf203a345e52257cf19eeec",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:15:32.062957+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "72a1d68bf5f059eac33a7377a3859d04a2acc4b08bf203a345e52257cf19eeec",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "1e5a3308a6f6e7f7cf2b757dd0053c528ebe6d413ad20ffc54b7a928a6fe0302"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "21ae857eb1d3735af5228c4321cfb3559af40c991af6c0b34042a8cd340c30a0"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:17:00.004148+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "72a1d68bf5f059eac33a7377a3859d04a2acc4b08bf203a345e52257cf19eeec",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "1e5a3308a6f6e7f7cf2b757dd0053c528ebe6d413ad20ffc54b7a928a6fe0302"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "21ae857eb1d3735af5228c4321cfb3559af40c991af6c0b34042a8cd340c30a0"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build_success": true,
+      "cli_build_success": true,
+      "controls": [
+        {
+          "selector": "cli::crate_graph::generic_boundary_tests::lifetime_arguments_name_the_bare_nominal_inside_macro_arguments",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 17.024
+        },
+        {
+          "selector": "vm::frame::tests::rustc_original_universal_region_is_retained_as_non_data_source_metadata",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.391
+        },
+        {
+          "selector": "engine::run::returning::reference_result_tests::named_declared_lifetime_uses_the_same_source_selected_projection_return",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.381
+        },
+        {
+          "selector": "engine::run::return_tests::original_alias_return_contracts_preserve_source_identity_at_equal_descriptor",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.405
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_generic_annotation_preserves_actual_frame_owner_all_editions_and_origins",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 34.495
+        }
+      ],
+      "runtime_report_local": "/private/tmp/lrr-v467-rigid-region-runtime/report.json",
+      "runtime_terminal_exit": 1,
+      "selected_batch_passed": false,
+      "runtime_cases": [
+        {
+          "case": "tests/ui/union/union-generic-rpass.rs",
+          "status": "interpreter_failure",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "f59d90d6dad771e639a8ff498e0475e10e126c1b81342c3a14c08263458356b8",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "executor",
+            "code": "LRR-E-CALL-RETURN-TYPE",
+            "message": "returned value differs from the closed declared result type"
+          },
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 326,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 14,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 207,
+            "vm_outcomes": 207
+          }
+        },
+        {
+          "case": "tests/ui/structs-enums/struct-aliases.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "8da894106e96817d0e10bea2b1668090bd62f661804742b32ff0d474ccb59ab3",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 1952,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 4,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 961,
+            "vm_outcomes": 961
+          }
+        },
+        {
+          "case": "tests/ui/generics/generic-derived-type.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "59e07d17994d57e0175737319e69637680861a13e39a162cc2c12fe53e0ac06b",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 312,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 5,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 199,
+            "vm_outcomes": 199
+          }
+        }
+      ]
+    },
+    "468": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:17:57.812440+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "6b5b163048748c312482718f66914c6e23c005d143d4cc64b89380c083a7cf0b",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:18:55.228954+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "6b5b163048748c312482718f66914c6e23c005d143d4cc64b89380c083a7cf0b",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "b3013f276b46012fc6501d47b43766fd2e3474312f9ed4fed6861ba9029d0123"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "addb2b7664c3b4bc9bc33a3eeccab14c229f3a3b1981c29c92e7dcb88b61a78b"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:20:44.106376+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "6b5b163048748c312482718f66914c6e23c005d143d4cc64b89380c083a7cf0b",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "b3013f276b46012fc6501d47b43766fd2e3474312f9ed4fed6861ba9029d0123"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "addb2b7664c3b4bc9bc33a3eeccab14c229f3a3b1981c29c92e7dcb88b61a78b"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build_success": true,
+      "cli_build_success": true,
+      "controls": [
+        {
+          "selector": "cli::crate_graph::generic_boundary_tests::lifetime_arguments_name_the_bare_nominal_inside_macro_arguments",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 17.032
+        },
+        {
+          "selector": "vm::frame::tests::rustc_original_universal_region_is_retained_as_non_data_source_metadata",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.374
+        },
+        {
+          "selector": "engine::run::returning::reference_result_tests::named_declared_lifetime_uses_the_same_source_selected_projection_return",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.38
+        },
+        {
+          "selector": "engine::run::return_tests::original_alias_return_contracts_preserve_source_identity_at_equal_descriptor",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.404
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_generic_annotation_preserves_actual_frame_owner_all_editions_and_origins",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 34.599
+        }
+      ],
+      "runtime_report_local": "/private/tmp/lrr-v468-rigid-region-runtime/report.json",
+      "runtime_terminal_exit": 1,
+      "selected_batch_passed": false,
+      "runtime_cases": [
+        {
+          "case": "tests/ui/union/union-generic-rpass.rs",
+          "status": "interpreter_failure",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "f59d90d6dad771e639a8ff498e0475e10e126c1b81342c3a14c08263458356b8",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "executor",
+            "code": "LRR-E-INTERNAL-IR",
+            "message": "composite frame source view requires table integration"
+          },
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 326,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 14,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 207,
+            "vm_outcomes": 207
+          }
+        },
+        {
+          "case": "tests/ui/structs-enums/struct-aliases.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "8da894106e96817d0e10bea2b1668090bd62f661804742b32ff0d474ccb59ab3",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 1952,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 4,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 961,
+            "vm_outcomes": 961
+          }
+        },
+        {
+          "case": "tests/ui/generics/generic-derived-type.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "59e07d17994d57e0175737319e69637680861a13e39a162cc2c12fe53e0ac06b",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 312,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 5,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 199,
+            "vm_outcomes": 199
+          }
+        }
+      ]
+    },
+    "469": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:21:53.974182+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "f89677519d608a40ebb52a2e1e7ee856e063918eafa31b14c8c4cb54b2f4d8ff",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:22:41.159093+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "f89677519d608a40ebb52a2e1e7ee856e063918eafa31b14c8c4cb54b2f4d8ff",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "96caa4a872b3caa01cde8364a9351846d6915ae8ee5f341fce7af5d15b0ce783"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "66db2c7542d70100f6aaeac6a5877d398ecda999116a1272c53f1688e8120fdd"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:23:16.582120+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "f89677519d608a40ebb52a2e1e7ee856e063918eafa31b14c8c4cb54b2f4d8ff",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "96caa4a872b3caa01cde8364a9351846d6915ae8ee5f341fce7af5d15b0ce783"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "66db2c7542d70100f6aaeac6a5877d398ecda999116a1272c53f1688e8120fdd"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build_success": true,
+      "cli_build_success": true,
+      "controls": [
+        {
+          "selector": "vm::frame::source_types_frame::tests::nominal_region_metadata_preserves_exact_runtime_type_and_argument_guards",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.396
+        },
+        {
+          "selector": "vm::frame::source_types_frame::tests::composite_call_source_batch_admits_distinct_arguments_and_refuses_aliases",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.386
+        },
+        {
+          "selector": "vm::frame::source_types_frame::tests::ordinary_tuple_projection_preserves_admitted_nested_source_and_does_not_consume_fields",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.384
+        },
+        {
+          "selector": "frontend::call_contracts::closed_reference_calls::tests::reference_result_source_certificate_rejects_public_packet_tampering",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.393
+        },
+        {
+          "selector": "frontend::call_contracts::closed_reference_calls::tests::shared_header_plan_does_not_share_actual_caller_regions_or_target_receipts",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.383
+        }
+      ],
+      "runtime_report_local": "/private/tmp/lrr-v469-rigid-frame-runtime/report.json",
+      "runtime_terminal_exit": 1,
+      "selected_batch_passed": false,
+      "runtime_cases": [
+        {
+          "case": "tests/ui/union/union-generic-rpass.rs",
+          "status": "interpreter_failure",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "f59d90d6dad771e639a8ff498e0475e10e126c1b81342c3a14c08263458356b8",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "executor",
+            "code": "LRR-E-RUNTIME-RESOURCE",
+            "message": "guest arena handle/memory reservation exhausted"
+          },
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 298,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 12,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 187,
+            "vm_outcomes": 186
+          }
+        },
+        {
+          "case": "tests/ui/structs-enums/struct-aliases.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "8da894106e96817d0e10bea2b1668090bd62f661804742b32ff0d474ccb59ab3",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 1952,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 4,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 961,
+            "vm_outcomes": 961
+          }
+        },
+        {
+          "case": "tests/ui/generics/generic-derived-type.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "59e07d17994d57e0175737319e69637680861a13e39a162cc2c12fe53e0ac06b",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 312,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 5,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 199,
+            "vm_outcomes": 199
+          }
+        }
+      ]
+    },
+    "470": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:25:54.527705+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "1b25c372e2f1a2885b6368d4a22f5ea1de0d4bab385208393a6becaf89a39ead",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:26:36.472439+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "1b25c372e2f1a2885b6368d4a22f5ea1de0d4bab385208393a6becaf89a39ead",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "95184a5949970bacf1e8d5804035f85806d4b9673d78c1e1335587c13aeb60e2"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "50ef0657df1c9806df7a6a52aec89ae87554cd781a600919beda1698b08edd4b"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:28:02.942843+00:00",
+          "head": "8c3449eca662b6565727aa93ca0259e3abe566b1",
+          "file_count": 8611,
+          "source_sha256": "1b25c372e2f1a2885b6368d4a22f5ea1de0d4bab385208393a6becaf89a39ead",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "95184a5949970bacf1e8d5804035f85806d4b9673d78c1e1335587c13aeb60e2"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "50ef0657df1c9806df7a6a52aec89ae87554cd781a600919beda1698b08edd4b"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build_success": true,
+      "cli_build_success": true,
+      "controls": [
+        {
+          "selector": "vm::frame::source_types_frame::tests::nominal_region_metadata_preserves_exact_runtime_type_and_argument_guards",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.432
+        },
+        {
+          "selector": "vm::frame::source_types_frame::tests::composite_call_source_batch_admits_distinct_arguments_and_refuses_aliases",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.382
+        },
+        {
+          "selector": "vm::frame::source_types_frame::tests::ordinary_tuple_projection_preserves_admitted_nested_source_and_does_not_consume_fields",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.385
+        },
+        {
+          "selector": "frontend::call_contracts::closed_reference_calls::tests::reference_result_source_certificate_rejects_public_packet_tampering",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.387
+        },
+        {
+          "selector": "frontend::call_contracts::closed_reference_calls::tests::shared_header_plan_does_not_share_actual_caller_regions_or_target_receipts",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.384
+        },
+        {
+          "selector": "vm::frame::source_types_frame::tests::composite_source_views_replace_and_clear_without_guest_allocations",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.381
+        },
+        {
+          "selector": "vm::frame::source_types_frame::tests::source_views_move_with_places_and_cleanup_clears_them_once",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.381
+        },
+        {
+          "selector": "vm::frame::source_types_frame::tests::scope_cleanup_releases_composite_annotations_but_keeps_the_return_source_owned",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.383
+        },
+        {
+          "selector": "vm::frame::source_types_frame::tests::original_inner_tuple_constructor_retains_actual_field_sources_through_guard_and_finish",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.382
+        }
+      ],
+      "runtime_report_local": "/private/tmp/lrr-v470-source-views-runtime/report.json",
+      "runtime_terminal_exit": 1,
+      "selected_batch_passed": false,
+      "runtime_cases": [
+        {
+          "case": "tests/ui/union/union-generic-rpass.rs",
+          "status": "interpreter_failure",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "f59d90d6dad771e639a8ff498e0475e10e126c1b81342c3a14c08263458356b8",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "executor",
+            "code": "LRR-E-UNSUPPORTED",
+            "message": "explicit Type argument with an inference hole requires inference"
+          },
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 404,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 16,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 265,
+            "vm_outcomes": 265
+          }
+        },
+        {
+          "case": "tests/ui/structs-enums/struct-aliases.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "8da894106e96817d0e10bea2b1668090bd62f661804742b32ff0d474ccb59ab3",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 1952,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 4,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 961,
+            "vm_outcomes": 961
+          }
+        },
+        {
+          "case": "tests/ui/generics/generic-derived-type.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "59e07d17994d57e0175737319e69637680861a13e39a162cc2c12fe53e0ac06b",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 312,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 5,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 199,
+            "vm_outcomes": 199
+          }
+        },
+        {
+          "case": "tests/ui/union/union-drop-assign.rs",
+          "status": "runtime_contract_pass",
+          "edition": 2015,
+          "mode": "run-pass",
+          "source_sha256": "90061165d623fa715382b34c1e690d6ee9ff62673a672d96f409b618b75a13a7",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 515,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 1,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 2,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 317,
+            "vm_outcomes": 317
+          }
+        }
+      ]
+    }
+  },
+  "originals": {
+    "tests/ui/union/union-generic-rpass.rs": {
+      "sha256": "f59d90d6dad771e639a8ff498e0475e10e126c1b81342c3a14c08263458356b8",
+      "matches_upstream_bytes": true
+    },
+    "tests/ui/structs-enums/struct-aliases.rs": {
+      "sha256": "8da894106e96817d0e10bea2b1668090bd62f661804742b32ff0d474ccb59ab3",
+      "matches_upstream_bytes": true
+    },
+    "tests/ui/generics/generic-derived-type.rs": {
+      "sha256": "59e07d17994d57e0175737319e69637680861a13e39a162cc2c12fe53e0ac06b",
+      "matches_upstream_bytes": true
+    },
+    "tests/ui/union/union-drop-assign.rs": {
+      "sha256": "90061165d623fa715382b34c1e690d6ee9ff62673a672d96f409b618b75a13a7",
+      "matches_upstream_bytes": true
+    }
+  },
+  "new_distinct_upstream_runtime_passes": 0,
+  "refreshed_suite_total": null,
+  "completed_spec_cards": [],
+  "upstream_runtime_acceptance": "incomplete",
+  "diagnostic_compatibility": "unassessed",
+  "compiler_tooling_compatibility": "unassessed",
+  "full_suite_compatibility": "incomplete",
+  "guest_jit_allowed": false,
+  "remaining": [
+    "nested explicit Type inference applications and associated projections through the required upstream inference/solver bridge",
+    "complete source facts, SolverDelegate/root/ParamEnv/member/dictionary/VM migration; inherited custom structural inference remains debt",
+    "full common-engine source/user-macro/wrapper/standard-macro runtime matrix for this primary original",
+    "pointer-bearing/wide/enum union image and in-place Drop gaps",
+    "other inherited frame/projection accounting; E006 not complete",
+    "all applicable runtime/interpreter correctness, guest JIT/release gates"
+  ],
+  "reproduction": {
+    "lib": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+    "cli": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+    "controls": "python3.12 tools/validation/run_controls.py artifacts/validation-current-v470 worktracks/04-calls-source-views/2026-10-19-rigid-frame-controls.json",
+    "runtime": "LRR_EMBEDDED_FACADE=1 python3.12 tools/rustc_checkout_runtime.py --lrr target/debug/lrr --source-digester target/debug/examples/lrr_source_digests --report-dir /private/tmp/lrr-v470-source-views-runtime --case tests/ui/union/union-generic-rpass.rs --case tests/ui/structs-enums/struct-aliases.rs --case tests/ui/generics/generic-derived-type.rs --case tests/ui/union/union-drop-assign.rs",
+    "guard": "python3.12 tools/validation/source_manifest.py artifacts/validation-current-v470 after-runtime"
+  }
+}

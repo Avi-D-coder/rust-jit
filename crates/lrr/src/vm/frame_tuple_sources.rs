@@ -20,12 +20,6 @@ impl Frame {
         let crate::syntax::constructors::ConstructorKind::Tuple(fields) = plan.kind() else {
             return Ok(None);
         };
-        let transient = fields
-            .len()
-            .checked_mul(2 * std::mem::size_of::<SlotId>())
-            .and_then(|bytes| bytes.checked_add(3 * std::mem::size_of::<usize>()))
-            .ok_or_else(crate::runtime::arena::resource)?;
-        self.source_storage_limit(self.source_extra_bytes, transient)?;
         let mut operands = Vec::new();
         operands
             .try_reserve_exact(fields.len())
@@ -46,10 +40,7 @@ impl Frame {
         let Some(operands) = &active.source_operands else {
             return Ok(false);
         };
-        let mut heap = operands
-            .len()
-            .checked_mul(std::mem::size_of::<TyTerm>())
-            .ok_or_else(crate::runtime::arena::resource)?;
+        self.slot(destination)?;
         for slot in operands.iter() {
             if store.state(self.cell(*slot)?)? != CellState::Moved {
                 return Err(invalid(
@@ -64,9 +55,6 @@ impl Frame {
                 // require their ordinary source-proof table. Do not guess.
                 return Ok(false);
             }
-            heap = heap
-                .checked_add(Self::source_heap(Some(source))?)
-                .ok_or_else(crate::runtime::arena::resource)?;
         }
         let key = match active.result {
             ConstructionResult::Bound(target) => {
@@ -96,16 +84,6 @@ impl Frame {
                 ));
             }
         }
-        let excess = self
-            .source_extra_bytes
-            .checked_sub(Self::source_excess(self.source_view_ref(destination)?)?)
-            .and_then(|bytes| {
-                bytes.checked_add(heap.saturating_sub(2 * std::mem::size_of::<TyTerm>()))
-            })
-            .ok_or_else(|| invalid("tuple source accounting overflow/underflow"))?;
-        // Include the entire newly owned clone while the old annotations and
-        // constructor rows still exist. No guard/guest owner changes on refusal.
-        self.source_storage_limit(excess, heap)?;
         Ok(true)
     }
 

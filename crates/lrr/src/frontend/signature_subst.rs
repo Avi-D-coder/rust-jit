@@ -148,7 +148,9 @@ impl SignatureSubstitution {
         self.unifier.unify(&instantiated, actual)
     }
 }
-/// Every region becomes `'static`; types and mutability are kept.
+/// The runtime comparison view keeps Type/Const identities and mutability.
+/// Reference region names become `'static`; nominal region arguments have no
+/// physical descriptor slots and are omitted. Source terms stay unchanged.
 pub(crate) fn erase_regions(term: &TyTerm) -> TyTerm {
     match term {
         TyTerm::Ref(_, mutable, target) => TyTerm::Ref(
@@ -162,12 +164,10 @@ pub(crate) fn erase_regions(term: &TyTerm) -> TyTerm {
         TyTerm::Nominal(identity, args) => TyTerm::Nominal(
             *identity,
             args.iter()
-                .map(|arg| match arg {
-                    GenericArg::Type(ty) => GenericArg::Type(erase_regions(ty)),
-                    GenericArg::Region(_) => {
-                        GenericArg::Region(crate::traits::term::RegionTerm::Static)
-                    }
-                    other => other.clone(),
+                .filter_map(|arg| match arg {
+                    GenericArg::Type(ty) => Some(GenericArg::Type(erase_regions(ty))),
+                    GenericArg::Region(_) => None,
+                    other => Some(other.clone()),
                 })
                 .collect(),
         ),

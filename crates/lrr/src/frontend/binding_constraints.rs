@@ -893,8 +893,12 @@ impl<'a> Component<'a> {
             Some(TyTerm::Dyn(principal)) if !self.open => {
                 self.object_obligation(db, node, principal.0)
             }
-            Some(term) if self.open && crate::frontend::call_contracts::closed_term(&term) => {
-                self.candidate(node, term);
+            Some(term) if self.open => {
+                if ready!(self.admitted_open_answer(db, &term)) {
+                    self.candidate(node, term);
+                } else {
+                    self.defer(node, demand);
+                }
                 QueryPoll::Ready(Ok(()))
             }
             _ => {
@@ -1144,6 +1148,11 @@ impl<'a> Component<'a> {
         match ready!(self.project_parametric(db, term, &steps)) {
             generics::TermProjection::Parameter(key, remaining) if is_call => {
                 self.relate_parameter(db, node, definition, key, remaining)
+            }
+            // A body's declared result or parameter already states its own
+            // rigid Type. It is not an undecided callee argument to relate.
+            generics::TermProjection::Parameter(_, _) if !is_call => {
+                self.constrain_term(db, node, term, demand)
             }
             generics::TermProjection::Leaf(term)
                 if is_call && self.open && methods::mentions_parameter(&term) =>

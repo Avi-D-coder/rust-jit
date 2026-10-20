@@ -15,6 +15,119 @@ const ORIGINAL: &str = include_str!(
     "../../../../fixtures/upstream/rustc-checkout/tests/ui/or-patterns/search-via-bindings.rs"
 );
 
+#[test]
+fn nominal_region_metadata_preserves_exact_runtime_type_and_argument_guards() {
+    use crate::traits::term::{GenericArg, ParamKey, PlaceholderKey, RegionTerm};
+    // A descriptor-membership control around the actual library declaration.
+    // This supplies no source-admission receipt or stock runtime evidence.
+    const SLICE: &str = include_str!("../../facade/core/slice.rs");
+    for edition in [2015, 2018, 2021, 2024] {
+        let profile = ProfileIdentity {
+            edition,
+            ..ProfileIdentity::current()
+        };
+        let parsed = ParsedFile::parse(
+            &SourceBlob::new(SLICE.as_bytes().to_vec()).unwrap(),
+            profile,
+        )
+        .unwrap();
+        let outline = parsed
+            .outline(Digest([84; 32]), vec![], &CfgSet::guest_default())
+            .unwrap();
+        let definition = outline
+            .items
+            .iter()
+            .find(|item| item.def_key.declared_name == "Iter")
+            .unwrap()
+            .def_key
+            .clone();
+        let identity = definition.fingerprint();
+        let mut store = GuestStore::for_epoch(1).unwrap();
+        let descriptor = store
+            .intern_type(TypeKey::Nominal {
+                identity,
+                definition,
+                schema: Digest::of_bytes(SLICE.as_bytes()),
+                args: vec![TypeId(9)].into_boxed_slice(),
+                const_args: Box::new([]),
+            })
+            .unwrap();
+        for region in [
+            RegionTerm::Static,
+            RegionTerm::Param(ParamKey {
+                definition: identity,
+                ordinal: 0,
+            }),
+            RegionTerm::Bound { depth: 0, index: 0 },
+            RegionTerm::Local {
+                definition: identity,
+                start: 1,
+                end: 2,
+            },
+        ] {
+            let source = TyTerm::Nominal(
+                identity,
+                vec![
+                    GenericArg::Region(region),
+                    GenericArg::Type(TyTerm::Primitive(PrimitiveType::U8)),
+                ],
+            );
+            let retained = source.clone();
+            assert!(Frame::supported_structural_source(&source));
+            Frame::require_structural_source_target(&source, descriptor, &store).unwrap();
+            assert_eq!(source, retained); // Physical checking never rewrites source regions.
+            let (_, _, index, _, node) = original_source();
+            let entry = index.pc(NodeId(0), Phase::Entry).unwrap();
+            let mut frame = Frame::new(Arc::new(index), entry, &mut store).unwrap();
+            let slot = frame.body.nodes()[node.0 as usize].value.unwrap();
+            frame.set_source_view(slot, Some(source.clone())).unwrap();
+            assert_eq!(frame.source_view_ref(slot).unwrap(), Some(&source));
+            frame.preflight_call_source_views(&[(slot, Some(descriptor), Some(source.clone()))]).unwrap();
+            frame.set_source_view(slot, None).unwrap();
+            assert!(frame.source_view_ref(slot).unwrap().is_none());
+            for wrong in [
+                TyTerm::Nominal(
+                    Digest([85; 32]),
+                    match &source {
+                        TyTerm::Nominal(_, args) => args.clone(),
+                        _ => unreachable!(),
+                    },
+                ),
+                TyTerm::Nominal(
+                    identity,
+                    vec![GenericArg::Type(TyTerm::Primitive(PrimitiveType::I32))],
+                ),
+                TyTerm::Nominal(identity, vec![]),
+                TyTerm::Nominal(
+                    identity,
+                    vec![GenericArg::Type(TyTerm::Param(ParamKey {
+                        definition: Digest([86; 32]),
+                        ordinal: 0,
+                    }))],
+                ),
+                TyTerm::Nominal(identity, vec![GenericArg::Const(ConstTerm::Value(9))]),
+            ] {
+                assert!(
+                    Frame::require_structural_source_target(&wrong, descriptor, &store).is_err()
+                );
+            }
+        }
+        let unresolved = TyTerm::Nominal(
+            identity,
+            vec![
+                GenericArg::Region(RegionTerm::Placeholder(PlaceholderKey {
+                    transaction: identity,
+                    universe: 0,
+                    index: 0,
+                })),
+                GenericArg::Type(TyTerm::Primitive(PrimitiveType::U8)),
+            ],
+        );
+        assert!(!Frame::supported_structural_source(&unresolved));
+        assert!(!crate::frontend::call_contracts::closed_term(&unresolved));
+    }
+}
+
 // This is source-fact extraction for the control's prepared aggregate setup.
 // It performs no guest execution and grants no general Type-path resolution.
 fn source_shape(expression: ast::Expr) -> TyTerm {
@@ -248,7 +361,7 @@ pub(super) fn enter_slot_scopes(frame: &mut Frame, slot: SlotId) {
 }
 
 #[test]
-fn composite_source_views_release_their_accounting_exactly() {
+fn composite_source_views_replace_and_clear_without_guest_allocations() {
     // E-R5-006: no frame source quota; installing a composite view on every
     // slot succeeds and clearing them returns the excess to zero.
     let (_, _, index, _, _) = original_source();
@@ -256,21 +369,19 @@ fn composite_source_views_release_their_accounting_exactly() {
     let entry = index.pc(NodeId(0), Phase::Entry).unwrap();
     let mut frame = Frame::new(Arc::new(index), entry, &mut store).unwrap();
     let view = TyTerm::Tuple(vec![TyTerm::Primitive(PrimitiveType::Bool); 8]);
-    let heap = Frame::source_heap(Some(&view)).unwrap();
-    assert!(heap > 2 * std::mem::size_of::<TyTerm>());
     let before = (store.budget().handles(), store.budget().bytes());
     let slots = (0..frame.slots.len())
         .map(|ordinal| SlotId(u32::try_from(ordinal).unwrap()))
         .collect::<Vec<_>>();
     for slot in &slots {
         frame.set_source_view(*slot, Some(view.clone())).unwrap();
+        assert_eq!(frame.source_view_ref(*slot).unwrap(), Some(&view));
     }
-    assert!(frame.source_extra_bytes > 0);
     assert_eq!((store.budget().handles(), store.budget().bytes()), before);
     for slot in slots {
         frame.set_source_view(slot, None).unwrap();
+        assert!(frame.source_view_ref(slot).unwrap().is_none());
     }
-    assert_eq!(frame.source_extra_bytes, 0);
 }
 
 #[test]
@@ -309,7 +420,7 @@ fn composite_call_source_batch_admits_distinct_arguments_and_refuses_aliases() {
 }
 
 #[test]
-fn source_heap_moves_with_places_and_cleanup_releases_it_once() {
+fn source_views_move_with_places_and_cleanup_clears_them_once() {
     let (_, _, index, _, node) = original_source();
     let mut store = GuestStore::for_epoch(1).unwrap();
     let entry = index.pc(NodeId(0), Phase::Entry).unwrap();
@@ -329,20 +440,18 @@ fn source_heap_moves_with_places_and_cleanup_releases_it_once() {
         )
         .unwrap();
     store.initialize(cell, ticket).unwrap();
-    // This is an address/accounting component control: the large annotation is
+    // This is a source-retention component control: the large annotation is
     // never used to authorize a descriptor read or a projected guest operation.
     frame.slots[source.0 as usize].place = Some(crate::runtime::place::Place::cell(cell));
     let view = TyTerm::Tuple(vec![TyTerm::Primitive(PrimitiveType::Bool); 4096]);
-    frame.set_source_view(source, Some(view)).unwrap();
-    let charged = frame.source_extra_bytes;
-    assert!(charged > 0);
+    frame.set_source_view(source, Some(view.clone())).unwrap();
     frame.transfer_place(source, destination, &store).unwrap();
-    assert_eq!(frame.source_extra_bytes, charged);
+    assert_eq!(frame.source_view_ref(destination).unwrap(), Some(&view));
     assert!(frame.source_view_ref(source).unwrap().is_none());
     frame.clear_place(destination).unwrap();
-    assert_eq!(frame.source_extra_bytes, 0);
+    assert!(frame.source_view_ref(destination).unwrap().is_none());
     frame.clear_place(destination).unwrap();
-    assert_eq!(frame.source_extra_bytes, 0);
+    assert!(frame.source_view_ref(destination).unwrap().is_none());
     store.retire_cell(cell).unwrap_err(); // A live owner is still live after address cleanup.
     let ticket = store.begin_drop(cell).unwrap();
     store.discard(ticket).unwrap();
@@ -359,9 +468,8 @@ fn scope_cleanup_releases_composite_annotations_but_keeps_the_return_source_owne
     enter_slot_scopes(&mut frame, source);
     let view = TyTerm::Tuple(vec![TyTerm::Primitive(PrimitiveType::Bool); 4096]);
     frame.set_source_view(source, Some(view.clone())).unwrap();
-    frame.set_return_source_view(Some(view)).unwrap();
-    let returned = Frame::source_excess(frame.return_source.as_ref()).unwrap();
-    assert_eq!(frame.source_extra_bytes, 2 * returned);
+    frame.set_return_source_view(Some(view.clone())).unwrap();
+    assert_eq!(frame.return_source.as_ref(), Some(&view));
     let must_yield = frame.slots.len() > 256;
     let mut yielded = false;
     while let Some(scope) = frame.active_scopes.last().copied() {
@@ -373,25 +481,6 @@ fn scope_cleanup_releases_composite_annotations_but_keeps_the_return_source_owne
         );
         loop {
             let complete = frame.advance_scope_cleanup(&mut store).unwrap();
-            let measured = frame
-                .slots
-                .iter()
-                .map(|slot| Frame::source_excess(slot.source.as_ref()).unwrap())
-                .chain(
-                    frame
-                        .binding_sources
-                        .iter()
-                        .map(|source| Frame::source_excess(source.as_ref()).unwrap()),
-                )
-                .chain(
-                    frame
-                        .parameter_sources
-                        .iter()
-                        .map(|source| Frame::source_excess(Some(source)).unwrap()),
-                )
-                .chain([Frame::source_excess(frame.return_source.as_ref()).unwrap()])
-                .sum::<usize>();
-            assert_eq!(frame.source_extra_bytes, measured);
             assert!(frame.return_source.is_some());
             if complete {
                 break;
@@ -401,11 +490,10 @@ fn scope_cleanup_releases_composite_annotations_but_keeps_the_return_source_owne
         }
     }
     assert!(!must_yield || yielded);
-    assert_eq!(frame.source_extra_bytes, returned);
     assert!(frame.source_view_ref(source).unwrap().is_none());
-    assert!(frame.return_source.is_some());
+    assert_eq!(frame.return_source.as_ref(), Some(&view));
     frame.set_return_source_view(None).unwrap();
-    assert_eq!(frame.source_extra_bytes, 0);
+    assert!(frame.return_source.is_none());
 }
 
 #[test]

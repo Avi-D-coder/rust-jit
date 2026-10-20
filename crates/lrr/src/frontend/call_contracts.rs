@@ -2149,6 +2149,11 @@ pub(crate) fn closed_term(term: &TyTerm) -> bool {
         }
         TyTerm::Nominal(_, args) => args.iter().all(|arg| match arg {
             crate::traits::term::GenericArg::Type(ty) => closed_term(ty),
+            // As with Ref, a retained source region is metadata rather than
+            // an unbound runtime Type. Keep inference placeholders out.
+            crate::traits::term::GenericArg::Region(region) => {
+                !matches!(region, crate::traits::term::RegionTerm::Placeholder(_))
+            }
             _ => false,
         }),
         TyTerm::Tuple(fields) => fields.iter().all(closed_term),

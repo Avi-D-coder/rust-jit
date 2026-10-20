@@ -383,7 +383,6 @@ pub struct Frame {
     constructor_start: Option<PreparedConstructor>,
     source_field: Option<PreparedSourceField>,
     constructor_mapping_bytes: usize,
-    source_extra_bytes: usize,
     projection_bytes: usize,
     constant_activation: Option<source_constant_frame::BoundSourceConstant>,
     copy_activation: Option<aggregate_copy_frame::OpActivation>,
@@ -443,12 +442,9 @@ impl Frame {
         store.require_frame(self.anchor)
     }
     pub(crate) fn metadata_bytes(body: &BodyIndex, parameters: usize) -> Option<usize> {
-        // Reserve the original two-node floor per source view. Composite
-        // source storage tracks its actual additional heap separately.
-        let source_heap = std::mem::size_of::<crate::traits::term::TyTerm>().checked_mul(2)?;
         (body.slot_count() as usize)
             .checked_mul(
-                std::mem::size_of::<Slot>().checked_add(source_heap)?,
+                std::mem::size_of::<Slot>(),
             )
             .and_then(|bytes| {
                 body.nodes()
@@ -456,7 +452,6 @@ impl Frame {
                     .checked_mul(
                         std::mem::size_of::<Option<CellId>>()
                             .checked_add(std::mem::size_of::<Option<crate::traits::term::TyTerm>>())?
-                            .checked_add(source_heap)?
                             .checked_add(std::mem::size_of::<Option<crate::core::digest::Digest>>())?,
                     )
                     .and_then(|n| bytes.checked_add(n))
@@ -465,8 +460,7 @@ impl Frame {
                 parameters
                     .checked_mul(
                         std::mem::size_of::<Option<CellId>>()
-                            .checked_add(std::mem::size_of::<crate::traits::term::TyTerm>())?
-                            .checked_add(source_heap)?,
+                            .checked_add(std::mem::size_of::<crate::traits::term::TyTerm>())?,
                     )
                     .and_then(|n| bytes.checked_add(n))
             })
@@ -478,7 +472,6 @@ impl Frame {
             })
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<PreparedConstructor>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<(PcKey, SlotId)>>()))
-            .and_then(|bytes| bytes.checked_add(source_heap))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Option<crate::traits::term::TyTerm>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<Vec<(super::call::CallIdentity, (u32, u32))>>()))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<usize>()))
@@ -658,7 +651,6 @@ impl Frame {
             constructor_start: None,
             source_field: None,
             constructor_mapping_bytes: 0,
-            source_extra_bytes: 0,
             projection_bytes: 0,
             constant_activation: None,
             copy_activation: None,
@@ -1238,14 +1230,9 @@ impl Frame {
     pub(crate) fn start_call(&mut self, site: u32, arguments: &[SlotId]) -> Result<(), Diagnostic> {
         self.preflight_call_start(site, arguments)?;
         let identity = self.call_identity(site);
-        let additional = usize::from(self.call_progress.len() == self.call_progress.capacity())
-            .checked_mul(std::mem::size_of::<(super::call::CallIdentity, (u32, u32))>())
-            .ok_or_else(crate::runtime::arena::resource)?;
-        self.source_storage_limit(self.source_extra_bytes, additional)?;
         self.call_progress
             .try_reserve_exact(1)
             .map_err(|_| crate::runtime::arena::resource())?;
-        self.source_storage_limit(self.source_extra_bytes, 0)?;
         let super::call::CallStartFacts {
             hints,
             ordinary,
@@ -1583,15 +1570,6 @@ impl Frame {
         }) {
             return Err(invalid("parameter source identity mismatch"));
         }
-        let added_source = sources.iter().try_fold(0usize, |bytes, source| {
-            bytes
-                .checked_add(Self::source_excess(Some(source))?)
-                .ok_or_else(crate::runtime::arena::resource)
-        })?;
-        self.source_extra_bytes = self
-            .source_extra_bytes
-            .checked_add(added_source)
-            .ok_or_else(crate::runtime::arena::resource)?;
         self.parameter_sources = sources;
         Ok(())
     }
@@ -2028,10 +2006,7 @@ impl Frame {
         source: Option<crate::traits::term::TyTerm>,
     ) -> Result<(), Diagnostic> {
         self.preflight_source_view(slot, source.as_ref())?;
-        let excess =
-            self.preflight_source_replacement(self.source_view_ref(slot)?, source.as_ref())?;
         self.slots[slot.0 as usize].source = source;
-        self.source_extra_bytes = excess;
         #[cfg(test)]
         symbolic_place_source_tests::observe(self, slot);
         Ok(())
@@ -2051,8 +2026,6 @@ impl Frame {
                 "composite frame source view requires table integration",
             ));
         }
-        let excess = self.preflight_source_replacement(self.source_view_ref(slot)?, source)?;
-        self.source_storage_limit(excess, Self::source_heap(source)?)?;
         Ok(())
     }
     pub(crate) fn set_binding_source(
@@ -2449,7 +2422,6 @@ impl Frame {
         Self::metadata_bytes(&self.body, self.parameter_metadata_count())
             .and_then(|bytes| bytes.checked_add(self.constructor_mapping_bytes))
             .and_then(|bytes| bytes.checked_add(self.projection_bytes))
-            .and_then(|bytes| bytes.checked_add(self.source_extra_bytes))
             .and_then(|bytes| bytes.checked_add(self.auxiliary_metadata_bytes()?))
             .and_then(|bytes| bytes.checked_add(binding.estimated_bytes()?))
             .and_then(|bytes| bytes.checked_add(std::mem::size_of::<PreparedSourceField>()))
@@ -2775,16 +2747,6 @@ impl Frame {
             added
         };
         self.preflight_source_view(destination, source.as_ref())?;
-        let source_excess = self.preflight_source_replacement(
-            self.place_slot(destination)?.source.as_ref(),
-            source.as_ref(),
-        )?;
-        self.source_storage_limit(
-            source_excess,
-            added
-                .checked_add(Self::source_heap(source.as_ref())?)
-                .ok_or_else(crate::runtime::arena::resource)?,
-        )?;
         let retained_bytes = self
             .projection_bytes
             .checked_sub(base_place.projection_bytes()?)
@@ -3359,7 +3321,7 @@ impl Frame {
         };
         let target = store.admit_place_borrow(source, access)?;
         self.require_borrow_source_target(self.place_slot(place)?.source.as_ref(), target, store)?;
-        self.preflight_borrow_source_storage(place, destination)?;
+        self.preflight_borrow_source_view(place, destination)?;
         let result = self.slot(destination)?;
         if !self.active_scopes.contains(&result.scope) {
             return Err(invalid("borrow result scope inactive").into());
@@ -5640,10 +5602,7 @@ impl Frame {
                 "reached return value does not match its declared primitive descriptor".into(),
             ));
         }
-        let source = self.certified_return_source(value, store)?;
-        let excess =
-            self.preflight_source_replacement(self.return_source.as_ref(), source.as_ref())?;
-        self.source_storage_limit(excess, Self::source_heap(source.as_ref())?)?;
+        self.certified_return_source(value, store)?;
         Ok(())
     }
     pub(crate) fn preflight_control(
@@ -5797,11 +5756,7 @@ impl Frame {
                 self.counters.cleanup_elements_completed = completed;
             }
             if self.body.nodes()[ordinal].scope == scope {
-                let old = self.binding_sources[ordinal].take();
-                self.source_extra_bytes = self
-                    .source_extra_bytes
-                    .checked_sub(Self::source_excess(old.as_ref())?)
-                    .ok_or_else(|| invalid("binding source cleanup accounting underflow"))?;
+                self.binding_sources[ordinal] = None;
             }
         }
         Ok(())
@@ -5844,10 +5799,6 @@ impl Frame {
                 slot.cell = None;
                 self.counters.cleanup_elements_completed = completed;
             }
-            self.source_extra_bytes = self
-                .source_extra_bytes
-                .checked_sub(Self::source_excess(slot.source.as_ref())?)
-                .ok_or_else(|| invalid("slot source cleanup accounting underflow"))?;
             slot.source = None;
             let bytes = slot
                 .place

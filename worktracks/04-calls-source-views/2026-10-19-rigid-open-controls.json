@@ -1,0 +1,8 @@
+{
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_explicit_alias_keeps_shared_application_guard_all_editions_and_origins",
+    "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::official_three_call_plans_keep_nominal_identity_shared_rows_and_guarded_caller",
+    "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::type_argument_plan_keeps_real_unsupported_body_and_field_cold_and_resolves_caller_alias",
+    "cli::callable_value_tests::upstream_generic_annotation_and_explicit_application_share_all_origins"
+  ]
+}

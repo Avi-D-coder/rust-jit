@@ -127,6 +127,29 @@ fn substitute(term: &TyTerm, solved: &BTreeMap<ParamKey, TyTerm>) -> TyTerm {
 }
 
 impl<'a> Component<'a> {
+    /// A relation can state a concrete Type or an actual rigid Type of this
+    /// frame. Reuse the ordinary source application admission; foreign binders
+    /// and inference holes never become runtime parameter ordinals.
+    pub(super) fn admitted_open_answer(
+        &self,
+        db: &mut Database,
+        term: &TyTerm,
+    ) -> QueryPoll<bool> {
+        if crate::frontend::call_contracts::closed_term(term) {
+            return QueryPoll::Ready(Ok(true));
+        }
+        let owner = ready!(db.fetch(
+            &crate::db::provider::SyntaxProvider,
+            crate::db::key::QueryKey::SourceLocalPlan(self.key.body.clone()),
+        ));
+        let QueryValue::SourceLocalPlan(owner) = owner.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("open Type answer owner outcome differs")));
+        };
+        let application = ready!(crate::frontend::explicit_type_arguments::prepare_application(
+            db, owner, term.clone(),
+        ));
+        QueryPoll::Ready(Ok(application.is_some()))
+    }
     /// The open type parameters of an initializer expression, or `None`
     /// when its Type is fixed by its arguments or is not stated by the
     /// common services. Reads declared goals only; it records no relation.
@@ -321,7 +344,7 @@ impl<'a> Component<'a> {
         let projected = self.project_term(db, &term, &steps);
         (self.pending, self.unrecorded) = saved;
         if let Some(projected) = ready!(projected)
-            && crate::frontend::call_contracts::closed_term(&projected)
+            && ready!(self.admitted_open_answer(db, &projected))
         {
             self.candidate(node, projected);
         }
@@ -395,7 +418,7 @@ fn closed_answer(
             }
         }
         let term = substitute(&answer, &solved);
-        if crate::frontend::call_contracts::closed_term(&term) {
+        if ready!(component.admitted_open_answer(db, &term)) {
             return QueryPoll::Ready(Ok(Some(term)));
         }
     }
@@ -513,7 +536,7 @@ impl<'a> Component<'a> {
         };
         let decided = substitute(&term, &solved);
         QueryPoll::Ready(Ok(
-            if crate::frontend::call_contracts::closed_term(&decided) {
+            if ready!(self.admitted_open_answer(db, &decided)) {
                 decided
             } else {
                 term
@@ -594,10 +617,10 @@ pub(super) fn prepare_expression(
         db,
         &sources,
         &closed,
-        Digest::default(),
+        key.body.definition,
     ) {
         QueryPoll::Ready(Ok(Some(written))) if !matches!(written, WrittenType::Infer) => {
-            Some(written)
+            Some(written.in_frame(key.body.definition))
         }
         QueryPoll::Ready(Ok(_)) | QueryPoll::Ready(Err(_)) => None,
         QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
@@ -610,9 +633,14 @@ pub(super) fn prepare_expression(
             let Some(solved) = solved.get(open) else {
                 continue;
             };
-            match crate::frontend::written_terms::closed_written_type(db, &sources, solved) {
+            match crate::frontend::written_terms::written_template(
+                db, &sources, solved, key.body.definition,
+            ) {
                 QueryPoll::Ready(Ok(Some(written))) => {
-                    arguments.push((open.ordinal, Arc::new(written)))
+                    arguments.push((
+                        open.ordinal,
+                        Arc::new(written.in_frame(key.body.definition)),
+                    ))
                 }
                 QueryPoll::Ready(Ok(None)) | QueryPoll::Ready(Err(_)) => {}
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),

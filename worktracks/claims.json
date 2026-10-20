@@ -2017,11 +2017,13 @@
         "crates/lrr/src/cli/drop_witness_tests.rs",
         "worktracks/evidence/2026-10-19-v458-v461-replacement-cleanup-ownership.json",
         "worktracks/06-storage-ownership/2026-10-19-replacement-cleanup-review.md",
-        "worktracks/06-storage-ownership/2026-10-19-replacement-cleanup-controls.json"
+        "worktracks/06-storage-ownership/2026-10-19-replacement-cleanup-controls.json",
+        "worktracks/04-calls-source-views/2026-10-19-rigid-open-results.md",
+        "crates/lrr/src/vm/frame_source_types_tests.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-20T04:43:39.237535+00:00",
+      "updated_at": "2026-10-20T06:29:33.785168+00:00",
       "review_after": "2026-10-20T10:52:01.627878+00:00",
       "shared_interfaces": [
         {
@@ -2071,7 +2073,9 @@
             "crates/lrr/src/vm/frame_slices.rs",
             "crates/lrr/src/vm/step.rs",
             "crates/lrr/src/vm/frame_nominal_values.rs",
-            "crates/lrr/src/runtime/cell_aggregate_copy.rs"
+            "crates/lrr/src/runtime/cell_aggregate_copy.rs",
+            "crates/lrr/src/vm/frame_source_storage.rs",
+            "crates/lrr/src/vm/frame_tuple_sources.rs"
           ],
           "scope": "Same implementing owner uses the existing reservation for the V281 catalog/header Type transport slice; no parallel owner or transfer."
         },
@@ -2115,7 +2119,8 @@
             "crates/lrr/src/traits/index.rs",
             "crates/lrr/src/traits/unify.rs",
             "crates/lrr/src/frontend/impl_predicates.rs",
-            "crates/lrr/src/engine/run_operator_calls.rs"
+            "crates/lrr/src/engine/run_operator_calls.rs",
+            "crates/lrr/src/frontend/binding_constraints.rs"
           ],
           "scope": "Same solo /root uses the existing reservation for actual source generic metadata and common trait default arguments; one path owner, no concurrent agent or transfer."
         },
@@ -2209,9 +2214,17 @@
             "crates/lrr/src/expand/source_discovery/configured_catalog.rs"
           ],
           "scope": "Same solo owner; cold generated-frontier failure diagnostics only, no concurrent agent or transfer."
+        },
+        {
+          "claim": "LOCAL-044",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/vm/frame_source_types.rs"
+          ],
+          "scope": "Same solo owner extends nominal source region metadata admission and exact physical argument membership; no concurrent owner or transfer."
         }
       ],
-      "latest_component_scope": "V444-V447 HELD T040/M018 shared nominal byte-image prerequisite for union storage. Existing plain byte classification, encoder and decoder now support actual prepared nominal structs through DeclarationFacts/LayoutTable instances and the one repr-aware layout algorithm. Reconstruction uses ordinary construction guards/tickets and grants no Copy or source authority. Transmute consumes its actual source ticket/owned field graph without guest Drop instead of orphaning it in moved_in; nominal zeroed/transmute destinations retain their own ordinary Drop. Image windows validate conversions/addition/ranges before access, including ZST windows, rather than fabricating zeros/ignoring writes. V444 unchanged transmute-const.rs fails19dispatches/3calls/1initializer; final V447 completes58dispatches/3calls/1initializer, unit/empty streams/cleanup in owning2015. V445 all16edition/origin const-image worlds and source-no-Drop/destination-once controls pass; its3/4control batch retains the combined formatter-signature failure. Controlled V446 production baseline654e0c7 reproduces that exact formatter failure with the same unchanged test and helper; it stays failed/inherited, not waived. Final V447 both builds and3/3scoped boundary/ownership/size controls pass; nominal zeroed is exercised in all4editions. Additional unchanged transmute-array-to-scalar still fails6dispatches at explicit Type source-signature admission. One newly passing distinct upstream runtime case against measured pre-change654e0c7, not a suite sweep or task/milestone/architecture closure. Union canonical backing/view coherence, projections/references/moves/Copy/cleanup, enum/provenance images, complete source signatures and full upstream solver/common-engine joins remain held. JIT stays gated."
+      "latest_component_scope": "V462-V470 HELD M018/T040/T053/E006 common rigid source answers and nominal region metadata. Actual same-body rigid answers use the existing source application finalizer and retained WrittenType::Frame; body result parameters feed existing source relations. Common call closedness, runtime region projection and frame descriptor membership preserve source regions separately from physical Type slots. Source-view heap measurement/counters/transient preflights and cleanup bookkeeping are removed under E006 rather than extending a false resource refusal. Final V470 both macOS1.99.0 builds and9/9scoped controls pass; actual view publication, source identity/arity/foreign-Type/placeholder refusals, call-slot alias checks, tuple transfer, return/scope cleanup and reference certificate guards exercised. Unchanged owning2015 union-generic-rpass advances18->265matched VM operations/16source calls, through generic union transmute, iterator creation and first next; still fails at nested explicit Type inference hole std::slice::Iter<_>. Maintained struct-aliases/generic-derived-type/union-drop-assign pass961/199/317operations with complete captures. V467/V468 lifetime/frame-owner controls retain their own exact source evidence. V469 false resource failure and earlier diagnostic probes remain recorded. No newly complete distinct upstream runtime case or refreshed suite/morning total. Full nested inference/projections, upstream solver root/member/VM migration, origin matrix, source/currentness/cleanup and all task/milestone/interpreter/JIT gates remain incomplete. No Linux/performance/full-fixture/diagnostic/tooling closure."
     }
   ],
   "updated_at": "2026-10-20T05:53:09.895207+00:00"

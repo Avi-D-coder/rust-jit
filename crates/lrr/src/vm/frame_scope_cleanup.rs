@@ -452,10 +452,6 @@ impl Frame {
             .checked_sub(bytes)
             .ok_or_else(|| invalid("cleanup place accounting underflow"))?;
         slot.cell = None;
-        self.source_extra_bytes = self
-            .source_extra_bytes
-            .checked_sub(Self::source_excess(slot.source.as_ref())?)
-            .ok_or_else(|| invalid("cleanup slot source accounting underflow"))?;
         slot.source = None;
         slot.place = None;
         slot.hint = None;

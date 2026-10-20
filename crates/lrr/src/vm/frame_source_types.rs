@@ -3,7 +3,7 @@
 use super::*;
 use crate::{
     runtime::shape::TypeKey,
-    traits::term::{ConstTerm, TyTerm},
+    traits::term::{ConstTerm, GenericArg, RegionTerm, TyTerm},
 };
 
 impl Frame {
@@ -22,9 +22,10 @@ impl Frame {
             }
             // A selected nominal member (`(i32, P)`, `(u8, W<i32>)`): its
             // declaration identity and closed type arguments.
-            TyTerm::Nominal(_, args) => args.iter().all(|arg| {
-                matches!(arg, crate::traits::term::GenericArg::Type(ty)
-                    if Self::structural_source_shape(ty))
+            TyTerm::Nominal(_, args) => args.iter().all(|arg| match arg {
+                GenericArg::Type(ty) => Self::structural_source_shape(ty),
+                GenericArg::Region(region) => !matches!(region, RegionTerm::Placeholder(_)),
+                _ => false,
             }),
             // A closed fn-pointer member (E-R5-008).
             TyTerm::Function(_) => crate::frontend::call_contracts::closed_term(source),
@@ -165,11 +166,19 @@ impl Frame {
                 else {
                     return Err(mismatch());
                 };
-                if actual != identity || args.len() != arguments.len() || !const_args.is_empty() {
+                // Source regions have no physical nominal descriptor slots.
+                // Keep every Type/Const slot and its order for the checks below.
+                let arguments = arguments
+                    .iter()
+                    .filter(|argument| !matches!(argument, GenericArg::Region(_)));
+                if actual != identity
+                    || args.len() != arguments.clone().count()
+                    || !const_args.is_empty()
+                {
                     return Err(mismatch());
                 }
-                for (argument, arg) in arguments.iter().zip(args.iter()) {
-                    let crate::traits::term::GenericArg::Type(argument) = argument else {
+                for (argument, arg) in arguments.zip(args.iter()) {
+                    let GenericArg::Type(argument) = argument else {
                         return Err(mismatch());
                     };
                     Self::structural_source_target(argument, *arg, store, context)?;
