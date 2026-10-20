@@ -197,6 +197,10 @@ pub struct Database {
     /// in `CheckedRevision` memos.
     instance: u64,
     inputs: BTreeMap<InputKey, InputRecord>,
+    // Exact pre-contribution rows, retained only for affected generated scopes.
+    // Epoch advance restores these roots and withdraws generated name buckets.
+    generated_namespace_bases: BTreeMap<crate::syntax::outline::ScopeKey, Option<Arc<InputValue>>>,
+    generated_member_owners: BTreeMap<crate::syntax::outline::ScopeKey, Digest>,
     /// `lexical_namespace_stamps` of one input revision.
     lexical_stamps: std::sync::Mutex<Option<(u64, Arc<BTreeMap<InputKey, Digest>>)>>,
     scope_certificates: scope_certificate_index::ScopeCertificateIndex,
@@ -225,6 +229,8 @@ impl Default for Database {
         Self {
             instance: NEXT_INSTANCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             inputs: BTreeMap::new(),
+            generated_namespace_bases: BTreeMap::new(),
+            generated_member_owners: BTreeMap::new(),
             lexical_stamps: Default::default(),
             scope_certificates: Default::default(),
             memos: BTreeMap::new(),
@@ -1139,22 +1145,7 @@ impl Database {
             if let (InputKey::ScopeMembers(scope), InputValue::ScopeMembers(members)) = (key, value)
             {
                 members.normalize();
-                granular.insert(
-                    InputKey::ScopeBlockers(scope.clone()),
-                    InputValue::ScopeBlockers(members.blockers.clone()),
-                );
-                for ((namespace, name), candidates) in &members.candidates {
-                    if !candidates.is_empty() {
-                        granular.insert(
-                            InputKey::NameCandidates(super::key::BucketKey {
-                                scope: scope.clone(),
-                                namespace: *namespace,
-                                name: name.clone(),
-                            }),
-                            InputValue::NameCandidates(candidates.clone()),
-                        );
-                    }
-                }
+                granular.extend(granular_scope_rows(scope, members));
             }
         }
         for (key, value) in granular {
@@ -1186,6 +1177,8 @@ impl Database {
             );
         }
         self.inputs = staged;
+        self.generated_namespace_bases.clear();
+        self.generated_member_owners.clear();
         self.scope_certificates = Default::default();
         self.revision = revision;
         self.source_revision = revision;
@@ -2298,6 +2291,7 @@ impl Database {
             })
             .collect::<std::collections::BTreeSet<_>>();
         let mut staged = BTreeMap::new();
+        let mut namespace_units = Vec::new();
         for (key, value) in derived {
             if !value.matches(&key) {
                 return Err(fault(
@@ -2338,6 +2332,7 @@ impl Database {
                                 "generated syntax lacks matching discovery dependency",
                             ));
                         }
+                        namespace_units.push(Arc::clone(unit));
                     }
                     (InputKey::DefinitionHeader(_), InputValue::DefinitionHeader(_))
                     | (InputKey::DefinitionSource(_), InputValue::DefinitionSource(_))
@@ -2377,6 +2372,51 @@ impl Database {
                         value: Arc::new(value),
                     },
                 );
+            }
+        }
+        // Namespace rows are computed here from authenticated private units;
+        // callers cannot pass arbitrary ScopeMembers in the derived allowlist.
+        let mut namespace_bases = BTreeMap::new();
+        let mut member_owners = BTreeMap::new();
+        let mut merged_scopes = BTreeMap::<crate::syntax::outline::ScopeKey, crate::syntax::outline::ScopeMembers>::new();
+        for unit in &namespace_units {
+            for (scope, owner) in unit.member_scope_owners() {
+                if let Some(previous) = member_owners.get(scope).or_else(|| self.generated_member_owners.get(scope)) {
+                    if previous != owner {
+                        return Err(fault("LRR-E-EXPANSION-CONFLICT", "generated member scope has distinct actual parents"));
+                    }
+                } else if staged.contains_key(&InputKey::ScopeMembers(scope.clone()))
+                    || self.inputs.contains_key(&InputKey::ScopeMembers(scope.clone())) {
+                    return Err(fault("LRR-E-EXPANSION-CONFLICT", "generated member scope collides with an existing source owner"));
+                }
+                member_owners.insert(scope.clone(), *owner);
+            }
+            for (scope, contribution) in unit.scope_contributions() {
+                if !merged_scopes.contains_key(scope) {
+                    let key = InputKey::ScopeMembers(scope.clone());
+                    let current = staged.get(&key).or_else(|| self.inputs.get(&key)).map(|row| Arc::clone(&row.value));
+                    let members = match current.as_deref() {
+                        Some(InputValue::ScopeMembers(members)) => members.clone(),
+                        None => crate::syntax::outline::ScopeMembers::default(),
+                        _ => return Err(fault("LRR-E-INTERNAL-SNAPSHOT", "generated base scope input differs")),
+                    };
+                    if !self.generated_namespace_bases.contains_key(scope) {
+                        namespace_bases.insert(scope.clone(), current);
+                    }
+                    merged_scopes.insert(scope.clone(), members);
+                }
+                merged_scopes.get_mut(scope).expect("selected affected scope").merge(contribution);
+            }
+        }
+        for (scope, members) in merged_scopes {
+            let mut rows = granular_scope_rows(&scope, &members);
+            rows.insert(InputKey::ScopeMembers(scope), InputValue::ScopeMembers(members));
+            for (key, value) in rows {
+                let fingerprint = value.fingerprint();
+                if staged.get(&key).or_else(|| self.inputs.get(&key))
+                    .is_some_and(|row| row.fingerprint == fingerprint) { continue; }
+                extra_bytes = account_add(extra_bytes, input_metadata_bytes(&key, &value)?)?;
+                staged.insert(key, InputRecord { fingerprint, value: Arc::new(value) });
             }
         }
         let prepared_sources = self.module_prepared_registry(modules, ordinary_modules)?;
@@ -2419,6 +2459,8 @@ impl Database {
                 // The identical publication can still supply a live immutable
                 // module lease after its earlier weak owner was dropped.
                 self.prepared_sources = prepared_sources;
+                self.generated_namespace_bases.extend(namespace_bases);
+                self.generated_member_owners.extend(member_owners);
                 return Ok(());
             }
         } else {
@@ -2458,6 +2500,8 @@ impl Database {
             );
         }
         self.inputs.extend(staged);
+        self.generated_namespace_bases.extend(namespace_bases);
+        self.generated_member_owners.extend(member_owners);
         if let Some(index) = scope_certificates {
             self.scope_certificates = index;
         }
@@ -2482,6 +2526,26 @@ impl Database {
             .revision
             .checked_add(1)
             .ok_or_else(|| fault("LRR-E-ID-EXHAUSTED", "query revision exhausted"))?;
+        for (scope, base) in std::mem::take(&mut self.generated_namespace_bases) {
+            let scope_key = InputKey::ScopeMembers(scope.clone());
+            if let Some(current) = self.inputs.remove(&scope_key) {
+                let InputValue::ScopeMembers(members) = current.value.as_ref() else { unreachable!("published generated scope") };
+                for ((namespace, name), _) in &members.candidates {
+                    self.inputs.remove(&InputKey::NameCandidates(super::key::BucketKey {
+                        scope: scope.clone(), namespace: *namespace, name: name.clone(),
+                    }));
+                }
+            }
+            self.inputs.remove(&InputKey::ScopeBlockers(scope.clone()));
+            if let Some(base) = base {
+                let InputValue::ScopeMembers(members) = base.as_ref() else { unreachable!("captured base scope") };
+                for (key, value) in granular_scope_rows(&scope, members) {
+                    self.inputs.insert(key, InputRecord { fingerprint: value.fingerprint(), value: Arc::new(value) });
+                }
+                self.inputs.insert(scope_key, InputRecord { fingerprint: base.fingerprint(), value: base });
+            }
+        }
+        self.generated_member_owners.clear();
         self.inputs.insert(
             key,
             InputRecord {
@@ -3087,6 +3151,25 @@ impl Database {
 }
 fn fault(code: &'static str, message: impl Into<String>) -> Diagnostic {
     Diagnostic::new(code, message.into())
+}
+
+/// Exact granular projection used by original and authenticated generated
+/// scope publication. Empty blockers remain a positive published scope receipt.
+fn granular_scope_rows(
+    scope: &crate::syntax::outline::ScopeKey,
+    members: &crate::syntax::outline::ScopeMembers,
+) -> BTreeMap<InputKey, InputValue> {
+    let mut rows = BTreeMap::from([(
+        InputKey::ScopeBlockers(scope.clone()), InputValue::ScopeBlockers(members.blockers.clone()),
+    )]);
+    for ((namespace, name), candidates) in &members.candidates {
+        if !candidates.is_empty() {
+            rows.insert(InputKey::NameCandidates(super::key::BucketKey {
+                scope: scope.clone(), namespace: *namespace, name: name.clone(),
+            }), InputValue::NameCandidates(candidates.clone()));
+        }
+    }
+    rows
 }
 
 fn account_add(left: usize, right: usize) -> Result<usize, Diagnostic> {

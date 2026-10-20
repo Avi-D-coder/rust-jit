@@ -26,6 +26,7 @@ CRATES = (
 )
 LICENSES = ("LICENSE-MIT", "LICENSE-APACHE", "COPYRIGHT")
 SUPPORT_SOURCES = (
+    "compiler/rustc_hir_analysis/src/collect/type_of.rs",
     "compiler/rustc_middle/src/ty/structural_impls.rs",
     "compiler/rustc_middle/src/ty/fold.rs",
     "compiler/rustc_middle/src/ty/predicate.rs",

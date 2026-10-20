@@ -608,6 +608,11 @@ impl<'cx> PreparedProvider<'cx> {
     pub(super) fn source_early_region(self, key: ParamKey) -> Option<EarlyRegion<'cx>> {
         self.settings.construction_generics?.early_region(key)
     }
+    /// Actual construction metadata only; absence is an unmet preparation
+    /// demand, never permission to construct an unchecked projection alias.
+    pub(super) fn source_projection_parent(self, id: DefinitionId) -> Option<DefinitionId> {
+        self.settings.construction_generics?.projection_parent(id)
+    }
     pub(super) fn require_generic_value(self, id: DefinitionId, value: Generics<'cx, Self>) -> Result<(), Diagnostic> {
         if id.world() != self.world || self.generic_facts.with(|generics| generics.get(&id).copied()) != Some(value) {
             return Err(fault("typed generics differ from actual source identity/order/parent count/const Type"));
@@ -952,11 +957,19 @@ impl<'cx> PreparedProvider<'cx> {
             .expect("demanded source constant was not prepared")
     }
     fn parent(self, id: DefinitionId) -> DefinitionId {
+        if let Some(parent) = self.settings.construction_generics.and_then(|source| source.projection_parent(id)) {
+            return parent;
+        }
         self.definition(id)
             .parent
             .expect("associated source parent was not prepared")
     }
     fn alias_layout(self, kind: AliasTermKind<Cx<'cx>>) -> &'cx [BoundKind] {
+        if let AliasTermKind::ProjectionTy { def_id } = kind
+            && let Some(layout) = self.settings.construction_generics
+                .and_then(|source| source.projection_argument_kinds(def_id)) {
+            return layout;
+        }
         self.definition(alias_definition(kind))
             .alias_layouts
             .iter()

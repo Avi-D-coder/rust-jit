@@ -3528,7 +3528,7 @@ fn unchanged_nominal_fields_encode_through_shared_source_types_all_editions_and_
         for (case,start,selected) in [
             ("tests/ui/generics/generic-derived-type.rs","fn g<",&[("Pair",C::GenericPair)][..]),
             ("tests/ui/const-generics/array-wrapper-struct-ctor.rs","struct ArrayStruct",&[("ArrayStruct",C::ArrayRecord),("ArrayTuple",C::ArrayTuple)][..]),
-            ("tests/ui/union/union-generic-rpass.rs","use std::mem",&[("U",C::GenericUnion),("MaybeItem",C::ProjectionPending)][..]),
+            ("tests/ui/union/union-generic-rpass.rs","use std::mem",&[("U",C::GenericUnion),("MaybeItem",C::ProjectedField)][..]),
         ] {
             let text=std::fs::read_to_string(root.join(case)).unwrap();let offset=text.find(start).unwrap();
             for origin in 0..3 {
@@ -3555,8 +3555,17 @@ fn unchanged_nominal_fields_encode_through_shared_source_types_all_editions_and_
             }
         }
     }
-    assert_eq!((fields,pending),(72,12));
+    assert_eq!((fields,pending),(96,0));
 }
 
 #[path = "preentry_loader_tests/upstream_definition_headers.rs"]
 mod upstream_definition_headers;
+
+#[path = "preentry_loader_tests/upstream_projection_types.rs"]
+mod upstream_projection_types;
+
+#[path = "preentry_loader_tests/upstream_generated_projection_fields.rs"]
+mod upstream_generated_projection_fields;
+
+#[path = "preentry_loader_tests/generated_namespace_publication.rs"]
+mod generated_namespace_publication;

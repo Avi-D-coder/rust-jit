@@ -300,6 +300,13 @@
       "upstream_sha256": "ecb7777ffca8e89ad7056cc864771983a3eb4384049d739fbd5b562ed2d53850"
     },
     {
+      "path": "compiler/rustc_hir_analysis/src/collect/type_of.rs",
+      "bytes": 23355,
+      "sha256": "c643bb4fcd51048f7d3e912065c2759d4a91e51b5a2e726bdc30a998a4ee3730",
+      "upstream": "compiler/rustc_hir_analysis/src/collect/type_of.rs",
+      "upstream_sha256": "c643bb4fcd51048f7d3e912065c2759d4a91e51b5a2e726bdc30a998a4ee3730"
+    },
+    {
       "path": "compiler/rustc_index/Cargo.toml",
       "bytes": 323,
       "sha256": "68e5259b591b82baf38cc5ff5ba3892bc274c3880c7e1fd50bd115d53102e510",
@@ -1586,6 +1593,7 @@
     "compiler/rustc_data_structures/src/transitive_relation.rs",
     "compiler/rustc_data_structures/src/transitive_relation/tests.rs",
     "compiler/rustc_feature/src/unstable.rs",
+    "compiler/rustc_hir_analysis/src/collect/type_of.rs",
     "compiler/rustc_infer/src/infer/at.rs",
     "compiler/rustc_infer/src/infer/canonical/instantiate.rs",
     "compiler/rustc_infer/src/infer/canonical/mod.rs",

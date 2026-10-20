@@ -1,0 +1,15 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Actual projection declarations/TypeIR/own-function bounds and nominal Type payloads in existing source contexts. Complete factory/root/alias normalization/runtime/member/JIT gates held.",
+  "controls": [
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_iterator_projection_fields_encode_actual_associated_declaration_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_projection_fixture_trait_members_keep_actual_source_identity_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_definition_headers::nominal_declared_types_do_not_demand_projected_fields_or_initializers",
+    "cli::preentry_loader_tests::upstream_definition_headers::unchanged_declarations_prepare_actual_header_inputs_all_editions_and_origins",
+    "cli::preentry_loader_tests::unchanged_nominal_fields_encode_through_shared_source_types_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_generated_projection_fields::unchanged_local_associated_field_encodes_actual_generated_declaration_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_generated_projection_fields::unchanged_generic_trait_associated_field_encodes_actual_generated_parent_arguments_all_editions_and_origins",
+    "cli::preentry_loader_tests::generated_namespace_publication::independent_generated_namespaces_merge_and_restore_originals_on_epoch_change"
+  ]
+}

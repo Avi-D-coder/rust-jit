@@ -292,8 +292,25 @@ pub(super) struct DefinitionHeaderInputs<'cx> {
     pub(super) role: DefinitionHeaderRole,
     pub(super) function_syntax: Option<SourceFunctionHeader>,
 }
-impl DefinitionHeaderInputs<'_> {
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(super) enum DefinitionTypePending { NonNominal, SourceWorld, SourceGenerics }
+impl<'cx> DefinitionHeaderInputs<'cx> {
     pub(super) fn semantic_holds(&self) -> &[DefinitionSemanticHold] { SEMANTIC_HOLDS }
+    /// Exact pinned nominal type_of construction, without demanding its fields.
+    /// Other declared Type kinds and complete DefinitionFacts remain held.
+    pub(super) fn nominal_type(&self, cx: Cx<'cx>)
+        -> Result<rustc_type_ir::EarlyBinder<Cx<'cx>, super::model::Ty<'cx, prepared::PreparedProvider<'cx>>>, DefinitionTypePending>
+    {
+        use rustc_type_ir::inherent::*;
+        if !matches!(self.role, DefinitionHeaderRole::Struct | DefinitionHeaderRole::Enum | DefinitionHeaderRole::Union) {
+            return Err(DefinitionTypePending::NonNominal);
+        }
+        if self.definition.world() != cx.services().source_world() { return Err(DefinitionTypePending::SourceWorld); }
+        if cx.services().require_generic_value(self.definition, self.generics).is_err() { return Err(DefinitionTypePending::SourceGenerics); }
+        let def = cx.adt_def(self.definition);
+        let args = super::model::Args::identity_for_item(cx, self.definition);
+        Ok(rustc_type_ir::EarlyBinder::bind(cx, super::model::Ty::new_adt(cx, def, args)))
+    }
 }
 #[derive(Debug)]
 pub struct CurrentDefinitionHeader { value: Arc<QueryValue>, guard: PreparedInputGuard }
@@ -423,6 +440,15 @@ pub(crate) fn check_actual_definition_headers(
             assert_eq!(encoded.role, role);
             assert_eq!(encoded.associated_parent.map(|parent| parent.source()), parent);
             assert_eq!(encoded.function_syntax, plan.source_function());
+            if matches!(role, DefinitionHeaderRole::Struct | DefinitionHeaderRole::Enum | DefinitionHeaderRole::Union) {
+                let nominal = encoded.nominal_type(cx).expect("actual nominal declared Type payload");
+                let rustc_type_ir::TyKind::Adt(adt, args) = nominal.skip_binder().kind() else { panic!("nominal header must construct the actual shared ADT Type"); };
+                assert_eq!(adt.definition, encoded.definition);
+                assert_eq!(args, Args::identity_for_item(cx, encoded.definition));
+            } else {
+                assert_eq!(encoded.nominal_type(cx).unwrap_err(), DefinitionTypePending::NonNominal,
+                    "other declaration kinds need their actual semantic Type producer");
+            }
             assert_eq!(encoded.semantic_holds(), plan.semantic_holds());
             assert!(!encoded.semantic_holds().is_empty());
             cx.services().require_generic_value(encoded.definition, encoded.generics).unwrap();

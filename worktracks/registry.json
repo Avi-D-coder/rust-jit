@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-20T17:51:20.434415+00:00",
+  "updated_at": "2026-10-20T18:47:00.579172+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -569,9 +569,17 @@
             "worktracks/05-trait-goal-engine/2026-10-20-source-header-lang-review.md",
             "worktracks/05-trait-goal-engine/2026-10-20-source-header-controls.json",
             "worktracks/05-trait-goal-engine/2026-10-20-upstream-transmute.md",
-            "worktracks/evidence/2026-10-20-v495-v497-source-header-transmute.json"
+            "worktracks/evidence/2026-10-20-v495-v497-source-header-transmute.json",
+            "worktracks/05-trait-goal-engine/2026-10-20-projection-source-identities.md",
+            "worktracks/05-trait-goal-engine/2026-10-20-projection-typeir.md",
+            "worktracks/05-trait-goal-engine/2026-10-20-projection-review.md",
+            "worktracks/05-trait-goal-engine/2026-10-20-projection-controls.json",
+            "worktracks/05-trait-goal-engine/2026-10-20-nominal-declared-types.md",
+            "worktracks/05-trait-goal-engine/2026-10-20-generated-member-namespaces.md",
+            "worktracks/05-trait-goal-engine/2026-10-20-generated-projection-fields.md",
+            "worktracks/evidence/2026-10-20-v498-v501-source-projections.json"
           ],
-          "latest_component_scope": "V497 HELD M020 source header/lang identities and pinned transmute client. DefinitionHeaderPlan(tag75) retains actual source/edition/associated parent/generic/header syntax with explicit missing semantic producers; SourceLangIdentity(tag76) classifies one authenticated declaration, never complete-world absence. Original trait methods now use the existing canonical associated-declaration join and immutable member-scope index; generated join unchanged. Full pinned transmute tree/automaton adapter replaces the final SolverClients callback/container; mandatory typed layout/query inputs and actual producer/admission remain held. macOS1.99 lib/CLI/digester and four provenance audits pass.3/3controls pass:36header worlds,276root headers,24requested facet headers with0requested gaps,4alias/attribute editions; old field matrix36worlds/72fields/12explicit pending declarations maintained (exact pending variant unmeasured). V495 compile failure and V496 two metadata failures preserved and fixed through common index/harness; closing source/HEAD/test/CLI guards match. Generic-derived-type remains runtime-contract pass; repr128 remains LRR-E-OP-TYPE. Zero new distinct stock gains/refreshed totals, actual root execution, full source factory or task/milestone/interpreter/JIT closure. Projection identity/predicate encoding, complete lang registry/header parity, semantic source facts, const/layout query producers, admission/suspension and runtime member join remain open."
+          "latest_component_scope": "V501 HELD M020 actual source projections and common generated member namespaces. TraitAssociatedTypes(tag77) resolves legacy item lookup keys to actual associated declarations; DeclarationSourcePredicates(tag78) collects actual own bounds. Shared TypeIR uses real alias/generic parent identities and pinned AliasTy constructors; nominal type_of payloads stay cold. Authenticated generated contributions merge through ordinary granular scope publication and restore original bases on epoch change. Function Type lookup uses its actual header receipt; shorthand bounds and Q77 share one retained TraitDeclaration member-scope receipt, removing duplicate derivation. Final macOS1.99 lib/CLI/digester,5source audits plus exact upstream-object verification and9/9controls pass with matching source/HEAD/test/CLI guards. Controls cover12iterator worlds/24fields,12own-bound worlds/36clauses/12projected,24trait-member worlds,24cold nominal worlds/48enum-unionheaders,36header worlds/276root+24facet headers,36field worlds/96fields/0pending,24local/generic generated-field worlds/24fields with epoch checks, and4edition namespace merge/negative-positive/withdrawal worlds. V498 compile/provenance and V499/V500 generated source failures remain preserved at their original fingerprints. Generic-derived-type remains runtime-contract pass; repr128 remains LRR-E-OP-TYPE. Zero new distinct stock gains/refreshed suite total or task/milestone/interpreter/JIT closure. Complete applicable source facts, query-domain/variance representation, lang registry, predicate closure, generated associated fragments/GATs, root admission/member/VM remain held."
         },
         {
           "id": "WT05-03",
@@ -700,10 +708,18 @@
         "worktracks/05-trait-goal-engine/2026-10-20-source-header-lang-review.md",
         "worktracks/05-trait-goal-engine/2026-10-20-source-header-controls.json",
         "worktracks/05-trait-goal-engine/2026-10-20-upstream-transmute.md",
-        "worktracks/evidence/2026-10-20-v495-v497-source-header-transmute.json"
+        "worktracks/evidence/2026-10-20-v495-v497-source-header-transmute.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-projection-source-identities.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-projection-typeir.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-projection-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-projection-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-nominal-declared-types.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-generated-member-namespaces.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-generated-projection-fields.md",
+        "worktracks/evidence/2026-10-20-v498-v501-source-projections.json"
       ],
       "solver_policy": "Pinned upstream next-generation rustc solver; E-R5-014. Adapter integration not implemented.",
-      "latest_component_scope": "V497 HELD M020 source header/lang identities and pinned transmute client. DefinitionHeaderPlan(tag75) retains actual source/edition/associated parent/generic/header syntax with explicit missing semantic producers; SourceLangIdentity(tag76) classifies one authenticated declaration, never complete-world absence. Original trait methods now use the existing canonical associated-declaration join and immutable member-scope index; generated join unchanged. Full pinned transmute tree/automaton adapter replaces the final SolverClients callback/container; mandatory typed layout/query inputs and actual producer/admission remain held. macOS1.99 lib/CLI/digester and four provenance audits pass.3/3controls pass:36header worlds,276root headers,24requested facet headers with0requested gaps,4alias/attribute editions; old field matrix36worlds/72fields/12explicit pending declarations maintained (exact pending variant unmeasured). V495 compile failure and V496 two metadata failures preserved and fixed through common index/harness; closing source/HEAD/test/CLI guards match. Generic-derived-type remains runtime-contract pass; repr128 remains LRR-E-OP-TYPE. Zero new distinct stock gains/refreshed totals, actual root execution, full source factory or task/milestone/interpreter/JIT closure. Projection identity/predicate encoding, complete lang registry/header parity, semantic source facts, const/layout query producers, admission/suspension and runtime member join remain open."
+      "latest_component_scope": "V501 HELD M020 actual source projections and common generated member namespaces. TraitAssociatedTypes(tag77) resolves legacy item lookup keys to actual associated declarations; DeclarationSourcePredicates(tag78) collects actual own bounds. Shared TypeIR uses real alias/generic parent identities and pinned AliasTy constructors; nominal type_of payloads stay cold. Authenticated generated contributions merge through ordinary granular scope publication and restore original bases on epoch change. Function Type lookup uses its actual header receipt; shorthand bounds and Q77 share one retained TraitDeclaration member-scope receipt, removing duplicate derivation. Final macOS1.99 lib/CLI/digester,5source audits plus exact upstream-object verification and9/9controls pass with matching source/HEAD/test/CLI guards. Controls cover12iterator worlds/24fields,12own-bound worlds/36clauses/12projected,24trait-member worlds,24cold nominal worlds/48enum-unionheaders,36header worlds/276root+24facet headers,36field worlds/96fields/0pending,24local/generic generated-field worlds/24fields with epoch checks, and4edition namespace merge/negative-positive/withdrawal worlds. V498 compile/provenance and V499/V500 generated source failures remain preserved at their original fingerprints. Generic-derived-type remains runtime-contract pass; repr128 remains LRR-E-OP-TYPE. Zero new distinct stock gains/refreshed suite total or task/milestone/interpreter/JIT closure. Complete applicable source facts, query-domain/variance representation, lang registry, predicate closure, generated associated fragments/GATs, root admission/member/VM remain held."
     },
     {
       "id": "WT06",
@@ -1210,7 +1226,7 @@
     "guest_jit": "blocked_by_runtime_acceptance",
     "source_checkpoint_pushed": true,
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired.",
-    "latest_targeted_evidence": "worktracks/evidence/2026-10-18-interpreter-v180-v186-constructor-arguments.json",
+    "latest_targeted_evidence": "worktracks/evidence/2026-10-20-v498-v501-source-projections.json",
     "evidence": [
       "worktracks/evidence/2026-10-18-interpreter-v92-v99-symbolic-places.json",
       "worktracks/evidence/2026-10-18-interpreter-v100-open-reference-coercions.json",
@@ -1253,7 +1269,15 @@
       "worktracks/05-trait-goal-engine/2026-10-20-upstream-field-client-review.md",
       "worktracks/05-trait-goal-engine/2026-10-20-upstream-field-client-controls.json",
       "worktracks/05-trait-goal-engine/2026-10-20-upstream-const-eval.md",
-      "worktracks/evidence/2026-10-20-v493-v494-upstream-field-clients.json"
+      "worktracks/evidence/2026-10-20-v493-v494-upstream-field-clients.json",
+      "worktracks/05-trait-goal-engine/2026-10-20-projection-source-identities.md",
+      "worktracks/05-trait-goal-engine/2026-10-20-projection-typeir.md",
+      "worktracks/05-trait-goal-engine/2026-10-20-projection-review.md",
+      "worktracks/05-trait-goal-engine/2026-10-20-projection-controls.json",
+      "worktracks/05-trait-goal-engine/2026-10-20-nominal-declared-types.md",
+      "worktracks/05-trait-goal-engine/2026-10-20-generated-member-namespaces.md",
+      "worktracks/05-trait-goal-engine/2026-10-20-generated-projection-fields.md",
+      "worktracks/evidence/2026-10-20-v498-v501-source-projections.json"
     ],
     "source_checkpoint_note": "Last confirmed pushed checkpoint before V494 candidate is a3e36397f8dd26c0bc5797d7e42908bce0726a26. Exact candidate source/binary fingerprints and held integration scope are in V494 evidence; a source checkpoint is not interpreter/root/release acceptance.",
     "previous_source_checkpoint_commit": "548d9d1b190d9d7e03e5067cd3c71fa0e9d24ea4",
@@ -1388,6 +1412,12 @@
     "held_upstream_field_clients": {
       "evidence": "worktracks/evidence/2026-10-20-v493-v494-upstream-field-clients.json",
       "scope": "V494 HELD M020 ordinary source-field plans and pinned const/reflection clients. AdtSourceFields(tag74) uses the existing TypeSchema/SchemaNames/source-bindings/generic-layout/TypeIR route with memo reuse and mandatory captured dependency guard. Context-owned immutable slices and Symbols retain actual field metadata without leaks or caps. Full pinned reflective-field and const-normalization algorithms replace Clients.reflective_field and SolverClients.evaluate_const function pointers; immutable terminal const-query data distinguish missing admission from semantic None. Actual lang-item/terminal-query result production, complete ADT/source/ParamEnv/leaf factory, root admission/suspension/member/VM joins and transmutation client remain held. Both macOS1.99 builds, digest helper and all three port audits pass.3/3exact controls pass; new field matrix covers36worlds,72encoded fields,12explicit pending declarations, actual symbolic array constants, missing-owner data boundary and withdrawal guards. Exact pending enum is unmeasured; reflectionSome, alias/terminal/GCA, full provenance/currentness/origin/root matrices remain unexecuted. Unchanged generic-derived-type retains199matched VM operations/output/cleanup; repr128 retains LRR-E-OP-TYPE28attempts/27outcomes. Source/HEAD/test/CLI closing guards match. Zero new distinct stock gains/refreshed totals or task/milestone/interpreter/JIT closure."
+    },
+    "held_upstream_source_projections": {
+      "source_baseline": "289995a5accac76fcb386b46d863e1118cbb6e6d",
+      "source_sha256": "0ffc8527d5916f45f60f951c80f40e2cda82cca8060c26b46e3e9b09f9cb461e",
+      "scope": "V501 HELD M020 actual source projections and common generated member namespaces. TraitAssociatedTypes(tag77) resolves legacy item lookup keys to actual associated declarations; DeclarationSourcePredicates(tag78) collects actual own bounds. Shared TypeIR uses real alias/generic parent identities and pinned AliasTy constructors; nominal type_of payloads stay cold. Authenticated generated contributions merge through ordinary granular scope publication and restore original bases on epoch change. Function Type lookup uses its actual header receipt; shorthand bounds and Q77 share one retained TraitDeclaration member-scope receipt, removing duplicate derivation. Final macOS1.99 lib/CLI/digester,5source audits plus exact upstream-object verification and9/9controls pass with matching source/HEAD/test/CLI guards. Controls cover12iterator worlds/24fields,12own-bound worlds/36clauses/12projected,24trait-member worlds,24cold nominal worlds/48enum-unionheaders,36header worlds/276root+24facet headers,36field worlds/96fields/0pending,24local/generic generated-field worlds/24fields with epoch checks, and4edition namespace merge/negative-positive/withdrawal worlds. V498 compile/provenance and V499/V500 generated source failures remain preserved at their original fingerprints. Generic-derived-type remains runtime-contract pass; repr128 remains LRR-E-OP-TYPE. Zero new distinct stock gains/refreshed suite total or task/milestone/interpreter/JIT closure. Complete applicable source facts, query-domain/variance representation, lang registry, predicate closure, generated associated fragments/GATs, root admission/member/VM remain held.",
+      "evidence": "worktracks/evidence/2026-10-20-v498-v501-source-projections.json"
     }
   },
   "current_spec": {

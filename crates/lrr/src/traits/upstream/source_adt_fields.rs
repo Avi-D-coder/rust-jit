@@ -4,7 +4,7 @@ use super::{
     configuration::PreparedSolverConfiguration,
     model::{AdtField, AdtKind, AdtVariant, Symbol},
     prepared::{self, Cx, DefinitionReceipt},
-    source_bindings::{DefinitionKind, SourceBindings, require_type},
+    source_bindings::{DefinitionKind, SourceBindings, SourceRequirements, require_type},
     source_generics::SourceGenericLayouts,
     source_terms::SourceTypePending,
 };
@@ -132,7 +132,7 @@ impl PreparedAdtSourceFields {
         };
         let sources: Vec<_> = environment.sources().iter().collect();
         let names = ready!(SchemaNames::from_current_database(db, environment.names(), &sources, result.schema()));
-        let mut required = BTreeMap::from([(key.definition, DefinitionKind::Nominal)]);
+        let mut required = SourceRequirements::from(BTreeMap::from([(key.definition, DefinitionKind::Nominal)]));
         let mut variants = Vec::new();
         for (variant_index, variant) in result.schema().variants.iter().enumerate() {
             let variant_index = match u32::try_from(variant_index) {
@@ -193,7 +193,7 @@ impl PreparedAdtSourceFields {
         for variant in &self.variants {
             let mut fields = Vec::new();
             for field in &variant.fields {
-                let ty = super::source_terms::encode_declared(cx, configuration, &bindings.definitions, &field.ty)
+                let ty = super::source_terms::encode_declared(cx, configuration, bindings.type_bindings(), &field.ty)
                     .map_err(SourceAdtFieldsPending::Source)?;
                 fields.push(AdtField { name: cx.retain_adt_symbol(&field.name), ty: EarlyBinder::bind(cx, ty) });
             }
@@ -272,7 +272,7 @@ pub(crate) enum SourceFieldControl {
     ArrayRecord,
     ArrayTuple,
     GenericUnion,
-    ProjectionPending,
+    ProjectedField,
 }
 
 /// The caller selects actual declaration IDs from its real fixture environment.
@@ -307,7 +307,7 @@ pub(crate) fn check_actual_source_fields(
     };
     let mut held = Vec::new();
     let mut encoded_fields = 0;
-    let mut explicit_pending = 0;
+    let explicit_pending = 0;
     for &(definition, control) in definitions {
         let key = AdtSourceFieldsKey { inventory: inventory.clone(), definition };
         let current = match CurrentAdtSourceFields::capture(db, &key) {
@@ -325,40 +325,24 @@ pub(crate) fn check_actual_source_fields(
         assert_eq!(current.fingerprint(), again.fingerprint());
         let plan = current.plan();
         assert_eq!(plan.key(), &key);
-        let projection = matches!(control, SourceFieldControl::ProjectionPending);
+        let projection = matches!(control, SourceFieldControl::ProjectedField);
         let (expected_kind, expected_name) = match control {
             SourceFieldControl::GenericPair => (AdtKind::Struct, "Pair"),
             SourceFieldControl::ArrayRecord => (AdtKind::Struct, "ArrayStruct"),
             SourceFieldControl::ArrayTuple => (AdtKind::Struct, "ArrayTuple"),
             SourceFieldControl::GenericUnion => (AdtKind::Union, "U"),
-            SourceFieldControl::ProjectionPending => (AdtKind::Union, "MaybeItem"),
+            SourceFieldControl::ProjectedField => (AdtKind::Union, "MaybeItem"),
         };
         assert_eq!((plan.kind(), plan.name()), (expected_kind, expected_name));
         if projection {
             assert_eq!(plan.schema().variants[0].fields[0].name.as_deref(), Some("elem"));
             assert_eq!(plan.schema().variants[0].fields[1].name.as_deref(), Some("none"));
         }
-        if let Some(pending) = plan.pending() {
-            assert!(projection, "actual fixture field preparation is pending: {pending:?}");
-            assert!(matches!(pending,
-                SourceAdtFieldsPending::FieldType { .. }
-                | SourceAdtFieldsPending::Source(SourceTypePending::ProjectionMetadata)
-                | SourceAdtFieldsPending::Source(SourceTypePending::SourceDefinition)
-            ), "projection control must expose its actual source/field prerequisite: {pending:?}");
-            explicit_pending += 1;
-            held.push(current);
-            continue;
-        }
+        assert_eq!(plan.pending(), None, "actual fixture field preparation must be ready");
         let layouts = plan.generic_layouts()?;
         let before_encoding = db.trace.events.len();
         let fields = configuration.with_source_context(db, Arc::clone(&input), Some(&layouts), |cx, _| {
             assert!(cx.services().ready(cx).is_err(), "field metadata must not mint complete solver facts");
-            if projection {
-                assert!(matches!(plan.materialize(cx, configuration),
-                    Err(SourceAdtFieldsPending::Source(SourceTypePending::ProjectionMetadata))),
-                    "actual associated field projection stays explicitly unrepresented");
-                return 0;
-            }
             let variants = plan.materialize(cx, configuration)
                 .unwrap_or_else(|pending| panic!("actual source field encoding pending: {pending:?}"));
             assert_eq!(variants.len(), 1);
@@ -369,11 +353,25 @@ pub(crate) fn check_actual_source_fields(
             let env=super::model::ParamEnv(cx.clauses(super::model::List::default()));
             super::infer::const_eval::check_missing_owner_env(id);
             let typed = variants[0].fields;
+            if projection {
+                assert_eq!(typed.len(), 2);
+                assert_eq!((typed[0].name.0, typed[1].name.0), ("elem", "none"));
+                let TyTerm::Nominal(wrapper, source_args) = &plan.variants[0].fields[0].ty else { panic!("actual MaybeItem field wrapper source lost") };
+                let Some(crate::traits::term::GenericArg::Type(TyTerm::Projection(source))) = source_args.first() else { panic!("actual MaybeItem field source projection lost") };
+                let binding = &plan.bindings.projections[&(source.trait_ref.trait_key, source.item)];
+                let ty::TyKind::Adt(actual_wrapper, args) = typed[0].ty.skip_binder().kind() else { panic!("actual projected field wrapper shared Type lost") };
+                assert_eq!(actual_wrapper.definition.source(), *wrapper);
+                let Some(Arg::Type(projected)) = args.items().first() else { panic!("actual projected wrapper argument lost") };
+                super::source_terms::check_actual_projection_alias(cx, *projected,
+                    ParamKey { definition, ordinal: 0 }, binding.trait_definition.source(), binding.associated_definition.source());
+                assert!(matches!(typed[1].ty.skip_binder().kind(), ty::TyKind::Tuple(fields) if fields.items().is_empty()));
+                return typed.len();
+            }
             let expected_names: &[&str] = match control {
                 SourceFieldControl::GenericPair | SourceFieldControl::GenericUnion => &["a", "b"],
                 SourceFieldControl::ArrayRecord => &["data"],
                 SourceFieldControl::ArrayTuple => &["0"],
-                SourceFieldControl::ProjectionPending => unreachable!(),
+                SourceFieldControl::ProjectedField => unreachable!(),
             };
             assert_eq!(typed.len(), expected_names.len());
             assert_eq!(plan.schema().variants[0].fields.len(), typed.len());
@@ -413,9 +411,194 @@ pub(crate) fn check_actual_source_fields(
             typed.len()
         })?;
         assert_eq!(before_encoding, db.trace.events.len(), "field encoding/materialization must not query source");
-        if projection { explicit_pending += 1; } else { encoded_fields += fields; }
+        encoded_fields += fields;
         current.require_current(db)?;
         held.push(current);
     }
     Ok((held, encoded_fields, explicit_pending))
+}
+
+/// External fixture controls supply independent actual trait/member IDs.
+#[cfg(test)]
+pub(crate) fn check_actual_projected_source_fields(
+    db: &mut Database, inventory: &SealKey, owner: Digest,
+    expected_trait: Digest, expected_item: Digest,
+) -> Result<(CurrentAdtSourceFields, usize), Diagnostic> {
+    use super::{configuration::SolverConfigurationKey, model::{Arg, Args}};
+    use rustc_type_ir::{self as ty, inherent::*};
+    let current = match CurrentAdtSourceFields::capture(db, &AdtSourceFieldsKey { inventory: inventory.clone(), definition: owner }) {
+        QueryPoll::Ready(Ok(value)) => value, QueryPoll::Ready(Err(error)) => return Err(error),
+        QueryPoll::NeedInput(_) => return Err(fault("actual projected field preparation needs input")),
+    };
+    current.require_current(db)?;
+    let plan = current.plan();
+    assert_eq!(plan.pending(), None, "actual projected field prerequisites must be complete");
+    assert_eq!(plan.kind(), AdtKind::Union);
+    let TyTerm::Nominal(wrapper, source_args) = &plan.variants[0].fields[0].ty else { panic!("actual projected field source wrapper absent") };
+    let Some(crate::traits::term::GenericArg::Type(TyTerm::Projection(source))) = source_args.first() else { panic!("actual projected field source term absent") };
+    assert_eq!(source.trait_ref.trait_key, expected_trait);
+    let binding = &plan.bindings.projections[&(expected_trait, source.item)];
+    assert_eq!(binding.associated_definition.source(), expected_item);
+    assert_eq!(binding.trait_definition.source(), expected_trait);
+    let input = Arc::clone(&plan.bindings.catalog);
+    let InputValue::DiscoverySeal(catalog) = input.as_ref() else { unreachable!("actual source catalog") };
+    let configuration = match db.fetch(&SyntaxProvider, QueryKey::SolverConfiguration(Box::new(
+        SolverConfigurationKey::from_source(catalog.impl_catalog.as_ref().expect("checked catalog").root()),
+    ))) {
+        QueryPoll::Ready(Ok(value)) => value.value, QueryPoll::Ready(Err(error)) => return Err(error),
+        QueryPoll::NeedInput(_) => return Err(fault("actual projected field configuration needs input")),
+    };
+    let QueryValue::SolverConfiguration(configuration) = configuration.as_ref() else { unreachable!("actual field configuration") };
+    let layouts = plan.generic_layouts()?;
+    let before = db.trace.events.len();
+    let fields = configuration.with_source_context(db, input, Some(&layouts), |cx, _| {
+        assert!(cx.services().ready(cx).is_err());
+        let variants = plan.materialize(cx, configuration).unwrap_or_else(|pending| panic!("actual projected field encoding pending: {pending:?}"));
+        assert_eq!(variants.len(), 1); assert_eq!(variants[0].fields.len(), 2);
+        let fields = variants[0].fields;
+        assert_eq!((fields[0].name.0, fields[1].name.0), ("elem", "none"));
+        let args = Args::identity_for_item(cx, plan.bindings.definitions[&owner]);
+        let ty::TyKind::Adt(actual_wrapper, actual_args) = fields[0].ty(cx, args).skip_norm_wip().kind() else { panic!("actual projected field wrapper Type absent") };
+        assert_eq!(actual_wrapper.definition.source(), *wrapper);
+        let Some(Arg::Type(projected)) = actual_args.items().first() else { panic!("actual projected wrapper argument absent") };
+        super::source_terms::check_actual_projection_alias(cx, *projected,
+            crate::traits::term::ParamKey { definition: owner, ordinal: 0 }, expected_trait, expected_item);
+        assert!(matches!(fields[1].ty(cx, args).skip_norm_wip().kind(), ty::TyKind::Tuple(fields) if fields.items().is_empty()));
+        assert!(cx.services().ready(cx).is_err());
+        fields.len()
+    })?;
+    assert_eq!(before, db.trace.events.len(), "projected field TypeIR construction must not query source");
+    current.require_current(db)?;
+    Ok((current, fields))
+}
+
+/// Independent schema expectations supplied by the host fixture harness.
+/// These select observations of actual source Types; they construct no recipe.
+#[cfg(test)]
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum ProjectionSelfExpectation {
+    Parameter(crate::traits::term::ParamKey),
+    Nominal(Digest),
+}
+#[cfg(test)]
+pub(crate) struct DeclaredProjectionFieldExpectation<'a> {
+    pub(crate) field_name: &'a str,
+    pub(crate) wrappers: &'a [Digest],
+    pub(crate) trait_definition: Digest,
+    pub(crate) associated_definition: Digest,
+    pub(crate) self_type: ProjectionSelfExpectation,
+    pub(crate) unsigned_trait_arguments: &'a [rustc_type_ir::UintTy],
+    pub(crate) parent_count: usize,
+}
+
+/// Inspect one declared field through the ordinary actual-source encoder.
+/// Actual generated publication IDs and expected field shape come from an
+/// independent Outline selection; no normalization or ready facts are used.
+#[cfg(test)]
+pub(crate) fn check_actual_declared_projection_field(
+    db: &mut Database, inventory: &SealKey, owner: Digest,
+    expected: &DeclaredProjectionFieldExpectation<'_>,
+) -> Result<(CurrentAdtSourceFields, usize), Diagnostic> {
+    use super::{configuration::SolverConfigurationKey, model::{AllocateList, Arg, Args}};
+    use crate::traits::term::BoundKind;
+    use rustc_type_ir::{self as ty, inherent::*, Interner};
+    let current = match CurrentAdtSourceFields::capture(db, &AdtSourceFieldsKey {
+        inventory: inventory.clone(), definition: owner,
+    }) {
+        QueryPoll::Ready(Ok(value)) => value, QueryPoll::Ready(Err(error)) => return Err(error),
+        QueryPoll::NeedInput(_) => return Err(fault("declared projection field source needs input")),
+    };
+    current.require_current(db)?;
+    let plan = current.plan();
+    if let Some(pending) = plan.pending() {
+        return Err(fault(&format!("actual declared projection field prerequisite pending: {pending:?}")));
+    }
+    assert_eq!(plan.kind(), AdtKind::Struct);
+    assert_eq!(plan.variants.len(), 1);
+    assert_eq!(plan.variants[0].fields.len(), 1);
+    assert_eq!(plan.variants[0].fields[0].name, expected.field_name);
+    let mut source = &plan.variants[0].fields[0].ty;
+    for wrapper in expected.wrappers {
+        let TyTerm::Nominal(actual, arguments) = source else { panic!("actual field nominal wrapper missing") };
+        assert_eq!(actual, wrapper);
+        let [crate::traits::term::GenericArg::Type(argument)] = arguments.as_slice() else {
+            panic!("actual field wrapper must retain its one Type argument")
+        };
+        source = argument;
+    }
+    let TyTerm::Projection(source) = source else { panic!("actual declared field projection missing") };
+    assert_eq!(source.trait_ref.trait_key, expected.trait_definition);
+    let binding = &plan.bindings.projections[&(expected.trait_definition, source.item)];
+    assert_eq!(binding.associated_definition.source(), expected.associated_definition);
+    assert_eq!(binding.trait_definition.source(), expected.trait_definition);
+    let layouts = plan.generic_layouts()?;
+    assert_eq!(layouts.projection_parent(binding.associated_definition), Some(binding.trait_definition));
+    let expected_kinds = vec![BoundKind::Type; expected.parent_count];
+    assert_eq!(layouts.projection_argument_kinds(binding.associated_definition), Some(expected_kinds.as_slice()));
+    let associated = layouts.get(binding.associated_definition).expect("actual associated generic declaration");
+    let layout = associated.layout().expect("actual associated source binder");
+    assert!(layout.implicit_self);
+    assert_eq!(layout.own, 0);
+    assert_eq!(layout.inherited as usize + 1, expected.parent_count);
+    let input = Arc::clone(&plan.bindings.catalog);
+    let InputValue::DiscoverySeal(catalog) = input.as_ref() else { unreachable!("actual field catalog") };
+    let configuration = match db.fetch(&SyntaxProvider, QueryKey::SolverConfiguration(Box::new(
+        SolverConfigurationKey::from_source(catalog.impl_catalog.as_ref().expect("actual source catalog").root()),
+    ))) {
+        QueryPoll::Ready(Ok(value)) => value.value, QueryPoll::Ready(Err(error)) => return Err(error),
+        QueryPoll::NeedInput(_) => return Err(fault("declared projection field configuration needs input")),
+    };
+    let QueryValue::SolverConfiguration(configuration) = configuration.as_ref() else { unreachable!("actual field configuration") };
+    let before = db.trace.events.len();
+    let count = configuration.with_source_context(db, input, Some(&layouts), |cx, _| {
+        assert!(cx.services().ready(cx).is_err());
+        let variants = plan.materialize(cx, configuration)
+            .unwrap_or_else(|pending| panic!("actual declared field TypeIR pending: {pending:?}"));
+        assert_eq!(variants.len(), 1);
+        assert_eq!(variants[0].fields.len(), 1);
+        let field = variants[0].fields[0];
+        assert_eq!(field.name.0, expected.field_name);
+        let owner_args = Args::identity_for_item(cx, plan.bindings.definitions[&owner]);
+        let mut value = field.ty(cx, owner_args).skip_norm_wip();
+        for wrapper in expected.wrappers {
+            let ty::TyKind::Adt(actual, arguments) = value.kind() else { panic!("encoded field wrapper missing") };
+            assert_eq!(actual.definition.source(), *wrapper);
+            assert_eq!(actual.definition.world(), cx.services().source_world());
+            let [Arg::Type(argument)] = arguments.items() else { panic!("encoded wrapper argument layout differs") };
+            value = *argument;
+        }
+        let ty::TyKind::Alias(ty::IsRigid::No, alias) = value.kind() else { panic!("field must retain an unnormalized alias") };
+        let ty::AliasTyKind::Projection { def_id } = alias.kind else { panic!("field lost its projection alias kind") };
+        assert_eq!(def_id, binding.associated_definition);
+        assert_eq!(cx.projection_parent(def_id), binding.trait_definition);
+        assert_eq!(cx.generics_of(def_id).parent_count, expected.parent_count);
+        assert_eq!(cx.generics_of(def_id).count(), expected.parent_count);
+        assert!(cx.check_alias_term_args_compatible(alias.kind.into(), alias.args));
+        let wrong = cx.list(Vec::<Arg<'_, prepared::PreparedProvider<'_>>>::new());
+        assert!(!cx.check_alias_term_args_compatible(alias.kind.into(), wrong));
+        assert_eq!(ty::AliasTy::new_from_args(cx, alias.kind, alias.args), alias);
+        let (reference, own) = alias.trait_ref_and_own_args(cx);
+        assert_eq!(reference.def_id, binding.trait_definition);
+        assert!(own.is_empty());
+        assert_eq!(reference.args.items().len(), 1 + expected.unsigned_trait_arguments.len());
+        let Arg::Type(self_type) = reference.args.items()[0] else { panic!("actual trait Self Type missing") };
+        match expected.self_type {
+            ProjectionSelfExpectation::Parameter(expected) => assert!(matches!(self_type.kind(),
+                ty::TyKind::Param(actual) if actual.source() == expected)),
+            ProjectionSelfExpectation::Nominal(expected) => {
+                let ty::TyKind::Adt(actual, arguments) = self_type.kind() else { panic!("actual nominal trait Self missing") };
+                assert_eq!(actual.definition.source(), expected);
+                assert_eq!(actual.definition.world(), cx.services().source_world());
+                assert!(arguments.items().is_empty());
+            }
+        }
+        for (argument, expected) in reference.args.items()[1..].iter().zip(expected.unsigned_trait_arguments) {
+            assert!(matches!(argument, Arg::Type(actual) if matches!(actual.kind(), ty::TyKind::Uint(kind) if kind == *expected)));
+        }
+        assert!(cx.services().ready(cx).is_err());
+        variants[0].fields.len()
+    })?;
+    assert_eq!(before, db.trace.events.len(), "declared projection encoding must not query source");
+    current.require_current(db)?;
+    Ok((current, count))
 }

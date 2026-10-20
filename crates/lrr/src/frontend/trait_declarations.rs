@@ -35,6 +35,15 @@ pub enum TraitDeclarationResult {
     /// This does not establish a failed trait goal or reject guest execution.
     NotTrait,
 }
+/// Missing member ownership is preparation pending, independent of the
+/// already established fact that the selected declaration is a trait.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[repr(u32)]
+pub enum TraitMemberScopePending {
+    SourceMetadata = 0,
+    NotTrait = 1,
+    GeneratedParentJoin = 2,
+}
 #[derive(Debug)]
 struct Metadata {
     source: Arc<InputValue>,
@@ -124,6 +133,8 @@ pub struct TraitDeclaration {
     parsed: Option<Arc<QueryValue>>,
     result: TraitDeclarationResult,
     header: Option<TraitHeader>,
+    member_scope: Result<ScopeKey, TraitMemberScopePending>,
+    member_source: Option<Arc<InputValue>>,
 }
 impl TraitDeclaration {
     pub fn definition(&self) -> Digest {
@@ -138,6 +149,12 @@ impl TraitDeclaration {
     /// None is pending metadata or a non-trait, never an empty source catalog.
     pub fn header(&self) -> Option<&TraitHeader> {
         self.header.as_ref()
+    }
+    /// Actual source scope for this trait's members. A generated trait's real
+    /// declaration ID differs from its retained Outline auxiliary scope owner.
+    /// This receipt grants no namespace completeness or member absence.
+    pub fn member_scope(&self) -> Result<&ScopeKey, TraitMemberScopePending> {
+        self.member_scope.as_ref().map_err(|pending| *pending)
     }
     pub(crate) fn recipe(&self) -> Option<&HeaderRecipe> {
         match self.metadata.as_ref()?.header.as_ref() {
@@ -192,6 +209,8 @@ impl TraitDeclaration {
             parsed: None,
             result: TraitDeclarationResult::MetadataPending,
             header: None,
+            member_scope: Err(TraitMemberScopePending::SourceMetadata),
+            member_source: None,
         };
         let source = db.input(&InputKey::DefinitionSource(definition));
         let header = db.input(&InputKey::DefinitionHeader(definition));
@@ -233,6 +252,37 @@ impl TraitDeclaration {
             if tokens(declaration.syntax(), excluded) != header_data.tokens {
                 return QueryPoll::Ready(Err(fault("actual trait declaration header differs")));
             }
+            let generated = db.input(&InputKey::GeneratedSyntax(parse.content));
+            prepared.member_scope = if let Some(input) = &generated {
+                let InputValue::GeneratedSyntax(unit) = input.as_ref() else {
+                    return QueryPoll::Ready(Err(fault("trait member source input differs")));
+                };
+                if unit.key != *parse {
+                    return QueryPoll::Ready(Err(fault("trait member source parser differs")));
+                }
+                match unit.declaration(definition) {
+                    Some(item) => {
+                        if item.scope != context_data.scope || item.declaration_span != context_data.range
+                            || item.header != *header_data
+                            || item.def_key.item_kind != crate::source::manifest::ItemKind::Trait
+                            || item.def_key.namespace != crate::source::manifest::Namespace::Type {
+                            return QueryPoll::Ready(Err(fault("trait member declaration source join differs")));
+                        }
+                        let scope = ScopeKey { owner: Some(item.def_key.fingerprint()), ..context_data.scope.clone() };
+                        if unit.declaration_for_member_scope(&scope) == Some(definition) {
+                            Ok(scope)
+                        } else { Err(TraitMemberScopePending::GeneratedParentJoin) }
+                    }
+                    None => Err(TraitMemberScopePending::GeneratedParentJoin),
+                }
+            } else if parsed.generated_origin.is_some() {
+                // An admitted generated/retained grammar alone is not proof
+                // of its actual declaration-to-member-scope attachment.
+                Err(TraitMemberScopePending::GeneratedParentJoin)
+            } else {
+                Ok(ScopeKey { owner: Some(definition), ..context_data.scope.clone() })
+            };
+            prepared.member_source = generated;
             let generics = match db.fetch(&SyntaxProvider, QueryKey::DeclarationGenerics(definition)) {
                 QueryPoll::Ready(Ok(value)) => value.value,
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -283,6 +333,7 @@ impl TraitDeclaration {
             });
             TraitDeclarationResult::Trait
         } else {
+            prepared.member_scope = Err(TraitMemberScopePending::NotTrait);
             TraitDeclarationResult::NotTrait
         };
         prepared.metadata = Some(Metadata {
@@ -312,7 +363,7 @@ fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-TRAIT-DECLARATION", message.into())
 }
 impl StableEncode for TraitDeclaration {
-    const DOMAIN: &'static str = "lrr/v3/actual-trait-declaration";
+    const DOMAIN: &'static str = "lrr/v4/actual-trait-declaration";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.definition);
         e.u32(match self.result {
@@ -320,6 +371,11 @@ impl StableEncode for TraitDeclaration {
             TraitDeclarationResult::MetadataPending => 1,
             TraitDeclarationResult::NotTrait => 2,
         });
+        match &self.member_scope {
+            Ok(scope) => { e.u32(0); e.record(scope); }
+            Err(pending) => { e.u32(1); e.u32(*pending as u32); }
+        }
+        e.option(&self.member_source, |e, source| e.digest(source.fingerprint()));
         e.option(&self.header, |e, header| e.record(header));
         e.option(&self.metadata, |e, metadata| {
             e.digest(metadata.source.fingerprint());

@@ -59,7 +59,7 @@ impl PreparedImplSourceTypes {
             plan.pending = Some(SourceTypePending::HeadTypes); return QueryPoll::Ready(Ok(plan));
         };
         use super::source_bindings::{DefinitionKind, require_type, SourceBindings};
-        let mut required = BTreeMap::new();
+        let mut required = super::source_bindings::SourceRequirements::new();
         require_type(&mut required, self_type);
         if let Some(reference) = trait_ref {
             required.insert(reference.trait_key, DefinitionKind::Trait);
@@ -76,7 +76,7 @@ impl PreparedImplSourceTypes {
         if configuration.source() != self.catalog().impl_catalog.as_ref().expect("checked catalog").root()
             || cx.services().source_world() != self.catalog().seal.fingerprint() { return Err(SourceTypePending::SourceDefinition); }
         let ImplHeadTypeResult::Resolved { self_type, trait_ref } = self.head().result() else { return Err(SourceTypePending::HeadTypes); };
-        let encoder = Encoder { definitions: &self.bindings.definitions, cx, configuration };
+        let encoder = Encoder { bindings: self.bindings.type_bindings(), cx, configuration };
         let self_ty = encoder.ty(self_type, &[])?;
         let trait_arguments = trait_ref.as_ref()
             .map(|reference| encoder.trait_arguments(reference, self_ty)).transpose()?;
@@ -102,10 +102,10 @@ impl<'cx> EncodedTraitArguments<'cx> {
 /// Shared source predicate translation; source enumeration/relaxation and
 /// completeness stay with the actual retained predicate plan.
 pub(super) fn encode_predicate<'cx>(cx: Cx<'cx>, configuration: &PreparedSolverConfiguration,
-    definitions: &BTreeMap<Digest, DefinitionId>, predicate: &crate::traits::predicate::PredicateResult)
+    bindings: super::source_bindings::SourceTypeBindings<'_>, predicate: &crate::traits::predicate::PredicateResult)
     -> Result<model::Clause<'cx, prepared::PreparedProvider<'cx>>, SourceTypePending> {
     use crate::traits::predicate::PredicateResult;
-    let encoder = Encoder { definitions, cx, configuration };
+    let encoder = Encoder { bindings, cx, configuration };
     let kind = match predicate {
         PredicateResult::Implemented(reference) => {
             let self_ty = encoder.ty(&reference.self_ty, &[])?;
@@ -121,15 +121,15 @@ pub(super) fn encode_predicate<'cx>(cx: Cx<'cx>, configuration: &PreparedSolverC
     };
     Ok(model::Clause::new(cx, ty::Binder::dummy(kind)))
 }
-struct Encoder<'a, 'cx> { definitions: &'a BTreeMap<Digest, DefinitionId>, cx: Cx<'cx>, configuration: &'a PreparedSolverConfiguration }
+struct Encoder<'a, 'cx> { bindings: super::source_bindings::SourceTypeBindings<'a>, cx: Cx<'cx>, configuration: &'a PreparedSolverConfiguration }
 pub(super) fn encode_declared<'cx>(cx: Cx<'cx>, configuration: &PreparedSolverConfiguration,
-    definitions: &BTreeMap<Digest, DefinitionId>, ty: &TyTerm) -> Result<Ty<'cx, prepared::PreparedProvider<'cx>>, SourceTypePending> {
-    Encoder { definitions, cx, configuration }.ty(ty, &[])
+    bindings: super::source_bindings::SourceTypeBindings<'_>, ty: &TyTerm) -> Result<Ty<'cx, prepared::PreparedProvider<'cx>>, SourceTypePending> {
+    Encoder { bindings, cx, configuration }.ty(ty, &[])
 }
 impl<'cx> Encoder<'_, 'cx> {
     fn trait_arguments(&self, reference: &term::TraitRef, self_ty: Ty<'cx, prepared::PreparedProvider<'cx>>)
         -> Result<EncodedTraitArguments<'cx>, SourceTypePending> {
-        let definition = *self.definitions.get(&reference.trait_key).ok_or(SourceTypePending::SourceDefinition)?;
+        let definition = *self.bindings.definitions.get(&reference.trait_key).ok_or(SourceTypePending::SourceDefinition)?;
         let mut args = vec![Arg::Type(self_ty)];
         for argument in &reference.args { args.push(self.arg(argument, &[])?); }
         Ok(EncodedTraitArguments { definition, args: self.cx.list(args) })
@@ -192,7 +192,7 @@ impl<'cx> Encoder<'_, 'cx> {
             TyTerm::Str => TyKind::Str, TyTerm::Never => TyKind::Never,
             TyTerm::Param(key) => TyKind::Param(self.parameter(*key, BoundKind::Type)?),
             TyTerm::Nominal(definition, args) => {
-                let id = *self.definitions.get(definition).ok_or(SourceTypePending::SourceDefinition)?;
+                let id = *self.bindings.definitions.get(definition).ok_or(SourceTypePending::SourceDefinition)?;
                 let args = args.iter().map(|arg| self.arg(arg, binders)).collect::<Result<Vec<_>, _>>()?;
                 TyKind::Adt(AdtDefinition { context: self.cx, definition: id }, self.cx.list(args))
             }
@@ -209,7 +209,22 @@ impl<'cx> Encoder<'_, 'cx> {
             TyTerm::Function(_) => return Err(SourceTypePending::FunctionMetadata),
             TyTerm::Infer(_) => return Err(SourceTypePending::Inference), TyTerm::Placeholder(_) => return Err(SourceTypePending::Placeholder),
             TyTerm::Dyn(_) => return Err(SourceTypePending::DynMetadata), TyTerm::Opaque(..) => return Err(SourceTypePending::OpaqueMetadata),
-            TyTerm::Projection(_) => return Err(SourceTypePending::ProjectionMetadata),
+            TyTerm::Projection(projection) => {
+                let binding = self.bindings.projections.get(&(projection.trait_ref.trait_key, projection.item))
+                    .ok_or(SourceTypePending::ProjectionMetadata)?;
+                if self.cx.services().source_projection_parent(binding.associated_definition) != Some(binding.trait_definition) {
+                    return Err(SourceTypePending::ProjectionMetadata);
+                }
+                let mut args = vec![Arg::Type(self.ty(&projection.trait_ref.self_ty, binders)?)];
+                for argument in projection.arguments() { args.push(self.arg(argument, binders)?); }
+                let args = self.cx.list(args);
+                let kind = ty::AliasTyKind::Projection { def_id: binding.associated_definition };
+                if !self.cx.check_alias_term_args_compatible(kind.into(), args) {
+                    return Err(SourceTypePending::ParameterLayout);
+                }
+                let alias = ty::AliasTy::new_from_args(self.cx, kind, args);
+                return Ok(alias.to_ty(self.cx, ty::IsRigid::No));
+            }
         };
         Ok(self.cx.ty(kind))
     }
@@ -221,6 +236,31 @@ impl StableEncode for PreparedImplSourceTypes {
         e.record(&self.key); e.record(self.head()); e.record(&self.bindings);
         e.option(&self.pending, |e, pending| e.u32(*pending as u32));
     }
+}
+
+/// Exact source-identity controls for the unchanged Iterator/Discriminant
+/// projection witnesses; never used to construct a source recipe or answer.
+#[cfg(test)]
+pub(super) fn check_actual_projection_alias<'cx>(
+    cx: Cx<'cx>, value: Ty<'cx, prepared::PreparedProvider<'cx>>,
+    source_self: term::ParamKey, expected_trait: Digest, expected_item: Digest,
+) {
+    let TyKind::Alias(ty::IsRigid::No, alias) = value.kind() else {
+        panic!("actual projected source Type must remain an unnormalized shared alias")
+    };
+    let ty::AliasTyKind::Projection { def_id } = alias.kind else { panic!("source projection lost its alias kind") };
+    assert_eq!(def_id.source(), expected_item, "actual associated declaration ID, never a name hash");
+    assert_eq!(def_id.world(), cx.services().source_world());
+    assert_eq!(cx.projection_parent(def_id).source(), expected_trait);
+    assert!(cx.check_alias_term_args_compatible(alias.kind.into(), alias.args));
+    let wrong = cx.list(Vec::<Arg<'cx, prepared::PreparedProvider<'cx>>>::new());
+    assert!(!cx.check_alias_term_args_compatible(alias.kind.into(), wrong), "actual alias binder rejects a missing Self argument");
+    let (reference, own) = alias.trait_ref_and_own_args(cx);
+    assert_eq!(reference.def_id.source(), expected_trait);
+    assert!(own.is_empty(), "these unchanged witnesses have no associated item arguments");
+    assert_eq!(reference.args.items().len(), 1);
+    assert!(matches!(reference.args.items()[0], Arg::Type(value)
+        if matches!(value.kind(), TyKind::Param(parameter) if parameter.source()==source_self)));
 }
 
 #[cfg(test)]

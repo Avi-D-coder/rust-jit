@@ -460,6 +460,10 @@ fn lookup_type_declaration_using(
         kind if kind.is_nominal_type() => QueryKey::TypeSchema(declaration.definition),
         ItemKind::TypeAlias => QueryKey::TypeAlias(declaration.definition),
         ItemKind::Trait => QueryKey::TraitDeclaration(declaration.definition),
+        // Type names written in a function declaration use its actual retained
+        // source header. A function is not a nominal/alias Type recipe, and
+        // admitting its namespace must not prepare its executable signature.
+        ItemKind::Function => QueryKey::DeclarationGenerics(declaration.definition),
         _ => {
             return QueryPoll::Ready(Err(fault(
                 "LRR-E-CALL-CONTEXT",
@@ -473,6 +477,15 @@ fn lookup_type_declaration_using(
         QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
     };
     let valid = match captured.value.as_ref() {
+        crate::db::value::QueryValue::DeclarationGenerics(recipe) => {
+            recipe.definition() == declaration.definition && recipe.is_function()
+                && recipe.source_parts().is_some_and(|(source, header, context, parsed)| {
+                    source == parse && parsed.key() == *parse && header == declaration.header
+                        && &context.scope == declaration.scope
+                        && matches!(db.input(&InputKey::DeclarationContext(declaration.definition)).as_deref(),
+                            Some(InputValue::DeclarationContext(current)) if current == context)
+                })
+        }
         crate::db::value::QueryValue::TraitDeclaration(recipe) => {
             recipe.matches_owner(declaration.definition, parse, declaration.header, declaration.scope)
         }

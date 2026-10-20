@@ -1164,13 +1164,22 @@ pub(super) fn resolve_actual_type(
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             };
-            let context = db.input(&InputKey::DeclarationContext(trait_key));
-            let Some(InputValue::DeclarationContext(context)) = context.as_deref() else {
-                continue;
+            let declaration = match db.fetch(&SyntaxProvider, QueryKey::TraitDeclaration(trait_key)) {
+                QueryPoll::Ready(Ok(value)) => value.value,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             };
-            let scope = crate::syntax::outline::ScopeKey {
-                owner: Some(trait_key),
-                ..context.scope.clone()
+            let QueryValue::TraitDeclaration(declaration) = declaration.as_ref() else {
+                return QueryPoll::Ready(Err(fault("associated trait declaration result mismatch")));
+            };
+            if declaration.definition() != trait_key {
+                return QueryPoll::Ready(Err(fault("associated trait declaration owner mismatch")));
+            }
+            // A generated trait's canonical declaration ID and its retained
+            // source member-scope owner are distinct. Use the same actual
+            // trait receipt as every associated-member consumer.
+            let Ok(scope) = declaration.member_scope() else {
+                continue;
             };
             // Some imported declaration-only contexts do not publish
             // their associated scope yet. Preserve the existing unknown
@@ -1179,7 +1188,7 @@ pub(super) fn resolve_actual_type(
                 continue;
             }
             let key = crate::db::key::BucketKey {
-                scope,
+                scope: scope.clone(),
                 namespace: Namespace::Type,
                 name: item.into(),
             };

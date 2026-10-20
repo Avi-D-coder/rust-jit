@@ -134,3 +134,6 @@ pub(crate) mod source_predicates;
 pub(crate) mod impl_predicates;
 
 pub(crate) mod declaration_repr;
+
+pub(crate) mod trait_associated_types;
+pub(crate) mod declaration_source_predicates;

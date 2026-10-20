@@ -225,3 +225,62 @@ fn source_lang_attributes_and_aliases_preserve_actual_definition_identity() {
         std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }
 }
+
+#[test]
+fn nominal_declared_types_do_not_demand_projected_fields_or_initializers() {
+    let originals = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/upstream/rustc-checkout");
+    let mut checked = 0;
+    for edition in [2015, 2018, 2021, 2024] {
+        for (case, names, role) in [
+            ("tests/ui/enum-discriminant/repr128.rs", ["Signed", "Unsigned"], Role::Enum),
+            ("tests/ui/union/union-generic-rpass.rs", ["MaybeItem", "U"], Role::Union),
+        ] {
+            let original_path = originals.join(case);
+            let text = std::fs::read_to_string(&original_path).unwrap();
+            let offset = text.find("use std").unwrap();
+            for origin in 0..3 {
+                let path = if origin == 0 { original_path.clone() } else {
+                    let macros = if origin == 1 {
+                        "macro_rules! emit {($($t:tt)*)=>{$($t)*}} emit!"
+                    } else {
+                        "macro_rules! emit {($($t:tt)*)=>{$($t)*}} macro_rules! wrap {($($t:tt)*)=>{emit!{$($t)*}}} wrap!"
+                    };
+                    temporary_source(&format!("nominal-declared-{edition}-{origin}"),
+                        &format!("{}{}{{{}}}", &text[..offset], macros, &text[offset..]))
+                };
+                let (mut db, seal, scope) = configured_impl_catalog_world(&path, edition).unwrap();
+                let source = ready(db.fetch(&SyntaxProvider, QueryKey::PreparedScopeImplHeaders(seal.clone()))).value;
+                let QueryValue::PreparedScopeImplHeaders(headers) = source.as_ref() else { panic!() };
+                let environment = headers.inventory_root().environment().unwrap();
+                let mut rows = BTreeMap::new();
+                for source in environment.sources().iter().filter(|s| s.outline().root_scope.crate_key == scope.crate_key) {
+                    for item in &source.outline().items { rows.insert(item.def_key.fingerprint(), item.clone()); }
+                }
+                if origin != 0 {
+                    for unit in environment.generated_publication_for_control().0.iter().filter(|unit| unit.scope.crate_key == scope.crate_key) {
+                        for &identity in unit.definitions.keys() { rows.insert(identity, unit.declaration(identity).unwrap().clone()); }
+                    }
+                }
+                let expected = names.iter().map(|name| {
+                    let found = rows.iter().filter(|(_, item)| item.def_key.declared_name == *name
+                        && item.def_key.namespace == Namespace::Type).collect::<Vec<_>>();
+                    assert_eq!(found.len(), 1, "actual nominal header source {name}");
+                    (*found[0].0, role, Some(*name), None)
+                }).collect::<Vec<_>>();
+                db.trace.detailed = true; let before = db.trace.events.len();
+                let (held, count) = check_actual_definition_headers(&mut db, &seal, &expected).unwrap();
+                assert_eq!(count, 2);
+                assert!(db.trace.events[before..].iter().all(|event| !matches!(event.key,
+                    QueryKey::AdtSourceFields(_) | QueryKey::TypeSchema(_) | QueryKey::BodyStructure(_)
+                    | QueryKey::FunctionSignature(_) | QueryKey::Thunk(_))),
+                    "nominal identity must not demand field projections or discriminant initializers");
+                db.publish_inputs(BTreeMap::new()).unwrap();
+                assert!(held.iter().all(|plan| plan.require_current(&db).is_err()));
+                checked += count;
+                if origin != 0 { std::fs::remove_dir_all(path.parent().unwrap()).unwrap(); }
+            }
+        }
+    }
+    assert_eq!(checked, 48);
+}

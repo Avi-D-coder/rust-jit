@@ -10,7 +10,7 @@ use crate::{
     },
     source::snapshot::CfgSet,
     syntax::{
-        outline::{DeclarationContext, ScopeKey},
+        outline::{DeclarationContext, ScopeKey, ScopeMembers},
         parse::{ParseKey, ParsedFile},
     },
 };
@@ -29,6 +29,9 @@ pub struct GeneratedSyntaxInput {
     outline: Arc<crate::syntax::outline::Outline>,
     declaration_locations: BTreeMap<Digest, usize>,
     member_declarations: BTreeMap<ScopeKey, Digest>,
+    // Actual source scopes keep their recorded auxiliary owners. Only member
+    // candidate identities are translated to the real generated header keys.
+    scope_contributions: BTreeMap<ScopeKey, ScopeMembers>,
 }
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-INTERNAL-SNAPSHOT", message.into())
@@ -127,6 +130,7 @@ impl GeneratedSyntaxInput {
         let mut definitions = BTreeMap::new();
         let mut declaration_locations = BTreeMap::new();
         let mut member_declarations = BTreeMap::new();
+        let mut published_definitions = BTreeMap::new();
         for (location, item) in outline.items.iter().enumerate() {
             if item.scope.crate_key != scope.crate_key
                 || !(item.scope == scope && admitted || item.scope.owner.is_none_or(|owner| {
@@ -147,6 +151,9 @@ impl GeneratedSyntaxInput {
                 .get(&(item.declaration_span.start, item.declaration_span.end))
                 .ok_or_else(|| fault("generated query structural header absent"))?;
             let id = header.key.fingerprint();
+            if published_definitions.insert(item.def_key.fingerprint(), id).is_some() {
+                return Err(fault("generated source declaration identity repeats"));
+            }
             if matches!(item.def_key.item_kind, crate::source::manifest::ItemKind::Impl | crate::source::manifest::ItemKind::Trait) {
                 let mut member_scope = item.scope.clone();
                 member_scope.owner = Some(if item.def_key.item_kind == crate::source::manifest::ItemKind::Impl {
@@ -183,6 +190,18 @@ impl GeneratedSyntaxInput {
                 );
             }
         }
+        let mut scope_contributions = BTreeMap::new();
+        for (scope, members) in &outline.scopes {
+            let mut contribution = members.clone();
+            for candidates in contribution.candidates.values_mut() {
+                for candidate in candidates {
+                    *candidate = *published_definitions.get(candidate)
+                        .ok_or_else(|| fault("generated scope candidate lacks its exact declaration join"))?;
+                }
+            }
+            contribution.normalize();
+            scope_contributions.insert(scope.clone(), contribution);
+        }
         Ok((
             Arc::new(Self {
                 items,
@@ -196,6 +215,7 @@ impl GeneratedSyntaxInput {
                 outline: Arc::new(outline),
                 declaration_locations,
                 member_declarations,
+                scope_contributions,
             }),
             declarations,
         ))
@@ -205,6 +225,15 @@ impl GeneratedSyntaxInput {
     }
     pub(crate) fn declaration_for_member_scope(&self, scope: &ScopeKey) -> Option<Digest> {
         self.member_declarations.get(scope).copied()
+    }
+    /// Source-owned namespace contributions prepared once from the actual
+    /// admitted outline. Publication must authenticate this unit's seal and
+    /// merge affected scopes; the map grants no producer completion or absence.
+    pub(crate) fn scope_contributions(&self) -> &BTreeMap<ScopeKey, ScopeMembers> {
+        &self.scope_contributions
+    }
+    pub(crate) fn member_scope_owners(&self) -> &BTreeMap<ScopeKey, Digest> {
+        &self.member_declarations
     }
     /// The unit's outline (already computed at preparation).
     pub(crate) fn outline(&self) -> Result<Arc<crate::syntax::outline::Outline>, Diagnostic> {
@@ -279,7 +308,7 @@ impl GeneratedSyntaxInput {
     }
 }
 impl StableEncode for GeneratedSyntaxInput {
-    const DOMAIN: &'static str = "lrr/v4/generated-syntax-value";
+    const DOMAIN: &'static str = "lrr/v5/generated-syntax-value";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.record(&self.scope);
@@ -289,5 +318,6 @@ impl StableEncode for GeneratedSyntaxInput {
         e.option(&self.producer_origin, |e, origin| e.record(origin.as_ref()));
         e.option(&self.included_source, |e, view| e.digest(view.identity()));
         e.map(&self.member_declarations, |e, scope, definition| { e.record(scope); e.digest(*definition); });
+        e.map(&self.scope_contributions, |e, scope, members| { e.record(scope); e.record(members); });
     }
 }
