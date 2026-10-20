@@ -251,7 +251,7 @@ pub struct SchemaNames<'a> {
     schema: &'a NominalSchema,
     definition: Cow<'a, crate::source::manifest::DefKey>,
     body_type: Option<&'a super::source_locals::owned_plan::type_declarations::PreparedBodyType>,
-    body_owner: Option<super::source_types::LocalNominalOwner>,
+    body_owner: Option<super::source_types::LocalDeclarationOwner>,
 }
 /// One lookup result and, when available, its source-selected concrete type.
 /// Metadata-only graph callers cannot mint nominal schema authority.

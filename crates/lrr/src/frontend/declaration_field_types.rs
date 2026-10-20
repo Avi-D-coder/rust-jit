@@ -322,7 +322,7 @@ impl DeclarationFieldTypes {
         let mut items = BTreeMap::new();
         let mut bytes = 0;
         let mut fingerprint =
-            StableEncoder::new("lrr/v4/local-declaration-header-Type-occurrences");
+            StableEncoder::new("lrr/v5/local-declaration-header-Type-occurrences");
         fingerprint.digest(source.identity());
         fingerprint.u64(
             context
@@ -338,6 +338,7 @@ impl DeclarationFieldTypes {
                             | ItemKind::Impl
                             | ItemKind::Constant
                             | ItemKind::Static
+                            | ItemKind::TypeAlias
                     ) && !row.item.is_discriminant_constant()
                 })
                 .count() as u64,
@@ -352,6 +353,7 @@ impl DeclarationFieldTypes {
                     | ItemKind::Impl
                     | ItemKind::Constant
                     | ItemKind::Static
+                    | ItemKind::TypeAlias
             ) || row.item.is_discriminant_constant()
             {
                 continue;
@@ -1028,6 +1030,60 @@ impl PreparedSourceLocalPlan {
     }
     /// Field and parameter sites enter the same opaque local/import/module
     /// prefix and final current declaration/Type preparation service.
+    /// A retained declaration Type leaf enters the same header prefix as a
+    /// field/parameter. The parser receipt and HeaderItem supply its real
+    /// location, lexical scope, generics and token hygiene.
+    pub(crate) fn resolve_declaration_type_name(
+        self: &Arc<Self>, db: &mut Database,
+        declaration: crate::frontend::type_name_namespace::SourceTypeOwner<'_>,
+        candidate: &ast::NameRef,
+    ) -> QueryPoll<Option<SignatureName>> {
+        ready!(self.require_current(db));
+        let source = self.context.source();
+        let parsed = source.parsed();
+        let input = db.input(&InputKey::DefinitionSource(declaration.definition));
+        let context = db.input(&InputKey::DeclarationContext(declaration.definition));
+        let header = db.input(&InputKey::DefinitionHeader(declaration.definition));
+        let (Some(InputValue::DefinitionSource(parse)),Some(InputValue::DeclarationContext(context)),Some(InputValue::DefinitionHeader(header))) =
+            (input.as_deref(),context.as_deref(),header.as_deref()) else {
+                return QueryPoll::Ready(Err(error("declaration Type name inputs absent")));
+            };
+        if *parse != parsed.key() || context.scope != *declaration.scope || header != declaration.header {
+            return QueryPoll::Ready(Err(error("declaration Type name source/header differs")));
+        }
+        let Some(item) = self.field_types.items.get(&declaration.definition) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        if item.header_input != InputValue::DefinitionHeader(header.clone()).fingerprint()
+            || item.declaration != context.range {
+            return QueryPoll::Ready(Err(error("declaration Type name retained header differs")));
+        }
+        let proof = checked!(parsed.declaration_type_name(declaration.definition,header,context,candidate));
+        checked!(proof.require(parse,declaration.definition,header,context,candidate.text()));
+        let span = proof.range();
+        let (root, _) = self.entered.local_hygiene();
+        let field = HeaderField { parameter: None, range: span,
+            tokens: tokens(candidate.syntax(),None), shape: None,
+            name: Some(LocalTypeUse { name: candidate.text().to_owned(), range: span,
+                context: checked!(source.identifier_context_or_original(span,root)),
+                edition: checked!(parsed.token_edition(span)) }) };
+        let site = HeaderTypeSite { owner: self.field_types.owner, item, field: &field, leaf: None };
+        let prefix = ready!(self.prepare_header_prefix(db,site,
+            super::DeclarationTypeSite::Name { definition: declaration.definition, range: span }));
+        let name = prefix.use_name().expect("actual declaration prefix name");
+        let found = match prefix.selection() {
+            LocalTypePrefixSelection::Parameter(parameter) =>
+                return QueryPoll::Ready(Ok(Some(SignatureName::Parameter(*parameter)))),
+            LocalTypePrefixSelection::Lookup(found) => Some(found.clone()),
+            LocalTypePrefixSelection::ModuleTail | LocalTypePrefixSelection::NeedDefinitionModule(_) =>
+                ready!(prefix.module_name(db)).and_then(|observation| observation.lookup().cloned()),
+            LocalTypePrefixSelection::NeedImport(producer) | LocalTypePrefixSelection::NeedDeclarationOccurrence(producer) =>
+                Some(crate::frontend::names::NameLookup::NeedInput(*producer)),
+            _ => None,
+        };
+        QueryPoll::Ready(found.map(|found|
+            crate::frontend::signature_names::classify_completed_type_lookup(name.name(),name.edition(),found)).transpose())
+    }
     fn prepare_header_type(
         self: &Arc<Self>,
         db: &mut Database,
@@ -1061,6 +1117,17 @@ impl PreparedSourceLocalPlan {
                 crate::frontend::type_aliases::AliasTarget::Type(term),
             )));
         }
+        let prefix = ready!(self.prepare_header_prefix(db, header, identity));
+        if generic_base { prefix.prepare_named_base(db) } else { prefix.prepare_named(db) }
+    }
+    fn prepare_header_prefix(
+        self: &Arc<Self>, db: &mut Database, header: HeaderTypeSite<'_>,
+        identity: super::DeclarationTypeSite,
+    ) -> QueryPoll<LocalTypePrefix> {
+        ready!(self.require_current(db));
+        let Some(name) = header.leaf.or(header.field.name.as_ref()) else {
+            return QueryPoll::Ready(Err(error("header prefix actual name occurrence absent")));
+        };
         let site = crate::frontend::source_locals::OrdinaryNameSite {
             source: self.entered.parent.source(),
             body: self.context.source().index().body(),
@@ -1099,11 +1166,7 @@ impl PreparedSourceLocalPlan {
         };
         checked!(prefix.exclusive_metadata_bytes());
         prefix.fingerprint = StableEncode::fingerprint(&prefix);
-        if generic_base {
-            prefix.prepare_named_base(db)
-        } else {
-            prefix.prepare_named(db)
-        }
+        QueryPoll::Ready(Ok(prefix))
     }
 }
 

@@ -3031,3 +3031,61 @@ fn unchanged_lifetime_aliases_use_retained_target_ast_and_mixed_substitution_all
     }
     assert_eq!(worlds,12);
 }
+
+#[test]
+fn unchanged_body_and_module_aliases_share_actual_normalization_all_editions_and_origins() {
+    use crate::{core::digest::StableEncode,db::{dependency::{InputKey,InputValue},key::QueryKey,poll::QueryPoll,provider::SyntaxProvider,value::QueryValue},
+        frontend::{source_types::NamedTypePreparation,type_aliases::AliasTarget},source::manifest::{ItemKind,Namespace},
+        syntax::imports::ImportSegment,traits::term::{TyTerm,GenericArg}};
+    fn ready<T:std::fmt::Debug>(p:QueryPoll<T>)->T {match p{QueryPoll::Ready(Ok(v))=>v,other=>panic!("real alias source: {other:?}")}}
+    let root=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");let mut aliases=0;
+    for edition in [2015,2018,2021,2024] {
+        for (case,marker,local) in [
+            ("tests/ui/type-alias/static-method-type-alias-11047.rs","\npub mod foo",true),
+            ("tests/ui/structs-enums/struct-aliases.rs","\nuse std::mem",false),
+        ] {
+            let original=root.join(case);let text=std::fs::read_to_string(&original).unwrap();let at=text.find(marker).unwrap();let (prefix,items)=text.split_at(at);let mut paths=vec![original];
+            for wrapper in [false,true] {let setup=if wrapper{"macro_rules! outer {($($t:tt)*)=>{emit!{$($t)*}}}"}else{""};let invoke=if wrapper{"outer"}else{"emit"};paths.push(temporary_source(&format!("alias-normalize-{edition}-{wrapper}-{local}"),&format!("{prefix}\nmacro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} {setup} {invoke}!{{{items}}}")));}
+            for (origin,path) in paths.iter().enumerate() {
+                let (mut db,discovery,scope)=configured_impl_catalog_discovery(path,edition).unwrap();
+                discovery.publish(&mut db).unwrap();let seal=discovery.key().clone();
+                let headers=ready(db.fetch(&SyntaxProvider,QueryKey::PreparedScopeImplHeaders(seal))).value;
+                let QueryValue::PreparedScopeImplHeaders(headers)=headers.as_ref()else{panic!()};let environment=headers.inventory_root().environment().unwrap();let sources=environment.sources().iter().collect::<Vec<_>>();
+                let mut selected=Vec::new();
+                if local {
+                    let lookup=environment.names().lookup_source_path(Namespace::Value,&[ImportSegment::Name("main".into())],false,&scope,edition).unwrap();
+                    let crate::frontend::names::NameLookup::Defined(main)=lookup else {panic!("actual main source lookup absent")};
+                    let body=db.input(&InputKey::DefinitionBody(main.identity)).unwrap();let InputValue::DefinitionBody(body)=body.as_ref() else {panic!("actual main body absent")};
+                    let plan=ready(db.prepare_source_local_plan(&discovery,&sources,&body.key()));
+                    for row in &plan.context().facts().items {if row.item.def_key.item_kind==ItemKind::TypeAlias {selected.push((row.item.def_key.declared_name.clone(),row.item.def_key.fingerprint()));}}
+                } else {
+                    for name in ["S2","S4"] {let lookup=environment.names().lookup_source_path(Namespace::Type,&[ImportSegment::Name(name.into())],false,&scope,edition).unwrap();let crate::frontend::names::NameLookup::Defined(found)=lookup else{panic!("actual alias: {lookup:?}")};selected.push((name.into(),found.identity));}
+                }
+                let target_identity=|path:&[&str]| {
+                    let segments=path.iter().map(|name|ImportSegment::Name((*name).into())).collect::<Vec<_>>();
+                    let lookup=environment.names().lookup_source_path(Namespace::Type,&segments,false,&scope,edition).unwrap();
+                    let crate::frontend::names::NameLookup::Defined(found)=lookup else {panic!("actual target source lookup: {lookup:?}")};found.identity
+                };
+                let expected=if local {vec![target_identity(&["foo","bar","baz","Qux"]),target_identity(&["Vec"]),target_identity(&["String"])]}
+                    else {vec![target_identity(&["S"]),target_identity(&["S3"])]};
+                assert_eq!(selected.len(),2);db.trace.detailed=true;let start=db.trace.events.len();
+                for (name,identity) in &selected {
+                    assert!(matches!(db.input(&InputKey::DefinitionHeader(*identity)).as_deref(),Some(InputValue::DefinitionHeader(_))),"canonical alias publisher must supply the exact identity");
+                    let (result,explicit)=ready(crate::frontend::source_types::check_selected_alias_definition(&mut db,environment.names(),&sources,*identity));
+                    match (name.as_str(),result,explicit) {
+                        ("Ham",NamedTypePreparation::Alias(AliasTarget::Type(TyTerm::Nominal(target,args))),None)=>{assert_eq!(target,expected[0]);assert!(args.is_empty());},
+                        ("StringVec",NamedTypePreparation::Alias(AliasTarget::Type(TyTerm::Nominal(target,args))),None)=>{assert_eq!(target,expected[1]);assert_eq!(args,vec![GenericArg::Type(TyTerm::Nominal(expected[2],vec![]))]);},
+                        ("S2",NamedTypePreparation::Ready(source),None)=>assert_eq!(source.source(),&TyTerm::Nominal(expected[0],vec![])),
+                        ("S4",NamedTypePreparation::Alias(AliasTarget::Deferred{definition,..}),Some(TyTerm::Nominal(target,args)))=>{assert_eq!(definition,*identity);assert_eq!(target,expected[1]);assert_eq!(args,vec![GenericArg::Type(TyTerm::Primitive(crate::ir::op::PrimitiveType::U16)),GenericArg::Type(TyTerm::Primitive(crate::ir::op::PrimitiveType::Char))]);},
+                        (_,result,explicit)=>panic!("{case},edition{edition},origin{origin},{name}: {result:?};{explicit:?}"),
+                    }
+                    aliases+=1;
+                }
+                assert!(db.trace.events[start..].iter().all(|e|!matches!(e.key,QueryKey::BodyStructure(_)|QueryKey::FunctionSignature(_)|QueryKey::Thunk(_)|QueryKey::PatternPlan(_))));
+                let saved=selected[0].1;db.publish_inputs(std::collections::BTreeMap::new()).unwrap();assert!(matches!(crate::frontend::source_types::check_selected_alias_definition(&mut db,environment.names(),&sources,saved),QueryPoll::Ready(Err(_))),"revoked real source must not normalize from retained metadata alone");
+                eprintln!("actual alias targets {case},edition{edition},origin{origin}:2; no additional body preparation/guest execution");
+            }
+        }
+    }
+    assert_eq!(aliases,48);
+}

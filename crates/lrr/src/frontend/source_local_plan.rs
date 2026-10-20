@@ -82,6 +82,7 @@ pub(crate) struct LocalTypePrefix {
 }
 #[derive(Clone)]
 enum DeclarationTypeSite {
+    Name { definition: Digest, range: crate::syntax::spans::SourceRange },
     Return {
         definition: Digest,
         range: crate::syntax::spans::SourceRange,
@@ -223,12 +224,13 @@ impl LocalTypePrefix {
     }
 }
 impl StableEncode for LocalTypePrefix {
-    const DOMAIN: &'static str = "lrr/v5/local-type-prefix-source-proof";
+    const DOMAIN: &'static str = "lrr/v6/local-type-prefix-source-proof";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.plan.source_identity());
         e.option(&self.node, |e, node| e.u32(node.0));
         e.option(&self.header, |e, site| {
             let (definition, span) = match site {
+                DeclarationTypeSite::Name { definition, range } => { e.u8(3); (definition, range) }
                 DeclarationTypeSite::Return { definition, range } => {
                     e.u8(2);
                     (definition, range)
@@ -1048,93 +1050,14 @@ impl LocalTypePrefix {
             type_declarations::BodyTypeOutcome::Pending(
                 type_declarations::BodyTypeDemand::AliasContext(identity),
             ) => {
-                // A body-local alias (`type N = i32;` in a block) is declared
-                // in a lexical scope the module alias service cannot read: it
-                // stays an explicit, named refusal until its target resolves
-                // through this body's own prefix.
-                if matches!(
-                    db.input(&crate::db::dependency::InputKey::DeclarationContext(identity))
-                        .as_deref(),
-                    Some(InputValue::DeclarationContext(context)) if context.scope.owner.is_some()
-                ) {
-                    // A non-generic alias whose written target is already a
-                    // closed symbolic term (a primitive) needs no lookup.
-                    let outcome = ready!(db.fetch(
-                        &crate::db::provider::SyntaxProvider,
-                        crate::db::key::QueryKey::TypeAlias(identity)
-                    ));
-                    if let crate::db::value::QueryValue::TypeAlias(alias) = outcome.value.as_ref()
-                        && alias.generics.is_empty()
-                    {
-                        if let Some(term) = &alias.symbolic {
-                            return QueryPoll::Ready(Ok(NamedTypeOutcome::Ready(NamedTypePreparation::Alias(
-                                crate::frontend::type_aliases::AliasTarget::Type(term.clone()),
-                            ))));
-                        }
-                        // A single builtin Type name (`type N = i32;`), when no
-                        // block item or import of this body can shadow it.
-                        if let [target] = alias.target.as_slice() {
-                            use crate::syntax::imports::{ImportKind, ImportSegment};
-                            let facts = plan.context().facts();
-                            let shadowed = facts
-                                .items
-                                .iter()
-                                .any(|row| row.item.def_key.declared_name == target.text)
-                                || facts.imports.iter().any(|row| match &row.source.kind {
-                                    ImportKind::Glob => true,
-                                    ImportKind::Named { alias: Some(name) } => *name == target.text,
-                                    ImportKind::Named { alias: None } => matches!(
-                                        row.source.path.last(),
-                                        Some(ImportSegment::Name(name)) if *name == target.text
-                                    ),
-                                    ImportKind::Anonymous => false,
-                                });
-                            if !shadowed {
-                                match crate::frontend::signature_names::classify_completed_type_lookup(
-                                    &target.text,
-                                    alias.header.profile.edition,
-                                    NameLookup::Absent,
-                                ) {
-                                    Ok(SignatureName::Primitive(primitive)) => {
-                                        return QueryPoll::Ready(Ok(NamedTypeOutcome::Ready(NamedTypePreparation::Alias(
-                                            crate::frontend::type_aliases::AliasTarget::Type(
-                                                crate::traits::term::TyTerm::Primitive(primitive),
-                                            ),
-                                        ))));
-                                    }
-                                    Ok(SignatureName::Str) => {
-                                        return QueryPoll::Ready(Ok(NamedTypeOutcome::Ready(NamedTypePreparation::Alias(
-                                            crate::frontend::type_aliases::AliasTarget::Str,
-                                        ))));
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
-                    return QueryPoll::Ready(Ok(NamedTypeOutcome::Pending {
-                        demand: type_declarations::BodyTypeDemand::AliasContext(identity),
-                        diagnostic: Diagnostic::new("LRR-E-TYPE-CONTEXT", format!(
-                            "Type requires actual source authority: AliasContext({identity:?}); a body-local alias awaits lexical alias normalization")),
-                    }));
-                }
                 let Some(environment) = plan.environment() else {
                     return QueryPoll::Ready(Err(error("alias Type environment absent")));
                 };
                 let completed = std::sync::Arc::clone(environment.macros().source_environment());
                 let views: Vec<&crate::source::changes::PreparedSourceView> =
                     completed.sources().iter().collect();
-                let selected = crate::frontend::names::NameDefinition {
-                    namespace: crate::source::manifest::Namespace::Type,
-                    identity,
-                    defining_unit: Default::default(),
-                    definition_edition: 0,
-                };
-                crate::frontend::source_types::prepare_selected(
-                    db,
-                    completed.names(),
-                    &views,
-                    SignatureName::Source(selected),
+                crate::frontend::source_types::prepare_selected_definition(
+                    db, completed.names(), &views, identity,
                 ).map(NamedTypeOutcome::Ready)
             }
             type_declarations::BodyTypeOutcome::Pending(demand) => QueryPoll::Ready(Ok(NamedTypeOutcome::Pending {

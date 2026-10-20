@@ -1,0 +1,12 @@
+{
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_body_and_module_aliases_share_actual_normalization_all_editions_and_origins",
+    "cli::preentry_loader_tests::unchanged_lifetime_aliases_use_retained_target_ast_and_mixed_substitution_all_editions_and_origins",
+    "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::type_argument_plan_keeps_real_unsupported_body_and_field_cold_and_resolves_caller_alias",
+    "frontend::source_locals::owned_plan::field_types::tests::field_recipe_substitution_and_revoked_owning_environment_are_refused",
+    "frontend::source_locals::owned_plan::field_types::tests::generated_and_wrapper_local_fields_join_the_same_declaration_prefix",
+    "frontend::source_locals::owned_plan::field_types::tests::unchanged_local_field_types_use_their_actual_header_scope_all_editions",
+    "frontend::source_locals::owned_plan::tests::unchanged_local_record_name_selects_its_actual_declared_type",
+    "frontend::source_locals::owned_plan::type_declarations::tests::unchanged_const_direct_type_joins_current_declaration_and_shared_nominal_kernel"
+  ]
+}

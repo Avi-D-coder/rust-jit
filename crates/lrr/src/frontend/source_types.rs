@@ -36,6 +36,7 @@ pub(crate) struct SourceType {
     source: TyTerm,
     key: TypeKey,
 }
+#[derive(Debug)]
 pub(crate) enum NamedTypePreparation {
     Ready(SourceType),
     Parameter(crate::traits::term::ParamKey),
@@ -1917,6 +1918,47 @@ fn impl_owned_name(
     let found = lookup(&segments, absolute)?;
     super::signature_names::classify_completed_type_lookup(&last, edition, found)
 }
+/// Shared immutable source join for every demanded alias target. The syntax
+/// handle belongs to the retained parser; no display text is reparsed.
+pub(super) struct RetainedAliasType {
+    declaration: std::sync::Arc<QueryValue>,
+    pub(super) syntax: ra_ap_syntax::ast::TypeAlias,
+}
+impl RetainedAliasType {
+    pub(super) fn declaration(&self) -> &super::declaration_generics::DeclarationGenerics {
+        let QueryValue::DeclarationGenerics(declaration) = self.declaration.as_ref() else {
+            unreachable!("checked retained alias declaration")
+        };
+        declaration
+    }
+}
+pub(super) fn retain_alias_type(
+    db: &mut Database, definition: crate::core::digest::Digest,
+    alias: &crate::syntax::type_aliases::TypeAliasRecipe,
+) -> QueryPoll<Option<RetainedAliasType>> {
+    use ra_ap_syntax::{AstNode, ast};
+    let declaration = match db.fetch(&SyntaxProvider, QueryKey::DeclarationGenerics(definition)) {
+        QueryPoll::Ready(Ok(value)) => value.value,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    };
+    let QueryValue::DeclarationGenerics(generics) = declaration.as_ref() else {
+        return QueryPoll::Ready(Err(fault("alias generic declaration query differs")));
+    };
+    let Some((_, header, context, parsed)) = generics.source_parts() else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    if alias.definition != definition || generics.definition() != definition
+        || header != &alias.header || context.scope != alias.scope || generics.parameters() != alias.generics {
+        return QueryPoll::Ready(Err(fault("alias target/generic source receipts differ")));
+    }
+    let syntax = match parsed.syntax_at(context.range, |n| ast::TypeAlias::can_cast(n.kind())) {
+        Ok(Some(node)) => ast::TypeAlias::cast(node).expect("checked retained alias"),
+        Ok(None) => return QueryPoll::Ready(Err(fault("actual alias target is absent"))),
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    QueryPoll::Ready(Ok(Some(RetainedAliasType { declaration, syntax })))
+}
 /// A type alias whose target is a written compound type (`type Foo =
 /// GenericFoo<u32>`, `type Pair<T> = (T, T)`): the target resolved by the same
 /// written-Type walk in the alias's own declaration context, its Type
@@ -1938,31 +1980,36 @@ pub(super) fn deferred_alias_type(
         return QueryPoll::Ready(Err(fault("alias query result mismatch")));
     };
     if alias.scope.owner.is_some() {
-        return QueryPoll::Ready(Ok(None));
+        let cold = match super::source_locals::cold_declarations::declaration(db, definition) {
+            QueryPoll::Ready(Ok(cold)) => cold, QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        if let Some(cold) = cold {
+            if cold.definition.item_kind != ItemKind::TypeAlias || cold.scope != alias.scope || cold.header != alias.header {
+                return QueryPoll::Ready(Err(fault("local alias cold source receipt differs")));
+            }
+        } else {
+            let owner = match local_type_owner(db, definition) {
+                QueryPoll::Ready(Ok(owner)) => owner, QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            if owner.is_none_or(|owner| owner.definition.item_kind != ItemKind::TypeAlias) {
+                return QueryPoll::Ready(Ok(None));
+            }
+        }
     }
     // Join the actual retained alias declaration, not a synthetic function or
     // reparsed display tokens. Both source queries must describe this snapshot.
-    use ra_ap_syntax::{AstNode, ast::{self, HasGenericParams}};
+    use ra_ap_syntax::{AstNode, ast::HasGenericParams};
     use crate::traits::term::{GenericArg, ParamKey, RegionTerm};
-    let declaration = match db.fetch(&SyntaxProvider, QueryKey::DeclarationGenerics(definition)) {
-        QueryPoll::Ready(Ok(value)) => value.value,
+    let retained = match retain_alias_type(db, definition, alias) {
+        QueryPoll::Ready(Ok(Some(retained))) => retained,
+        QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
         QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
     };
-    let QueryValue::DeclarationGenerics(generics) = declaration.as_ref() else {
-        return QueryPoll::Ready(Err(fault("alias generic declaration query differs")));
-    };
-    let Some((_, header, context, parsed)) = generics.source_parts() else {
-        return QueryPoll::Ready(Ok(None));
-    };
-    if header != &alias.header || context.scope != alias.scope || generics.parameters() != alias.generics {
-        return QueryPoll::Ready(Err(fault("alias target/generic source receipts differ")));
-    }
-    let item = match parsed.syntax_at(context.range, |n| ast::TypeAlias::can_cast(n.kind())) {
-        Ok(Some(node)) => ast::TypeAlias::cast(node).expect("checked retained alias"),
-        Ok(None) => return QueryPoll::Ready(Err(fault("actual alias target is absent"))),
-        Err(error) => return QueryPoll::Ready(Err(error)),
-    };
+    let (_,header,context,_) = retained.declaration().source_parts().expect("checked retained alias context");
+    let item = &retained.syntax;
     let Some(target) = item.ty() else { return QueryPoll::Ready(Ok(None)); };
     let owner = WrittenTypeDeclaration::declaration(super::type_name_namespace::SourceTypeOwner {
         definition, scope: &context.scope, header,
@@ -2005,32 +2052,17 @@ pub(super) fn deferred_alias_type(
     if supplied.next().is_some() { return QueryPoll::Ready(Ok(None)); }
     QueryPoll::Ready(substitution.apply(&term).map(Some))
 }
-/// Resolve the selected result of the owning source Type lookup above. This
-/// internal helper cannot serve as an alternate public namespace admission.
-pub(super) fn prepare_selected(
-    db: &mut Database,
-    graph: &NameNamespaces,
-    sources: &[&PreparedSourceView],
-    selected: SignatureName,
+/// Caller already holds ordinary source-name selection. This supplies no
+/// namespace grant from a descriptor or arbitrary spelling.
+pub(super) fn prepare_selected_definition(
+    db: &mut Database, graph: &NameNamespaces, sources: &[&PreparedSourceView],
+    identity: crate::core::digest::Digest,
 ) -> QueryPoll<NamedTypePreparation> {
-    let proof = match selected {
-        SignatureName::Primitive(p) => match SourceType::selected_primitive(p) {
-            Ok(proof) => proof,
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        },
-        SignatureName::Str => match SourceType::selected_str() {
-            Ok(proof) => proof,
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        },
-        SignatureName::Parameter(key) => {
-            return QueryPoll::Ready(Ok(NamedTypePreparation::Parameter(key)));
-        }
-        SignatureName::Source(selected) => {
             let normalizer = match AliasNormalizer::new(graph, sources) {
                 Ok(normalizer) => normalizer,
                 Err(error) => return QueryPoll::Ready(Err(error)),
             };
-            let target = match normalizer.normalize(db, selected.identity) {
+            let target = match normalizer.normalize(db, identity) {
                 QueryPoll::Ready(Ok(target)) => target,
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
@@ -2063,6 +2095,30 @@ pub(super) fn prepare_selected(
                 Err(error) => return QueryPoll::Ready(Err(error)),
             };
             return prepare_nominal(db, identity, definition);
+}
+
+/// Resolve the selected result of the owning source Type lookup above. This
+/// internal helper cannot serve as an alternate public namespace admission.
+pub(super) fn prepare_selected(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    selected: SignatureName,
+) -> QueryPoll<NamedTypePreparation> {
+    let proof = match selected {
+        SignatureName::Primitive(p) => match SourceType::selected_primitive(p) {
+            Ok(proof) => proof,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        },
+        SignatureName::Str => match SourceType::selected_str() {
+            Ok(proof) => proof,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        },
+        SignatureName::Parameter(key) => {
+            return QueryPoll::Ready(Ok(NamedTypePreparation::Parameter(key)));
+        }
+        SignatureName::Source(selected) => {
+            return prepare_selected_definition(db, graph, sources, selected.identity);
         }
         other => return QueryPoll::Ready(Ok(NamedTypePreparation::Name(other))),
     };
@@ -2192,23 +2248,23 @@ pub(super) fn nominal_definition(
         .ok_or_else(|| fault("selected generated nominal identity absent"))
 }
 
-/// Canonical local declaration ownership after a source consumer selected the
-/// nominal identity. This does not perform a name lookup or derive authority
+/// Canonical local declaration ownership after a source consumer selected its
+/// identity. This does not perform a name lookup or derive authority
 /// from a guest descriptor: the exact current owning plan must contain the row.
-pub(super) struct LocalNominalOwner {
+pub(super) struct LocalDeclarationOwner {
     pub(super) definition: DefKey,
     pub(super) plan: std::sync::Arc<super::source_locals::PreparedSourceLocalPlan>,
     pub(super) edition: u16,
 }
-pub(super) fn local_nominal_owner(
+pub(super) fn local_declaration_owner(
     db: &mut Database,
     identity: crate::core::digest::Digest,
-) -> QueryPoll<Option<LocalNominalOwner>> {
+) -> QueryPoll<Option<LocalDeclarationOwner>> {
     let Some(context) = db.input(&InputKey::DeclarationContext(identity)) else {
         return QueryPoll::Ready(Ok(None));
     };
     let InputValue::DeclarationContext(context) = context.as_ref() else {
-        return QueryPoll::Ready(Err(fault("local nominal context variant differs")));
+        return QueryPoll::Ready(Err(fault("local Type declaration context variant differs")));
     };
     if context.scope.owner.is_none() {
         return QueryPoll::Ready(Ok(None));
@@ -2216,19 +2272,19 @@ pub(super) fn local_nominal_owner(
     // A scope owner is a lexical rib, not a definition. Only the admitted
     // declaration publication supplies its actual owning executable body.
     let Some(owner) = db.input(&InputKey::LocalDeclarationOwner(identity)) else {
-        return QueryPoll::Ready(Err(fault("local nominal owning declaration is absent")));
+        return QueryPoll::Ready(Err(fault("local Type declaration owning declaration is absent")));
     };
     let InputValue::LocalDeclarationOwner(owner) = owner.as_ref() else {
-        return QueryPoll::Ready(Err(fault("local nominal owner variant differs")));
+        return QueryPoll::Ready(Err(fault("local Type declaration owner variant differs")));
     };
     let Some(body) = db.input(&InputKey::DefinitionBody(owner.definition)) else {
-        return QueryPoll::Ready(Err(fault("local nominal owning body is absent")));
+        return QueryPoll::Ready(Err(fault("local Type declaration owning body is absent")));
     };
     let InputValue::DefinitionBody(body) = body.as_ref() else {
-        return QueryPoll::Ready(Err(fault("local nominal owning body variant differs")));
+        return QueryPoll::Ready(Err(fault("local Type declaration owning body variant differs")));
     };
     if body.key() != *owner {
-        return QueryPoll::Ready(Err(fault("local nominal owning body changed")));
+        return QueryPoll::Ready(Err(fault("local Type declaration owning body changed")));
     }
     let result = match db.fetch(&SyntaxProvider, QueryKey::SourceLocalPlan(body.key())) {
         QueryPoll::Ready(Ok(value)) => value,
@@ -2236,10 +2292,10 @@ pub(super) fn local_nominal_owner(
         QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
     };
     let QueryValue::SourceLocalPlan(plan) = result.value.as_ref() else {
-        return QueryPoll::Ready(Err(fault("local nominal owning plan variant differs")));
+        return QueryPoll::Ready(Err(fault("local Type declaration owning plan variant differs")));
     };
     if plan.environment().is_none() || plan.context().source().index().body() != &body.key() {
-        return QueryPoll::Ready(Err(fault("local nominal owning environment differs")));
+        return QueryPoll::Ready(Err(fault("local Type declaration owning environment differs")));
     }
     match plan.require_current(db) {
         QueryPoll::Ready(Ok(())) => {}
@@ -2253,7 +2309,7 @@ pub(super) fn local_nominal_owner(
         .iter()
         .filter(|row| row.item.def_key.fingerprint() == identity);
     let Some(row) = rows.next() else {
-        return QueryPoll::Ready(Err(fault("local nominal canonical declaration is absent")));
+        return QueryPoll::Ready(Err(fault("local Type declaration canonical declaration is absent")));
     };
     if rows.next().is_some()
         || row.item.scope != context.scope
@@ -2263,7 +2319,11 @@ pub(super) fn local_nominal_owner(
         || !matches!(db.input(&InputKey::DefinitionSource(identity)).as_deref(),
             Some(InputValue::DefinitionSource(parse)) if *parse == plan.context().source().parsed().key())
     {
-        return QueryPoll::Ready(Err(fault("local nominal canonical source rows differ")));
+        return QueryPoll::Ready(Err(fault("local Type declaration canonical source rows differ")));
+    }
+    if !matches!(row.item.def_key.item_kind, ItemKind::Struct | ItemKind::Enum | ItemKind::Union
+        | ItemKind::TypeAlias | ItemKind::Function | ItemKind::Constant | ItemKind::Static | ItemKind::Trait) {
+        return QueryPoll::Ready(Ok(None));
     }
     // Read the actual selected declaration name, including its owning token
     // edition. Header profile alone cannot replace a generated token edition.
@@ -2275,32 +2335,52 @@ pub(super) fn local_nominal_owner(
     let name = (|| -> Result<_, Diagnostic> {
         let selected = parsed
             .syntax_at(context.range, |node| {
-                ast::Struct::can_cast(node.kind()) || ast::Enum::can_cast(node.kind())
+                ast::Item::can_cast(node.kind())
             })?
             .and_then(ast::Item::cast);
         let name = match selected {
             Some(ast::Item::Struct(item)) => item.name(),
             Some(ast::Item::Enum(item)) => item.name(),
+            Some(ast::Item::Union(item)) => item.name(),
+            Some(ast::Item::TypeAlias(item)) => item.name(),
+            Some(ast::Item::Fn(item)) => item.name(),
+            Some(ast::Item::Const(item)) => item.name(),
+            Some(ast::Item::Static(item)) => item.name(),
+            Some(ast::Item::Trait(item)) => item.name(),
             _ => None,
         }
-        .ok_or_else(|| fault("local nominal actual name is absent"))?;
+        .ok_or_else(|| fault("local Type declaration actual name is absent"))?;
         let range = crate::syntax::ast_adapter::range(name.syntax().text_range());
         let edition = parsed.token_edition(range)?;
         if super::names::owned_name(name.text(), edition)?.as_str()
             != row.item.def_key.declared_name
         {
-            return Err(fault("local nominal actual name differs"));
+            return Err(fault("local Type declaration actual name differs"));
         }
         Ok(edition)
     })();
     match name {
-        Ok(edition) => QueryPoll::Ready(Ok(Some(LocalNominalOwner {
+        Ok(edition) => QueryPoll::Ready(Ok(Some(LocalDeclarationOwner {
             definition: row.item.def_key.clone(),
             plan: std::sync::Arc::clone(plan),
             edition,
         }))),
         Err(error) => QueryPoll::Ready(Err(error)),
     }
+}
+
+/// Only a real Type declaration may supply alias/nominal preparation.
+pub(super) fn local_type_owner(db: &mut Database, identity: crate::core::digest::Digest)
+    -> QueryPoll<Option<LocalDeclarationOwner>> {
+    local_declaration_owner(db, identity).map(|owner| owner.filter(|owner|
+        matches!(owner.definition.item_kind, ItemKind::Struct | ItemKind::Enum | ItemKind::Union | ItemKind::TypeAlias)))
+}
+
+/// Keep the existing nominal consumers restricted to their admitted kinds.
+pub(super) fn local_nominal_owner(db: &mut Database, identity: crate::core::digest::Digest)
+    -> QueryPoll<Option<LocalDeclarationOwner>> {
+    local_type_owner(db, identity).map(|owner| owner.filter(|owner|
+        matches!(owner.definition.item_kind, ItemKind::Struct | ItemKind::Enum)))
 }
 
 /// Supplemental retained-source alias control; never a source authority bypass.
@@ -2314,4 +2394,21 @@ pub(crate) fn check_retained_alias_arguments(db: &mut Database, graph: &NameName
         }
     };
     Ok((get(db,&[crate::traits::term::GenericArg::Region(crate::traits::term::RegionTerm::Static)])?,get(db,&[])?))
+}
+
+#[cfg(test)]
+pub(crate) fn check_selected_alias_definition(db: &mut Database, graph: &NameNamespaces,
+    sources: &[&PreparedSourceView], identity: crate::core::digest::Digest,
+) -> QueryPoll<(NamedTypePreparation,Option<TyTerm>)> {
+    let selected = match prepare_selected_definition(db,graph,sources,identity) {
+        QueryPoll::Ready(Ok(value)) => value, QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    };
+    let explicit = if matches!(selected,NamedTypePreparation::Alias(AliasTarget::Deferred{..})) {
+        match deferred_alias_type(db,graph,sources,identity,&[crate::traits::term::GenericArg::Type(TyTerm::Primitive(crate::ir::op::PrimitiveType::U16))]) {
+            QueryPoll::Ready(Ok(value)) => value, QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        }
+    } else {None};
+    QueryPoll::Ready(Ok((selected,explicit)))
 }

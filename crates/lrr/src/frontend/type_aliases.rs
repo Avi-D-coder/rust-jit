@@ -2,7 +2,7 @@
 use super::{
     names::{NameLookup, NameNamespaces},
     signature_names::SignatureName,
-    type_name_namespace::{SourceTypeOwner, lookup_declaration_name, resolve_declaration_name},
+    type_name_namespace::{SourceTypeOwner, lookup_declaration_name, resolve_declaration_name_at},
 };
 use crate::{
     core::{
@@ -42,6 +42,7 @@ pub enum AliasTarget {
 }
 struct AliasDeclaration {
     local_lookup: Option<NameLookup>,
+    local_plan: Option<std::sync::Arc<super::source_locals::PreparedSourceLocalPlan>>,
     definition: DefKey,
     scope: ScopeKey,
     header: HeaderRecipe,
@@ -75,7 +76,7 @@ impl<'a> AliasNormalizer<'a> {
                 )));
             }
             return QueryPoll::Ready(Ok(AliasDeclaration {
-                local_lookup: None,
+                local_lookup: None, local_plan: None,
                 definition: item.def_key.clone(),
                 scope: item.scope.clone(),
                 header: item.header.clone(),
@@ -84,11 +85,31 @@ impl<'a> AliasNormalizer<'a> {
         match super::source_locals::cold_declarations::declaration(db, identity) {
             QueryPoll::Ready(Ok(Some(local))) => return QueryPoll::Ready(Ok(AliasDeclaration {
                 definition: local.definition, scope: local.scope, header: local.header,
-                local_lookup: Some(local.lookup),
+                local_lookup: Some(local.lookup), local_plan: None,
             })),
             QueryPoll::Ready(Ok(None)) => {},
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        }
+        // Entered body declarations share the same checked source/owner kernel
+        // as nominal consumers. A lexical owner number alone is not a receipt.
+        if db.input(&InputKey::LocalDeclarationOwner(identity)).is_some() {
+            let local = match super::source_types::local_type_owner(db, identity) {
+                QueryPoll::Ready(Ok(local)) => local, QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            if let Some(local) = local {
+                let header = db.input(&InputKey::DefinitionHeader(identity));
+                let context = db.input(&InputKey::DeclarationContext(identity));
+                let (Some(header),Some(context)) = (header,context) else { return QueryPoll::Ready(Err(fault("local alias declaration inputs absent"))); };
+                let (InputValue::DefinitionHeader(header),InputValue::DeclarationContext(context)) = (header.as_ref(),context.as_ref()) else { return QueryPoll::Ready(Err(fault("local alias declaration variants differ"))); };
+                let lookup = NameLookup::Defined(super::names::NameDefinition {
+                    namespace: local.definition.namespace, identity, defining_unit: local.definition.crate_key,
+                    definition_edition: local.edition,
+                });
+                return QueryPoll::Ready(Ok(AliasDeclaration { local_lookup: Some(lookup), local_plan: Some(local.plan),
+                    definition: local.definition, scope: context.scope.clone(), header: header.clone() }));
+            }
         }
         let Some(source) = db.input(&InputKey::DefinitionSource(identity)) else {
             return QueryPoll::Ready(Err(fault(
@@ -142,7 +163,7 @@ impl<'a> AliasNormalizer<'a> {
             return QueryPoll::Ready(Err(fault("generated alias declaration context differs")));
         }
         QueryPoll::Ready(Ok(AliasDeclaration {
-            local_lookup: None,
+            local_lookup: None, local_plan: None,
             definition: definition.clone(),
             scope: context.scope.clone(),
             header: header.clone(),
@@ -223,6 +244,13 @@ impl<'a> AliasNormalizer<'a> {
             if item.scope.owner.is_some() && item.local_lookup.is_none() {
                 return QueryPoll::Ready(Ok(AliasTarget::NeedOwnerContext(item.scope.clone())));
             }
+            let has_local_receipt = item.local_lookup.is_some();
+            if let Some(trace) = trace.as_deref_mut() && let Some(plan) = &item.local_plan {
+                if let Err(error) = trace.input(db, InputKey::LocalDeclarationOwner(definition)) { return QueryPoll::Ready(Err(error)); }
+                let key = QueryKey::SourceLocalPlan(plan.context().source().index().body().clone());
+                let Some(memo) = db.memo(&key) else { return QueryPoll::Ready(Err(fault("local alias owner memo absent"))); };
+                if let Err(error) = trace.push(DependencyStamp::Query { key, fingerprint: memo.fingerprint }) { return QueryPoll::Ready(Err(error)); }
+            }
             let selected = if let Some(lookup) = item.local_lookup { lookup } else { match lookup_declaration_name(
                 db,
                 SourceTypeOwner {
@@ -292,7 +320,7 @@ impl<'a> AliasNormalizer<'a> {
             if alias.scope != item.scope || alias.header != item.header {
                 return QueryPoll::Ready(Err(fault("alias recipe/source context mismatch")));
             }
-            if alias.scope.owner.is_some() {
+            if alias.scope.owner.is_some() && !has_local_receipt {
                 return QueryPoll::Ready(Ok(AliasTarget::NeedOwnerContext(alias.scope.clone())));
             }
             if !alias.generics.is_empty() {
@@ -310,16 +338,22 @@ impl<'a> AliasNormalizer<'a> {
                     target: alias.target.clone(),
                 }));
             }
-            let resolved = match resolve_declaration_name(
-                db,
-                SourceTypeOwner {
-                    definition,
-                    scope: &alias.scope,
-                    header: &alias.header,
-                },
-                &alias.generics,
-                self.sources,
-                &alias.target[0].text,
+            let retained = match super::source_types::retain_alias_type(db, definition, alias) {
+                QueryPoll::Ready(Ok(Some(retained))) => retained,
+                QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(AliasTarget::Deferred { definition, target: alias.target.clone() })),
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+            let Some(ra_ap_syntax::ast::Type::PathType(target)) = retained.syntax.ty() else {
+                return QueryPoll::Ready(Ok(AliasTarget::Deferred { definition, target: alias.target.clone() }));
+            };
+            let Some(name) = target.path().filter(|path| path.qualifier().is_none())
+                .and_then(|path| path.segment()).and_then(|segment| segment.name_ref()) else {
+                return QueryPoll::Ready(Ok(AliasTarget::Deferred { definition, target: alias.target.clone() }));
+            };
+            let resolved = match resolve_declaration_name_at(
+                db, SourceTypeOwner { definition, scope: &alias.scope, header: &alias.header },
+                &alias.generics, self.sources, &name,
             ) {
                 QueryPoll::Ready(Ok(value)) => value,
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),

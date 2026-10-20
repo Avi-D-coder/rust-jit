@@ -161,14 +161,22 @@ pub(crate) fn resolve_declaration_name_at(
         declaration.header.profile.edition, generics, name.text()) {
         Ok(Some(local @ super::signature_names::SignatureName::NeedOwnerContext(_)))
             if declaration.scope.owner.is_some() && name.text() != "Self" => {
-            return match super::source_locals::cold_declarations::lookup(db, declaration, name) {
-                QueryPoll::Ready(Ok(Some(found))) => QueryPoll::Ready(
+            match super::source_locals::cold_declarations::lookup(db, declaration, name) {
+                QueryPoll::Ready(Ok(Some(found))) => return QueryPoll::Ready(
                     super::signature_names::classify_completed_type_lookup(name.text(),
                         declaration.header.profile.edition, found)),
-                QueryPoll::Ready(Ok(None)) => QueryPoll::Ready(Ok(local)),
-                QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                QueryPoll::Ready(Ok(None)) => {},
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+            let owner = match super::source_types::local_declaration_owner(db,declaration.definition) {
+                QueryPoll::Ready(Ok(Some(owner))) => owner,
+                QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(local)),
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             };
+            return owner.plan.resolve_declaration_type_name(db,declaration,name)
+                .map(|resolved| resolved.unwrap_or(local));
         }
         Ok(Some(local)) => return QueryPoll::Ready(Ok(local)),
         Ok(None) => {},
