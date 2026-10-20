@@ -614,10 +614,9 @@ fn main() {
     );
 }
 
-/// A transmute outside the byte-image model names the type pair; a size mismatch
-/// is refused; `zeroed` of a nominal type is refused, never guessed.
+/// A transmute size mismatch names the actual source and destination layouts.
 #[test]
-fn unsupported_transmute_and_zeroed_forms_name_their_types() {
+fn transmute_size_mismatch_names_its_types() {
     use super::format_trait_facade_tests::run;
     let refused = |source: &str, expected: &str| {
         for edition in [2021, 2024] {
@@ -632,15 +631,47 @@ fn unsupported_transmute_and_zeroed_forms_name_their_types() {
         }
     };
     refused(
-        "struct A(u32);\nstruct B(u32);\nfn main() { let b: B = unsafe { std::mem::transmute(A(7)) }; println!(\"{}\", b.0); }\n",
-        "mem::transmute::<A, B>",
-    );
-    refused(
         "fn main() { let w: u64 = unsafe { std::mem::transmute::<u32, u64>(1u32) }; println!(\"{}\", w); }\n",
         "different sizes: u32 is 4 bytes, u64 is 8 bytes",
     );
-    refused(
-        "struct A(u32);\nfn main() { let a: A = unsafe { std::mem::zeroed() }; println!(\"{}\", a.0); }\n",
-        "mem::zeroed::<A>",
-    );
+}
+
+#[test]
+fn upstream_nominal_transmute_uses_ordinary_const_vm_all_origins() {
+    use crate::cli::StandaloneOutcome;
+    use super::format_trait_facade_tests::run;
+    let original = include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/consts/transmute-const.rs");
+    let emitted = format!("macro_rules! emit {{ ($($t:tt)*) => {{$($t)*}} }} emit!{{{original}}}");
+    let wrapped = format!("macro_rules! emit {{ ($($t:tt)*) => {{$($t)*}} }} macro_rules! wrap {{ ($($t:tt)*) => {{emit!{{$($t)*}}}} }} wrap!{{{original}}}");
+    let nested = original.replace("assert_eq!(TRANSMUTED_U32, 3);", "assert_eq!(unsafe { mem::transmute::<Foo, u32>(Foo(3)) }, TRANSMUTED_U32);");
+    assert_ne!(nested, original);
+    for edition in [2015, 2018, 2021, 2024] {
+        for (origin, text) in [original, &emitted, &wrapped, &nested].into_iter().enumerate() {
+            let report = match run("upstream-nominal-image", text, edition) {
+                Ok(StandaloneOutcome::Completed(report)) => report,
+                Err(error) => panic!("edition={edition} origin={origin}: {error:?}"),
+                Ok(_) => panic!("edition={edition} origin={origin}: not completed"),
+            };
+            assert!(report.output.is_empty());
+            assert!(report.opcode_counters.started_by_opcode[22] > 0);
+            assert_eq!(report.opcode_counters.started_by_opcode[22], report.opcode_counters.started_by_opcode[19]);
+            eprintln!("nominal image edition={edition} origin={origin}: ordinary const VM and calls, empty streams");
+        }
+    }
+}
+
+#[test]
+fn transmute_consumes_source_without_drop_and_owns_destination_drop() {
+    prints("nominal-image-ownership", r#"
+struct Source(u32);
+impl Drop for Source { fn drop(&mut self) { println!("SOURCE-DROP"); } }
+struct Destination(u32);
+impl Drop for Destination { fn drop(&mut self) { println!("destination {}", self.0); } }
+fn make() -> Source { println!("make"); Source(7) }
+fn main() {
+    let value: Destination = unsafe { std::mem::transmute(make()) };
+    println!("value {}", value.0);
+    { let zero: Destination = unsafe { std::mem::zeroed() }; assert_eq!(zero.0, 0); }
+}
+"#, "make\nvalue 7\ndestination 0\ndestination 7\n");
 }

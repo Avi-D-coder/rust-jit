@@ -528,11 +528,11 @@ impl GuestStore {
 // ---- Plain data: `mem::zeroed` and `mem::transmute` ---------------------------
 //
 // The managed runtime has no byte-addressable memory. A *plain* type - a
-// scalar, a raw pointer, or an array or tuple of plain types - has a byte
+// scalar, a raw pointer, or an array, tuple or nominal struct of plain types - has a byte
 // image under its layout, so a value converts to bytes and back without
 // naming a host representation. `zeroed` builds the all-zero image;
 // `transmute` is image-to-image between plain types of equal size. Everything
-// else (references, `Box`, nominal types, closures) has provenance or
+// else (references, `Box`, enums/unions, closures) has provenance or
 // ownership the byte image cannot carry and is refused with the type pair.
 
 fn plain_fault(message: String) -> Diagnostic {
@@ -619,6 +619,9 @@ impl GuestStore {
                 TypeKey::RawPtr { target, .. } => !self.unsized_pointee(*target),
                 TypeKey::Array { element, .. } => self.plain_type(*element),
                 TypeKey::Tuple(members) => members.iter().all(|member| self.plain_type(*member)),
+                TypeKey::Nominal { .. } => self.nominal_image_fields(ty)
+                    .ok().flatten().is_some_and(|(members, _)|
+                        members.iter().all(|member| self.plain_type(*member))),
                 _ => false,
             },
             Err(_) => false,
@@ -631,11 +634,33 @@ impl GuestStore {
         Ok(algorithm::univariant(&layouts, &Repr::default(), StructKind::Sized).offsets)
     }
 
-    fn put_bytes(image: &mut [u8], offset: u64, bytes: &[u8]) {
-        let start = offset as usize;
-        if let Some(window) = image.get_mut(start..start + bytes.len()) {
-            window.copy_from_slice(bytes);
+    /// Field contracts and placement from the same prepared declaration used
+    /// by size/alignment queries. This grants no source constructor or Copy fact.
+    fn nominal_image_fields(&self, ty: TypeId) -> Result<Option<(Vec<TypeId>, Vec<u64>)>, Diagnostic> {
+        let (declaration, instance) = self.declaration_of(ty)?;
+        if declaration.kind != NominalKind::Struct
+            || matches!(declaration.library.map(|library| library.shape),
+                Some(LibraryShape::Pointer { .. } | LibraryShape::Fixed { .. }))
+        {
+            return Ok(None);
         }
+        let instance = instance.ok_or_else(invalid)?;
+        let [members] = instance.as_slice() else { return Err(invalid()); };
+        let placement = algorithm::univariant(
+            &self.layouts_of(members)?, &declaration.repr, StructKind::Sized,
+        );
+        Ok(Some((members.clone(), placement.offsets)))
+    }
+
+    fn image_range(offset: u64, length: usize) -> Result<std::ops::Range<usize>, Diagnostic> {
+        let start = usize::try_from(offset).map_err(|_| invalid())?;
+        let end = start.checked_add(length).ok_or_else(invalid)?;
+        Ok(start..end)
+    }
+    fn put_bytes(image: &mut [u8], offset: u64, bytes: &[u8]) -> Result<(), Diagnostic> {
+        let range = Self::image_range(offset, bytes.len())?;
+        image.get_mut(range).ok_or_else(invalid)?.copy_from_slice(bytes);
+        Ok(())
     }
 
     /// Write the byte image of `value` (of plain type `ty`) at `offset`.
@@ -646,6 +671,8 @@ impl GuestStore {
         offset: u64,
         image: &mut [u8],
     ) -> Result<(), Diagnostic> {
+        let length = usize::try_from(self.layout_of(ty)?.size).map_err(|_| invalid())?;
+        image.get(Self::image_range(offset, length)?).ok_or_else(invalid)?;
         let value = if matches!(value.kind, 11 | 12) {
             self.bound_literal(value)?
         } else {
@@ -653,9 +680,9 @@ impl GuestStore {
         };
         match value.kind {
             1 => {}
-            2 => Self::put_bytes(image, offset, &[value.payload as u8]),
-            3 => Self::put_bytes(image, offset, &(value.payload as u32).to_le_bytes()),
-            17 => Self::put_bytes(image, offset, &self.wide_integer_bits(value)?.to_le_bytes()),
+            2 => Self::put_bytes(image, offset, &[value.payload as u8])?,
+            3 => Self::put_bytes(image, offset, &(value.payload as u32).to_le_bytes())?,
+            17 => Self::put_bytes(image, offset, &self.wide_integer_bits(value)?.to_le_bytes())?,
             4 | 5 => {
                 let Ok(Primitive::Signed(width) | Primitive::Unsigned(width)) =
                     primitive(TypeId(value.type_id))
@@ -663,13 +690,13 @@ impl GuestStore {
                     return Err(invalid());
                 };
                 let bytes = value.payload.to_le_bytes();
-                Self::put_bytes(image, offset, &bytes[..usize::from(width) / 8]);
+                Self::put_bytes(image, offset, &bytes[..usize::from(width) / 8])?;
             }
-            6 => Self::put_bytes(image, offset, &(value.payload as u32).to_le_bytes()),
-            7 => Self::put_bytes(image, offset, &value.payload.to_le_bytes()),
+            6 => Self::put_bytes(image, offset, &(value.payload as u32).to_le_bytes())?,
+            7 => Self::put_bytes(image, offset, &value.payload.to_le_bytes())?,
             9 => {
                 let address = self.pointer_address(value)?;
-                Self::put_bytes(image, offset, &address.to_le_bytes());
+                Self::put_bytes(image, offset, &address.to_le_bytes())?;
             }
             8 => {
                 let key = Arc::clone(&self.types.descriptor(ty)?.key);
@@ -692,6 +719,17 @@ impl GuestStore {
                             self.write_plain_image(held, *member, offset + at, image)?;
                         }
                     }
+                    TypeKey::Nominal { .. } => {
+                        let (members, offsets) = self.nominal_image_fields(ty)?.ok_or_else(invalid)?;
+                        let ObjectStorage::Aggregate(storage) = &self.objects.get(ObjectId::from_bits(value.payload))?.storage else { return Err(invalid()); };
+                        if storage.variant != Some(0) || fields.len() != members.len() {
+                            return Err(invalid());
+                        }
+                        for ((field, member), at) in fields.iter().zip(members).zip(offsets) {
+                            let held = self.live_value(*field)?;
+                            self.write_plain_image(held, member, offset + at, image)?;
+                        }
+                    }
                     _ => return Err(invalid()),
                 }
             }
@@ -707,13 +745,13 @@ impl GuestStore {
         offset: u64,
         image: &[u8],
     ) -> Result<TicketId, Diagnostic> {
-        let take = |count: usize| -> [u8; 8] {
+        let length = usize::try_from(self.layout_of(ty)?.size).map_err(|_| invalid())?;
+        image.get(Self::image_range(offset, length)?).ok_or_else(invalid)?;
+        let take = |count: usize| -> Result<[u8; 8], Diagnostic> {
             let mut bytes = [0u8; 8];
-            let start = offset as usize;
-            if let Some(window) = image.get(start..start + count) {
-                bytes[..count].copy_from_slice(window);
-            }
-            bytes
+            let source = image.get(Self::image_range(offset, count)?).ok_or_else(invalid)?;
+            bytes.get_mut(..count).ok_or_else(invalid)?.copy_from_slice(source);
+            Ok(bytes)
         };
         if matches!(ty.0, 17 | 18) {
             let start = usize::try_from(offset).map_err(|_| invalid())?;
@@ -727,7 +765,7 @@ impl GuestStore {
             let value = match scalar {
                 Primitive::Unit => ValueRepr::unit(),
                 Primitive::Bool => {
-                    let byte = take(1)[0];
+                    let byte = take(1)?[0];
                     if byte > 1 {
                         return Err(plain_fault(format!(
                             "transmute produced the invalid bool value {byte}"
@@ -736,22 +774,22 @@ impl GuestStore {
                     ValueRepr::boolean(byte == 1)
                 }
                 Primitive::Char => {
-                    let code = u32::from_le_bytes(take(4)[..4].try_into().expect("four bytes"));
+                    let code = u32::from_le_bytes(take(4)?[..4].try_into().expect("four bytes"));
                     ValueRepr::character(char::from_u32(code).ok_or_else(|| {
                         plain_fault(format!("transmute produced the invalid char value {code:#x}"))
                     })?)
                 }
                 Primitive::F32 => ValueRepr::f32(f32::from_bits(u32::from_le_bytes(
-                    take(4)[..4].try_into().expect("four bytes"),
+                    take(4)?[..4].try_into().expect("four bytes"),
                 ))),
-                Primitive::F64 => ValueRepr::f64(f64::from_bits(u64::from_le_bytes(take(8)))),
+                Primitive::F64 => ValueRepr::f64(f64::from_bits(u64::from_le_bytes(take(8)?))),
                 Primitive::Unsigned(width) => {
                     let bytes = usize::from(width) / 8;
-                    ValueRepr::unsigned(ty, u64::from_le_bytes(take(bytes)))?
+                    ValueRepr::unsigned(ty, u64::from_le_bytes(take(bytes)?))?
                 }
                 Primitive::Signed(width) => {
                     let bytes = usize::from(width) / 8;
-                    let raw = u64::from_le_bytes(take(bytes));
+                    let raw = u64::from_le_bytes(take(bytes)?);
                     let shift = 64 - 8 * bytes as u32;
                     ValueRepr::signed(ty, ((raw << shift) as i64) >> shift)?
                 }
@@ -762,7 +800,7 @@ impl GuestStore {
         let key = Arc::clone(&self.types.descriptor(ty)?.key);
         match key.as_ref() {
             TypeKey::RawPtr { .. } => {
-                let address = u64::from_le_bytes(take(8));
+                let address = u64::from_le_bytes(take(8)?);
                 let integer = ValueRepr::unsigned(TypeId(13), address)?;
                 let pointer = self.pointer_cast(integer, ty)?;
                 self.ticket(pointer)
@@ -786,6 +824,16 @@ impl GuestStore {
                 }
                 self.commit_construction(guard, ty)
             }
+            TypeKey::Nominal { .. } => {
+                let (members, offsets) = self.nominal_image_fields(ty)?.ok_or_else(invalid)?;
+                let guard = self.begin_construction(&members)?;
+                self.constructions.get_mut(guard)?.nominal = Some((ty, 0));
+                for (index, (member, at)) in members.iter().zip(offsets).enumerate() {
+                    let item = self.read_plain_image(*member, offset + at, image)?;
+                    self.construction_push(guard, u32::try_from(index).map_err(|_| resource())?, item)?;
+                }
+                self.commit_construction(guard, ty)
+            }
             _ => Err(invalid()),
         }
     }
@@ -794,7 +842,7 @@ impl GuestStore {
     pub(crate) fn zeroed_value(&mut self, ty: TypeId) -> Result<TicketId, Diagnostic> {
         if !self.plain_type(ty) {
             return Err(plain_fault(format!(
-                "mem::zeroed::<{}> is outside the managed runtime's value model (only scalars, raw pointers and arrays or tuples of them)",
+                "mem::zeroed::<{}> requires a supported plain byte image",
                 self.describe_type(ty)
             )));
         }
@@ -805,10 +853,11 @@ impl GuestStore {
     /// `mem::transmute::<Src, Dst>(value)` between plain types of equal size.
     pub(crate) fn transmute_value(
         &mut self,
-        value: ValueRepr,
+        source_ticket: TicketId,
         source: TypeId,
         destination: TypeId,
     ) -> Result<TicketId, Diagnostic> {
+        let value = self.peek_ticket(source_ticket)?;
         // A thin reference is accepted as a source: its byte image is its
         // address (`transmute::<&T, usize>`). Rebuilding a reference from
         // bytes has no provenance to restore, so it is not a destination.
@@ -818,7 +867,7 @@ impl GuestStore {
         );
         if !(self.plain_type(source) || thin_reference) || !self.plain_type(destination) {
             return Err(plain_fault(format!(
-                "mem::transmute::<{}, {}> is outside the managed runtime's value model (only scalars, raw pointers and arrays or tuples of them transmute)",
+                "mem::transmute::<{}, {}> requires supported byte images and pointer provenance",
                 self.describe_type(source),
                 self.describe_type(destination)
             )));
@@ -836,6 +885,64 @@ impl GuestStore {
         }
         let mut image = vec![0u8; from as usize];
         self.write_plain_image(value, source, 0, &mut image)?;
-        self.read_plain_image(destination, 0, &image)
+        let result = self.read_plain_image(destination, 0, &image)?;
+        // Transmute consumes bits without calling the source's Drop. Reuse the
+        // physical owning-field transfer kernel, never leak an input ticket.
+        let mut sources = vec![source_ticket];
+        while let Some(ticket) = sources.last().copied() {
+            if self.peek_ticket(ticket)?.kind == 8 {
+                match self.aggregate_cleanup_step(ticket)? {
+                    AggregateCleanupStep::Field(child) => { sources.push(child); continue; }
+                    AggregateCleanupStep::Skipped => continue,
+                    AggregateCleanupStep::Complete => {}
+                }
+            }
+            self.discard(ticket)?;
+            sources.pop();
+        }
+        Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod image_storage_tests {
+    use super::*;
+
+    #[test]
+    fn image_windows_fail_closed_and_transmute_consumes_its_owning_graph() {
+        let mut store = GuestStore::new(1, u32::MAX, usize::MAX).unwrap();
+        let byte = TypeId(9);
+        let word = TypeId(11);
+        let array = store.types.intern(TypeKey::Array { element: byte, len: 4 }).unwrap();
+        let guard = store.begin_construction(&[byte; 4]).unwrap();
+        for index in 0..4 {
+            let ticket = store.ticket(ValueRepr::unsigned(byte, u64::from(index) + 1).unwrap()).unwrap();
+            store.construction_push(guard, index, ticket).unwrap();
+        }
+        let source = store.commit_construction(guard, array).unwrap();
+        let object = ObjectId::from_bits(store.peek_ticket(source).unwrap().payload);
+        let result = store.transmute_value(source, array, word).unwrap();
+        assert_eq!(store.peek_ticket(result).unwrap().payload, 0x04030201);
+        assert!(store.peek_ticket(source).is_err());
+        assert!(store.objects.get(object).is_err());
+        let owners = store.owner_inventory_for_test();
+        assert_eq!(owners.tickets, vec![result.bits()]);
+        assert!(owners.objects.is_empty());
+        assert!(owners.guards.is_empty());
+        assert!(owners.cells.iter().all(|(_, state)| *state == CellState::Dropped));
+        store.discard(result).unwrap();
+        let before = store.owner_inventory_for_test();
+        for offset in [0, 1, u64::MAX] {
+            let mut image = [0x55; 3];
+            assert!(store.write_plain_image(ValueRepr::unsigned(word, 7).unwrap(), word, offset, &mut image).is_err());
+            assert_eq!(image, [0x55; 3]);
+            assert!(store.read_plain_image(word, offset, &image).is_err());
+            assert_eq!(store.owner_inventory_for_test(), before);
+        }
+        assert!(GuestStore::put_bytes(&mut [], 1, &[]).is_err());
+        GuestStore::put_bytes(&mut [], 0, &[]).unwrap();
+        let unit = store.read_plain_image(TypeId(1), 0, &[]).unwrap();
+        store.discard(unit).unwrap();
+        assert!(store.read_plain_image(TypeId(1), 1, &[]).is_err());
     }
 }

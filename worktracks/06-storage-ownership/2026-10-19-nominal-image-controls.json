@@ -1,0 +1,8 @@
+{
+  "controls": [
+    "cli::crate_graph::mem_layout_tests::upstream_nominal_transmute_uses_ordinary_const_vm_all_origins",
+    "cli::crate_graph::mem_layout_tests::transmute_consumes_source_without_drop_and_owns_destination_drop",
+    "cli::crate_graph::mem_layout_tests::transmute_and_zeroed_between_scalars_pointers_and_arrays",
+    "cli::crate_graph::mem_layout_tests::transmute_size_mismatch_names_its_types"
+  ]
+}

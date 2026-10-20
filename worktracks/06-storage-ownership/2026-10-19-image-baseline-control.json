@@ -1,0 +1,5 @@
+{
+  "controls": [
+    "cli::crate_graph::mem_layout_tests::transmute_and_zeroed_between_scalars_pointers_and_arrays"
+  ]
+}

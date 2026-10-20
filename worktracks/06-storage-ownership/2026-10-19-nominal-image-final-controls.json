@@ -1,0 +1,7 @@
+{
+  "controls": [
+    "runtime::cell::layouts::image_storage_tests::image_windows_fail_closed_and_transmute_consumes_its_owning_graph",
+    "cli::crate_graph::mem_layout_tests::transmute_consumes_source_without_drop_and_owns_destination_drop",
+    "cli::crate_graph::mem_layout_tests::transmute_size_mismatch_names_its_types"
+  ]
+}

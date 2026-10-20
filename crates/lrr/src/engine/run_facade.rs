@@ -842,10 +842,9 @@ fn execute(
                 return Err(facade_fault("transmute lacks its type arguments"));
             };
             let ticket = argument()?;
-            let value = store.peek_ticket(ticket)?;
             moved_in.push(ticket);
             Ok(FacadeOutcome::Value(store.transmute_value(
-                value,
+                ticket,
                 *source,
                 *destination,
             )?))
