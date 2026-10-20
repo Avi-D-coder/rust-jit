@@ -3089,3 +3089,52 @@ fn unchanged_body_and_module_aliases_share_actual_normalization_all_editions_and
     }
     assert_eq!(aliases,48);
 }
+
+#[test]
+fn unchanged_record_aliases_retain_actual_target_arguments_all_editions_and_origins() {
+    use crate::{
+        db::{dependency::{InputKey,InputValue},key::QueryKey,poll::QueryPoll,provider::SyntaxProvider,value::QueryValue},
+        ir::pc::{NodeId,Phase},source::manifest::Namespace,syntax::imports::ImportSegment,
+        traits::term::TyTerm,
+    };
+    use ra_ap_syntax::{AstNode,ast};
+    fn ready<T:std::fmt::Debug>(value:QueryPoll<T>)->T {match value {QueryPoll::Ready(Ok(value))=>value,other=>panic!("actual record source: {other:?}")}}
+    let original=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout/tests/ui/structs-enums/struct-aliases.rs");
+    let text=std::fs::read_to_string(&original).unwrap();let at=text.find("\nuse std::mem").unwrap();let (prefix,items)=text.split_at(at);
+    let mut records=0;
+    for edition in [2015,2018,2021,2024] {
+        let mut paths=vec![original.clone()];
+        for wrapper in [false,true] {let setup=if wrapper{"macro_rules! outer {($($t:tt)*)=>{emit!{$($t)*}}}"}else{""};let invoke=if wrapper{"outer"}else{"emit"};paths.push(temporary_source(&format!("record-alias-{edition}-{wrapper}"),&format!("{prefix}\nmacro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} {setup} {invoke}!{{{items}}}")));}
+        for (origin,path) in paths.iter().enumerate() {
+            let (mut db,discovery,scope)=configured_impl_catalog_discovery(path,edition).unwrap();discovery.publish(&mut db).unwrap();
+            let header=ready(db.fetch(&SyntaxProvider,QueryKey::PreparedScopeImplHeaders(discovery.key().clone()))).value;let QueryValue::PreparedScopeImplHeaders(header)=header.as_ref()else{panic!()};
+            let environment=header.inventory_root().environment().unwrap();let sources=environment.sources().iter().collect::<Vec<_>>();
+            let lookup=|namespace,name:&str| {let found=environment.names().lookup_source_path(namespace,&[ImportSegment::Name(name.into())],false,&scope,edition).unwrap();let crate::frontend::names::NameLookup::Defined(found)=found else {panic!("actual source lookup {name}: {found:?}")};found.identity};
+            let main=lookup(Namespace::Value,"main");let target=[lookup(Namespace::Type,"S"),lookup(Namespace::Type,"S3")];
+            let body=db.input(&InputKey::DefinitionBody(main)).unwrap();let InputValue::DefinitionBody(body)=body.as_ref()else{panic!()};let plan=ready(db.prepare_source_local_plan(&discovery,&sources,&body.key()));
+            let owner=plan.context().source();let mut nodes=Vec::new();
+            for node in owner.index().nodes() {
+                if node.role==crate::syntax::body_index::NodeRole::Expression(crate::syntax::body_index::ExpressionKind::Other)
+                    && owner.parsed().entered_node_syntax(owner.body(),owner.index(),node.id).unwrap().and_then(ast::RecordExpr::cast).is_some() {nodes.push(node.id);}
+            }
+            assert_eq!(nodes.len(),3);db.trace.detailed=true;let start=db.trace.events.len();
+            for (ordinal,node) in nodes.iter().enumerate() {
+                let key=owner.index().pc(*node,Phase::Entry).unwrap();let result=db.fetch(&SyntaxProvider,QueryKey::BoundRecordConstructor(key));
+                if ordinal==1 {assert!(matches!(result,QueryPoll::Ready(Err(ref error))if error.code=="LRR-E-UNSUPPORTED"&&error.message.contains("complete source argument application")),"unsupplied alias U remains an explicit runtime blocker: {result:?}");continue;}
+                let value=ready(result).value;let QueryValue::BoundRecordConstructor(prepared)=value.as_ref()else{panic!()};
+                let bound=prepared.bound().expect("closed source record target binds the ordinary schema");assert_eq!(bound.mapping().definition(),target[usize::from(ordinal==2)]);
+                let actual=prepared.arguments().iter().map(|argument|argument.as_ref().unwrap().source().clone()).collect::<Vec<_>>();
+                let expected=if ordinal==0 {vec![]}else{vec![TyTerm::Primitive(crate::ir::op::PrimitiveType::U16),TyTerm::Primitive(crate::ir::op::PrimitiveType::Char)]};assert_eq!(actual,expected);assert_eq!(bound.variant().type_parameters()as usize,actual.len());records+=1;
+            }
+            let unwanted=db.trace.events[start..].iter().filter(|event|match &event.key {
+                QueryKey::BodyStructure(body)=>body!=owner.index().body() || event.action==crate::db::trace::Action::ProviderRun,
+                QueryKey::FunctionSignature(_)|QueryKey::Thunk(_)|QueryKey::PatternPlan(_)|QueryKey::BindingConstraints(_)=>true,
+                _=>false,
+            }).collect::<Vec<_>>();
+            assert!(unwanted.is_empty(),"record target preparation must not enter executable planning or rebuild its cached owner: {unwanted:?}");
+            let saved=owner.index().pc(NodeId(nodes[0].0),Phase::Entry).unwrap();db.publish_inputs(std::collections::BTreeMap::new()).unwrap();assert!(!matches!(db.fetch(&SyntaxProvider,QueryKey::BoundRecordConstructor(saved)),QueryPoll::Ready(Ok(_))));
+            eprintln!("actual record alias targets edition{edition},origin{origin}:2ordinary bindings;1inference hold;no guest execution");
+        }
+    }
+    assert_eq!(records,24);
+}

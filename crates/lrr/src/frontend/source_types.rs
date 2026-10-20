@@ -2014,10 +2014,6 @@ pub(super) fn deferred_alias_type(
     let owner = WrittenTypeDeclaration::declaration(super::type_name_namespace::SourceTypeOwner {
         definition, scope: &context.scope, header,
     }, &alias.generics, item.syntax(), None);
-    let term = match resolve_actual_type(db, graph, sources, &owner, &target) {
-        QueryPoll::Ready(Ok(Some(term))) => term,
-        other => return other,
-    };
     let parameter_ranges = item.generic_param_list().map(|list| list.generic_params()
         .map(|parameter| crate::syntax::ast_adapter::range(parameter.syntax().text_range())).collect::<Vec<_>>())
         .unwrap_or_default();
@@ -2050,6 +2046,10 @@ pub(super) fn deferred_alias_type(
         }
     }
     if supplied.next().is_some() { return QueryPoll::Ready(Ok(None)); }
+    let term = match resolve_actual_type(db, graph, sources, &owner, &target) {
+        QueryPoll::Ready(Ok(Some(term))) => term,
+        other => return other,
+    };
     QueryPoll::Ready(substitution.apply(&term).map(Some))
 }
 /// Caller already holds ordinary source-name selection. This supplies no
@@ -2057,6 +2057,14 @@ pub(super) fn deferred_alias_type(
 pub(super) fn prepare_selected_definition(
     db: &mut Database, graph: &NameNamespaces, sources: &[&PreparedSourceView],
     identity: crate::core::digest::Digest,
+) -> QueryPoll<NamedTypePreparation> {
+    prepare_selected_definition_with_arguments(db, graph, sources, identity, &[])
+}
+/// The same selected declaration finalizer, with actual already selected
+/// caller arguments. Alias substitution maps them into the target application.
+pub(super) fn prepare_selected_definition_with_arguments(
+    db: &mut Database, graph: &NameNamespaces, sources: &[&PreparedSourceView],
+    identity: crate::core::digest::Digest, arguments: &[crate::traits::term::GenericArg],
 ) -> QueryPoll<NamedTypePreparation> {
             let normalizer = match AliasNormalizer::new(graph, sources) {
                 Ok(normalizer) => normalizer,
@@ -2075,7 +2083,7 @@ pub(super) fn prepare_selected_definition(
                 }
                 AliasTarget::Nominal(identity) => identity,
                 AliasTarget::Deferred { definition, target } => {
-                    return match deferred_alias_type(db, graph, sources, definition, &[]) {
+                    return match deferred_alias_type(db, graph, sources, definition, arguments) {
                         QueryPoll::Ready(Ok(Some(term))) => QueryPoll::Ready(Ok(
                             NamedTypePreparation::Alias(AliasTarget::Type(term)),
                         )),

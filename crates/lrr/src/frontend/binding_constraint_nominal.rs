@@ -1005,7 +1005,19 @@ impl<'a> Component<'a> {
             let QueryValue::SourceLocalPlan(plan) = plan.value.as_ref() else {
                 return QueryPoll::Ready(Err(fault("constructor argument source plan differs")));
             };
-            if let Some(selected) = ready!(super::super::explicit_type_arguments::select_path_arguments(
+            let record = match self.fact(node) {
+                Ok(fact) => fact.kind() == crate::syntax::source_constraints::FactKind::Record,
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+            let selected_arguments = if record {
+                // Same normalized target slots the installed constructor reads.
+                let selected = ready!(db.fetch(&SyntaxProvider,QueryKey::BoundRecordConstructor(entry(self.key,node))));
+                let QueryValue::BoundRecordConstructor(selected) = selected.value.as_ref() else {
+                    return QueryPoll::Ready(Err(fault("constraint record arguments differ")));
+                };
+                (!selected.arguments().is_empty()).then(|| selected.arguments().iter().map(|argument|
+                    argument.as_ref().map(|argument| argument.source().clone())).collect::<Vec<_>>())
+            } else if let Some(selected) = ready!(super::super::explicit_type_arguments::select_path_arguments(
                 db, plan, &entry(self.key, node),
                 super::super::explicit_type_arguments::PathArgumentPosition::Constructor,
             )) {
@@ -1014,10 +1026,14 @@ impl<'a> Component<'a> {
                         return QueryPoll::Ready(Err(error));
                     }
                 }
+                Some(selected.arguments.iter().map(|argument|
+                    argument.as_ref().map(|argument| argument.source().clone())).collect())
+            } else {None};
+            if let Some(selected) = selected_arguments {
                 let mut arguments = self.dependent_arguments(node, constructed);
-                for (argument, selected) in arguments.iter_mut().zip(&selected.arguments) {
+                for (argument, selected) in arguments.iter_mut().zip(&selected) {
                     if let Some(selected) = selected {
-                        *argument = GenericArg::Type(selected.source().clone());
+                        *argument = GenericArg::Type(selected.clone());
                     }
                 }
                 ready!(self.constrain_term(db, node,

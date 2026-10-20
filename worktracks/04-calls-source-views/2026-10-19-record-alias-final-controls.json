@@ -1,0 +1,11 @@
+{
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_record_aliases_retain_actual_target_arguments_all_editions_and_origins",
+    "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::stock_records_share_one_binding_between_query_and_repeated_installed_lookup_all_editions",
+    "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::installed_record_rejects_revoked_owning_epoch_without_replanning",
+    "frontend::source_locals::owned_plan::field_types::tests::binding_constraint_tests::nominal_fields_constructors_and_patterns_relate_declared_field_types",
+    "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins",
+    "cli::type_preparation::tests::unchanged_local_record_main_uses_ordinary_construct_project_and_assign_all_editions",
+    "cli::preentry_loader_tests::unchanged_lifetime_aliases_use_retained_target_ast_and_mixed_substitution_all_editions_and_origins"
+  ]
+}

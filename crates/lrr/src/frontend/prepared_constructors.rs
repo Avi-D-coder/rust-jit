@@ -30,7 +30,7 @@ pub struct PreparedRecordConstructor {
     plan: ConstructorPlan,
     plan_identity: Digest,
     binding: PreparedRecordBinding,
-    /// Actual final-segment Type arguments selected at indexed occurrences.
+    /// Actual nominal target Type arguments after source alias application.
     /// Runtime parameter descriptors are read only by the owning activation.
     arguments: Box<[Option<super::explicit_type_arguments::ExplicitType>]>,
 }
@@ -121,7 +121,7 @@ impl PreparedRecordConstructor {
     }
 }
 impl StableEncode for PreparedRecordConstructor {
-    const DOMAIN: &'static str = "lrr/v5/prepared-record-constructor";
+    const DOMAIN: &'static str = "lrr/v6/prepared-record-constructor";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.record(&self.plan);
@@ -267,7 +267,7 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedRecor
         return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
     }
     sources.extend(completed.sources().iter());
-    let bound = ready!(super::constructors::bind_prepared_record_constructor(
+    let selected = ready!(super::constructors::bind_prepared_record_constructor(
         db,
         completed.names(),
         &sources,
@@ -276,7 +276,26 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedRecor
         &source_arguments,
         members.as_deref(),
     ));
-    let binding = match bound {
+    let arguments = if source_arguments == selected.arguments {
+        arguments
+    } else {
+        let mut applied = Vec::new();
+        for argument in selected.arguments {
+            let Some(term) = argument else { applied.push(None); continue; };
+            let actual = if matches!(term,crate::traits::term::TyTerm::Param(_)) {
+                super::explicit_type_arguments::ExplicitType::Parameter(term)
+            } else {
+                let Some(written) = ready!(super::written_terms::closed_written_type(db,&sources,&term)) else {
+                    return QueryPoll::Ready(Err(Diagnostic::new("LRR-E-UNSUPPORTED",
+                        "record alias target argument requires its source application".into())));
+                };
+                super::explicit_type_arguments::ExplicitType::Written { term, written: Arc::new(written) }
+            };
+            applied.push(Some(actual));
+        }
+        applied.into_boxed_slice()
+    };
+    let binding = match selected.binding {
         RecordConstructorBinding::Ready(bound) => PreparedRecordBinding::Ready(*bound),
         RecordConstructorBinding::Deferred(demand) => {
             let diagnostic = demand.diagnostic();
@@ -371,6 +390,7 @@ impl RecordConstructorDemand {
         use super::names::NameLookup;
         let unsupported = |message: &str| Diagnostic::new("LRR-E-UNSUPPORTED", message.into());
         match self {
+            Self::AliasApplication(_) => unsupported("record alias requires its complete source argument application"),
             Self::Name(NameLookup::Absent) => {
                 Diagnostic::new("LRR-E-NAME-MISSING", "constructor type is absent".into())
             }

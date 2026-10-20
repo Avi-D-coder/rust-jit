@@ -1,0 +1,890 @@
+{
+  "schema": "lrr/source-checkpoint-evidence/v1",
+  "recorded_at": "2026-10-20T00:56:11.446746+00:00",
+  "status": "held_component",
+  "claim": "LOCAL-049",
+  "tasks": [
+    "M018",
+    "T040"
+  ],
+  "baseline": "5ac8c991f0162dbe85cf9226b61228a5d9720d5d",
+  "source_sha256": "5c42fb6d845a97cdccb668add2765b1c0b3bef4b12a38d2a41bf32fb2bd66d83",
+  "source_files": {
+    "crates/lrr/src/cli/preentry_loader_tests.rs": "8549136351077a1ecabbe07d0387975c3717f626520d8872cfa02afb38d87b48",
+    "crates/lrr/src/frontend/binding_constraint_nominal.rs": "d9cf49aace18d665515ff98fb77814cb9fec3a61a94c07589010289d916d33de",
+    "crates/lrr/src/frontend/constructors.rs": "b6f18e894f094c1b470cbe6b1b9c9cce726b3a41796e296aa89254fc49fc17bb",
+    "crates/lrr/src/frontend/prepared_constructors.rs": "4a224e13502378db46f8bca92bff47919ad2902a23ce13fddba7fcde0ba157e3",
+    "crates/lrr/src/frontend/source_types.rs": "34918abcb7e81cffea7c45ffdd0caf3b7d6c8bf58bee3121fc51b6ec66a9cfdf"
+  },
+  "summary": "V398-V401 HELD M018/T040 ordinary record alias applications. AliasContext now enters the same selected-definition finalizer with actual supplied source arguments; retained target AST plus existing mixed Substitution maps alias slots to nominal target slots. Required argument binding precedes target walking. Record binding returns normalized target arguments, retained in existing ExplicitType forms; source record constraints and unchanged ordinary VM consume that same vector. No name rewriting, new inference algorithm or macro-specific semantics. V3981compile error preserved; V399 real source bindings reached but host trace assumption fails. V4005/7controls pass; existing Pair<T> source constraint regression exposes treating empty args as a self equation. V401 preserves absent-argument behavior and allows only cached owning BodyStructure metadata reads in the source control. Final both macOS1.99.0 builds and7/7selected controls pass with exact source/HEAD/test/CLI guards:24actual record bindings/12edition-origin worlds,12explicit inferred-alias holds, ordinary installation/revocation, nominal numeric constraints, explicit constructor contexts, retained alias lifetimes and unchanged local-record main in4editions. All8targeted stock alias runtime rows still fail: struct-aliases advances from constructor refusal after2VMdispatches at parent to shared S2 pattern-name refusal after21dispatches in4editions; static-method alias retains lexical-callee guard9dispatches/1call. Failed captures incomplete/no observed cleanup. No new distinct stock pass/refreshed suite total. Generic/partial alias inference, actual pattern argument/source identity and applications, rooted call recipe/Self context, solver/member/VM migration and other legacy routes remain open. No task/milestone/interpreter/JIT/Linux/full-fixture/diagnostic/tooling/performance closure.",
+  "binaries": {
+    "test": {
+      "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+      "sha256": "95577ab166e6613e43aae1b55be9bb2a439a05fc9e8fa35b05049ae5ce67661c"
+    },
+    "cli": {
+      "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+      "sha256": "bf3283b41d1704a35c729e7c9817467bdded19e5e3e0a2488d0a0afea45c518f"
+    }
+  },
+  "validation_runs": [
+    {
+      "validation": "V398",
+      "local_evidence": "artifacts/validation-current-v398",
+      "before": {
+        "head": "5ac8c991f0162dbe85cf9226b61228a5d9720d5d",
+        "source_sha256": "ecad33ef81d0bd515ea4778278cfeffb1332ddfb36e2aff1f25975f6b37c846b",
+        "time_utc": "2026-10-20T00:46:07.522275+00:00",
+        "manifest_sha256": "076095629fda6e67daa93647b5a948cecc6d157df88e79784220ff35f26e043f"
+      },
+      "after-build": {
+        "head": "5ac8c991f0162dbe85cf9226b61228a5d9720d5d",
+        "source_sha256": "ecad33ef81d0bd515ea4778278cfeffb1332ddfb36e2aff1f25975f6b37c846b",
+        "time_utc": "2026-10-20T00:47:18.123233+00:00",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "manifest_sha256": "26a5b1c6758b4eb641528395e61a561a8c2435be321f33eb20b160e28813b404"
+      },
+      "lib-build": {
+        "build_finished": [
+          {
+            "reason": "build-finished",
+            "success": false
+          }
+        ],
+        "errors": [
+          {
+            "message": "binary operation `==` cannot be applied to type `std::result::Result<FactKind, diagnostic::Diagnostic>`",
+            "code": {
+              "code": "E0369",
+              "explanation": "A binary operation was attempted on a type which doesn't support it.\n\nErroneous code example:\n\n```compile_fail,E0369\nlet x = 12f32; // error: binary operation `<<` cannot be applied to\n               //        type `f32`\n\nx << 2;\n```\n\nTo fix this error, please check that this type implements this binary\noperation. Example:\n\n```\nlet x = 12u32; // the `u32` type does implement it:\n               // https://doc.rust-lang.org/stable/std/ops/trait.Shl.html\n\nx << 2; // ok!\n```\n\nIt is also possible to overload most operators for your own type by\nimplementing traits from `std::ops`.\n\nString concatenation appends the string on the right to the string on the\nleft and may require reallocation. This requires ownership of the string\non the left. If something should be added to a string literal, move the\nliteral to the heap by allocating it with `to_owned()` like in\n`\"Your text\".to_owned()`.\n"
+            }
+          }
+        ],
+        "jsonl_sha256": "e0f88901614a48f3477c6028a869080e5b6f04c13907bb2105edb80151d551f8"
+      }
+    },
+    {
+      "validation": "V399",
+      "local_evidence": "artifacts/validation-current-v399",
+      "before": {
+        "head": "5ac8c991f0162dbe85cf9226b61228a5d9720d5d",
+        "source_sha256": "881008adb92fb2faeb88dda5a106f4ddcb13ffe125bda23ce3fcef319996e447",
+        "time_utc": "2026-10-20T00:47:18.687137+00:00",
+        "manifest_sha256": "fa425724e432821c7824d1c4ec393ede97e5e4ac5fab0e87ec6b724176fdc41d"
+      },
+      "after-build": {
+        "head": "5ac8c991f0162dbe85cf9226b61228a5d9720d5d",
+        "source_sha256": "881008adb92fb2faeb88dda5a106f4ddcb13ffe125bda23ce3fcef319996e447",
+        "time_utc": "2026-10-20T00:48:16.292198+00:00",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "manifest_sha256": "038f666878b333ff9b507870694d0bb4711f57003d62044cfe055fc93a1c77b0"
+      },
+      "after-runtime": {
+        "head": "5ac8c991f0162dbe85cf9226b61228a5d9720d5d",
+        "source_sha256": "881008adb92fb2faeb88dda5a106f4ddcb13ffe125bda23ce3fcef319996e447",
+        "time_utc": "2026-10-20T00:49:32.355283+00:00",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "binaries_match_build": true,
+        "manifest_sha256": "217dd4a2542ff966efe76f75a3c9f43a664bc1cae7d6ad4fa221c4eb9f57ae30"
+      },
+      "lib-build": {
+        "build_finished": [
+          {
+            "reason": "build-finished",
+            "success": true
+          }
+        ],
+        "errors": [],
+        "jsonl_sha256": "f6451258614b09b97f66cc3ab4b454795e72b60e51df2cc2ca1a56814a7a3e19"
+      },
+      "cli-build": {
+        "build_finished": [
+          {
+            "reason": "build-finished",
+            "success": true
+          }
+        ],
+        "errors": [],
+        "jsonl_sha256": "5b59fbf576dff7bf6e0a438f7668eb20363c746a6239c78191718c196472bf80"
+      },
+      "control-results": {
+        "rows": 1,
+        "passes": 0,
+        "sha256": "b98bf7bf97a38e35b1c98825b977c911581a00ef16fd34379c2610b06da60c93"
+      },
+      "alias-stock-results": {
+        "rows": 8,
+        "passes": 0,
+        "sha256": "4f3cfc7e833df33e9e5876a69fc019ab79c96913b0e582e59f171b45b4b1bb2a"
+      }
+    },
+    {
+      "validation": "V400",
+      "local_evidence": "artifacts/validation-current-v400",
+      "before": {
+        "head": "5ac8c991f0162dbe85cf9226b61228a5d9720d5d",
+        "source_sha256": "737ee3eb071fd3ad9533d9d156dbaa5dc2219f3333051d199e4a45a2ce9b34bb",
+        "time_utc": "2026-10-20T00:49:33.062944+00:00",
+        "manifest_sha256": "00a714a333ffc31a2c301bd77c64982c8eb4d0a10fdbff0e84d994aa5735d0b3"
+      },
+      "after-build": {
+        "head": "5ac8c991f0162dbe85cf9226b61228a5d9720d5d",
+        "source_sha256": "737ee3eb071fd3ad9533d9d156dbaa5dc2219f3333051d199e4a45a2ce9b34bb",
+        "time_utc": "2026-10-20T00:50:50.857000+00:00",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "manifest_sha256": "d0dc25b7663d2689b4b4431543f9a1b6fd50e880e998b7f4bd3070ed9ed47648"
+      },
+      "after-runtime": {
+        "head": "5ac8c991f0162dbe85cf9226b61228a5d9720d5d",
+        "source_sha256": "737ee3eb071fd3ad9533d9d156dbaa5dc2219f3333051d199e4a45a2ce9b34bb",
+        "time_utc": "2026-10-20T00:52:28.025062+00:00",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "binaries_match_build": true,
+        "manifest_sha256": "40389a4df43f2b47b810f7875cfed3bc6fdfd7ed7e7f54e4e948b8819a4e99ce"
+      },
+      "lib-build": {
+        "build_finished": [
+          {
+            "reason": "build-finished",
+            "success": true
+          }
+        ],
+        "errors": [],
+        "jsonl_sha256": "5dde598ba193ed8d55dde6c074c71336bb74608aa3850a6430686d7e57c45cef"
+      },
+      "cli-build": {
+        "build_finished": [
+          {
+            "reason": "build-finished",
+            "success": true
+          }
+        ],
+        "errors": [],
+        "jsonl_sha256": "e9e7524cf20dca26364742c15ebb228a51f0a9192fc8e01a07e1d9819002f022"
+      },
+      "control-results": {
+        "rows": 7,
+        "passes": 5,
+        "sha256": "ceed799315eeb96d6d27225cd20a004730183464ce49f1600df7c61cf9041114"
+      }
+    },
+    {
+      "validation": "V401",
+      "local_evidence": "artifacts/validation-current-v401",
+      "before": {
+        "head": "5ac8c991f0162dbe85cf9226b61228a5d9720d5d",
+        "source_sha256": "5c42fb6d845a97cdccb668add2765b1c0b3bef4b12a38d2a41bf32fb2bd66d83",
+        "time_utc": "2026-10-20T00:52:28.655608+00:00",
+        "manifest_sha256": "5455bc14c545ea6077f70e7f81651a3b8a4bf0f6b0d667f552619ec0c940aa1c"
+      },
+      "after-build": {
+        "head": "5ac8c991f0162dbe85cf9226b61228a5d9720d5d",
+        "source_sha256": "5c42fb6d845a97cdccb668add2765b1c0b3bef4b12a38d2a41bf32fb2bd66d83",
+        "time_utc": "2026-10-20T00:53:33.630858+00:00",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "manifest_sha256": "07d03df534bf60347dee44109c1614d96fb54f93d9ad954bc86a5e4a8b9e6383"
+      },
+      "after-runtime": {
+        "head": "5ac8c991f0162dbe85cf9226b61228a5d9720d5d",
+        "source_sha256": "5c42fb6d845a97cdccb668add2765b1c0b3bef4b12a38d2a41bf32fb2bd66d83",
+        "time_utc": "2026-10-20T00:56:11.175407+00:00",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "binaries_match_build": true,
+        "manifest_sha256": "4b3dc1fc836fbce26f3c0edcde48b61b6c886a2a5fa00be6d7a74233fcbb21f1"
+      },
+      "lib-build": {
+        "build_finished": [
+          {
+            "reason": "build-finished",
+            "success": true
+          }
+        ],
+        "errors": [],
+        "jsonl_sha256": "b431e63f209e0ca22135396d8bfed3bfb0b4ef1426113c71605987472039593b"
+      },
+      "cli-build": {
+        "build_finished": [
+          {
+            "reason": "build-finished",
+            "success": true
+          }
+        ],
+        "errors": [],
+        "jsonl_sha256": "c376ae2ba60334be530f2c1fdc6d751178c521d09d921777aab6ebccf530a36f"
+      },
+      "control-results": {
+        "rows": 7,
+        "passes": 7,
+        "sha256": "e996fa66264622745abdf5233cf1b244aad19f66fa78249668e5730a0d375df2"
+      },
+      "alias-stock-results": {
+        "rows": 8,
+        "passes": 0,
+        "sha256": "7e80f2bb648267380ac837a5a5919798fd00a9ddf4465245d89c8ba7bdc60208"
+      }
+    }
+  ],
+  "controls": [
+    {
+      "selector": "cli::preentry_loader_tests::unchanged_record_aliases_retain_actual_target_arguments_all_editions_and_origins",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+        "cli::preentry_loader_tests::unchanged_record_aliases_retain_actual_target_arguments_all_editions_and_origins",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 31.417,
+      "log": "control-0.log"
+    },
+    {
+      "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::stock_records_share_one_binding_between_query_and_repeated_installed_lookup_all_editions",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+        "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::stock_records_share_one_binding_between_query_and_repeated_installed_lookup_all_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 0.949,
+      "log": "control-1.log"
+    },
+    {
+      "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::installed_record_rejects_revoked_owning_epoch_without_replanning",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+        "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::installed_record_rejects_revoked_owning_epoch_without_replanning",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 0.479,
+      "log": "control-2.log"
+    },
+    {
+      "selector": "frontend::source_locals::owned_plan::field_types::tests::binding_constraint_tests::nominal_fields_constructors_and_patterns_relate_declared_field_types",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+        "frontend::source_locals::owned_plan::field_types::tests::binding_constraint_tests::nominal_fields_constructors_and_patterns_relate_declared_field_types",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 1.385,
+      "log": "control-3.log"
+    },
+    {
+      "selector": "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+        "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 24.205,
+      "log": "control-4.log"
+    },
+    {
+      "selector": "cli::type_preparation::tests::unchanged_local_record_main_uses_ordinary_construct_project_and_assign_all_editions",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+        "cli::type_preparation::tests::unchanged_local_record_main_uses_ordinary_construct_project_and_assign_all_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 0.757,
+      "log": "control-5.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::unchanged_lifetime_aliases_use_retained_target_ast_and_mixed_substitution_all_editions_and_origins",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+        "cli::preentry_loader_tests::unchanged_lifetime_aliases_use_retained_target_ast_and_mixed_substitution_all_editions_and_origins",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 27.743,
+      "log": "control-6.log"
+    }
+  ],
+  "runtime": [
+    {
+      "path": "tests/ui/type-alias/static-method-type-alias-11047.rs",
+      "edition": 2015,
+      "sha256": "bbd1a7b205e796bf377489b0c151ee14988c8beaac045d32c77f12403d9ff68b",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/type-alias/static-method-type-alias-11047.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "5a6d3d55bb39ccaa58d61303a88c9ebdf2f7c79d973bbb27814f3e5285d70939"
+      ],
+      "environment": {
+        "LRR_EMBEDDED_FACADE": "1"
+      },
+      "exit": 2,
+      "seconds": 5.08,
+      "inputs_unchanged": true,
+      "runtime_contract_pass": false,
+      "code": "LRR-E-UNSUPPORTED",
+      "message": "lexical item callee requires body namespace integration",
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 12,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 1,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 1,
+        "vm_dispatches": 9,
+        "vm_outcomes": 8
+      },
+      "stdout_observed": null,
+      "stderr_observed": null,
+      "parent_observation": {
+        "code": "LRR-E-UNSUPPORTED",
+        "message": "lexical item callee requires body namespace integration",
+        "facts": {
+          "classified_operation_candidates": 12,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 1,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 1,
+          "vm_dispatches": 9,
+          "vm_outcomes": 8
+        }
+      }
+    },
+    {
+      "path": "tests/ui/type-alias/static-method-type-alias-11047.rs",
+      "edition": 2018,
+      "sha256": "bbd1a7b205e796bf377489b0c151ee14988c8beaac045d32c77f12403d9ff68b",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2018",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/type-alias/static-method-type-alias-11047.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "5d7de4d7f553b63620ca10fdcd826a95e31b8c8abfd736835de7209962b24ca8"
+      ],
+      "environment": {
+        "LRR_EMBEDDED_FACADE": "1"
+      },
+      "exit": 2,
+      "seconds": 4.083,
+      "inputs_unchanged": true,
+      "runtime_contract_pass": false,
+      "code": "LRR-E-UNSUPPORTED",
+      "message": "lexical item callee requires body namespace integration",
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 12,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 1,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 1,
+        "vm_dispatches": 9,
+        "vm_outcomes": 8
+      },
+      "stdout_observed": null,
+      "stderr_observed": null,
+      "parent_observation": {
+        "code": "LRR-E-UNSUPPORTED",
+        "message": "lexical item callee requires body namespace integration",
+        "facts": {
+          "classified_operation_candidates": 12,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 1,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 1,
+          "vm_dispatches": 9,
+          "vm_outcomes": 8
+        }
+      }
+    },
+    {
+      "path": "tests/ui/type-alias/static-method-type-alias-11047.rs",
+      "edition": 2021,
+      "sha256": "bbd1a7b205e796bf377489b0c151ee14988c8beaac045d32c77f12403d9ff68b",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2021",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/type-alias/static-method-type-alias-11047.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "ad2a91622860beafaa7b25a074c708281589c24dc95ca1154880bf726d5404d7"
+      ],
+      "environment": {
+        "LRR_EMBEDDED_FACADE": "1"
+      },
+      "exit": 2,
+      "seconds": 4.1,
+      "inputs_unchanged": true,
+      "runtime_contract_pass": false,
+      "code": "LRR-E-UNSUPPORTED",
+      "message": "lexical item callee requires body namespace integration",
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 12,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 1,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 1,
+        "vm_dispatches": 9,
+        "vm_outcomes": 8
+      },
+      "stdout_observed": null,
+      "stderr_observed": null,
+      "parent_observation": {
+        "code": "LRR-E-UNSUPPORTED",
+        "message": "lexical item callee requires body namespace integration",
+        "facts": {
+          "classified_operation_candidates": 12,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 1,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 1,
+          "vm_dispatches": 9,
+          "vm_outcomes": 8
+        }
+      }
+    },
+    {
+      "path": "tests/ui/type-alias/static-method-type-alias-11047.rs",
+      "edition": 2024,
+      "sha256": "bbd1a7b205e796bf377489b0c151ee14988c8beaac045d32c77f12403d9ff68b",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2024",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/type-alias/static-method-type-alias-11047.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "a6a90e106bba5d2e742a3234754626ebb07bf4fdea71c5df8d1767d48729116d"
+      ],
+      "environment": {
+        "LRR_EMBEDDED_FACADE": "1"
+      },
+      "exit": 2,
+      "seconds": 4.098,
+      "inputs_unchanged": true,
+      "runtime_contract_pass": false,
+      "code": "LRR-E-UNSUPPORTED",
+      "message": "lexical item callee requires body namespace integration",
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 12,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 1,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 1,
+        "vm_dispatches": 9,
+        "vm_outcomes": 8
+      },
+      "stdout_observed": null,
+      "stderr_observed": null,
+      "parent_observation": {
+        "code": "LRR-E-UNSUPPORTED",
+        "message": "lexical item callee requires body namespace integration",
+        "facts": {
+          "classified_operation_candidates": 12,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 1,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 1,
+          "vm_dispatches": 9,
+          "vm_outcomes": 8
+        }
+      }
+    },
+    {
+      "path": "tests/ui/structs-enums/struct-aliases.rs",
+      "edition": 2015,
+      "sha256": "8da894106e96817d0e10bea2b1668090bd62f661804742b32ff0d474ccb59ab3",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2015",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/structs-enums/struct-aliases.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "5179266b047a878933d0ae23b6eb5509d8c8c4f4c004641ea4ad1ee70b08ab0f"
+      ],
+      "environment": {
+        "LRR_EMBEDDED_FACADE": "1"
+      },
+      "exit": 2,
+      "seconds": 4.502,
+      "inputs_unchanged": true,
+      "runtime_contract_pass": false,
+      "code": "LRR-E-UNSUPPORTED",
+      "message": "pattern name `S2` names a Value item that is not a constant or constructor",
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 30,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 0,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 21,
+        "vm_outcomes": 20
+      },
+      "stdout_observed": null,
+      "stderr_observed": null,
+      "parent_observation": {
+        "code": "LRR-E-UNSUPPORTED",
+        "message": "constructor requires further source member/type binding",
+        "facts": {
+          "classified_operation_candidates": 3,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 0,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 2,
+          "vm_outcomes": 2
+        }
+      }
+    },
+    {
+      "path": "tests/ui/structs-enums/struct-aliases.rs",
+      "edition": 2018,
+      "sha256": "8da894106e96817d0e10bea2b1668090bd62f661804742b32ff0d474ccb59ab3",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2018",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/structs-enums/struct-aliases.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "c56e412caf3fcf70e749926eeb88d25c3d236a1a8f2266ee1de1685f82c7995a"
+      ],
+      "environment": {
+        "LRR_EMBEDDED_FACADE": "1"
+      },
+      "exit": 2,
+      "seconds": 4.44,
+      "inputs_unchanged": true,
+      "runtime_contract_pass": false,
+      "code": "LRR-E-UNSUPPORTED",
+      "message": "pattern name `S2` names a Value item that is not a constant or constructor",
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 30,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 0,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 21,
+        "vm_outcomes": 20
+      },
+      "stdout_observed": null,
+      "stderr_observed": null,
+      "parent_observation": {
+        "code": "LRR-E-UNSUPPORTED",
+        "message": "constructor requires further source member/type binding",
+        "facts": {
+          "classified_operation_candidates": 3,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 0,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 2,
+          "vm_outcomes": 2
+        }
+      }
+    },
+    {
+      "path": "tests/ui/structs-enums/struct-aliases.rs",
+      "edition": 2021,
+      "sha256": "8da894106e96817d0e10bea2b1668090bd62f661804742b32ff0d474ccb59ab3",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2021",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/structs-enums/struct-aliases.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "56262eeb318813c0c763634c14b43793ffda2fc87dcd052af9cf74120de0e6aa"
+      ],
+      "environment": {
+        "LRR_EMBEDDED_FACADE": "1"
+      },
+      "exit": 2,
+      "seconds": 4.54,
+      "inputs_unchanged": true,
+      "runtime_contract_pass": false,
+      "code": "LRR-E-UNSUPPORTED",
+      "message": "pattern name `S2` names a Value item that is not a constant or constructor",
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 30,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 0,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 21,
+        "vm_outcomes": 20
+      },
+      "stdout_observed": null,
+      "stderr_observed": null,
+      "parent_observation": {
+        "code": "LRR-E-UNSUPPORTED",
+        "message": "constructor requires further source member/type binding",
+        "facts": {
+          "classified_operation_candidates": 3,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 0,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 2,
+          "vm_outcomes": 2
+        }
+      }
+    },
+    {
+      "path": "tests/ui/structs-enums/struct-aliases.rs",
+      "edition": 2024,
+      "sha256": "8da894106e96817d0e10bea2b1668090bd62f661804742b32ff0d474ccb59ab3",
+      "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+      "directives": [
+        "//@ run-pass"
+      ],
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/lrr",
+        "--edition",
+        "2024",
+        "run",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/structs-enums/struct-aliases.rs",
+        "--runtime-capture",
+        "--capture-context",
+        "6b5777e5a7d3ee5119ce488ebd4aae283bef04f3db18d4c9a3c7748fbae1e7c1"
+      ],
+      "environment": {
+        "LRR_EMBEDDED_FACADE": "1"
+      },
+      "exit": 2,
+      "seconds": 4.574,
+      "inputs_unchanged": true,
+      "runtime_contract_pass": false,
+      "code": "LRR-E-UNSUPPORTED",
+      "message": "pattern name `S2` names a Value item that is not a constant or constructor",
+      "capture_complete": false,
+      "facts": {
+        "classified_operation_candidates": 30,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 0,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 21,
+        "vm_outcomes": 20
+      },
+      "stdout_observed": null,
+      "stderr_observed": null,
+      "parent_observation": {
+        "code": "LRR-E-UNSUPPORTED",
+        "message": "constructor requires further source member/type binding",
+        "facts": {
+          "classified_operation_candidates": 3,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 0,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 2,
+          "vm_outcomes": 2
+        }
+      }
+    }
+  ],
+  "parent_evidence": "worktracks/evidence/2026-10-19-v389-v397-body-alias-normalization.json",
+  "acceptance": {
+    "upstream_runtime_acceptance": "incomplete;0/8selected alias rows, no new distinct gain",
+    "diagnostic_compatibility": "unmeasured/incomplete",
+    "compiler_tooling_compatibility": "unmeasured/incomplete",
+    "full_suite_compatibility": "incomplete",
+    "guest_jit": "blocked by interpreter gate",
+    "full_milestone": "not run; source migration remains held",
+    "performance": "unmeasured",
+    "linux": "not run"
+  },
+  "commands": {
+    "library_build": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+    "cli_build": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+    "controls": "python3.12 tools/validation/run_controls.py RUN_DIR worktracks/04-calls-source-views/2026-10-19-record-alias-final-controls.json",
+    "runtime": "LRR_EMBEDDED_FACADE=1 target/debug/lrr --edition EDITION run fixtures/upstream/rustc-checkout/PATH --runtime-capture --capture-context SHA256"
+  },
+  "reproduction": "New disposable validation directory and exact manifest guards; original fixture hashes/directives and invocation rows retained here. Raw build products, captures and logs are disposable local evidence, never source inputs. Failed captures have unobserved streams/cleanup and cannot pass. V400 test-only trace change used same CLI binary as V399; no duplicate runtime rerun for it.",
+  "architecture_record": "worktracks/04-calls-source-views/2026-10-19-record-alias-applications.md",
+  "architecture_review": "worktracks/04-calls-source-views/2026-10-19-record-alias-review.md"
+}

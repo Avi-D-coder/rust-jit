@@ -34,6 +34,7 @@ pub enum RecordConstructorDemand {
     /// A local/generated/alias/variant definition requires its source type view.
     Definition(NameDefinition),
     TypeContext,
+    AliasApplication(crate::core::digest::Digest),
     OwnerContext(ScopeKey),
     Parameter(crate::traits::term::ParamKey),
     Fields(Box<NominalConstructorBinding>),
@@ -50,6 +51,12 @@ fn deferred(demand: RecordConstructorDemand) -> QueryPoll<RecordConstructorBindi
     QueryPoll::Ready(Ok(RecordConstructorBinding::Deferred(Box::new(demand))))
 }
 
+/// Binding and target argument application selected together by the ordinary
+/// Type service. Written alias arguments are never forwarded as nominal slots.
+pub(crate) struct PreparedRecordSelection {
+    pub(crate) binding: RecordConstructorBinding,
+    pub(crate) arguments: Vec<Option<crate::traits::term::TyTerm>>,
+}
 /// Reached preparation from the memoized owning source environment. Local
 /// declaration authority is supplied by the same indexed Type occurrence used
 /// by other source type consumers, never by searching module outline rows.
@@ -60,6 +67,19 @@ pub(crate) fn bind_prepared_record_constructor(
     body: &BodyIndex,
     plan: &ConstructorPlan,
     arguments: &[Option<crate::traits::term::TyTerm>],
+    members: Option<&super::member_index::MemberIndex>,
+) -> QueryPoll<PreparedRecordSelection> {
+    let mut normalized = arguments.to_vec();
+    bind_prepared_record_inner(db, graph, sources, body, plan, &mut normalized, members)
+        .map(|binding| PreparedRecordSelection { binding, arguments: normalized })
+}
+fn bind_prepared_record_inner(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    body: &BodyIndex,
+    plan: &ConstructorPlan,
+    arguments: &mut Vec<Option<crate::traits::term::TyTerm>>,
     members: Option<&super::member_index::MemberIndex>,
 ) -> QueryPoll<RecordConstructorBinding> {
     use super::source_locals::owned_plan::type_declarations::BodyTypeOutcome;
@@ -92,6 +112,57 @@ pub(crate) fn bind_prepared_record_constructor(
     let selected = match locals.generic_base_body_type(db, plan.node()) {
         QueryPoll::Ready(Ok(BodyTypeOutcome::Ready(selected))) => selected,
         QueryPoll::Ready(Ok(BodyTypeOutcome::Pending(demand))) => {
+            if let super::source_locals::owned_plan::type_declarations::BodyTypeDemand::AliasContext(identity) = demand {
+                use super::{source_types::NamedTypePreparation, type_aliases::AliasTarget};
+                use crate::traits::term::{GenericArg, TyTerm};
+                let Some(supplied) = arguments.iter().map(|argument|
+                    argument.clone().map(GenericArg::Type)).collect::<Option<Vec<_>>>() else {
+                    return deferred(RecordConstructorDemand::AliasApplication(identity));
+                };
+                let selected = match super::source_types::prepare_selected_definition_with_arguments(
+                    db, graph, sources, identity, &supplied,
+                ) {
+                    QueryPoll::Ready(Ok(value)) => value,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+                let term = match selected {
+                    NamedTypePreparation::Ready(source) => source.source().clone(),
+                    NamedTypePreparation::Alias(AliasTarget::Type(term)) => term,
+                    // An uninstantiated generic target is not a nominal
+                    // application; ordinary inference must supply it first.
+                    _ => return deferred(RecordConstructorDemand::AliasApplication(identity)),
+                };
+                let TyTerm::Nominal(target, target_arguments) = term else {
+                    return deferred(RecordConstructorDemand::TypeContext);
+                };
+                let definition = match super::source_types::nominal_definition(db, sources, target) {
+                    Ok(value) => value, Err(error) => return QueryPoll::Ready(Err(error)),
+                };
+                if definition.item_kind != ItemKind::Struct {
+                    return deferred(RecordConstructorDemand::TypeContext);
+                }
+                let mut applied = Vec::new();
+                for argument in target_arguments {
+                    match argument {
+                        GenericArg::Type(term) => applied.push(Some(term)),
+                        GenericArg::Region(_) => {}, // runtime-erased metadata
+                        GenericArg::Const(_) => return deferred(RecordConstructorDemand::TypeContext),
+                    }
+                }
+                *arguments = applied;
+                let target_members = if members.is_none() && !arguments.is_empty() {
+                    match locals.environment().expect("checked constructor environment")
+                        .macros().source_environment().member_index() {
+                        Ok(members) => Some(members), Err(error) => return QueryPoll::Ready(Err(error)),
+                    }
+                } else { None };
+                return bind_variant_record_constructor_with_arguments(
+                    db, graph, sources, plan, target, None,
+                    locals.context().source().scope(), arguments,
+                    members.or(target_members.as_deref()),
+                );
+            }
             // A record path may name an enum variant (`E::B { .. }`), which is
             // a Type-namespace member of its enum but not itself a type.
             let variant = match selected_record_variant(db, graph, body, plan, demand) {

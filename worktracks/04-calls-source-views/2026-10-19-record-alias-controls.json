@@ -1,0 +1,5 @@
+{
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_record_aliases_retain_actual_target_arguments_all_editions_and_origins"
+  ]
+}
