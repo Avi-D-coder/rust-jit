@@ -2669,7 +2669,7 @@ impl RunMachine {
                 return RunPoll::Fault(error);
             }
         }
-        loop {
+        'dispatch: loop {
             // A reached cleanup owner demands its value's `Drop::drop` before
             // any further cleanup or execution of this frame.
             if self.frame.drop_witness_demand().is_some() {
@@ -3504,6 +3504,17 @@ impl RunMachine {
                                     QueryPoll::NeedInput(input) => {
                                         return RunPoll::NeedInput(input);
                                     }
+                                }
+                                match self.prepare_facade_discriminants(db, site.0, &arguments) {
+                                    QueryPoll::Ready(Ok(())) => {},
+                                    QueryPoll::Ready(Err(error)) => {
+                                        self.terminal = true;
+                                        return RunPoll::Fault(error);
+                                    }
+                                    QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                                }
+                                if self.initializer_demand.is_some() {
+                                    continue 'dispatch;
                                 }
                                 if let Err(error) = self.seal_facade_call(site.0, &arguments) {
                                     self.terminal = true;

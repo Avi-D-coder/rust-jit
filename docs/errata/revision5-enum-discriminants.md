@@ -31,7 +31,18 @@ Cold: one outline row per non-literal explicit discriminant at source preparatio
 
 ## Known gaps (recorded, not hidden)
 
-- **Layout.** `size_of::<E>()`, `align_of::<E>()` and the layout of types containing `E` still refuse an enum whose discriminants include an unevaluated expression (`engine/run_layout.rs`, E-R5-012): the layout declaration is demanded inside a call preparation, where `enter_initializer` cannot interleave a frame. `mem::discriminant(&e)` falls back to the variant index for such an enum. A shared fix is to evaluate the rows before the intrinsic's call sequence begins.
+October20 source checkpoint update: source-selected `discriminant_value` now
+shares the cast initializer coordinator before its arguments seal; it no longer
+substitutes an ordinal for a pending expression. Ordinary VM initialization,
+run-long constant storage and table refinement remain the same mechanism.
+Installed recipes retain the cast operand index instead of rebuilding it per
+preparation visit. [V485–V486 evidence](../../worktracks/evidence/2026-10-20-v485-v486-discriminant-initializers.json)
+records32LRR adaptation runs/16repeat pairs across all editions and origins;
+these do not pass the unchanged generic `repr128.rs` main. The projected field
+type in the `mem::Discriminant` facade, nonliteral layout demand and the other
+unexecuted/source-publication matrices remain incomplete.
+
+- **Layout.** `size_of::<E>()`, `align_of::<E>()` and the layout of types containing `E` still refuse an enum whose discriminants include an unevaluated expression (`engine/run_layout.rs`, E-R5-012). The layout demand still needs ordinary VM initializer preparation; the discriminant-value call path is now joined as recorded above. The `mem::Discriminant` facade's fixed-isize field still needs the common associated-type/field integration.
 - **Module-level macro-emitted enums.** `make_enum!(E)` at module level, with literal or expression discriminants alike, fails at `E::A` with `LRR-E-NAME-MISSING` because generated enum variants are not admitted into the name graph (`NameNamespaces::admit_enum_variants` runs for original outlines only). Unrelated to discriminants; the rows of generated units are computed with the unit's outline but not published (`generated_syntax.rs`), and `prepare_enum_discriminants` reports that explicitly.
 - **Macros inside a discriminant expression** (`Q = twice!(4)`) hit the general generated-expression lowering gap (`const X: i32 = twice!(4)` fails the same way).
 - **Local enums with `#[derive(..)]`** (baseline gap: the derive producer on a block-local enum leaves the body's macros unresolved) and a body that mixes a macro expansion with a local `const` (baseline: the pure evaluator no longer reaches the local `const`).

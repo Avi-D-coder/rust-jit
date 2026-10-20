@@ -495,6 +495,21 @@ impl GuestStore {
     /// `mem::discriminant`: the discriminant value of the enum value a
     /// reference designates. Any other value has discriminant 0.
     pub(crate) fn referent_discriminant(&mut self, value: ValueRepr) -> Result<ValueRepr, Diagnostic> {
+        match self.referent_enum_variant(value)? {
+            Some((enumeration, variant)) => self.enum_discriminant_value(enumeration, variant),
+            None => ValueRepr::unsigned(TypeId(9), 0),
+        }
+    }
+    pub(crate) fn pending_referent_discriminant(
+        &self, value: ValueRepr,
+    ) -> Result<Option<(TypeId, u32)>, Diagnostic> {
+        match self.referent_enum_variant(value)? {
+            Some((enumeration, variant)) => self.pending_discriminant(enumeration, variant),
+            None => Ok(None),
+        }
+    }
+    /// Shared checked place/variant selection; no scalar allocation or source demand.
+    fn referent_enum_variant(&self, value: ValueRepr) -> Result<Option<(TypeId, u32)>, Diagnostic> {
         if value.kind != 9 {
             return Err(Diagnostic::new(
                 "LRR-E-OP-TYPE",
@@ -504,24 +519,24 @@ impl GuestStore {
         let record = self.references.get(RefId::from_bits(value.payload))?;
         self.validate_reference_record(record)?;
         let ReferenceLease::Location(location) = &record.lease else {
-            return ValueRepr::unsigned(TypeId(9), 0);
+            return Ok(None);
         };
         let cell = location.final_cell.cell;
         let CellState::Live(held) = self.state(cell)? else {
             return Err(lease_fault());
         };
         if held.kind != 8 {
-            return ValueRepr::unsigned(TypeId(9), 0);
+            return Ok(None);
         }
         let enumeration = TypeId(held.type_id);
         if !matches!(self.types.descriptor(enumeration)?.key.as_ref(),
             TypeKey::Nominal { definition, .. } if definition.item_kind == crate::source::manifest::ItemKind::Enum)
         {
-            return ValueRepr::unsigned(TypeId(9), 0);
+            return Ok(None);
         }
         let (_, storage) = self.place_object(cell)?;
         let variant = storage.variant.ok_or_else(invalid)?;
-        self.enum_discriminant_value(enumeration, variant)
+        Ok(Some((enumeration, variant)))
     }
 }
 

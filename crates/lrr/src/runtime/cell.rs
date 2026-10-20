@@ -804,6 +804,11 @@ impl GuestStore {
         let Some((enumeration, variant)) = self.fieldless_enum_variant(id)? else {
             return Ok(None);
         };
+        self.pending_discriminant(enumeration, variant)
+    }
+    pub(super) fn pending_discriminant(
+        &self, enumeration: TypeId, variant: u32,
+    ) -> Result<Option<(TypeId, u32)>, Diagnostic> {
         let known = self
             .types
             .descriptor(enumeration)?

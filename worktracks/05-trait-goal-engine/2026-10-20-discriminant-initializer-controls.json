@@ -1,0 +1,6 @@
+{
+  "controls": [
+    "cli::crate_graph::enum_discriminant_tests::expression_discriminants_in_every_written_form",
+    "cli::crate_graph::enum_discriminant_tests::discriminant_casts_nested_in_user_macros_wrappers_and_standard_macros"
+  ]
+}

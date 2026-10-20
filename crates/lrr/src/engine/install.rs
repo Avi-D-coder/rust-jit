@@ -19,6 +19,7 @@ struct InstalledRecordConstructor {
 struct InstalledRecipe {
     recipe: Arc<VerifiedRecipe>,
     constructor: Option<InstalledRecordConstructor>,
+    enum_casts: Arc<[(usize, crate::ir::pc::SlotId)]>,
 }
 pub struct InstalledRecipes {
     source_revision: u64,
@@ -54,6 +55,15 @@ impl InstalledRecipes {
     }
     pub fn metadata_bytes(&self) -> usize {
         self.bytes
+    }
+    /// Retained ordinary LRIR positions; no source planning on preparation/resume.
+    pub(crate) fn enum_casts(
+        &self,
+        db: &Database,
+        id: RecipeId,
+    ) -> Result<Arc<[(usize, crate::ir::pc::SlotId)]>, Diagnostic> {
+        self.get_current(db, id)?;
+        Ok(Arc::clone(&self.entry(id)?.enum_casts))
     }
     pub fn get(&self, id: RecipeId) -> Result<&VerifiedRecipe, Diagnostic> {
         Ok(self.entry(id)?.recipe.as_ref())
@@ -293,10 +303,17 @@ impl InstalledRecipes {
             )
         })?;
         let owned = Arc::new(recipe.clone());
+        let enum_casts = recipe.recipe().operations.iter().enumerate().filter_map(|(index, op)| {
+            match op {
+                crate::ir::op::Op::PrimitiveCast { source, .. } => Some((index, *source)),
+                _ => None,
+            }
+        }).collect::<Arc<[_]>>();
         let id = RecipeId(index);
         self.entries.push(InstalledRecipe {
             recipe: owned,
             constructor,
+            enum_casts,
         });
         self.by_pc.insert(key, id);
         self.bytes = bytes;

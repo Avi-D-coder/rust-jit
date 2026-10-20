@@ -1,0 +1,2987 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-20T15:51:35.968027+00:00",
+  "baseline": "e53603b0676f689dcfbfe078ebc9a1c886d9595f",
+  "source_sha256": "dd808f8d98c5e84205c8881cbc944ae65f90cc3227c8fac9623082f8017ba319",
+  "status": "held_component_checkpoint",
+  "solo": true,
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "task_ids": [
+    "T040",
+    "M018",
+    "M020"
+  ],
+  "claims": [
+    "LOCAL-049"
+  ],
+  "summary": "V485-V486 HELD T040/M018/M020 common reached enum discriminant initialization. Source-selected discriminant intrinsic CallSeal now demands pending values through the existing cast coordinator and ordinary VM initializer continuation before arguments seal. Shared checked reference/variant and pending-table readers replace duplicate extraction/readiness logic. InstalledRecipe retains an Arc index of ordinary PrimitiveCast positions built once at installation; the per-visit full operation filter/Vec is removed. Source rows, schemas, const_cells, full-width scalar extraction and agreement-checked table refinement remain common; no parser/evaluator/solver/static check/cap or macro-specific runtime route is added. Exact baseline V485 adapted original declarations fail E013 before any initializer; the same source compiles/runs rustc1.99 edition2024 as separate reference evidence. V486 both macOS1.99 builds and2/2existing written-form/macro cast controls pass.32LRR adaptation executions across4editions/4origins/two repetition counts pass,16repeat pairs retain5/5initializer frames while source calls grow10/20; zero fault/effect/unsupported candidates,complete unit/empty-stream/cleanup captures. These32rows are not stock tests. Unchanged owning2015 stock batch passes3/4: enum_discr551,discriminant_size4684,actually_not_an_enum-discriminant1033matched VM operations; whole repr128 still fails generic operator typing at28attempts/27outcomes. Source/HEAD/test/CLI guards match after all terminals. Zero measured new distinct stock gains or refreshed suite/morning total. Generated initializer publication, associated mem::Discriminant fields, nonliteral layout, generic owner packets, full upstream solver/root/member/projection/VM joins and remaining fault/suspension/withdrawal/index-identity matrices remain held; no card/milestone/interpreter/JIT closure.",
+  "cohorts": {
+    "485": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T15:40:22.966217+00:00",
+          "head": "e53603b0676f689dcfbfe078ebc9a1c886d9595f",
+          "file_count": 8616,
+          "source_sha256": "dc7b8ea9f4b387b51f6e41692a5c69ff456867f75d189268e151f4dfda9512d8",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T15:40:39.187828+00:00",
+          "head": "e53603b0676f689dcfbfe078ebc9a1c886d9595f",
+          "file_count": 8616,
+          "source_sha256": "dc7b8ea9f4b387b51f6e41692a5c69ff456867f75d189268e151f4dfda9512d8",
+          "binaries": {
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "606b46982e61ab1bc5a0fd8b5bffded5eea33c98328b876d0aa3fa8baab7057a"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T15:40:39.692804+00:00",
+          "head": "e53603b0676f689dcfbfe078ebc9a1c886d9595f",
+          "file_count": 8616,
+          "source_sha256": "dc7b8ea9f4b387b51f6e41692a5c69ff456867f75d189268e151f4dfda9512d8",
+          "binaries": {
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "606b46982e61ab1bc5a0fd8b5bffded5eea33c98328b876d0aa3fa8baab7057a"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build_exit": null,
+      "cli_build_exit": null,
+      "probe_terminals": [
+        1
+      ],
+      "scope": "No build; reused exact pre-change CLI from preceding source checkpoint"
+    },
+    "486": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T15:42:11.727862+00:00",
+          "head": "e53603b0676f689dcfbfe078ebc9a1c886d9595f",
+          "file_count": 8616,
+          "source_sha256": "dd808f8d98c5e84205c8881cbc944ae65f90cc3227c8fac9623082f8017ba319",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T15:43:50.095168+00:00",
+          "head": "e53603b0676f689dcfbfe078ebc9a1c886d9595f",
+          "file_count": 8616,
+          "source_sha256": "dd808f8d98c5e84205c8881cbc944ae65f90cc3227c8fac9623082f8017ba319",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "4d3b9f050ff6d9f4cb9ad1d27a9b2e36c8fb1928d6939051cb7376f70aa2df81"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "28fc17f449d332619a20242e22d56265e6ac8e7a6fed75a48301dc684c35e767"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T15:48:29.871171+00:00",
+          "head": "e53603b0676f689dcfbfe078ebc9a1c886d9595f",
+          "file_count": 8616,
+          "source_sha256": "dd808f8d98c5e84205c8881cbc944ae65f90cc3227c8fac9623082f8017ba319",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "4d3b9f050ff6d9f4cb9ad1d27a9b2e36c8fb1928d6939051cb7376f70aa2df81"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "28fc17f449d332619a20242e22d56265e6ac8e7a6fed75a48301dc684c35e767"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build_exit": 0,
+      "cli_build_exit": 0,
+      "probe_terminals": [
+        0,
+        0,
+        0
+      ],
+      "controls": [
+        {
+          "selector": "cli::crate_graph::enum_discriminant_tests::expression_discriminants_in_every_written_form",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+            "cli::crate_graph::enum_discriminant_tests::expression_discriminants_in_every_written_form",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 21.228,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::crate_graph::enum_discriminant_tests::discriminant_casts_nested_in_user_macros_wrappers_and_standard_macros",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+            "cli::crate_graph::enum_discriminant_tests::discriminant_casts_nested_in_user_macros_wrappers_and_standard_macros",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 29.014,
+          "log": "control-1.log"
+        }
+      ],
+      "stock_batch_exit": 1
+    }
+  },
+  "baseline_probe": {
+    "scope": "LRR initializer/exact-once adaptation, not a stock fixture pass",
+    "upstream_original": "fixtures/upstream/rustc-checkout/tests/ui/enum-discriminant/repr128.rs",
+    "original_sha256": "66af2eb56be2026a744d2169f8467d11df4c75e8ea21d204f0948db2c8e445bc",
+    "binary_sha256": "606b46982e61ab1bc5a0fd8b5bffded5eea33c98328b876d0aa3fa8baab7057a",
+    "rows": [
+      {
+        "edition": 2024,
+        "origin": "ordinary",
+        "repeat": 1,
+        "source_sha256": "dd0aea3f2b3b5c197cda45245732b2f486c5b17549780987b8e91155501f57c0",
+        "observation": {
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "--edition",
+            "2024",
+            "run",
+            "/private/tmp/lrr-v485-initializer-baseline/2024-ordinary-1/main.rs",
+            "--runtime-capture",
+            "--capture-context",
+            "592ccfe8e7fc2dc3f5f549a7a24582043eaa153f56fd0e70cc54fb4956d88a99"
+          ],
+          "timed_out": false,
+          "output_limited": false,
+          "exit_code": 2,
+          "pid": 87731,
+          "elapsed_seconds": 4.216680416022427,
+          "stdout_bytes": 5161,
+          "stdout_sha256": "23c6aa19155ba0340412a8c9b0bdfbab88338cfc04bf9c5017943ada77d1d240",
+          "stderr_bytes": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "checks": {
+          "process": false,
+          "identity": true,
+          "edition": true,
+          "completed": false,
+          "capture": false,
+          "cleanup": false,
+          "dispatch": true,
+          "initializers": false,
+          "empty_guest_streams": false,
+          "no_fault_or_suspension": false
+        },
+        "facts": {
+          "classified_operation_candidates": 19,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 2,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 13,
+          "vm_outcomes": 13
+        },
+        "terminal": {
+          "code": "LRR-E-UNSUPPORTED",
+          "message": "enum discriminant expression was not evaluated before its use (E-R5-013)",
+          "status": "fault"
+        },
+        "pass": false
+      }
+    ],
+    "exact_once": [
+      {
+        "edition": 2024,
+        "origin": "ordinary",
+        "counts": [
+          0
+        ],
+        "pass": false
+      }
+    ]
+  },
+  "probes": [
+    {
+      "scope": "LRR initializer/exact-once adaptation, not a stock fixture pass",
+      "upstream_original": "fixtures/upstream/rustc-checkout/tests/ui/enum-discriminant/repr128.rs",
+      "original_sha256": "66af2eb56be2026a744d2169f8467d11df4c75e8ea21d204f0948db2c8e445bc",
+      "binary_sha256": "28fc17f449d332619a20242e22d56265e6ac8e7a6fed75a48301dc684c35e767",
+      "rows": [
+        {
+          "edition": 2024,
+          "origin": "ordinary",
+          "repeat": 1,
+          "source_sha256": "dd0aea3f2b3b5c197cda45245732b2f486c5b17549780987b8e91155501f57c0",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2024",
+              "run",
+              "/private/tmp/lrr-v486-initializer-probe/2024-ordinary-1/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "c425f13b7963ba21be250f0eb921404a9f5ee5e84a9630a0ca14008d30458a3e"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88133,
+            "elapsed_seconds": 5.571695207967423,
+            "stdout_bytes": 2103,
+            "stdout_sha256": "bcc1fdc65052462b88200663f49cc7fa1df72f1366bf25e3e36fd77e254d2ec3",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 959,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 517,
+            "vm_outcomes": 517
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2024,
+          "origin": "ordinary",
+          "repeat": 2,
+          "source_sha256": "69632cbb76f35a6373e839a1e693ffdde766a36282e4082f668323a4601bf778",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2024",
+              "run",
+              "/private/tmp/lrr-v486-initializer-probe/2024-ordinary-2/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "512f6f95c5d89f347e758346dcdf41ba1ffdff8a7263ec0f7d0f6ba3e5ee3aa1"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88138,
+            "elapsed_seconds": 5.303365541039966,
+            "stdout_bytes": 2122,
+            "stdout_sha256": "606a4f735941f559a1ad34bcccc7c82f6f659686a8af39fa0d289e38cb737511",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 2994,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 20,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1457,
+            "vm_outcomes": 1457
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        }
+      ],
+      "exact_once": [
+        {
+          "edition": 2024,
+          "origin": "ordinary",
+          "counts": [
+            5,
+            5
+          ],
+          "pass": true,
+          "source_call_boundaries": [
+            10,
+            20
+          ],
+          "zero_unobserved_candidates": true
+        }
+      ]
+    },
+    {
+      "scope": "LRR initializer/exact-once adaptation, not a stock fixture pass",
+      "upstream_original": "fixtures/upstream/rustc-checkout/tests/ui/enum-discriminant/repr128.rs",
+      "original_sha256": "66af2eb56be2026a744d2169f8467d11df4c75e8ea21d204f0948db2c8e445bc",
+      "binary_sha256": "28fc17f449d332619a20242e22d56265e6ac8e7a6fed75a48301dc684c35e767",
+      "rows": [
+        {
+          "edition": 2015,
+          "origin": "ordinary",
+          "repeat": 1,
+          "source_sha256": "dd0aea3f2b3b5c197cda45245732b2f486c5b17549780987b8e91155501f57c0",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2015-ordinary-1/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "24e19d0b9b7c8e6e1eb3db397fa62e80a4ea903c1d23e244459bdf1558bb9469"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88314,
+            "elapsed_seconds": 4.607313624932431,
+            "stdout_bytes": 2103,
+            "stdout_sha256": "df34bc40adc1da94b30552129f47b67641f07216d0e0c615dc333d9db2c0c563",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 959,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 517,
+            "vm_outcomes": 517
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2015,
+          "origin": "ordinary",
+          "repeat": 2,
+          "source_sha256": "69632cbb76f35a6373e839a1e693ffdde766a36282e4082f668323a4601bf778",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2015-ordinary-2/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "118e5739cfc52642cf7118ce8a564c1d65634b15dd653789bdf03d490593d697"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88342,
+            "elapsed_seconds": 5.419780957978219,
+            "stdout_bytes": 2122,
+            "stdout_sha256": "b823acf3416deca3019e7153d6802aeacdbb2cccfcdfc6844f033d31ee9a7cf6",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 2994,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 20,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1457,
+            "vm_outcomes": 1457
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2015,
+          "origin": "emit",
+          "repeat": 1,
+          "source_sha256": "b721b8a87d7565d8ec65c392498be7e33a9d73d8bec1daf405dcd8f455f8448d",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2015-emit-1/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "e01bc3ec2d77c742ad4641d57cef6530b90e2e9d1b540af8abc8631a23db9aaf"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88347,
+            "elapsed_seconds": 4.77632312499918,
+            "stdout_bytes": 2103,
+            "stdout_sha256": "f92e319e1eca6deda6c377d6c8afd03e1915346b24624a837206c9572c3b24a9",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 969,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 527,
+            "vm_outcomes": 527
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2015,
+          "origin": "emit",
+          "repeat": 2,
+          "source_sha256": "4b5278614328c9739a136726ecdd53470f85fb03d68479ac1f4215c0be1740fa",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2015-emit-2/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "a66a85f60aa04f9e3ed20120020c4acc5f3d36081f4b42d66bef8cb421729c41"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88351,
+            "elapsed_seconds": 5.39292116696015,
+            "stdout_bytes": 2122,
+            "stdout_sha256": "a2a99fd4f5a34e49b0e63848c70ea47cad9b79567d4483acf0368bac7b689ba9",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 3014,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 20,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1477,
+            "vm_outcomes": 1477
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2015,
+          "origin": "wrapper",
+          "repeat": 1,
+          "source_sha256": "3ef5670090b98b8890947eb171d93235872a3bb5cfaf1132f1a9f4a636c5d98a",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2015-wrapper-1/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "b475d470de750596195f5b6fc0b33ae339fdc124585f788681656cbcbef4b337"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88368,
+            "elapsed_seconds": 4.808169750031084,
+            "stdout_bytes": 2103,
+            "stdout_sha256": "c9640eff779a087417ec1ebac57d7d3f748d85b2f933e515f90a45ff6fa22333",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 969,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 527,
+            "vm_outcomes": 527
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2015,
+          "origin": "wrapper",
+          "repeat": 2,
+          "source_sha256": "62e93d662c10a953bd950c67ee08cd87c72c8a1a802164eea185862c154d7c7f",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2015-wrapper-2/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "f8a0331599e16f4d46f8e14e36427b25aa94640b41e3cd0b507e55ff22a36732"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88378,
+            "elapsed_seconds": 5.4561309579294175,
+            "stdout_bytes": 2122,
+            "stdout_sha256": "e755235aadff99574f489150616c0d7ad9c8feebaaf718c01b2578e63c29d760",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 3014,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 20,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1477,
+            "vm_outcomes": 1477
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2015,
+          "origin": "standard",
+          "repeat": 1,
+          "source_sha256": "dc011b6ce88f627bbed15afd168825e531cac8417503a05695e6c61881b5b9c2",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2015-standard-1/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "7753dd0e575c810e6c9b5cd1a50bb9d8aefa37dcb6396fc26d0e8d28e560d5a0"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88386,
+            "elapsed_seconds": 4.609340458991937,
+            "stdout_bytes": 2104,
+            "stdout_sha256": "2497afdc0574435c2f3520f88ba4c8eb265dcbb65ede72cb2a0e1b1991513abb",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 804,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 462,
+            "vm_outcomes": 462
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2015,
+          "origin": "standard",
+          "repeat": 2,
+          "source_sha256": "e21d774c3868d7bb47b42e6e41918cfa0574a3616680fe6391d2038157e4a631",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2015-standard-2/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "2acdc76343c87efe63eba105f59a57139d3ee25c472ee5415622b373199264c0"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88387,
+            "elapsed_seconds": 5.278305833926424,
+            "stdout_bytes": 2120,
+            "stdout_sha256": "cb186f62b0b2f503f8a11228eba7bf892a62c7c65057c077e4d49b50c0f5caa9",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 2584,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 20,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1297,
+            "vm_outcomes": 1297
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2018,
+          "origin": "ordinary",
+          "repeat": 1,
+          "source_sha256": "dd0aea3f2b3b5c197cda45245732b2f486c5b17549780987b8e91155501f57c0",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2018",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2018-ordinary-1/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "ce57ce66f180417cd9bb862f0e62b0801f380411d6df788a98e5b7e126f68e2a"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88402,
+            "elapsed_seconds": 4.557089207926765,
+            "stdout_bytes": 2103,
+            "stdout_sha256": "b347e8e9e4141aa3e0c8ec8c4bea98a7afd964faa91c713c2d76a9bc326bddb7",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 959,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 517,
+            "vm_outcomes": 517
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2018,
+          "origin": "ordinary",
+          "repeat": 2,
+          "source_sha256": "69632cbb76f35a6373e839a1e693ffdde766a36282e4082f668323a4601bf778",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2018",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2018-ordinary-2/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "de59099cf350732e0cc50e794f3fcee7f2a83ce2ec8efa04f6d1cf5db35c6e0a"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88415,
+            "elapsed_seconds": 5.716039582970552,
+            "stdout_bytes": 2122,
+            "stdout_sha256": "54a9ec188098023a940064d7a83c39bc7992c4fadd180a9c3841985b827fab6c",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 2994,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 20,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1457,
+            "vm_outcomes": 1457
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2018,
+          "origin": "emit",
+          "repeat": 1,
+          "source_sha256": "b721b8a87d7565d8ec65c392498be7e33a9d73d8bec1daf405dcd8f455f8448d",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2018",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2018-emit-1/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "26b8c035a246636d04455b2cde9bf189a6deb86ad3af3a870c7aff3f6810f188"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88420,
+            "elapsed_seconds": 4.97364237497095,
+            "stdout_bytes": 2103,
+            "stdout_sha256": "2381b910e728f8e6ae62dad795d5a23aed29dd48347f3de45b849dedb4e3cbdc",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 969,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 527,
+            "vm_outcomes": 527
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2018,
+          "origin": "emit",
+          "repeat": 2,
+          "source_sha256": "4b5278614328c9739a136726ecdd53470f85fb03d68479ac1f4215c0be1740fa",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2018",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2018-emit-2/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "8412105c2c530cf452055096507c9efbd68d712ebbb09bb4c47b8775872d5989"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88452,
+            "elapsed_seconds": 5.348974832915701,
+            "stdout_bytes": 2122,
+            "stdout_sha256": "28142c74a9814f22e45e6fd89be540aafa658cc06dd7954f811d17aad3ea73d8",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 3014,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 20,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1477,
+            "vm_outcomes": 1477
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2018,
+          "origin": "wrapper",
+          "repeat": 1,
+          "source_sha256": "3ef5670090b98b8890947eb171d93235872a3bb5cfaf1132f1a9f4a636c5d98a",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2018",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2018-wrapper-1/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "08085a882f44cde93f9aa5ef7b3a1fb4955e99a0115d16dacfc2b16160f8af3a"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88455,
+            "elapsed_seconds": 4.627610334078781,
+            "stdout_bytes": 2103,
+            "stdout_sha256": "6a1b341872c0904030b29988aa140654d814940960367c02f802ea94098971d3",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 969,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 527,
+            "vm_outcomes": 527
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2018,
+          "origin": "wrapper",
+          "repeat": 2,
+          "source_sha256": "62e93d662c10a953bd950c67ee08cd87c72c8a1a802164eea185862c154d7c7f",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2018",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2018-wrapper-2/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "fb5daecb21a1c536d593d0b7c27a3789de3c112e4eb2c4c676f82349cb0ca152"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88479,
+            "elapsed_seconds": 5.5703114999923855,
+            "stdout_bytes": 2122,
+            "stdout_sha256": "f2760d1ec869c3e21cf216b799568201efb2193dcdcfc9daaecc1207a79fd05d",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 3014,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 20,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1477,
+            "vm_outcomes": 1477
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2018,
+          "origin": "standard",
+          "repeat": 1,
+          "source_sha256": "dc011b6ce88f627bbed15afd168825e531cac8417503a05695e6c61881b5b9c2",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2018",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2018-standard-1/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "ef0255e0433b4b732d0918c74918c5a5b61a1484494cac8e3f5796a9477a5b19"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88530,
+            "elapsed_seconds": 4.652781083015725,
+            "stdout_bytes": 2104,
+            "stdout_sha256": "b5bcf2e5ec8dca33731c05ce1cb38ec80c683e21f7781b4b259a5cdd9a3c1a67",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 804,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 462,
+            "vm_outcomes": 462
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2018,
+          "origin": "standard",
+          "repeat": 2,
+          "source_sha256": "e21d774c3868d7bb47b42e6e41918cfa0574a3616680fe6391d2038157e4a631",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2018",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2018-standard-2/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "ee5b52c95aa5bf38742007e3dcc3ca6fc65e00bea4b062fb1b216875d5b8bc8c"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88547,
+            "elapsed_seconds": 5.36851687496528,
+            "stdout_bytes": 2120,
+            "stdout_sha256": "1125b8647fb6710faa60996a36478079a4f9376d9745caac3df38aa69c00b657",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 2584,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 20,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1297,
+            "vm_outcomes": 1297
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2021,
+          "origin": "ordinary",
+          "repeat": 1,
+          "source_sha256": "dd0aea3f2b3b5c197cda45245732b2f486c5b17549780987b8e91155501f57c0",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2021",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2021-ordinary-1/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "a4b71565cc223ae1985dde3146d79583ba539c5c35a010bd92562888adfbfba2"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88555,
+            "elapsed_seconds": 4.956790791009553,
+            "stdout_bytes": 2103,
+            "stdout_sha256": "6b5ade94fa2922cd3711af85b39f4d6dd13148f268e938792c1926abc09c24f2",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 959,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 517,
+            "vm_outcomes": 517
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2021,
+          "origin": "ordinary",
+          "repeat": 2,
+          "source_sha256": "69632cbb76f35a6373e839a1e693ffdde766a36282e4082f668323a4601bf778",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2021",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2021-ordinary-2/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "6e3ebff3af2c281dd1a6717eb30d4e37ff7a4e4b9621100cf09a0c7a0d9223a1"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88557,
+            "elapsed_seconds": 5.665024416986853,
+            "stdout_bytes": 2122,
+            "stdout_sha256": "a305e1a02bf0a48061e5377ff364deafb7c8644330eac6caf3e02d9ff4d0446b",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 2994,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 20,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1457,
+            "vm_outcomes": 1457
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2021,
+          "origin": "emit",
+          "repeat": 1,
+          "source_sha256": "b721b8a87d7565d8ec65c392498be7e33a9d73d8bec1daf405dcd8f455f8448d",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2021",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2021-emit-1/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "a4f64c7b872434eaeceef653a25028b21fc057798da018fb7263a0f1a1b12251"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88566,
+            "elapsed_seconds": 5.0410715830512345,
+            "stdout_bytes": 2103,
+            "stdout_sha256": "948da0c2bb159c879c4453c84007f130688a6459eca5fc7c2b48d4607076bf9b",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 969,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 527,
+            "vm_outcomes": 527
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2021,
+          "origin": "emit",
+          "repeat": 2,
+          "source_sha256": "4b5278614328c9739a136726ecdd53470f85fb03d68479ac1f4215c0be1740fa",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2021",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2021-emit-2/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "9114b20dda39331ec23d463897a0d478f0cef6a7a507bd7711aead2049359a45"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88577,
+            "elapsed_seconds": 6.004873541998677,
+            "stdout_bytes": 2122,
+            "stdout_sha256": "4456f8d93dbee2f256bb5356b9bac4eb06d367a1656592c355a2b1dc5ba948f1",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 3014,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 20,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1477,
+            "vm_outcomes": 1477
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2021,
+          "origin": "wrapper",
+          "repeat": 1,
+          "source_sha256": "3ef5670090b98b8890947eb171d93235872a3bb5cfaf1132f1a9f4a636c5d98a",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2021",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2021-wrapper-1/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "40a1e6f2f24bf7cda8c4666d4d8da593f9810e6529989f5b1a835ec085ae17ff"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88599,
+            "elapsed_seconds": 5.095450417022221,
+            "stdout_bytes": 2103,
+            "stdout_sha256": "d0a8adeed411e30604d1882ca5c8db114bcebbb9bd1357d261df746ca6c94c53",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 969,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 527,
+            "vm_outcomes": 527
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2021,
+          "origin": "wrapper",
+          "repeat": 2,
+          "source_sha256": "62e93d662c10a953bd950c67ee08cd87c72c8a1a802164eea185862c154d7c7f",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2021",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2021-wrapper-2/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "816a54b8fafbcb464fa81bf7b31f1b1f75e6a36d1a6ab98758c33f1c6c681fd6"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88621,
+            "elapsed_seconds": 5.963109915959649,
+            "stdout_bytes": 2122,
+            "stdout_sha256": "f2d1bec3aedde62e98c7277d2a4c5b8628388a3c18fb0329a6dd1651fbbc46b5",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 3014,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 20,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1477,
+            "vm_outcomes": 1477
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2021,
+          "origin": "standard",
+          "repeat": 1,
+          "source_sha256": "dc011b6ce88f627bbed15afd168825e531cac8417503a05695e6c61881b5b9c2",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2021",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2021-standard-1/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "95659048a1e69eb11e69c276598e192789e644b693909d42c87e02623b62ab0c"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88622,
+            "elapsed_seconds": 4.872013624990359,
+            "stdout_bytes": 2104,
+            "stdout_sha256": "827c112c062147769451408bbe08a58d45e08b8d1663a86b621e0558a8af480d",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 804,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 462,
+            "vm_outcomes": 462
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2021,
+          "origin": "standard",
+          "repeat": 2,
+          "source_sha256": "e21d774c3868d7bb47b42e6e41918cfa0574a3616680fe6391d2038157e4a631",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2021",
+              "run",
+              "/private/tmp/lrr-v486-initializer-editions/2021-standard-2/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "28d5eed28f89fefdc03b5cd6d5a9653d87989c2410b6ddf2e2166b3ed779e86d"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88623,
+            "elapsed_seconds": 5.371539875050075,
+            "stdout_bytes": 2120,
+            "stdout_sha256": "f02124a7eb88f5a94ff499545da47a844cafaa12dd6077891c4f92aaa737f9b0",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 2584,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 20,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1297,
+            "vm_outcomes": 1297
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        }
+      ],
+      "exact_once": [
+        {
+          "edition": 2015,
+          "origin": "ordinary",
+          "counts": [
+            5,
+            5
+          ],
+          "pass": true,
+          "source_call_boundaries": [
+            10,
+            20
+          ],
+          "zero_unobserved_candidates": true
+        },
+        {
+          "edition": 2015,
+          "origin": "emit",
+          "counts": [
+            5,
+            5
+          ],
+          "pass": true,
+          "source_call_boundaries": [
+            10,
+            20
+          ],
+          "zero_unobserved_candidates": true
+        },
+        {
+          "edition": 2015,
+          "origin": "wrapper",
+          "counts": [
+            5,
+            5
+          ],
+          "pass": true,
+          "source_call_boundaries": [
+            10,
+            20
+          ],
+          "zero_unobserved_candidates": true
+        },
+        {
+          "edition": 2015,
+          "origin": "standard",
+          "counts": [
+            5,
+            5
+          ],
+          "pass": true,
+          "source_call_boundaries": [
+            10,
+            20
+          ],
+          "zero_unobserved_candidates": true
+        },
+        {
+          "edition": 2018,
+          "origin": "ordinary",
+          "counts": [
+            5,
+            5
+          ],
+          "pass": true,
+          "source_call_boundaries": [
+            10,
+            20
+          ],
+          "zero_unobserved_candidates": true
+        },
+        {
+          "edition": 2018,
+          "origin": "emit",
+          "counts": [
+            5,
+            5
+          ],
+          "pass": true,
+          "source_call_boundaries": [
+            10,
+            20
+          ],
+          "zero_unobserved_candidates": true
+        },
+        {
+          "edition": 2018,
+          "origin": "wrapper",
+          "counts": [
+            5,
+            5
+          ],
+          "pass": true,
+          "source_call_boundaries": [
+            10,
+            20
+          ],
+          "zero_unobserved_candidates": true
+        },
+        {
+          "edition": 2018,
+          "origin": "standard",
+          "counts": [
+            5,
+            5
+          ],
+          "pass": true,
+          "source_call_boundaries": [
+            10,
+            20
+          ],
+          "zero_unobserved_candidates": true
+        },
+        {
+          "edition": 2021,
+          "origin": "ordinary",
+          "counts": [
+            5,
+            5
+          ],
+          "pass": true,
+          "source_call_boundaries": [
+            10,
+            20
+          ],
+          "zero_unobserved_candidates": true
+        },
+        {
+          "edition": 2021,
+          "origin": "emit",
+          "counts": [
+            5,
+            5
+          ],
+          "pass": true,
+          "source_call_boundaries": [
+            10,
+            20
+          ],
+          "zero_unobserved_candidates": true
+        },
+        {
+          "edition": 2021,
+          "origin": "wrapper",
+          "counts": [
+            5,
+            5
+          ],
+          "pass": true,
+          "source_call_boundaries": [
+            10,
+            20
+          ],
+          "zero_unobserved_candidates": true
+        },
+        {
+          "edition": 2021,
+          "origin": "standard",
+          "counts": [
+            5,
+            5
+          ],
+          "pass": true,
+          "source_call_boundaries": [
+            10,
+            20
+          ],
+          "zero_unobserved_candidates": true
+        }
+      ]
+    },
+    {
+      "scope": "LRR initializer/exact-once adaptation, not a stock fixture pass",
+      "upstream_original": "fixtures/upstream/rustc-checkout/tests/ui/enum-discriminant/repr128.rs",
+      "original_sha256": "66af2eb56be2026a744d2169f8467d11df4c75e8ea21d204f0948db2c8e445bc",
+      "binary_sha256": "28fc17f449d332619a20242e22d56265e6ac8e7a6fed75a48301dc684c35e767",
+      "rows": [
+        {
+          "edition": 2024,
+          "origin": "emit",
+          "repeat": 1,
+          "source_sha256": "b721b8a87d7565d8ec65c392498be7e33a9d73d8bec1daf405dcd8f455f8448d",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2024",
+              "run",
+              "/private/tmp/lrr-v486-initializer-origins/2024-emit-1/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "67ebfa915f74b2656818be752ac350564bc12a5c49f132804f5412243be5a106"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88316,
+            "elapsed_seconds": 4.758815584005788,
+            "stdout_bytes": 2103,
+            "stdout_sha256": "f189ba24b9dca938846bda84825a3ee59bbf3f0e2c7e69b31269d32a7d7921b9",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 969,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 527,
+            "vm_outcomes": 527
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2024,
+          "origin": "emit",
+          "repeat": 2,
+          "source_sha256": "4b5278614328c9739a136726ecdd53470f85fb03d68479ac1f4215c0be1740fa",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2024",
+              "run",
+              "/private/tmp/lrr-v486-initializer-origins/2024-emit-2/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "8129b40b758e67ccac6c5b79fc3a45836d0601cf822b5475caf4adb1422e0eb0"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88344,
+            "elapsed_seconds": 5.516588874976151,
+            "stdout_bytes": 2122,
+            "stdout_sha256": "2c7fe5bf39e20828f7f99dbd7f7353a4f0e0295d0482356787ab016e67472b97",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 3014,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 20,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1477,
+            "vm_outcomes": 1477
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2024,
+          "origin": "wrapper",
+          "repeat": 1,
+          "source_sha256": "3ef5670090b98b8890947eb171d93235872a3bb5cfaf1132f1a9f4a636c5d98a",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2024",
+              "run",
+              "/private/tmp/lrr-v486-initializer-origins/2024-wrapper-1/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "6f0f0537360cb02b9ddc64203455da62f0cb5abc592baa905a6cd3696e176dae"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88348,
+            "elapsed_seconds": 4.8830992500297725,
+            "stdout_bytes": 2103,
+            "stdout_sha256": "9072e28b2d69e0fbbf402fae91ddfb17071e9fe4989104a5d24321d3aa94966c",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 969,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 527,
+            "vm_outcomes": 527
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2024,
+          "origin": "wrapper",
+          "repeat": 2,
+          "source_sha256": "62e93d662c10a953bd950c67ee08cd87c72c8a1a802164eea185862c154d7c7f",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2024",
+              "run",
+              "/private/tmp/lrr-v486-initializer-origins/2024-wrapper-2/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "e27c86b64c62ee7e171e07475fedce1ae58d6e0a19c6de9cd50bb2d44f3712d9"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88362,
+            "elapsed_seconds": 5.484020042000338,
+            "stdout_bytes": 2122,
+            "stdout_sha256": "bdcf025cbc78f36b7faaa9c663157616166730e95ae24b99f4cdebbcc4e7d7c1",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 3014,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 20,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1477,
+            "vm_outcomes": 1477
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2024,
+          "origin": "standard",
+          "repeat": 1,
+          "source_sha256": "dc011b6ce88f627bbed15afd168825e531cac8417503a05695e6c61881b5b9c2",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2024",
+              "run",
+              "/private/tmp/lrr-v486-initializer-origins/2024-standard-1/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "0fce4c0fa4e22602153c788e276e36906a25134280149af8dbb5740c72fc40ef"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88377,
+            "elapsed_seconds": 4.677128582959995,
+            "stdout_bytes": 2104,
+            "stdout_sha256": "02dcf1906cba0c18bc08b42070b5ea5535277d75e0bd3452c0f25d2c87e977dc",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 804,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 10,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 462,
+            "vm_outcomes": 462
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        },
+        {
+          "edition": 2024,
+          "origin": "standard",
+          "repeat": 2,
+          "source_sha256": "e21d774c3868d7bb47b42e6e41918cfa0574a3616680fe6391d2038157e4a631",
+          "observation": {
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2024",
+              "run",
+              "/private/tmp/lrr-v486-initializer-origins/2024-standard-2/main.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "5995d6c9f0b3fdb11a61cbe5f010a417d09f621b8daf905c63ae09254ae3cb66"
+            ],
+            "timed_out": false,
+            "output_limited": false,
+            "exit_code": 0,
+            "pid": 88385,
+            "elapsed_seconds": 5.376532459049486,
+            "stdout_bytes": 2120,
+            "stdout_sha256": "115ad7e9ad237dfe26b2e3a831e0a2b44055ea1706d10bd8153a3a902f75421c",
+            "stderr_bytes": 0,
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "checks": {
+            "process": true,
+            "identity": true,
+            "edition": true,
+            "completed": true,
+            "capture": true,
+            "cleanup": true,
+            "dispatch": true,
+            "initializers": true,
+            "empty_guest_streams": true,
+            "no_fault_or_suspension": true
+          },
+          "facts": {
+            "classified_operation_candidates": 2584,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 5,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 20,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1297,
+            "vm_outcomes": 1297
+          },
+          "terminal": {
+            "status": "completed"
+          },
+          "pass": true
+        }
+      ],
+      "exact_once": [
+        {
+          "edition": 2024,
+          "origin": "emit",
+          "counts": [
+            5,
+            5
+          ],
+          "pass": true,
+          "source_call_boundaries": [
+            10,
+            20
+          ],
+          "zero_unobserved_candidates": true
+        },
+        {
+          "edition": 2024,
+          "origin": "wrapper",
+          "counts": [
+            5,
+            5
+          ],
+          "pass": true,
+          "source_call_boundaries": [
+            10,
+            20
+          ],
+          "zero_unobserved_candidates": true
+        },
+        {
+          "edition": 2024,
+          "origin": "standard",
+          "counts": [
+            5,
+            5
+          ],
+          "pass": true,
+          "source_call_boundaries": [
+            10,
+            20
+          ],
+          "zero_unobserved_candidates": true
+        }
+      ]
+    }
+  ],
+  "collected_repeat_checks": [
+    {
+      "edition": 2024,
+      "origin": "ordinary",
+      "counts": [
+        5,
+        5
+      ],
+      "pass": true,
+      "source_call_boundaries": [
+        10,
+        20
+      ],
+      "zero_unobserved_candidates": true
+    },
+    {
+      "edition": 2015,
+      "origin": "ordinary",
+      "counts": [
+        5,
+        5
+      ],
+      "pass": true,
+      "source_call_boundaries": [
+        10,
+        20
+      ],
+      "zero_unobserved_candidates": true
+    },
+    {
+      "edition": 2015,
+      "origin": "emit",
+      "counts": [
+        5,
+        5
+      ],
+      "pass": true,
+      "source_call_boundaries": [
+        10,
+        20
+      ],
+      "zero_unobserved_candidates": true
+    },
+    {
+      "edition": 2015,
+      "origin": "wrapper",
+      "counts": [
+        5,
+        5
+      ],
+      "pass": true,
+      "source_call_boundaries": [
+        10,
+        20
+      ],
+      "zero_unobserved_candidates": true
+    },
+    {
+      "edition": 2015,
+      "origin": "standard",
+      "counts": [
+        5,
+        5
+      ],
+      "pass": true,
+      "source_call_boundaries": [
+        10,
+        20
+      ],
+      "zero_unobserved_candidates": true
+    },
+    {
+      "edition": 2018,
+      "origin": "ordinary",
+      "counts": [
+        5,
+        5
+      ],
+      "pass": true,
+      "source_call_boundaries": [
+        10,
+        20
+      ],
+      "zero_unobserved_candidates": true
+    },
+    {
+      "edition": 2018,
+      "origin": "emit",
+      "counts": [
+        5,
+        5
+      ],
+      "pass": true,
+      "source_call_boundaries": [
+        10,
+        20
+      ],
+      "zero_unobserved_candidates": true
+    },
+    {
+      "edition": 2018,
+      "origin": "wrapper",
+      "counts": [
+        5,
+        5
+      ],
+      "pass": true,
+      "source_call_boundaries": [
+        10,
+        20
+      ],
+      "zero_unobserved_candidates": true
+    },
+    {
+      "edition": 2018,
+      "origin": "standard",
+      "counts": [
+        5,
+        5
+      ],
+      "pass": true,
+      "source_call_boundaries": [
+        10,
+        20
+      ],
+      "zero_unobserved_candidates": true
+    },
+    {
+      "edition": 2021,
+      "origin": "ordinary",
+      "counts": [
+        5,
+        5
+      ],
+      "pass": true,
+      "source_call_boundaries": [
+        10,
+        20
+      ],
+      "zero_unobserved_candidates": true
+    },
+    {
+      "edition": 2021,
+      "origin": "emit",
+      "counts": [
+        5,
+        5
+      ],
+      "pass": true,
+      "source_call_boundaries": [
+        10,
+        20
+      ],
+      "zero_unobserved_candidates": true
+    },
+    {
+      "edition": 2021,
+      "origin": "wrapper",
+      "counts": [
+        5,
+        5
+      ],
+      "pass": true,
+      "source_call_boundaries": [
+        10,
+        20
+      ],
+      "zero_unobserved_candidates": true
+    },
+    {
+      "edition": 2021,
+      "origin": "standard",
+      "counts": [
+        5,
+        5
+      ],
+      "pass": true,
+      "source_call_boundaries": [
+        10,
+        20
+      ],
+      "zero_unobserved_candidates": true
+    },
+    {
+      "edition": 2024,
+      "origin": "emit",
+      "counts": [
+        5,
+        5
+      ],
+      "pass": true,
+      "source_call_boundaries": [
+        10,
+        20
+      ],
+      "zero_unobserved_candidates": true
+    },
+    {
+      "edition": 2024,
+      "origin": "wrapper",
+      "counts": [
+        5,
+        5
+      ],
+      "pass": true,
+      "source_call_boundaries": [
+        10,
+        20
+      ],
+      "zero_unobserved_candidates": true
+    },
+    {
+      "edition": 2024,
+      "origin": "standard",
+      "counts": [
+        5,
+        5
+      ],
+      "pass": true,
+      "source_call_boundaries": [
+        10,
+        20
+      ],
+      "zero_unobserved_candidates": true
+    }
+  ],
+  "selected_stock": [
+    {
+      "case": "tests/ui/enum-discriminant/repr128.rs",
+      "status": "interpreter_failure",
+      "edition": 2015,
+      "source_sha256": "66af2eb56be2026a744d2169f8467d11df4c75e8ea21d204f0948db2c8e445bc",
+      "capture_context": "cda9bdb02e95e59f7121f2693190a77cc8bc64e09745a0b760d463e7c03c35f8",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/enum-discriminant/repr128.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "cda9bdb02e95e59f7121f2693190a77cc8bc64e09745a0b760d463e7c03c35f8"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 2,
+        "pid": 88136,
+        "elapsed_seconds": 3.885542125091888,
+        "stdout_bytes": 7361,
+        "stdout_sha256": "933ae210f2bf251e0ccfbf538fc23b48465a67dfb7b620cb519fb4ee6f59ad2c",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "terminal": {
+        "code": "LRR-E-OP-TYPE",
+        "message": "operator requires supported concrete primitive operand descriptors",
+        "phase": "executor",
+        "status": "fault"
+      },
+      "facts": {
+        "classified_operation_candidates": 39,
+        "cleanup_observed": false,
+        "closed_no_external_effects": false,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": true,
+        "observed_suspension": false,
+        "source_call_boundaries": 3,
+        "terminal": null,
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 28,
+        "vm_outcomes": 27
+      },
+      "entry_body": {
+        "definition": "6044d27a5688091034a91f94cb4b25981261249a923a162e8749bdf0433fa561",
+        "exact_body_bytes": "98bc7e97873813c8be057143b8f709a60340495acea76d0cc2e5e2390a6bf400"
+      }
+    },
+    {
+      "case": "tests/ui/consts/const-eval/enum_discr.rs",
+      "status": "runtime_contract_pass",
+      "edition": 2015,
+      "source_sha256": "0fbbaf646fdc469c70f52e23b0d979870d29a5fd0378c2c98b7c906f0aa0065c",
+      "capture_context": "edd433b16ed9cc0178128e1991add969074ff0c764e8c3564d11afecebc12f94",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/consts/const-eval/enum_discr.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "edd433b16ed9cc0178128e1991add969074ff0c764e8c3564d11afecebc12f94"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 0,
+        "pid": 88137,
+        "elapsed_seconds": 4.596654708031565,
+        "stdout_bytes": 2109,
+        "stdout_sha256": "94aa35c5fa06d4340ae07fdc0b58450340578a6168ab8a2e1fa989aa3e93413a",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "guest_output": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "output_contract": "closed_managed_bytes; upstream run-pass has no output comparison without check-run-results",
+      "facts": {
+        "classified_operation_candidates": 992,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 3,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 0,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 551,
+        "vm_outcomes": 551
+      },
+      "entry_body": {
+        "definition": "af1693960897f16dd90afd03940d5c8f99ee2d415830c3907714b5624d4a302b",
+        "exact_body_bytes": "9549d092f53f0584b857a8c4b0ae683c09215d23c6744da08e6a27b8a8495c32"
+      }
+    },
+    {
+      "case": "tests/ui/enum-discriminant/discriminant_size.rs",
+      "status": "runtime_contract_pass",
+      "edition": 2015,
+      "source_sha256": "3188f517b24186d08376bd2eac494b4041ddcbb1d11c6de50186be1a1f4d1871",
+      "capture_context": "420a6081e181accd4d897d554e41d8aa52ce1a8d448a3fa82b74077cd8accad5",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/enum-discriminant/discriminant_size.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "420a6081e181accd4d897d554e41d8aa52ce1a8d448a3fa82b74077cd8accad5"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 0,
+        "pid": 88139,
+        "elapsed_seconds": 11.108256999985315,
+        "stdout_bytes": 2173,
+        "stdout_sha256": "4a4456572c7b9d8a1cf9c7b03ea3a9d9625e9956fbe89162a6dd44fae96f7386",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "guest_output": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "output_contract": "closed_managed_bytes; upstream run-pass has no output comparison without check-run-results",
+      "facts": {
+        "classified_operation_candidates": 8819,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 108,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 4684,
+        "vm_outcomes": 4684
+      },
+      "entry_body": {
+        "definition": "4d8f13b0c559bdc3211744c05137e123b70f5429284c66254cd84ef1caff42f3",
+        "exact_body_bytes": "5e5e77d209f8e8c0ed36785d7f90ac5198fc67e68014492d3dd97aa16f5e855f"
+      }
+    },
+    {
+      "case": "tests/ui/enum-discriminant/actually_not_an_enum-discriminant.rs",
+      "status": "runtime_contract_pass",
+      "edition": 2015,
+      "source_sha256": "b683dff4633f110cab180e9b8f3b3ff62529062bf53398b558232da2858faa89",
+      "capture_context": "9eb5442557ae775cae8a4fe92fede34b469b7f2d3049b56fdb5ec596c936689d",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/enum-discriminant/actually_not_an_enum-discriminant.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "9eb5442557ae775cae8a4fe92fede34b469b7f2d3049b56fdb5ec596c936689d"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 0,
+        "pid": 88163,
+        "elapsed_seconds": 5.098901040968485,
+        "stdout_bytes": 2182,
+        "stdout_sha256": "2970ca7f57dad4014194d805c95087ca343bdf009297805b907802692260e035",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "guest_output": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "output_contract": "closed_managed_bytes; upstream run-pass has no output comparison without check-run-results",
+      "facts": {
+        "classified_operation_candidates": 1476,
+        "cleanup_observed": true,
+        "closed_no_external_effects": true,
+        "effect_recipe_dispatch_attempts": 0,
+        "initializer_frames_entered": 0,
+        "observed_fault": false,
+        "observed_suspension": false,
+        "source_call_boundaries": 48,
+        "terminal": {
+          "kind": "completed",
+          "unit": true
+        },
+        "typed_fault_exit_candidates": 0,
+        "unsupported_operation_candidates": 0,
+        "vm_dispatches": 1033,
+        "vm_outcomes": 1033
+      },
+      "entry_body": {
+        "definition": "4629a0d6d1d6b3aa9bab3044f182e450075ea265533b3faefe4ea1ba76c56c9f",
+        "exact_body_bytes": "29711bb81b5612bd2092d81eb502ba954795402c30f069739ff15ea008d03724"
+      }
+    }
+  ],
+  "native_reference": {
+    "scope": "adapted control only; never interpreter execution",
+    "edition": 2024,
+    "build_exit": 0,
+    "run_exit": 0,
+    "build_argv": [
+      "env",
+      "RUSTC_BOOTSTRAP=1",
+      "rustc",
+      "+1.99.0",
+      "--edition=2024",
+      "/private/tmp/lrr-v485-initializer-baseline/2024-ordinary-1/main.rs",
+      "-o",
+      "/private/tmp/lrr-v485-initializer-baseline/reference"
+    ],
+    "source_sha256": "dd0aea3f2b3b5c197cda45245732b2f486c5b17549780987b8e91155501f57c0",
+    "binary_sha256": "26f04136503ed299213b3aaf2b8fff69c1a421dc646d223a8a4ed6a5dffbe97c",
+    "stdout_bytes": 0,
+    "stderr_bytes": 0
+  },
+  "new_measured_distinct_stock_runtime_gains": 0,
+  "refreshed_suite_total": null,
+  "completed_spec_cards": [],
+  "upstream_runtime_acceptance": "incomplete; selected contracts only",
+  "diagnostic_compatibility": "unassessed",
+  "compiler_tooling_compatibility": "unassessed",
+  "full_suite_compatibility": "incomplete",
+  "guest_jit_allowed": false,
+  "architecture_record": "worktracks/05-trait-goal-engine/2026-10-20-discriminant-initializer-demand.md",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-20-discriminant-initializer-review.md",
+  "reproduction": [
+    "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+    "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+    "python3.12 tools/validation/run_controls.py NEW_VALIDATION_DIR worktracks/05-trait-goal-engine/2026-10-20-discriminant-initializer-controls.json",
+    "python3.12 worktracks/05-trait-goal-engine/discriminant_initializer_probe.py NEW_EXTERNAL_DIR",
+    "LRR_EMBEDDED_FACADE=1 python3.12 tools/rustc_checkout_runtime.py --lrr target/debug/lrr --source-digester target/debug/examples/lrr_source_digests --report-dir NEW_EXTERNAL_STOCK_DIR --timeout 240 --case tests/ui/enum-discriminant/repr128.rs --case tests/ui/consts/const-eval/enum_discr.rs --case tests/ui/enum-discriminant/discriminant_size.rs --case tests/ui/enum-discriminant/actually_not_an_enum-discriminant.rs"
+  ],
+  "planning_checks": {
+    "worktracks_check_exit": 0,
+    "spec_consistency_audit_exit": 0,
+    "scope": "planning/document checks only"
+  }
+}
