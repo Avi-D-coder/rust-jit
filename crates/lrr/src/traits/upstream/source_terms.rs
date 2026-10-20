@@ -1,6 +1,6 @@
 //! Actual demanded impl source terms -> shared IR, without inference or effects.
 use super::{configuration::PreparedSolverConfiguration, identity::DefinitionId,
-    model::{self, AllocateList, Arg, Ty, AdtDefinition, EarlyRegion, ValueConst, ScalarInt},
+    model::{self, AllocateList, Arg, Ty, AdtDefinition, ValueConst, ScalarInt},
     parameters::SourceParameter, prepared::{self, Cx}};
 use crate::{
     core::{diagnostic::Diagnostic, digest::{Digest, StableEncode, StableEncoder}},
@@ -78,12 +78,8 @@ impl PreparedImplSourceTypes {
         let ImplHeadTypeResult::Resolved { self_type, trait_ref } = self.head().result() else { return Err(SourceTypePending::HeadTypes); };
         let encoder = Encoder { definitions: &self.bindings.definitions, cx, configuration };
         let self_ty = encoder.ty(self_type, &[])?;
-        let trait_arguments = trait_ref.as_ref().map(|reference| {
-            let definition = *self.bindings.definitions.get(&reference.trait_key).ok_or(SourceTypePending::SourceDefinition)?;
-            let mut args = vec![Arg::Type(self_ty)];
-            for argument in &reference.args { args.push(encoder.arg(argument, &[])?); }
-            Ok::<_, SourceTypePending>(EncodedTraitArguments { definition, args: cx.list(args) })
-        }).transpose()?;
+        let trait_arguments = trait_ref.as_ref()
+            .map(|reference| encoder.trait_arguments(reference, self_ty)).transpose()?;
         Ok(EncodedImplTypes { self_ty, trait_arguments })
     }
 }
@@ -103,12 +99,42 @@ impl<'cx> EncodedTraitArguments<'cx> {
         ty::TraitRef::new_from_args(cx, self.definition, self.args)
     }
 }
+/// Shared source predicate translation; source enumeration/relaxation and
+/// completeness stay with the actual retained predicate plan.
+pub(super) fn encode_predicate<'cx>(cx: Cx<'cx>, configuration: &PreparedSolverConfiguration,
+    definitions: &BTreeMap<Digest, DefinitionId>, predicate: &crate::traits::predicate::PredicateResult)
+    -> Result<model::Clause<'cx, prepared::PreparedProvider<'cx>>, SourceTypePending> {
+    use crate::traits::predicate::PredicateResult;
+    let encoder = Encoder { definitions, cx, configuration };
+    let kind = match predicate {
+        PredicateResult::Implemented(reference) => {
+            let self_ty = encoder.ty(&reference.self_ty, &[])?;
+            let reference = encoder.trait_arguments(reference, self_ty)?.construct(cx);
+            ty::ClauseKind::Trait(ty::TraitClause { trait_ref: reference, polarity: ty::ClausePolarity::Positive })
+        }
+        PredicateResult::RegionOutlives { longer, shorter } =>
+            ty::ClauseKind::RegionOutlives(ty::OutlivesClause(encoder.region(longer, &[])?, encoder.region(shorter, &[])?)),
+        PredicateResult::TypeOutlives { ty, region } =>
+            ty::ClauseKind::TypeOutlives(ty::OutlivesClause(encoder.ty(ty, &[])?, encoder.region(region, &[])?)),
+        PredicateResult::Relaxed { .. } | PredicateResult::Pending(_) =>
+            unreachable!("only a prepared positive source requirement enters the Type encoder"),
+    };
+    Ok(model::Clause::new(cx, ty::Binder::dummy(kind)))
+}
 struct Encoder<'a, 'cx> { definitions: &'a BTreeMap<Digest, DefinitionId>, cx: Cx<'cx>, configuration: &'a PreparedSolverConfiguration }
 pub(super) fn encode_declared<'cx>(cx: Cx<'cx>, configuration: &PreparedSolverConfiguration,
     definitions: &BTreeMap<Digest, DefinitionId>, ty: &TyTerm) -> Result<Ty<'cx, prepared::PreparedProvider<'cx>>, SourceTypePending> {
     Encoder { definitions, cx, configuration }.ty(ty, &[])
 }
 impl<'cx> Encoder<'_, 'cx> {
+    fn trait_arguments(&self, reference: &term::TraitRef, self_ty: Ty<'cx, prepared::PreparedProvider<'cx>>)
+        -> Result<EncodedTraitArguments<'cx>, SourceTypePending> {
+        let definition = *self.definitions.get(&reference.trait_key).ok_or(SourceTypePending::SourceDefinition)?;
+        let mut args = vec![Arg::Type(self_ty)];
+        for argument in &reference.args { args.push(self.arg(argument, &[])?); }
+        Ok(EncodedTraitArguments { definition, args: self.cx.list(args) })
+    }
+
     fn parameter(&self, key: term::ParamKey, kind: BoundKind) -> Result<SourceParameter, SourceTypePending> {
         self.cx.services().source_parameter(key, kind).ok_or(SourceTypePending::ParameterLayout)
     }
@@ -126,7 +152,7 @@ impl<'cx> Encoder<'_, 'cx> {
     fn region(&self, region: &RegionTerm, binders: &[&[BoundKind]]) -> Result<ty::Region<Cx<'cx>>, SourceTypePending> {
         let kind = match region {
             RegionTerm::Static => RegionKind::ReStatic,
-            RegionTerm::Param(key) => RegionKind::ReEarlyParam(EarlyRegion { parameter: self.parameter(*key, BoundKind::Region)?, name: None }),
+            RegionTerm::Param(key) => RegionKind::ReEarlyParam(self.cx.services().source_early_region(*key).ok_or(SourceTypePending::ParameterLayout)?),
             RegionTerm::Bound { depth, index } => { self.bound(*depth, *index, BoundKind::Region, binders)?;
                 RegionKind::ReBound(BoundVarIndexKind::Bound(DebruijnIndex::from_u32(*depth)), BoundRegion { var: BoundVar::from_u32(*index), kind: BoundRegionKind::Anon }) },
             RegionTerm::Local { .. } => return Err(SourceTypePending::RegionMetadata),
@@ -266,6 +292,13 @@ pub(crate) fn check_actual_encodings(db: &mut Database, key: &crate::db::seals::
                     for (source, encoded) in source.args.iter().zip(encoded.args.items().iter().skip(1)) {
                         match (source, encoded) {
                             (GenericArg::Type(source), Arg::Type(encoded)) => check_shape(source, *encoded),
+                            (GenericArg::Region(source), Arg::Region(encoded)) => {
+                                check_region(source, *encoded);
+                                let RegionTerm::Param(key) = source else { panic!("this source trait region substitution remains unverified") };
+                                let parameter = cx.services().source_parameter(*key, BoundKind::Region).unwrap();
+                                assert_eq!(model::Args::identity_for_item(cx, id).items()[parameter.index() as usize], Arg::Region(*encoded),
+                                    "source argument and real compiler identity args share the exact region representation");
+                            }
                             _ => panic!("this actual fixture's generic argument shape remains unverified"),
                         }
                     }
@@ -301,14 +334,33 @@ pub(crate) fn check_actual_encodings(db: &mut Database, key: &crate::db::seals::
     Ok(count)
 }
 #[cfg(test)]
+fn check_region<'cx>(source: &RegionTerm, encoded: ty::Region<Cx<'cx>>) {
+    match (source, encoded.kind()) {
+        (RegionTerm::Static, RegionKind::ReStatic) => {},
+        (RegionTerm::Param(key), RegionKind::ReEarlyParam(region)) => {
+            assert_eq!(*key, region.parameter.source());
+            assert_eq!(region.parameter.kind(), BoundKind::Region);
+            assert!(region.name.is_some(), "retain the real declared region name, as identity args do");
+        }
+        _ => panic!("actual source region shape remains unverified"),
+    }
+}
+#[cfg(test)]
 fn check_shape<'cx>(source: &TyTerm, encoded: Ty<'cx, prepared::PreparedProvider<'cx>>) {
     match (source, encoded.kind()) {
         (TyTerm::Primitive(PrimitiveType::Isize), TyKind::Int(IntTy::Isize))
         | (TyTerm::Primitive(PrimitiveType::I32), TyKind::Int(IntTy::I32))
         | (TyTerm::Primitive(PrimitiveType::Usize), TyKind::Uint(UintTy::Usize))
-        | (TyTerm::Primitive(PrimitiveType::U8), TyKind::Uint(UintTy::U8)) => {},
+        | (TyTerm::Primitive(PrimitiveType::U8), TyKind::Uint(UintTy::U8))
+        | (TyTerm::Primitive(PrimitiveType::U32), TyKind::Uint(UintTy::U32))
+        | (TyTerm::Primitive(PrimitiveType::U64), TyKind::Uint(UintTy::U64)) => {},
         (TyTerm::Primitive(PrimitiveType::Unit), TyKind::Tuple(fields)) => assert!(fields.items().is_empty()),
         (TyTerm::Slice(source), TyKind::Slice(encoded)) => check_shape(source, encoded),
+        (TyTerm::Ref(region, mutable, source), TyKind::Ref(encoded_region, encoded_source, encoded_mut)) => {
+            check_region(region, encoded_region);
+            assert_eq!(*mutable, encoded_mut == Mutability::Mut);
+            check_shape(source, encoded_source);
+        }
         (TyTerm::Nominal(definition, args), TyKind::Adt(adt, encoded_args)) => {
             assert_eq!(adt.definition.source(), *definition);
             assert_eq!(args.len(), encoded_args.items().len());

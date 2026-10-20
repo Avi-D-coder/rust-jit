@@ -11,8 +11,8 @@ use crate::{
     },
     traits::{header_syntax::ImplHeaderSyntaxKey, predicate::SourcePredicateRecipe},
 };
-use ra_ap_syntax::{AstNode, ast};
-use std::sync::Arc;
+use ra_ap_syntax::{AstNode, ast::{self, HasGenericParams}};
+use std::{collections::BTreeMap, sync::Arc};
 
 #[derive(Debug)]
 pub enum ImplPredicateResult {
@@ -24,6 +24,7 @@ pub struct PreparedImplPredicates {
     key: ImplHeaderSyntaxKey,
     head: Arc<QueryValue>,
     result: ImplPredicateResult,
+    parameter_ranges: BTreeMap<u32, crate::syntax::spans::SourceRange>,
 }
 impl PreparedImplPredicates {
     pub fn key(&self) -> &ImplHeaderSyntaxKey {
@@ -34,6 +35,10 @@ impl PreparedImplPredicates {
             unreachable!("private impl head owner")
         };
         head
+    }
+    pub(crate) fn parameter_range(&self, key: crate::traits::term::ParamKey) -> Option<crate::syntax::spans::SourceRange> {
+        if self.head().syntax().canonical_owner()?.identity() != key.definition { return None; }
+        self.parameter_ranges.get(&key.ordinal).copied()
     }
     pub fn result(&self) -> &ImplPredicateResult {
         &self.result
@@ -63,6 +68,7 @@ impl PreparedImplPredicates {
                     key: key.clone(),
                     head: head_owner.clone(),
                     result: ImplPredicateResult::HeadPending(*why),
+                    parameter_ranges: BTreeMap::new(),
                 }));
             }
         };
@@ -85,6 +91,15 @@ impl PreparedImplPredicates {
             }
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
+        let mut parameter_ranges = BTreeMap::new();
+        if let Some(parameters) = ast::Impl::cast(node.clone()).expect("checked retained Impl").generic_param_list() {
+            for (index, parameter) in parameters.generic_params().enumerate() {
+                let ordinal = match u32::try_from(index) {
+                    Ok(index) => index, Err(_) => return QueryPoll::Ready(Err(fault("source generic ordinal overflow"))),
+                };
+                parameter_ranges.insert(ordinal, crate::syntax::ast_adapter::range(parameter.syntax().text_range()));
+            }
+        }
         let inventory = ready!(db.fetch(
             &SyntaxProvider,
             QueryKey::PreparedScopeImplHeaders(key.inventory.clone())
@@ -109,8 +124,6 @@ impl PreparedImplPredicates {
             environment.names(),
             &sources,
             &declaration,
-            canonical.identity(),
-            syntax.generics(),
             &node,
             environment.language_item_core(declaration.profile()),
         ));
@@ -118,6 +131,7 @@ impl PreparedImplPredicates {
             key: key.clone(),
             head: head_owner.clone(),
             result: ImplPredicateResult::Requirements(requirements),
+            parameter_ranges,
         }))
     }
 }
@@ -125,10 +139,11 @@ fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-IMPL-HEADER", message.into())
 }
 impl StableEncode for PreparedImplPredicates {
-    const DOMAIN: &'static str = "lrr/v1/prepared-impl-predicate-requirements";
+    const DOMAIN: &'static str = "lrr/v2/prepared-impl-predicate-requirements";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.record(self.head());
+        e.map(&self.parameter_ranges, |e, ordinal, range| { e.u32(*ordinal); e.u32(range.start); e.u32(range.end); });
         match &self.result {
             ImplPredicateResult::HeadPending(_) => e.u32(0), // exact reason encoded in actual head
             ImplPredicateResult::Requirements(requirements) => {

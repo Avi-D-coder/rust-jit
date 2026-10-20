@@ -784,8 +784,6 @@ fn unchanged_sized_relaxations_use_actual_language_item_across_origins_and_editi
                         environment.names(),
                         &sources,
                         &declaration,
-                        definition,
-                        syntax.generics(),
                         &node,
                         core,
                     ));
@@ -821,8 +819,6 @@ fn unchanged_sized_relaxations_use_actual_language_item_across_origins_and_editi
                         environment.names(),
                         &sources,
                         &declaration,
-                        definition,
-                        syntax.generics(),
                         &node,
                         None,
                     ));
@@ -2689,14 +2685,14 @@ fn unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all
         for case in ["tests/ui/traits/safety-ok.rs", "tests/ui/methods/method-self-arg-trait.rs",
             "tests/ui/coherence/coherence-impl-in-fn.rs", "tests/ui/methods/method-two-trait-defer-resolution-2.rs",
             "tests/ui/traits/multidispatch1.rs",
-            "tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs"] {
+            "tests/ui/generics/issue-61631-default-type-param-can-reference-self-in-trait.rs", "tests/ui/traits/issue-22019.rs"] {
             let original = root.join(case);
             let text = std::fs::read_to_string(&original).unwrap();
             let mut paths = vec![original];
-            if case.ends_with("method-two-trait-defer-resolution-2.rs") || case.ends_with("multidispatch1.rs") || case.ends_with("issue-61631-default-type-param-can-reference-self-in-trait.rs") {
+            if case.ends_with("method-two-trait-defer-resolution-2.rs") || case.ends_with("multidispatch1.rs") || case.ends_with("issue-61631-default-type-param-can-reference-self-in-trait.rs") || case.ends_with("issue-22019.rs") {
                 // Crate configuration belongs outside an item-emitting macro.
                 // Only the temporary adaptation removes it; original stays unchanged.
-                let text = text.replace("#![crate_type=\"lib\"]", "");
+                let text = text.replace("#![crate_type=\"lib\"]", "").replace("#![allow(missing_copy_implementations)]", "").replace("#![allow(unused_variables)]", "");
                 paths.push(temporary_source(&format!("shared-types-user-{edition}"),
                     &format!("macro_rules! emit_types {{($($t:tt)*)=>{{$($t)*}}}} emit_types!{{{text}}}")));
                 paths.push(temporary_source(&format!("shared-types-wrap-{edition}"),
@@ -2961,4 +2957,77 @@ fn generated_opaque_headers_share_declaration_query_and_refresh_actual_source_re
         assert!(absent.source_parts().is_none());assert!(absent.opaque_returns().is_none());
     }
     assert_eq!(worlds,8);
+}
+
+#[test]
+fn unchanged_conditional_impl_requirements_construct_actual_upstream_clauses_all_editions_and_origins() {
+    use crate::{db::key::QueryKey, traits::{predicate::PredicatePending,
+        upstream::source_predicates::{check_actual_clauses, SourcePredicatePending}}};
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");
+    let mut worlds = 0; let mut clauses = 0;
+    for edition in [2015, 2018, 2021, 2024] {
+        for (case, marker, expected) in [
+            ("tests/ui/methods/method-two-trait-defer-resolution-2.rs", "\ntrait Foo", [3usize,2,2,0,0,0,0]),
+            ("tests/ui/traits/where-clause-vs-impl.rs", "\nuse std::rc", [2,6,6,0,0,0,0]),
+            ("tests/ui/traits/static-outlives-a-where-clause.rs", "\ntrait Foo", [2,2,1,1,0,0,1]),
+            ("tests/ui/self/self-as-trait-call-in-method-body.rs", "\npub trait Foo", [1,2,1,0,1,0,0]),
+            ("tests/ui/traits/principal-less-objects.rs", "\nuse std::sync", [2,0,0,0,0,1,0]),
+        ] {
+            let original = root.join(case); let text = std::fs::read_to_string(&original).unwrap();
+            let at = text.find(marker).unwrap(); let (prefix, items) = text.split_at(at);
+            let mut paths = vec![original];
+            for wrapper in [false,true] {
+                let setup = if wrapper { "macro_rules! outer {($($t:tt)*)=>{emit!{$($t)*}}}" } else { "" };
+                let invoke = if wrapper { "outer" } else { "emit" };
+                paths.push(temporary_source(&format!("impl-clauses-{edition}-{wrapper}-{}",case.replace('/',"-")),
+                    &format!("{prefix}\nmacro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} {setup} {invoke}!{{{items}}}")));
+            }
+            for (origin,path) in paths.iter().enumerate() {
+                let (mut db,seal,root) = configured_impl_catalog_world(path,edition).unwrap();
+                db.trace.detailed=true; let start=db.trace.events.len();
+                let actual = check_actual_clauses(&mut db,&seal,root.crate_key)
+                    .unwrap_or_else(|e|panic!("{case},edition{edition},origin{origin}: {e:?}"));
+                let counts=[actual.implementations,actual.clauses,actual.traits,actual.regions,actual.types,actual.relaxations,actual.pending.len()];
+                assert_eq!(counts,expected,"{case},edition{edition},origin{origin}: {actual:?}");
+                assert!(actual.pending.iter().all(|p| *p==SourcePredicatePending::Bound(PredicatePending::HigherRanked)),
+                    "preserve the actual unresolved higher-ranked bound, not a source-only exclusion");
+                assert!(db.trace.events[start..].iter().all(|e| !matches!(e.key,
+                    QueryKey::FunctionSignature(_) | QueryKey::BodyStructure(_) | QueryKey::Thunk(_) | QueryKey::PatternPlan(_))));
+                eprintln!("actual source clauses {case},edition{edition},origin{origin}: {actual:?}; no root/guest execution");
+                worlds+=1; clauses+=actual.clauses;
+            }
+        }
+    }
+    assert_eq!(worlds,60); assert_eq!(clauses,144);
+}
+
+#[test]
+fn unchanged_lifetime_aliases_use_retained_target_ast_and_mixed_substitution_all_editions_and_origins() {
+    use crate::{db::{key::QueryKey,poll::QueryPoll,provider::SyntaxProvider,value::QueryValue},
+        source::manifest::Namespace,syntax::imports::ImportSegment,traits::term::{TyTerm,RegionTerm}};
+    let path=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout/tests/ui/traits/issue-22019.rs");
+    let text=std::fs::read_to_string(&path).unwrap();let at=text.find("\npub struct CFGNode").unwrap();let (prefix,items)=text.split_at(at);
+    let mut worlds=0;
+    for edition in [2015,2018,2021,2024] {
+        let mut paths=vec![path.clone()];
+        for wrapper in [false,true] {
+            let setup=if wrapper {"macro_rules! outer {($($t:tt)*)=>{emit!{$($t)*}}}"}else{""};let invoke=if wrapper {"outer"}else{"emit"};
+            paths.push(temporary_source(&format!("retained-alias-{edition}-{wrapper}"),&format!("{prefix}\nmacro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} {setup} {invoke}!{{{items}}}")));
+        }
+        for (origin,path) in paths.iter().enumerate() {
+            let (mut db,seal,scope)=configured_impl_catalog_world(path,edition).unwrap();
+            let headers=match db.fetch(&SyntaxProvider,QueryKey::PreparedScopeImplHeaders(seal)) {QueryPoll::Ready(Ok(v))=>v.value,other=>panic!("actual alias catalog: {other:?}")};
+            let QueryValue::PreparedScopeImplHeaders(headers)=headers.as_ref()else{panic!()};
+            let environment=headers.inventory_root().environment().unwrap();
+            let lookup=environment.names().lookup_source_path(Namespace::Type,&[ImportSegment::Name("Node".into())],false,&scope,edition).unwrap();
+            let crate::frontend::names::NameLookup::Defined(alias)=lookup else{panic!("actual source alias: {lookup:?}")};
+            let sources=environment.sources().iter().collect::<Vec<_>>();db.trace.detailed=true;let start=db.trace.events.len();
+            let (explicit,omitted)=crate::frontend::source_types::check_retained_alias_arguments(&mut db,environment.names(),&sources,alias.identity).unwrap();
+            let (TyTerm::Ref(RegionTerm::Static,false,explicit_target),TyTerm::Ref(RegionTerm::Local{definition,start:slot_start,end:slot_end},false,omitted_target))=(explicit,omitted)else{panic!("actual alias region transport remains unverified")};
+            assert_eq!(definition,alias.identity);assert!(slot_start<slot_end);assert_eq!(explicit_target,omitted_target);assert!(matches!(*explicit_target,TyTerm::Nominal(_,ref args)if args.is_empty()));
+            assert!(db.trace.events[start..].iter().all(|e|!matches!(e.key,QueryKey::FunctionSignature(_)|QueryKey::BodyStructure(_)|QueryKey::Thunk(_)|QueryKey::PatternPlan(_))));
+            eprintln!("retained actual Node alias,edition{edition},origin{origin}: explicit static and held local elision; no synthetic signature/target parse/guest entry");worlds+=1;
+        }
+    }
+    assert_eq!(worlds,12);
 }

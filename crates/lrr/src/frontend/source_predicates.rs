@@ -9,11 +9,10 @@ use crate::{
     source::changes::PreparedSourceView,
     syntax::{
         ast_adapter::range,
-        signatures::{DefinitionParameter, GenericKind},
     },
     traits::{
         predicate::{PredicatePending, PredicateResult, SourcePredicateRecipe},
-        term::{ParamKey, RegionTerm, TraitRef, TyTerm},
+        term::{RegionTerm, TraitRef, TyTerm},
     },
 };
 use ra_ap_syntax::{
@@ -21,40 +20,11 @@ use ra_ap_syntax::{
     ast::{self, HasGenericArgs},
 };
 
-fn region(
-    definition: crate::core::digest::Digest,
-    generics: &[DefinitionParameter],
-    lifetime: &ast::Lifetime,
-) -> Option<RegionTerm> {
-    let name =
-        crate::syntax::signatures::canonical_lifetime(&lifetime.syntax().text().to_string())?;
-    if name == "'static" {
-        return Some(RegionTerm::Static);
-    }
-    if name == "'_" {
-        let source = range(lifetime.syntax().text_range());
-        return Some(RegionTerm::Local {
-            definition,
-            start: source.start,
-            end: source.end,
-        });
-    }
-    let parameter = generics
-        .iter()
-        .find(|parameter| parameter.kind == GenericKind::Lifetime && parameter.name == name)?;
-    Some(RegionTerm::Param(ParamKey {
-        definition,
-        ordinal: parameter.ordinal,
-    }))
-}
-
 pub(crate) fn prepare(
     db: &mut Database,
     graph: &NameNamespaces,
     sources: &[&PreparedSourceView],
     declaration: &WrittenTypeDeclaration<'_>,
-    definition: crate::core::digest::Digest,
-    generics: &[DefinitionParameter],
     owner: &ra_ap_syntax::SyntaxNode,
     core: Option<crate::core::digest::Digest>,
 ) -> QueryPoll<Vec<SourcePredicateRecipe>> {
@@ -143,7 +113,7 @@ pub(crate) fn prepare(
             }
             ActualBoundSubject::Region(term) => Subject::Region(term),
             ActualBoundSubject::RegionSyntax(lifetime) => {
-                let Some(term) = region(definition, generics, &lifetime) else {
+                let Some(term) = declaration.region(&lifetime) else {
                     pending!(LifetimeName);
                 };
                 Subject::Region(term)
@@ -153,7 +123,7 @@ pub(crate) fn prepare(
             }
         };
         if let Some(lifetime) = row.bound.lifetime() {
-            let Some(target) = region(definition, generics, &lifetime) else {
+            let Some(target) = declaration.region(&lifetime) else {
                 pending!(LifetimeName);
             };
             let result = match subject {

@@ -360,7 +360,7 @@ pub(crate) struct WrittenTypeDeclaration<'a> {
     function: Option<&'a FunctionSignature>,
     syntax: Option<&'a ra_ap_syntax::SyntaxNode>,
     impl_self: Option<&'a TyTerm>,
-    type_arguments: Option<&'a std::collections::BTreeMap<crate::traits::term::ParamKey, TyTerm>>,
+    type_arguments: Option<&'a std::collections::BTreeMap<crate::traits::term::ParamKey, crate::traits::term::GenericArg>>,
     parameter_rebase: Option<&'a std::collections::BTreeMap<crate::traits::term::ParamKey, crate::traits::term::ParamKey>>,
 }
 impl<'a> WrittenTypeDeclaration<'a> {
@@ -456,7 +456,27 @@ impl<'a> WrittenTypeDeclaration<'a> {
         self.parameter_rebase.and_then(|map| map.get(&key)).copied().unwrap_or(key)
     }
     fn parameter_type(&self, key: crate::traits::term::ParamKey) -> TyTerm {
-        self.type_arguments.and_then(|arguments| arguments.get(&key)).cloned().unwrap_or_else(|| TyTerm::Param(self.parameter_key(key)))
+        self.type_arguments.and_then(|arguments| arguments.get(&key)).and_then(|arg| match arg {
+            crate::traits::term::GenericArg::Type(ty) => Some(ty.clone()), _ => None,
+        }).unwrap_or_else(|| TyTerm::Param(self.parameter_key(key)))
+    }
+    /// One actual declaration lifetime leaf for bounds and generic arguments.
+    /// Regions remain metadata; this performs no static region/borrow checking.
+    pub(super) fn region(&self, lifetime: &ra_ap_syntax::ast::Lifetime) -> Option<crate::traits::term::RegionTerm> {
+        use ra_ap_syntax::AstNode;
+        use crate::{syntax::signatures::{canonical_lifetime, GenericKind}, traits::term::{GenericArg, ParamKey, RegionTerm}};
+        let name = canonical_lifetime(&lifetime.syntax().text().to_string())?;
+        if name == "'static" { return Some(RegionTerm::Static); }
+        if name == "'_" {
+            let source = crate::syntax::ast_adapter::range(lifetime.syntax().text_range());
+            return Some(RegionTerm::Local { definition: self.definition, start: source.start, end: source.end });
+        }
+        let parameter = self.generics.iter().find(|p| p.kind == GenericKind::Lifetime && p.name == name)?;
+        let key = ParamKey { definition: self.definition, ordinal: parameter.ordinal };
+        Some(match self.type_arguments.and_then(|args| args.get(&key)) {
+            Some(GenericArg::Region(region)) => region.clone(),
+            _ => RegionTerm::Param(self.parameter_key(key)),
+        })
     }
     fn resolve_name(
         &self,
@@ -497,7 +517,8 @@ impl<'a> WrittenTypeDeclaration<'a> {
 pub(super) enum SymbolicTypePending { Regions, Identity }
 pub(super) fn symbolic_type_pending(ty: &ra_ap_syntax::ast::Type) -> Option<SymbolicTypePending> {
     use ra_ap_syntax::{AstNode, ast};
-    if ty.syntax().descendants().any(|node| ast::RefType::can_cast(node.kind()) || ast::Lifetime::can_cast(node.kind())) {
+    if ty.syntax().descendants().any(|node| ast::RefType::can_cast(node.kind())
+        || ast::Lifetime::can_cast(node.kind()) && !node.parent().is_some_and(|p| ast::LifetimeArg::can_cast(p.kind()))) {
         return Some(SymbolicTypePending::Regions);
     }
     ty.syntax().descendants().any(|node| ast::DynTraitType::can_cast(node.kind())
@@ -608,19 +629,25 @@ pub(super) fn resolve_actual_type(
                     Err(error) => QueryPoll::Ready(Err(error)),
                 }
             }
-            // Regions are not runtime data; the interpreter binds through
-            // erased regions after rustc's own borrow checking.
-            ast::Type::RefType(reference) => match reference.ty() {
-                Some(target) => match walk(db, graph, sources, signature, &target) {
-                    QueryPoll::Ready(Ok(Some(target))) => QueryPoll::Ready(Ok(Some(TyTerm::Ref(
-                        crate::traits::term::RegionTerm::Static,
-                        reference.mut_token().is_some(),
-                        Box::new(target),
-                    )))),
-                    other => other,
-                },
-                None => QueryPoll::Ready(Ok(None)),
-            },
+            // Preserve explicit declaration lifetimes in source terms. Runtime
+            // storage still erases regions; exact reference admission is separate.
+            ast::Type::RefType(reference) => {
+                let region = match reference.lifetime() {
+                    Some(lifetime) => match signature.region(&lifetime) {
+                        Some(region) => region, None => return QueryPoll::Ready(Ok(None)),
+                    },
+                    None => crate::traits::term::RegionTerm::Static,
+                };
+                match reference.ty() {
+                    Some(target) => match walk(db, graph, sources, signature, &target) {
+                        QueryPoll::Ready(Ok(Some(target))) => QueryPoll::Ready(Ok(Some(TyTerm::Ref(
+                            region, reference.mut_token().is_some(), Box::new(target),
+                        )))),
+                        other => other,
+                    },
+                    None => QueryPoll::Ready(Ok(None)),
+                }
+            }
             ast::Type::SliceType(slice) => match slice.ty() {
                 Some(element) => match walk(db, graph, sources, signature, &element) {
                     QueryPoll::Ready(Ok(Some(element))) => {
@@ -766,7 +793,12 @@ pub(super) fn resolve_actual_type(
                                     other => return other,
                                 }
                             }
-                            ast::GenericArg::LifetimeArg(_) => {}
+                            ast::GenericArg::LifetimeArg(argument) => {
+                                let Some(region) = argument.lifetime().and_then(|lifetime| signature.region(&lifetime)) else {
+                                    return QueryPoll::Ready(Ok(None));
+                                };
+                                arguments.push(crate::traits::term::GenericArg::Region(region));
+                            }
                             _ => return QueryPoll::Ready(Ok(None)),
                         }
                     }
@@ -885,7 +917,12 @@ pub(super) fn resolve_actual_type(
                             other => return other,
                         }
                     }
-                    ast::GenericArg::LifetimeArg(_) => {}
+                    ast::GenericArg::LifetimeArg(argument) => {
+                                let Some(region) = argument.lifetime().and_then(|lifetime| signature.region(&lifetime)) else {
+                                    return QueryPoll::Ready(Ok(None));
+                                };
+                                arguments.push(crate::traits::term::GenericArg::Region(region));
+                            }
                     _ => return QueryPoll::Ready(Ok(None)),
                 }
             }
@@ -1211,7 +1248,13 @@ pub(super) fn projection_trait(
     {
         for argument in list.generic_args() {
             match argument {
-                ast::GenericArg::LifetimeArg(_) | ast::GenericArg::AssocTypeArg(_) => {}
+                ast::GenericArg::LifetimeArg(argument) => {
+                    let Some(region) = argument.lifetime().and_then(|lifetime| signature.region(&lifetime)) else {
+                        return QueryPoll::Ready(Ok(None));
+                    };
+                    arguments.push(crate::traits::term::GenericArg::Region(region));
+                }
+                ast::GenericArg::AssocTypeArg(_) => {}
                 ast::GenericArg::TypeArg(argument) => {
                     let Some(ty) = argument.ty() else {
                         return QueryPoll::Ready(Ok(None));
@@ -1251,19 +1294,30 @@ fn complete_trait_arguments(
         return QueryPoll::Ready(Err(fault("trait default declaration query differs")));
     };
     let Some(header) = trait_declaration.header() else { return QueryPoll::Ready(Ok(None)); };
-    if header.generics().iter().any(|p| p.kind != GenericKind::Type) || arguments.len() > header.generics().len() {
-        // The old source path erases written lifetimes and does not yet carry
-        // const argument Type metadata. Never turn that into an exact reference.
+    if header.generics().iter().any(|p| p.kind == GenericKind::Const) || arguments.len() > header.generics().len() {
+        // Const arguments still need actual source Type metadata. Do not
+        // turn an incomplete representation into an exact reference.
         return QueryPoll::Ready(Ok(None));
     }
-    if arguments.len() == header.generics().len() { return QueryPoll::Ready(Ok(Some((trait_key, arguments)))); }
+    if arguments.len() == header.generics().len() {
+        let compatible = header.generics().iter().zip(&arguments).all(|(p, arg)| matches!((p.kind,arg),
+            (GenericKind::Type,GenericArg::Type(_)) | (GenericKind::Lifetime,GenericArg::Region(_))));
+        return QueryPoll::Ready(Ok(compatible.then_some((trait_key, arguments))));
+    }
     let (Some(scope), Some(recipe), Some(parsed)) =
         (trait_declaration.scope(), trait_declaration.recipe(), trait_declaration.parsed()) else {
             return QueryPoll::Ready(Ok(None));
         };
     let mut bindings = std::collections::BTreeMap::new();
     for (index, parameter) in header.generics().iter().enumerate() {
-        let term = if let Some(GenericArg::Type(term)) = arguments.get(index) { term.clone() } else {
+        if parameter.kind == GenericKind::Lifetime {
+            let Some(GenericArg::Region(region)) = arguments.get(index) else { return QueryPoll::Ready(Ok(None)); };
+            bindings.insert(ParamKey { definition: trait_key, ordinal: parameter.ordinal }, GenericArg::Region(region.clone()));
+            continue;
+        }
+        let term = if let Some(argument) = arguments.get(index) {
+            let GenericArg::Type(term) = argument else { return QueryPoll::Ready(Ok(None)); }; term.clone()
+        } else {
             let Some(range) = header.generic_ranges().get(index) else { return QueryPoll::Ready(Ok(None)); };
             let node = match parsed.syntax_at(*range, |node| ast::TypeParam::can_cast(node.kind())) {
                 Ok(Some(node)) => node, Ok(None) => return QueryPoll::Ready(Ok(None)),
@@ -1281,7 +1335,7 @@ fn complete_trait_arguments(
             };
             arguments.push(GenericArg::Type(term.clone())); term
         };
-        bindings.insert(ParamKey { definition: trait_key, ordinal: parameter.ordinal }, term);
+        bindings.insert(ParamKey { definition: trait_key, ordinal: parameter.ordinal }, GenericArg::Type(term));
     }
     QueryPoll::Ready(Ok(Some((trait_key, arguments))))
 }
@@ -1886,48 +1940,70 @@ pub(super) fn deferred_alias_type(
     if alias.scope.owner.is_some() {
         return QueryPoll::Ready(Ok(None));
     }
-    // The alias declaration is its own Type owner: its generics, scope and
-    // edition, with the target as the only written Type.
-    let signature = FunctionSignature {
-        definition,
-        generic_source_layout: None,
-        scope: alias.scope.clone(),
-        header: alias.header.clone(),
-        generics: alias.generics.clone(),
-        parameters: Vec::new(),
-        result: alias.target.clone(),
-        result_symbolic: None,
-        predicates: Vec::new(),
+    // Join the actual retained alias declaration, not a synthetic function or
+    // reparsed display tokens. Both source queries must describe this snapshot.
+    use ra_ap_syntax::{AstNode, ast::{self, HasGenericParams}};
+    use crate::traits::term::{GenericArg, ParamKey, RegionTerm};
+    let declaration = match db.fetch(&SyntaxProvider, QueryKey::DeclarationGenerics(definition)) {
+        QueryPoll::Ready(Ok(value)) => value.value,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
     };
-    let term = match resolve_written_type(db, graph, sources, &signature, &alias.target) {
+    let QueryValue::DeclarationGenerics(generics) = declaration.as_ref() else {
+        return QueryPoll::Ready(Err(fault("alias generic declaration query differs")));
+    };
+    let Some((_, header, context, parsed)) = generics.source_parts() else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    if header != &alias.header || context.scope != alias.scope || generics.parameters() != alias.generics {
+        return QueryPoll::Ready(Err(fault("alias target/generic source receipts differ")));
+    }
+    let item = match parsed.syntax_at(context.range, |n| ast::TypeAlias::can_cast(n.kind())) {
+        Ok(Some(node)) => ast::TypeAlias::cast(node).expect("checked retained alias"),
+        Ok(None) => return QueryPoll::Ready(Err(fault("actual alias target is absent"))),
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    let Some(target) = item.ty() else { return QueryPoll::Ready(Ok(None)); };
+    let owner = WrittenTypeDeclaration::declaration(super::type_name_namespace::SourceTypeOwner {
+        definition, scope: &context.scope, header,
+    }, &alias.generics, item.syntax(), None);
+    let term = match resolve_actual_type(db, graph, sources, &owner, &target) {
         QueryPoll::Ready(Ok(Some(term))) => term,
         other => return other,
     };
-    let mut supplied = arguments.iter().filter_map(|argument| match argument {
-        crate::traits::term::GenericArg::Type(ty) => Some(ty),
-        _ => None,
-    });
-    let mut map = std::collections::BTreeMap::new();
-    for parameter in alias
-        .generics
-        .iter()
-        .filter(|parameter| parameter.kind == crate::syntax::signatures::GenericKind::Type)
-    {
-        let key = match resolve_named(db, graph, sources, &signature, &parameter.name) {
-            QueryPoll::Ready(Ok(SignatureName::Parameter(key))) => key,
-            QueryPoll::Ready(Ok(_)) => return QueryPoll::Ready(Ok(None)),
-            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-            QueryPoll::NeedInput(request) => return QueryPoll::NeedInput(request),
+    let parameter_ranges = item.generic_param_list().map(|list| list.generic_params()
+        .map(|parameter| crate::syntax::ast_adapter::range(parameter.syntax().text_range())).collect::<Vec<_>>())
+        .unwrap_or_default();
+    let mut supplied = arguments.iter().peekable();
+    let mut substitution = crate::traits::subst::Substitution::default();
+    for parameter in &alias.generics {
+        use crate::syntax::signatures::GenericKind;
+        let value = match parameter.kind {
+            GenericKind::Lifetime => match supplied.peek() {
+                Some(GenericArg::Region(_)) => supplied.next().expect("peeked argument").clone(),
+                _ => {
+                    // Runtime erases omitted alias lifetimes. Preserve their
+                    // actual declared slot as local metadata; the exact source
+                    // IR encoder holds Local instead of proving a guessed region.
+                    let Some(range) = parameter_ranges.get(parameter.ordinal as usize) else {
+                        return QueryPoll::Ready(Err(fault("actual alias lifetime slot absent")));
+                    };
+                    GenericArg::Region(RegionTerm::Local { definition, start: range.start, end: range.end })
+                }
+            },
+            GenericKind::Type => match supplied.next() {
+                Some(value @ GenericArg::Type(_)) => value.clone(), _ => return QueryPoll::Ready(Ok(None)),
+            },
+            GenericKind::Const => match supplied.next() {
+                Some(value @ GenericArg::Const(_)) => value.clone(), _ => return QueryPoll::Ready(Ok(None)),
+            },
         };
-        let Some(argument) = supplied.next() else {
-            return QueryPoll::Ready(Ok(None));
-        };
-        map.insert(key, argument.clone());
+        if let Err(error) = substitution.insert(ParamKey { definition, ordinal: parameter.ordinal }, value) {
+            return QueryPoll::Ready(Err(error));
+        }
     }
-    if supplied.next().is_some() {
-        return QueryPoll::Ready(Ok(None));
-    }
-    QueryPoll::Ready(Ok(Some(super::associated_types::substitute(&term, &map))))
+    if supplied.next().is_some() { return QueryPoll::Ready(Ok(None)); }
+    QueryPoll::Ready(substitution.apply(&term).map(Some))
 }
 /// Resolve the selected result of the owning source Type lookup above. This
 /// internal helper cannot serve as an alternate public namespace admission.
@@ -2225,4 +2301,17 @@ pub(super) fn local_nominal_owner(
         }))),
         Err(error) => QueryPoll::Ready(Err(error)),
     }
+}
+
+/// Supplemental retained-source alias control; never a source authority bypass.
+#[cfg(test)]
+pub(crate) fn check_retained_alias_arguments(db: &mut Database, graph: &NameNamespaces,
+    sources: &[&PreparedSourceView], definition: crate::core::digest::Digest) -> Result<(TyTerm,TyTerm), Diagnostic> {
+    let get = |db: &mut Database, args: &[crate::traits::term::GenericArg]| {
+        match deferred_alias_type(db, graph, sources, definition, args) {
+            QueryPoll::Ready(Ok(Some(term))) => Ok(term), QueryPoll::Ready(Err(error)) => Err(error),
+            other => Err(fault(&format!("actual retained alias control: {other:?}"))),
+        }
+    };
+    Ok((get(db,&[crate::traits::term::GenericArg::Region(crate::traits::term::RegionTerm::Static)])?,get(db,&[])?))
 }

@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V377-V380 HELD M019/M020 retained opaque return headers. DeclarationGenerics now retains actual return-Type opaque positions/parents/bounds/impl-token editions and explicit unresolved MacroType frontiers in its existing source memo. ParsedFile::function_header factors existing Fn header admission for signatures and declaration metadata; no full FunctionSignature/body preparation is added to namespace-only queries. DefinitionReceipt retains the same actual DeclarationGenerics Arc, with no opaque IDs/captures/ParamEnv/fake ready facts. V377/V378 build-only; V379 three host caller compile errors preserved; V380 both macOS1.99.0 builds and4/4source controls pass with exact source/HEAD/test/CLI guards. New controls retain36unchanged source sites and8normal emit/wrapper worlds across all4editions, actual AST locations, memo sharing, real old/new source isolation and unresolved type-macro frontiers; existing140Types/136TraitRefs/48origin-edition and20generic-world matrices remain passing. Runtime2024 generic-fn passes,401VMdispatches/6source calls/exact output/cleanup; nesting remains exit2 LRR-E-TYPE-CONTEXT unbound U,22VMdispatches/2calls/incomplete capture/no cleanup. Runtime parent session terminal was lost to tool output truncation; both actual child exits and input guards are recorded, no parent exit asserted. Old impl/dyn erasure and result_symbolic absence remain held until actual opaque capture/bound/source facts/upstream root/member/VM integration. Four required semantic clients remain open. Zero measured new distinct stock gain/refreshed suite total; no full-fixture/M019/M020/milestone/interpreter/JIT/Linux/performance/diagnostic closure.",
+      "scope": "V381-V388 HELD M019/M020 actual source impl clauses. New demand-only Q71 retains Q59/Q58 and actual SourceBindings; positive trait/Sized and region/Type-outlives requirements use the same Type/Arg/Region encoder as heads and real upstream TraitRef/Clause constructors. Relaxed bounds remain metadata; unresolved bounds never produce an empty env or NoSolution. Q59 owns actual generic parameter locations. Common explicit lifetime arguments and typed earlier-default bindings replace dropped regions; duplicate bound-region mapper removed. Deferred alias synthetic FunctionSignature/display-text reparse and Type-only substitution removed from the affected production route: actual TypeAlias/DeclarationGenerics/retained target AST now use common declaration Type resolution and one mixed Substitution. Omitted alias lifetimes stay Local/held by exact IR; explicit source lifetimes remain metadata, no borrow/static checker. SourceGenericLayouts early_region is shared by identity args/materialization and encoder, preserving actual name/key/index. V3813production API/exhaustiveness compile errors and V3835host API diagnostics retained. V3843/4controls pass; new control exposes dropped lifetime argument head, unchanged conditional main fails all4editions. V385-V387 are build-only intermediates. Final V388 both macOS1.99.0 builds and6/6controls pass at exact source/HEAD/test/CLI guards:60clause worlds/144clauses/12HigherRanked holds/12relaxations,12retained alias worlds, expanded source-IR 164Types/160TraitRefs/60worlds including real distinct g/h scopes and identity-arg equality; prior generic/const metadata and direct reference/projection holds preserved. Final runtime generic-fn2024 passes with exact output/cleanup; conditional deferred2 still fails all4editions LRR-E-NAME-AMBIGUOUS after120VMdispatches/7source calls, incomplete capture/no cleanup. Two additional unchanged alias mains fail all4editions at existing lexical-callee (9dispatches/1call) and constructor/type-binding (2dispatches/0calls) guards; no parent runtime comparison or regression attribution is asserted. No new measured distinct stock gain/refreshed suite count. Full source predicate/opaque/binder/default/elision facts, four compiler clients, actual upstream root/response/source-selected member/dictionary/VM integration, legacy unifier and other token-based consumers remain open. No M019/M020/milestone/interpreter/JIT/Linux/full-fixture/diagnostic/performance closure.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1914,11 +1914,15 @@
         "worktracks/05-trait-goal-engine/2026-10-19-retained-opaque-return-headers.md",
         "worktracks/05-trait-goal-engine/2026-10-19-retained-opaque-return-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-retained-opaque-return-controls.json",
-        "worktracks/evidence/2026-10-19-v377-v380-retained-opaque-return.json"
+        "worktracks/evidence/2026-10-19-v377-v380-retained-opaque-return.json",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-impl-clauses.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-impl-clauses-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-19-source-impl-clauses-controls.json",
+        "worktracks/evidence/2026-10-19-v381-v388-source-impl-clauses.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T23:31:01.854906+00:00",
+      "updated_at": "2026-10-20T00:08:04.983529+00:00",
       "review_after": "2026-10-20T08:52:46.617857+00:00",
       "shared_interfaces": [
         {
@@ -1981,7 +1985,8 @@
             "crates/lrr/src/frontend/trait_declarations.rs",
             "crates/lrr/src/frontend/source_predicates.rs",
             "crates/lrr/src/traits/index.rs",
-            "crates/lrr/src/traits/unify.rs"
+            "crates/lrr/src/traits/unify.rs",
+            "crates/lrr/src/frontend/impl_predicates.rs"
           ],
           "scope": "Same solo /root uses the existing reservation for actual source generic metadata and common trait default arguments; one path owner, no concurrent agent or transfer."
         },
@@ -2015,5 +2020,5 @@
       ]
     }
   ],
-  "updated_at": "2026-10-19T23:31:01.854906+00:00"
+  "updated_at": "2026-10-20T00:08:04.983529+00:00"
 }

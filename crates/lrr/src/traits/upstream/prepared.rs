@@ -469,6 +469,9 @@ impl<'cx> PreparedProvider<'cx> {
     pub(super) fn source_parameter(self, key: ParamKey, kind: BoundKind) -> Option<SourceParameter> {
         self.settings.construction_generics?.parameter(key, kind)
     }
+    pub(super) fn source_early_region(self, key: ParamKey) -> Option<EarlyRegion<'cx>> {
+        self.settings.construction_generics?.early_region(key)
+    }
     pub(super) fn require_generic_value(self, id: DefinitionId, value: Generics<'cx, Self>) -> Result<(), Diagnostic> {
         if id.world() != self.world || self.generic_facts.with(|generics| generics.get(&id).copied()) != Some(value) {
             return Err(fault("typed generics differ from actual source identity/order/parent count/const Type"));

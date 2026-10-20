@@ -1,0 +1,76 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Actual ordinary impl requirements translated to upstream clauses; source/IR controls, not solver-root or runtime acceptance",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_conditional_impl_requirements_construct_actual_upstream_clauses_all_editions_and_origins",
+    "cli::preentry_loader_tests::unchanged_lifetime_aliases_use_retained_target_ast_and_mixed_substitution_all_editions_and_origins",
+    "cli::preentry_loader_tests::unchanged_conditional_impl_heads_use_common_types_across_origins_and_editions",
+    "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+    "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+    "cli::preentry_loader_tests::unchanged_impl_heads_keep_region_and_cold_metadata_demands_explicit"
+  ],
+  "runtime_cases": [
+    {
+      "path": "tests/ui/methods/method-two-trait-defer-resolution-2.rs",
+      "editions": [
+        2015,
+        2018,
+        2021,
+        2024
+      ],
+      "directives": [
+        "//@ run-pass"
+      ],
+      "expected_stdout_bytes": [],
+      "expected_stderr_bytes": []
+    },
+    {
+      "path": "tests/ui/generics/generic-fn.rs",
+      "editions": [
+        2024
+      ],
+      "directives": [
+        "//@ run-pass"
+      ],
+      "expected_stdout_bytes": [
+        54,
+        50,
+        10,
+        97,
+        10,
+        54,
+        55,
+        10
+      ],
+      "expected_stderr_bytes": []
+    },
+    {
+      "path": "tests/ui/type-alias/static-method-type-alias-11047.rs",
+      "editions": [
+        2015,
+        2018,
+        2021,
+        2024
+      ],
+      "directives": [
+        "//@ run-pass"
+      ],
+      "expected_stdout_bytes": [],
+      "expected_stderr_bytes": []
+    },
+    {
+      "path": "tests/ui/structs-enums/struct-aliases.rs",
+      "editions": [
+        2015,
+        2018,
+        2021,
+        2024
+      ],
+      "directives": [
+        "//@ run-pass"
+      ],
+      "expected_stdout_bytes": [],
+      "expected_stderr_bytes": []
+    }
+  ]
+}

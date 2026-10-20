@@ -26,7 +26,7 @@ pub(super) struct SourceGenericLayouts {
     definitions: BTreeMap<Digest, DefinitionId>,
 }
 impl SourceGenericLayouts {
-    fn from_bindings<'a>(catalog: Arc<InputValue>, bindings: impl IntoIterator<Item = &'a SourceBindings>) -> Result<Self, Diagnostic> {
+    pub(super) fn from_bindings<'a>(catalog: Arc<InputValue>, bindings: impl IntoIterator<Item = &'a SourceBindings>) -> Result<Self, Diagnostic> {
         let mut result = Self { catalog, declarations: BTreeMap::new(), definitions: BTreeMap::new() };
         for bindings in bindings {
             if !Arc::ptr_eq(&bindings.catalog, &result.catalog) || bindings.pending.is_some() {
@@ -77,19 +77,23 @@ impl SourceGenericLayouts {
         let parameter = *self.declarations.get(id)?.source.get(key.ordinal as usize)?;
         (parameter.source() == key && parameter.kind() == kind).then_some(parameter)
     }
+    pub(super) fn early_region(&self, key: ParamKey) -> Option<EarlyRegion<'_>> {
+        let parameter = self.parameter(key, BoundKind::Region)?;
+        let id = self.definitions.get(&key.definition)?;
+        let name = self.declarations.get(id)?.types().declaration().parameters().get(key.ordinal as usize)?;
+        Some(EarlyRegion { parameter, name: Some(Symbol(name.name.as_str())) })
+    }
     pub(super) fn materialize<'cx>(&'cx self, cx: Cx<'cx>, configuration: &PreparedSolverConfiguration)
         -> Result<BTreeMap<DefinitionId, Generics<'cx, prepared::PreparedProvider<'cx>>>, Diagnostic> {
         let mut result = BTreeMap::new();
         for (id, plan) in &self.declarations {
-            let declaration = plan.types().declaration();
             let mut parameters = Vec::new();
             for parameter in &plan.upstream {
                 parameters.push(match parameter.kind() {
                     BoundKind::Type => GenericParameter::Type(*parameter),
                     BoundKind::Region => {
-                        let name = declaration.parameters().get(parameter.source().ordinal as usize)
-                            .ok_or_else(|| fault("actual region parameter name absent"))?;
-                        GenericParameter::Region(EarlyRegion { parameter: *parameter, name: Some(Symbol(name.name.as_str())) })
+                        GenericParameter::Region(self.early_region(parameter.source())
+                            .ok_or_else(|| fault("actual region parameter source absent"))?)
                     }
                     BoundKind::Const => {
                         let ty = plan.types().const_types().get(&parameter.source().ordinal)

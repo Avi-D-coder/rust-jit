@@ -24,6 +24,7 @@ mod constant_expression;
 mod constructors;
 pub(crate) mod configuration;
 pub(crate) mod source_terms;
+pub(crate) mod source_predicates;
 pub(crate) mod context;
 pub(crate) mod facts;
 pub(crate) mod expression_operators;

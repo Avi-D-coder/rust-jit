@@ -183,6 +183,7 @@ pub enum QueryKey {
     ImplTraitIdentity(Box<crate::traits::header_syntax::ImplHeaderSyntaxKey>),
     SolverConfiguration(Box<crate::traits::upstream::configuration::SolverConfigurationKey>),
     ImplSourceTypes(Box<crate::traits::header_syntax::ImplHeaderSyntaxKey>),
+    ImplSourcePredicates(Box<crate::traits::header_syntax::ImplHeaderSyntaxKey>),
     ImplTraitCatalog(super::seals::SealKey),
     ImplPredicates(Box<crate::traits::header_syntax::ImplHeaderSyntaxKey>),
     BodyStructure(crate::source::manifest::BodyKey),
@@ -221,7 +222,7 @@ impl QueryKey {
                     + key.bucket.name.capacity()
             }
             Self::DiscoverySeal(_) | Self::ScopeDeclarationInventory(_)
-            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) | Self::DeclarationGenerics(_) | Self::DeclarationGenericTypes(_) | Self::ImplTraitIdentity(_) | Self::ImplTraitCatalog(_) | Self::SolverConfiguration(_) | Self::ImplSourceTypes(_) => 0,
+            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) | Self::DeclarationGenerics(_) | Self::DeclarationGenericTypes(_) | Self::ImplTraitIdentity(_) | Self::ImplTraitCatalog(_) | Self::SolverConfiguration(_) | Self::ImplSourceTypes(_) | Self::ImplSourcePredicates(_) => 0,
             Self::ExpansionInput(k) | Self::CurrentExpansionInput(k) => {
                 std::mem::size_of_val(k.as_ref()) + crate::expand::record::key_heap_bytes(k)
             }
@@ -275,6 +276,7 @@ impl QueryKey {
             Self::ImplHeadTypes(_) => "ImplHeadTypes",
             Self::ImplTraitIdentity(_) => "ImplTraitIdentity",
             Self::ImplSourceTypes(_) => "ImplSourceTypes",
+            Self::ImplSourcePredicates(_) => "ImplSourcePredicates",
             Self::SolverConfiguration(_) => "SolverConfiguration",
             Self::ImplTraitCatalog(_) => "ImplTraitCatalog",
             Self::ImplPredicates(_) => "ImplPredicates",
@@ -338,6 +340,7 @@ impl StableEncode for QueryKey {
             Self::ImplTraitIdentity(key) => { e.u32(65); e.record(key.as_ref()); }
             Self::SolverConfiguration(key) => { e.u32(67); e.record(key.as_ref()); }
             Self::ImplSourceTypes(key) => { e.u32(68); e.record(key.as_ref()); }
+            Self::ImplSourcePredicates(key) => { e.u32(71); e.record(key.as_ref()); }
             Self::ImplTraitCatalog(key) => { e.u32(66); e.record(key); }
             Self::ImplPredicates(key) => { e.u32(59); e.record(key.as_ref()); }
             Self::TraitDeclaration(key) => { e.u32(60); e.digest(*key); }
