@@ -6,24 +6,17 @@ use super::{
     prepared::{Cx, PreparedProvider},
     source_terms::SourceTypePending,
 };
-use crate::{
-    core::diagnostic::Diagnostic,
-    traits::term::InferVarKey,
-};
+use crate::{core::diagnostic::Diagnostic, traits::term::InferVarKey};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(super) enum RootVariableKind {
-    Type,
-    Integer,
-    Float,
-}
+pub(super) use super::root_input::SourceVariableFamily as RootVariableKind;
 
 /// This map cannot outlive its inference owner. A source key denotes the same
 /// variable at every occurrence, and its numeric family survives encoding.
 pub(super) struct RootVariables<'owner, 'cx> {
     owner: &'owner SolverContext<'cx>,
     variables: BTreeMap<InferVarKey, Ty<'cx, PreparedProvider<'cx>>>,
+    specifications: BTreeMap<InferVarKey, RootVariableKind>,
 }
 impl<'owner, 'cx> RootVariables<'owner, 'cx> {
     pub(super) fn new(
@@ -42,8 +35,8 @@ impl<'owner, 'cx> RootVariables<'owner, 'cx> {
             }
         }
         let variables = kinds
-            .into_iter()
-            .map(|(key, kind)| {
+            .iter()
+            .map(|(&key, &kind)| {
                 let value = match kind {
                     RootVariableKind::Type => owner.next_ty_var(span),
                     RootVariableKind::Integer => owner.next_int_var(),
@@ -52,7 +45,15 @@ impl<'owner, 'cx> RootVariables<'owner, 'cx> {
                 (key, value)
             })
             .collect();
-        Ok(Self { owner, variables })
+        Ok(Self {
+            owner,
+            variables,
+            specifications: kinds,
+        })
+    }
+
+    pub(super) fn specifications(&self) -> &BTreeMap<InferVarKey, RootVariableKind> {
+        &self.specifications
     }
 
     pub(super) fn require_owner(
@@ -87,6 +88,8 @@ impl<'owner, 'cx> RootVariables<'owner, 'cx> {
         &self,
         key: InferVarKey,
     ) -> Result<Ty<'cx, PreparedProvider<'cx>>, SourceTypePending> {
-        Ok(self.owner.deeply_resolve_ignoring_regions(self.variable(key)?))
+        Ok(self
+            .owner
+            .deeply_resolve_ignoring_regions(self.variable(key)?))
     }
 }

@@ -3,6 +3,7 @@
 use super::{
     context::Context, facts::SourceFacts, identity::DefinitionId, parameters::SourceParameter,
     storage::Interned,
+    query_facts::QueryFact,
 };
 use crate::core::digest::Digest;
 use rustc_type_ir::relate::{Relate, RelateResult, TypeRelation};
@@ -736,26 +737,40 @@ impl<'cx, F: SourceFacts<'cx>> AdtField<'cx, F> {
     }
 }
 pub(crate) struct AdtInfo<'cx, F: SourceFacts<'cx>> {
+    /// Declaration role has its own actual source receipt. Other callback
+    /// domains stay unavailable until their genuine producer supplies them.
     pub(crate) kind: AdtKind,
-    /// Actual enum source repr, not a caller-supplied integer Type.
-    pub(crate) discriminant: Option<super::enum_repr::PreparedEnumDiscriminant>,
-    pub(crate) packed: bool,
-    pub(crate) phantom_data: bool,
-    pub(crate) manually_drop: bool,
-    pub(crate) unsafe_fields: bool,
-    pub(crate) fundamental: bool,
-    pub(crate) variants: &'cx [AdtVariant<'cx, F>],
-    /// Same declaration-order fields as `variants`, flattened for upstream's
-    /// AdtDef interface; prepared publication verifies the two views agree.
-    pub(crate) fields: Types<'cx, F>,
-    pub(crate) tail: Option<Ty<'cx, F>>,
-    pub(crate) sized: Option<Ty<'cx, F>>,
-    pub(crate) meta_sized: Option<Ty<'cx, F>>,
-    pub(crate) destructor: Option<bool>,
+    pub(crate) discriminant: QueryFact<Option<std::sync::Arc<super::enum_repr::PreparedEnumDiscriminant>>>,
+    pub(crate) packed: QueryFact<bool>,
+    pub(crate) phantom_data: QueryFact<bool>,
+    pub(crate) manually_drop: QueryFact<bool>,
+    pub(crate) unsafe_fields: QueryFact<bool>,
+    pub(crate) fundamental: QueryFact<bool>,
+    pub(crate) variants: QueryFact<&'cx [AdtVariant<'cx, F>]>,
+    /// Same declaration-order fields as variants, when this independent view
+    /// is published. Publication checks its exact flattening correspondence.
+    pub(crate) fields: QueryFact<Types<'cx, F>>,
+    pub(crate) tail: QueryFact<Option<Ty<'cx, F>>>,
+    pub(crate) sized: QueryFact<Option<Ty<'cx, F>>>,
+    pub(crate) meta_sized: QueryFact<Option<Ty<'cx, F>>>,
+    pub(crate) destructor: QueryFact<Option<bool>>,
+}
+impl<'cx, F: SourceFacts<'cx>> AdtInfo<'cx, F> {
+    pub(super) fn declaration(kind: AdtKind) -> Self {
+        Self {
+            kind, discriminant: QueryFact::Unprepared,
+            packed: QueryFact::Unprepared, phantom_data: QueryFact::Unprepared,
+            manually_drop: QueryFact::Unprepared, unsafe_fields: QueryFact::Unprepared,
+            fundamental: QueryFact::Unprepared, variants: QueryFact::Unprepared,
+            fields: QueryFact::Unprepared, tail: QueryFact::Unprepared,
+            sized: QueryFact::Unprepared, meta_sized: QueryFact::Unprepared,
+            destructor: QueryFact::Unprepared,
+        }
+    }
 }
 impl<'cx, F: SourceFacts<'cx>> AdtDefinition<'cx, F> {
     pub(super) fn variants(self) -> &'cx [AdtVariant<'cx, F>] {
-        self.info().variants
+        self.info().variants.copied("ADT variants")
     }
     pub(super) fn variant(self, index: rustc_abi::VariantIdx) -> &'cx AdtVariant<'cx, F> {
         &self.variants()[index.as_usize()]
@@ -763,7 +778,7 @@ impl<'cx, F: SourceFacts<'cx>> AdtDefinition<'cx, F> {
     pub(super) fn is_enum(self) -> bool { self.info().kind == AdtKind::Enum }
     pub(super) fn enum_discriminant_type(self, cx: Context<'cx,F>) -> Ty<'cx,F> {
         assert_eq!(cx, self.context, "ADT discriminant belongs to another context");
-        self.info().discriminant.as_ref().expect("actual enum repr was not prepared").ty(cx,self.definition)
+        self.info().discriminant.require("enum discriminant").as_ref().expect("actual enum repr was not prepared").ty(cx,self.definition)
     }
     fn info(self) -> &'cx AdtInfo<'cx, F> {
         self.context
@@ -779,20 +794,20 @@ impl<'cx, F: SourceFacts<'cx>> AdtDef<Context<'cx, F>> for AdtDefinition<'cx, F>
         self.info().kind == AdtKind::Struct
     }
     fn is_packed(self) -> bool {
-        self.info().packed
+        self.info().packed.copied("ADT packed")
     }
     fn is_phantom_data(self) -> bool {
-        self.info().phantom_data
+        self.info().phantom_data.copied("ADT phantom_data")
     }
     fn is_manually_drop(self) -> bool {
-        self.info().manually_drop
+        self.info().manually_drop.copied("ADT manually_drop")
     }
     fn struct_tail_ty(
         self,
         _: Context<'cx, F>,
     ) -> Option<EarlyBinder<Context<'cx, F>, Ty<'cx, F>>> {
         assert!(self.is_struct());
-        self.info().tail.map(|t| EarlyBinder::bind(self.context, t))
+        self.info().tail.copied("ADT struct tail").map(|t| EarlyBinder::bind(self.context, t))
     }
     fn field_representing_type_info(
         self,
@@ -806,7 +821,7 @@ impl<'cx, F: SourceFacts<'cx>> AdtDef<Context<'cx, F>> for AdtDefinition<'cx, F>
         self,
         _: Context<'cx, F>,
     ) -> EarlyBinder<Context<'cx, F>, impl IntoIterator<Item = Ty<'cx, F>>> {
-        EarlyBinder::bind(self.context, self.info().fields)
+        EarlyBinder::bind(self.context, self.info().fields.copied("ADT fields"))
     }
     fn sizedness_constraint(
         self,
@@ -814,16 +829,16 @@ impl<'cx, F: SourceFacts<'cx>> AdtDef<Context<'cx, F>> for AdtDefinition<'cx, F>
         kind: ty::solve::SizedTraitKind,
     ) -> Option<EarlyBinder<Context<'cx, F>, Ty<'cx, F>>> {
         match kind {
-            ty::solve::SizedTraitKind::Sized => self.info().sized,
-            ty::solve::SizedTraitKind::MetaSized => self.info().meta_sized,
+            ty::solve::SizedTraitKind::Sized => self.info().sized.copied("ADT sizedness"),
+            ty::solve::SizedTraitKind::MetaSized => self.info().meta_sized.copied("ADT meta-sizedness"),
         }
         .map(|t| EarlyBinder::bind(self.context, t))
     }
     fn is_fundamental(self) -> bool {
-        self.info().fundamental
+        self.info().fundamental.copied("ADT fundamental")
     }
     fn destructor(self, _: Context<'cx, F>) -> Option<ty::solve::AdtDestructorKind> {
-        self.info().destructor.map(|c| {
+        self.info().destructor.copied("ADT destructor").map(|c| {
             if c {
                 ty::solve::AdtDestructorKind::Const
             } else {

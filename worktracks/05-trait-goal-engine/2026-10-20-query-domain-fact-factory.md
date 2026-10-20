@@ -495,3 +495,342 @@ caller versus callee assumption separation, actual owner/currentness checks and
 ordinary/user/wrapper source joins. Root/runtime gain requires real solving and
 guarded response commit; source packet observation alone is insufficient. No
 new standalone controls may substitute for the actual runtime witness.
+
+Implementation release: lead explicitly released engine/run.rs and new private
+engine/run_call_inputs.rs after pushed da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42.
+The first adapter captures only upon an actual consumer request; the legacy
+CallSeal path must allocate no unused packet and retain its behavior. The parent
+owns shared root DTO/factory integration. Initial callee Type parameters retain
+packet Type-family keys; raw argument coercion relations connect them to concrete
+source terms or actual shared-literal Integer/Float keys in upstream inference.
+Only actual explicit argument mappings become known source substitutions here.
+No packet Unifier, projection/composite guess or caller-assumption fabrication.
+There is no source/runtime acceptance claim before genuine consumption/evidence.
+
+### Released packet implementation handoff
+
+Owned production changes are engine/run_call_inputs.rs plus six lines in run.rs
+(private module registration and the exact pre-fallback integration anchor).
+The actual root consumer is still held/unwired. The legacy CallSeal execution
+does not invoke capture and allocates no unused packet; fallback, source call
+contracts and the repr128 outcome are not changed by this adapter alone.
+
+Stable callable engine API:
+`RunMachine::capture_reached_call_inputs(&mut self, db, site:NodeId,
+arguments:&[SlotId], result_hint:Option<&ArgumentType>) ->
+Result<ReachedCallInputs,Diagnostic>`. Its non-Clone engine-private packet exposes
+pending(), source()->Result<SourceRootCallInput<'_>,ReachedCallInputPending>,
+site()->&BodySpan, source_site()->Option<SourceCallSite>, and
+require_current(&RunMachine,&mut Database). The actual consumer owns retention
+across NeedInput under an authentic call-attempt/activation identity and must
+call require_current before committing a response. The existing reusable PC,
+CallIdentity and arena cell IDs do not prove that activation, even when bytes
+and selected callable match. Actual attempt retention and result-expectation
+currentness remain consumer obligations, so this is not a full commit certificate.
+No engine-owned cell, slot, value or frame type appears in SourceRootCallInput.
+
+The adapter consumes the lead's shared root_input DTOs directly:
+SourceVariableFamily, SourceCallRelation/Kind, SourceCallSite,
+CallerSourceContext and SourceRootCallInput. There is no parallel shared schema.
+Callee Type parameters begin as actual source-keyed Type variables. Authenticated
+explicit type arguments retain their actual mapping and Equal relations; unused
+initial Type-family keys are removed. Argument/result relations are Coerce,
+preserving direction (callee result toward actual expected result). No structural
+Unifier, projection/composite inference or literal-fallback coercion is invoked.
+Formal templates come from the selected actual signature; missing represented
+templates remain ParameterSource/ResultSource holds. No complete anonymous/APIT,
+const/region generic namespace is inferred from this written Type map; the lead's
+actual generic query preparation remains authoritative.
+
+Open numeric input uses the existing selection_argument observation. Before
+deduplication, GuestStore::admit_move/validate_value and effective_type verify a
+real live numeric LiteralRecord handle. The (kind,payload) key is that validated
+record identity, not numeric value bits, spelling or slot. Two views of the same
+record share one Integer/Float InferVarKey. Each packet records actual PC and
+runtime call ordinal in its source variable scope; exact inference ownership is
+still the lead session's job. Unknown nonliteral observations remain explicit
+ArgumentSource holds rather than invented Type variables.
+
+The packet captures current BodyKey separately from optional Arc<GenericEnv>
+owner/signature/application and actual source substitution rows. It supplies no
+caller ParamEnv, callee-bound assumption or absence proof for a missing environment.
+Caller DefinitionSource/DefinitionBody attachments must authenticate the actual
+BodyKey and retained BodySpan before conversion to an absolute SourceCallSite.
+A real runtime source call also validates its existing call/argument/phase/source
+identity. Missing or mismatched source joins remain CallerSource holds with no
+fabricated span; the adapter does not newly refuse a legacy generated call.
+No source/body scan or display-text reconstruction is used.
+
+Snapshots retain actual slot/cell, CellState, validated ValueRepr and effective
+Type (including literal binding). Revalidation checks active PC/CallIdentity,
+selected callable Arc/signature and argument slots, typed explicit/qualifier
+guards, immutable caller body/environment and source-attachment handles, and
+all current cells/values/literal binding state. It reuses the existing callable
+source-revision safety check; the initial independent packet revision snapshot
+was removed during separate review. It adds no full-world comparison. This inherited
+global revision invalidation remains broader than ideal relevant guards, not a
+new performance/completeness claim. Guard checks allocate no argument vector.
+
+All-eight implementation source review: (1–2) no evaluator/assertion/macro semantic
+route, only existing call/literal observations; (3) raw relation data only, no
+trait/member/primitive choice; (4) actual original/generated source attachment
+and runtime ordinal retained, missing joins held; (5) no bodies/static checks/
+patterns/cold arms prepared; (6) capture is demand-only and the consumer must
+retain it across actual suspension, installed code does no preparation; (7)
+direct relevant handles/slot snapshots, no namespace/body census; (8) Arc body/
+callee/environment retention and direct BodySpan lookup, no immutable BodyIndex
+clone or whole-file search. The source map conversion and snapshots are read-only;
+no literal bindings, hints, moves, tickets or argument ownership are changed.
+No resource accounting, host-policy change or unsafe code was introduced.
+
+Current worker source fingerprints before parent integration/review:
+
+| Path under crates/lrr/src/engine | SHA256 |
+| --- | --- |
+| run.rs | 3a21ecb4966f7f3e499aa64f019378d20d1cd7b0c08497a16b54305307e6cdab |
+| run_call_inputs.rs | 7f4746815d24b0d822eebe632fd495d63347dc57d83fe32189f7f6aa538cd019 |
+
+No Cargo/build/test/guest command was run. Actual capture, literal dedup across
+suspension, generated/edition matrix, caller clause join, root factory/admission,
+response commit and the unchanged repr128 runtime witness remain unexecuted/held.
+The integration anchor is not an installed root consumer or a completed repair.
+
+### Caller assumptions source preparation — bounded follow-on before code
+
+M020 / LOCAL-049 / WT05-02 extends only new
+`traits/upstream/source_caller_clauses.rs`. The unchanged repr128 call from
+ordinary `main` needs a genuine caller environment before callee obligations
+can enter upstream. Missing `GenericEnv` is not an empty-environment receipt.
+The common route is actual Q75 declaration identity, Q81 retained Q80 own/parent
+source hierarchy, Q83 conditional constness and owning solver configuration.
+Original/generated declarations share those services; no alternate parser,
+body walk, generated exclusion, callee-bound assumption or independent solver.
+
+Pinned ae0fe511b15ab760d7e963b13389d1bc2ab42b18 `rustc_ty_utils/src/ty.rs::param_env`
+instantiates complete clauses, adds default trait-method RPITIT assumptions and
+conditional const effects, then normalizes. `collect/clauses_of.rs` gathers
+written/implicit clauses, GCE and unstable-feature additions; `outlives/mod.rs`
+returns no inferred outlives for ordinary Fn. The initial certified source
+branch is only a genuine standalone, zero complete-parameter-count Fn with no
+where predicates/transform or unstable-feature attributes, no GCE, no conditional
+constness and an empty authenticated source hierarchy. No parent text, generic
+application, closure/typeck child, inherited or nonempty explicit source bundle
+is promoted to a complete ParamEnv. These remain typed pending, retained with
+their source plans. The eventual caller application/root owner must authenticate
+the packet's source descriptor, not treat this plan as root admission.
+
+Cold cost is existing memo demands plus one retained direct declaration AST
+lookup and header checks. Encoding reads retained immutable plans, does no DB
+work and performs no solver callbacks for the proven empty branch. Relevant
+query input guards protect currentness; no new global source revision gate or
+namespace census. Existing legacy fallback remains named and held until an
+actual consumer, owner/session closure and unchanged runtime evidence replace
+it. All eight architecture modes require a separate source review; actual
+ordinary/user/wrapper/edition execution and suspension remain unexecuted here.
+
+Caller module source handoff: `SourceCallerClausesKey = DefinitionHeaderKey`;
+`PreparedSourceCallerClauses::prepare(db,key)` retains individual underlying
+memo input guards and catalog Arc, with `require_current(db)`. There is no new
+query registration yet. `hierarchy()` retains actual own/parent source plans,
+`encode_written` delegates to the existing Q81 encoder without a completeness
+claim, and `encode(cx,configuration,&CallerSourceContext)` produces ParamEnv only
+for the proven empty branch. All optional runtime generic/application descriptors
+currently cause `CallerApplication`; their absence is accepted only after the
+independent source proof. Nonempty generic callers, associated/default trait
+methods, lexical local owners, foreign and typeck children, missing configuration
+and nontrivial normalization/application remain typed holds. Source preparation
+performs no signature/body lowering and reads only the retained declaration node.
+
+Separate all-eight source pass against module SHA256
+`8520b7333569a6e58f60239184400856604e42ba4e614dd7185073f5ad125afd`:
+(1–2) `prepare` and `encode` transport ordinary source metadata, no assertion or
+generated evaluator (MA001/MA004/MA005); (3) no member/numeric decisions or solver
+(MA003/MA006); (4) Q75/Q81 share genuine original/generated joins, no origin test;
+(5) no patterns, executable branches, synthetic signatures or body walk
+(MA002); (6) retained memo roots and pure encoding, input guards rather than
+per-phase reconstruction; (7) no namespace census or new revision-wide guard;
+(8) Arc roots and direct `syntax_at(context.range)` access, no BodyIndex clone or
+whole-file search (MA008). No macro identity dispatch is added (MA007). This is a
+source review only, not evidence that these historical audit findings are closed.
+No Cargo/tests or guest execution; null-branch source observation, matrix,
+suspension and actual root/runtime acceptance are still unexecuted.
+
+### Owned root-response transport — bounded follow-on before code
+
+M020 / LOCAL-049 / WT05-02 owns only new `upstream/root_response.rs` in this
+slice. `source_terms.rs::Encoder` supplies portable-to-IR construction, but no
+production reverse converter exists. The shared next-solver owner applies its
+real response; this adapter reads only `RootVariables::resolved` afterward, not
+the original goal or a fabricated solver result. It consumes the owner-retained
+`specifications()` map, authenticates the same SolverContext and translates
+representable IR to existing TyTerm. It does no inference, normalization,
+candidate selection, canonicalization or source preparation.
+
+The unchanged repr128 witness needs genuine primitive nominal arguments and
+integer variables. Source nominal/member identities must invert authenticated
+SourceBindings/Q77/DeclarationGenericTypes receipts, including parent-first
+projection argument split. Unresolved Type/Integer/Float families stay separate:
+only an actual original source key with the matching upstream inference family
+can name a representative. Unknown solver-created variables and unavailable
+source/binder/region/constant metadata are typed pending, never fabricated
+keys, numeric defaults, erased-to-static lifetimes or spelling hashes. Runtime
+commit, caller admission and same-call activation remain independent holds.
+
+Cold export is one traversal of demanded resolved values plus retained binding
+maps; it runs only on an actual consumer response. No new per-op source parsing,
+world census, deep BodyIndex clone, evaluator or macro-origin dispatch is added.
+No legacy path is replaced in this slice, and no unused export is installed on
+ordinary calls. Required closure is source review plus actual same-owner response
+controls and unchanged runtime execution; all remain unexecuted before validation.
+
+Implemented response API: `export_root_response(owner,&RootVariables,
+&SourceGenericLayouts)->Result<OwnedRootResponse,RootResponsePending>`. It uses
+the lead's owner-retained `specifications()` accessor; no caller-supplied family
+map or public arbitrary-Ty conversion is accepted. Existing materialized
+`SourceGenericLayouts::{type_bindings,argument_kinds,projection_argument_kinds,
+projection_parent,parameter}` supply inverse identity and split metadata, so
+export does not repeat DeclarationParameters/source preparation. Actual Q77
+lookup reconfirms member declaration identity using its retained map only.
+`OwnedRootResponse` owns values for original source keys and a separate map of
+unresolved representative families, with source-world identity. It is not a
+solver-success, root, caller, activation or commit certificate.
+
+Representable forms are portable primitive/bool/char/unit, str/never, tuple,
+slice, reference with genuine static/early-source region, existing raw-pointer
+transport, nominal with validated argument namespaces, source parameters,
+nonrigid projection with authenticated member and parent split, and the existing
+u64 usize constant/array representation. F16/F128, fn/dyn/opaque, rigid aliases,
+unscoped bound/placeholder types, erased/inference/late regions, nonrepresentable
+constants and unknown solver variables remain typed pending. A Type variable
+resolved to an open Integer variable exports through an actual original Integer
+key; it is not renamed as a Type variable. Multiple unified keys use the first
+matching-family actual key in deterministic source-key order. Numeric fallback
+is never performed here.
+
+Separate all-eight response source pass against SHA256
+`d37d63dc68ddecc90a28267f3345c8755b265900ae47841498003e599c11c9b4`:
+(1–2) data conversion only, no evaluator/assertion/generated executor
+(MA001/MA004/MA005); (3) upstream owner alone resolves variables, no replacement
+solver/member/numeric inference (MA003/MA006); (4) actual source IDs/retained Q77
+join with no origin branch; (5) no body/pattern/cold-arm work (MA002); (6) existing
+resolved reads and materialized source layouts, no source planning; (7) selected
+maps only, no namespace/global-world census or new invalidation gate; (8) no
+BodyIndex copy or source searches (MA008), no macro-identity dispatch (MA007).
+Each projection currently scans only the retained demanded projection map to
+find the unique inverse member; no scaling claim is made. Formatting/diff checks
+only; no Cargo/tests or actual response/runtime execution in this slice.
+
+### Frozen V520/V521 read-only caller application review
+
+No production edits or executions. Inspected `vm/context.rs::GenericEnv`,
+`frontend/signature_subst.rs::SignatureSubstitution`,
+`frontend/call_contracts.rs::PreparedCallContracts`,
+`vm/frame.rs::{install_context,shared_generic_context}`, Q81 and pinned
+`generic_clauses.rs`/`rustc_ty_utils/src/ty.rs::param_env`. Existing receipts:
+
+* `GenericEnv::capture_current` revalidates the actual selected SourceCallable
+  and its specialized result/reference proofs, then owns the immutable actual
+  FunctionSignature fingerprint plus source/runtime Type substitutions.
+  `Frame::install_context` requires that signature definition to equal the
+  entered BodyKey definition. `shared_generic_context` can instead return a
+  lexical environment from a different creating definition; preserve the
+  distinction already present in CallerSourceContext.
+* `application_identity` hashes signature plus BOTH symbolic and run-local
+  runtime descriptor rows. The DTO contains only symbolic rows, so its digest
+  cannot be independently reconstructed/verified from that DTO. The packet's
+  retained GenericEnv Arc and actual active owner must authenticate the runtime
+  application; a digest string alone is not authority. `require_current` checks
+  that environment's signature/specialized proofs, not compiler clause closure.
+* `checked_bytes` validates each present Type binding's namespace and corresponding
+  runtime row, but does not certify that all actual generic parameters are
+  present. Runtime GenericEnv stores Type substitutions only, and permits no
+  transaction Infer/placeholder terms. Missing region/const/Type bindings do not
+  become identity, defaults or successful empty substitutions.
+* `SignatureSubstitution` is legacy custom Unifier state. Its binding/constrain
+  methods and region-erasure comparison view cannot certify upstream inference,
+  clauses, region identity or normalization. Reuse its already-authenticated
+  source data only; do not run it again to build a caller ParamEnv.
+
+Smallest next common production step is a caller-application identity join at
+the existing reached-call preparation boundary: source-authenticate
+`generic_definition` and `signature` against the actual retained
+FunctionSignature/Q75/DeclarationGenericTypes metadata; retain its relevant
+input guards alongside the same actual GenericEnv Arc and active call owner.
+For an ordinary nongeneric called function, prove the complete count is zero
+and both actual substitution tables are empty; after that join, a Some GenericEnv
+can reuse the existing genuine empty caller clause branch. This removes the
+current blanket `CallerApplication` hold only for an independently proven case,
+without requiring a new clause producer or solver. No signature or source work
+belongs in installed execution. Lexical closure contexts stay held until the
+actual typeck-root/creating-owner join exists; do not equate their body and
+generic-definition digests.
+
+For a nonempty generic caller, the next prerequisite remains complete clause
+availability for each actual own/parent declaration. Q81 is explicitly written
+source transport, not full compiler `clauses_of`: const-parameter
+`ConstArgHasType`, GCE/unstable effects, inferred outlives, trait identity and
+default-method RPITIT additions cannot be assumed supplied by its current recipe
+enum. Once that real domain is admitted, encode actual arguments in the already
+validated SourceGenericLayouts parent-first order, transport their genuine
+Type/Region/Const namespaces, and reuse pinned
+`GenericClauses::{instantiate,instantiate_own}`/EarlyBinder over the retained
+parent closure. No new substitution/unification algorithm is needed. Then reuse
+the real upstream ParamEnv normalization and conditional-const effect route,
+with demanded fact closure prepared before entry. Callee clauses remain separate
+obligations; they are never inserted as caller assumptions. Existing
+`rebase_parent_parameter` and Q81's source-parent receipts supply identity
+transport, not completion by themselves.
+
+Response re-review binds `root_response.rs`
+`d37d63dc68ddecc90a28267f3345c8755b265900ae47841498003e599c11c9b4`.
+No missed family-collapse issue was found: Type-to-open-numeric resolution
+requires an actual original matching-family numeric key, unified keys share a
+deterministic representative, and unknown solver-created keys remain pending.
+Projection export authenticates actual associated DefinitionId via retained Q77
+and validates parent argument kinds/count; the existing portable ProjectionKey
+still stores the legacy member-name digest. It must never be consumed as a DefId.
+The eventual consumer retains/revalidates the actual layouts/Q77 receipts;
+OwnedRootResponse's world field alone does not prove their currentness. Export
+may observe an owner before solver success and is not a Certainty/response-
+constraint/commit receipt. The independent validator's bounded source pass found
+no mechanical blocker, but V520 failed elsewhere before export acceptance and
+V521 was running frozen validation when this review was recorded. Caller module
+now includes the lead's actual Cx configuration fingerprint check (SHA256
+`587ddd7beb9da615a7cfb9abf4c04ac25d677e42ea810c4e236929b0c5451964`).
+Activation identity, result-expectation currentness, actual response consumption,
+all source-origin/edition matrices and unchanged repr128 runtime remain held.
+
+### Next caller-application receipt design — source still frozen
+
+Authorized next owned production file is `upstream/caller_application.rs` only;
+no implementation has started during V521 freeze. Proposed preparation receives
+the actual Arc<GenericEnv>, actual Arc<SourceCallable>, retained
+Arc<PreparedSourceCallerClauses> and CallerSourceContext. It returns either a
+private VerifiedCallerApplication or typed pending. The token retains those
+exact handles plus an actual FunctionSignature query input guard. It compares
+the full source signature with both environment and callable, Q75 actual
+header/context/source identity, complete DeclarationParameters zero count and
+genuine empty source/runtime substitution tables. DTO body/generic/signature/
+application/substitution fields must describe those actual inputs exactly.
+SourceCallable::revalidate, GenericEnv::require_current, caller source-plan
+guards and the signature guard remain required. Token revalidation compares
+the actual active Arc handles; source application is not activation/commit or
+solver authority. No app-digest-only, Unifier or source-row matching proof.
+
+One shared read-only inspector is needed after unfreeze: GenericEnv currently
+exposes only key lookup, so external code cannot prove both private retained
+tables contain zero rows. A narrow `has_empty_bindings()` over both owned tables
+or borrowed row slices supplies direct evidence. The lead owns that shared edit.
+The current `application_identity == None` recipe is insufficient on its own for
+this requested boundary, and cannot expose hidden extra rows.
+
+Existing ordinary call integration can obtain the actual callable with O(1)
+`RunMachine.calls.last().call.callee` and the active environment from
+Frame::shared_generic_context. `enter_callee` retained the former and installed
+the latter; no new active-callable table, global lookup or legacy-path allocation
+is necessary. `call.closure.is_some()` and mismatched body/generic owners stay
+typed pending, as do nonempty generic/application rows and missing source
+receipts. Root main with no call stack/environment keeps the independent
+source-proven missing-env path. The lead will integrate token consumption into
+caller encoding only after source ownership returns; frozen caller/run/packet
+modules are unchanged by this design note. Builds/tests remain validator-owned.

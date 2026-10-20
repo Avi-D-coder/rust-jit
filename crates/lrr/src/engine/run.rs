@@ -37,6 +37,8 @@ use serde::Serialize;
 use std::{collections::BTreeMap, sync::Arc};
 #[path = "run_argument_hints.rs"]
 mod argument_hints;
+#[path = "run_call_inputs.rs"]
+mod call_inputs;
 #[cfg(test)]
 #[path = "run_body_lease_tests.rs"]
 mod body_lease_tests;
@@ -3652,6 +3654,10 @@ impl RunMachine {
                                 return RunPoll::Fault(error);
                             }
                         }
+                        // An actual upstream consumer can request
+                        // capture_reached_call_inputs here, before fallback.
+                        // The held consumer is not installed: legacy calls
+                        // allocate no packet and keep their existing behavior.
                         let mut types = Vec::new();
                         let mut cells = Vec::new();
                         for slot in arguments {

@@ -1,0 +1,7 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "One actual-source component control for the same PreparedProvider admitted pinned impl-super-outlives elaborator. Unchanged repr128 i128/u128 PartialEq impls and unchanged builtin-superkinds-self-type Foo impl cover empty and exact T:'static output; unchanged streaming_iterator inherent impl retains typed NotApplicable. Four editions and original/emit/wrapper; memo/currentness/epoch revocation and cold executable bodies. No solver root, caller assumption completeness, runtime contract, feature gain or factory/milestone closure is claimed. Selection is unexecuted until explicit global source freeze and validation authorization.",
+  "controls": [
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_impl_super_outlives_uses_pinned_elaborator_all_editions_and_origins"
+  ]
+}

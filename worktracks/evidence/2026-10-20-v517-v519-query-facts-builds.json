@@ -1,0 +1,395 @@
+{
+  "schema": "lrr/source-checkpoint-evidence/v1",
+  "recorded_at": "2026-10-20T22:47:40.482275+00:00",
+  "baseline": "da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42",
+  "scope": "M019/M020 query-fact availability split, Q89 metadata closure and inactive reached-call input transport; compile-only evidence, no test body/runtime/root activation",
+  "attempts": {
+    "V517": {
+      "directory": "artifacts/validation-current-v517",
+      "files": {
+        "after-build.json": "4afa32f27739befdc87c7406ad93c676e1d4c403ba31b388bbbace8dc22b40b3",
+        "after-runtime.json": "336db9df26a3343328f3ec93d6cc72b6c3b42d79691c4fd269417c7eea16d33f",
+        "before.json": "c4d38e01d42fcd3e6750cd3cb6565929196b05d03849f9808be591cbbc452b0b",
+        "build-terminal.json": "cc01bf5e244d46fa9faa9027d24304d48064bd913fb83645c75faa9b4667929a",
+        "digester-after-build.json": "946a4ab1058c095913ab62b1d43ec463fac3ecd9e2ce37f0926d99005133f402",
+        "digester-after-runtime.json": "946a4ab1058c095913ab62b1d43ec463fac3ecd9e2ce37f0926d99005133f402",
+        "lib-build.jsonl": "5b7c825b8ba1cad50f65c656d4cbc51359f56350e315a1c1b2917253be837ab8",
+        "lib-build.log": "41297a3f82a4aef908e244256c56f02fc3e005c1479dc417b44bd1fa86a79ea0",
+        "old-binary-closing-guards.json": "c8a107d314ffaf05ae2d74e7138d192d986b73da56bb71563ffa0b3a97b804ba",
+        "preexisting-binaries.json": "b1e1b0a80e0db80a8fd87c3cd85e03515c239ceb0eb01224dc454b262ec158d0"
+      },
+      "before": {
+        "head": "da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42",
+        "file_count": 8729,
+        "source_sha256": "9354775bd2f6240d3886c63d4df84d3129e2ee3f29ef89be44775924e215f154",
+        "binaries": {}
+      },
+      "after-build": {
+        "head": "da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42",
+        "file_count": 8729,
+        "source_sha256": "9354775bd2f6240d3886c63d4df84d3129e2ee3f29ef89be44775924e215f154",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "binaries": {
+          "cli": {
+            "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "sha256": "6eeff255fc80382ec39ef978613e2bb759c6b7475bee8e18418073f5e2ad5d7d"
+          }
+        },
+        "changed_sources": []
+      },
+      "after-runtime": {
+        "head": "da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42",
+        "file_count": 8729,
+        "source_sha256": "9354775bd2f6240d3886c63d4df84d3129e2ee3f29ef89be44775924e215f154",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "binaries": {
+          "cli": {
+            "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "sha256": "6eeff255fc80382ec39ef978613e2bb759c6b7475bee8e18418073f5e2ad5d7d"
+          }
+        },
+        "changed_sources": []
+      },
+      "terminals": {
+        "scope": "compile-only; no test bodies or runtime executed",
+        "lib": {
+          "exit_code": 101,
+          "session": 35995,
+          "errors": [
+            {
+              "code": "E0432",
+              "message": "unresolved import `rustc_type_ir::IntoKind`",
+              "primary": [
+                {
+                  "file": "crates/lrr/src/traits/upstream/source_impl_outlives.rs",
+                  "line": 36
+                }
+              ]
+            },
+            {
+              "code": "E0603",
+              "message": "module `visit` is private",
+              "primary": [
+                {
+                  "file": "crates/lrr/src/traits/upstream/source_impl_outlives.rs",
+                  "line": 38
+                }
+              ]
+            },
+            {
+              "code": "E0603",
+              "message": "module `visit` is private",
+              "primary": [
+                {
+                  "file": "crates/lrr/src/traits/upstream/source_impl_outlives.rs",
+                  "line": 38
+                }
+              ]
+            },
+            {
+              "code": "E0603",
+              "message": "module `visit` is private",
+              "primary": [
+                {
+                  "file": "crates/lrr/src/traits/upstream/source_impl_outlives.rs",
+                  "line": 38
+                }
+              ]
+            },
+            {
+              "code": "E0603",
+              "message": "module `visit` is private",
+              "primary": [
+                {
+                  "file": "crates/lrr/src/traits/upstream/source_impl_outlives.rs",
+                  "line": 38
+                }
+              ]
+            }
+          ]
+        },
+        "cli": {
+          "status": "not started; lib failed"
+        },
+        "digester": {
+          "status": "not started; lib failed"
+        },
+        "controls": "unexecuted",
+        "runtime": "unexecuted",
+        "all_processes_terminal": true
+      },
+      "digester-after-build.json": {
+        "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+        "sha256": "aa585ff08d146d45daa76e1bf490d649744566fa514157caea4a19d1c7aae1f4",
+        "fresh": false,
+        "matches_preexisting": true
+      },
+      "digester-after-runtime.json": {
+        "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+        "sha256": "aa585ff08d146d45daa76e1bf490d649744566fa514157caea4a19d1c7aae1f4",
+        "fresh": false,
+        "matches_preexisting": true
+      },
+      "preexisting-binaries.json": {
+        "time_utc": "2026-10-20T22:33:05.855342+00:00",
+        "fresh": false,
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "6eeff255fc80382ec39ef978613e2bb759c6b7475bee8e18418073f5e2ad5d7d"
+        },
+        "digester": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+          "sha256": "aa585ff08d146d45daa76e1bf490d649744566fa514157caea4a19d1c7aae1f4"
+        },
+        "last_test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+          "sha256": "e7e930915f71fceb42e1a2cb1270c3f47d58606d9ced0cfa112347332b51d7f3"
+        }
+      }
+    },
+    "V518": {
+      "directory": "artifacts/validation-current-v518",
+      "files": {
+        "after-build.json": "b47db1a4e82dfbfcfe390e1b90727b8ce1295496d5f716036e5f7b73c3fb4951",
+        "after-runtime.json": "79e5c1e0e0627d086abc3935464b905ead462f3df2b7acae7087f653b0917485",
+        "before.json": "340b5fc2d19d4efe9828ed7cbdbf101e63150255dea0f299a89afbb416c4b2c9",
+        "build-terminal.json": "542090ffbefc55ae209a1dc1b828eedca8c5587108a765e5254707bb1b518855",
+        "digester-after-build.json": "946a4ab1058c095913ab62b1d43ec463fac3ecd9e2ce37f0926d99005133f402",
+        "digester-after-runtime.json": "946a4ab1058c095913ab62b1d43ec463fac3ecd9e2ce37f0926d99005133f402",
+        "lib-build.jsonl": "f1c3a28d233031a58078b333b011c5741e3a48cdc33572d043a19551be75074a",
+        "lib-build.log": "a7cd3983c5fea980bcae9c2cee61b7f05f5b131e2f3e8dce1c2d50ab018abeb9",
+        "old-binary-closing-guards.json": "ced84d3a41ad523154c02fca23eea5fa530a86ed39a40cb204895bf7ecc559cb",
+        "preexisting-binaries.json": "698f17a7472467a7c564f70e44a5e2de75e947bb69aacb4e04b5cd649a95a15f",
+        "source-delta.json": "ee4fae750d2eb61673e3263531c4f7fbc08603035cf511452b6ec42d51a4c51d"
+      },
+      "before": {
+        "head": "da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42",
+        "file_count": 8729,
+        "source_sha256": "9cbf650493469db1a8d5c9110a91c6f2d81e0b88879fe94cd2bd06c92c5c3eb2",
+        "binaries": {}
+      },
+      "after-build": {
+        "head": "da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42",
+        "file_count": 8729,
+        "source_sha256": "9cbf650493469db1a8d5c9110a91c6f2d81e0b88879fe94cd2bd06c92c5c3eb2",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "binaries": {
+          "cli": {
+            "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "sha256": "6eeff255fc80382ec39ef978613e2bb759c6b7475bee8e18418073f5e2ad5d7d"
+          }
+        },
+        "changed_sources": []
+      },
+      "after-runtime": {
+        "head": "da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42",
+        "file_count": 8729,
+        "source_sha256": "9cbf650493469db1a8d5c9110a91c6f2d81e0b88879fe94cd2bd06c92c5c3eb2",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "binaries": {
+          "cli": {
+            "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "sha256": "6eeff255fc80382ec39ef978613e2bb759c6b7475bee8e18418073f5e2ad5d7d"
+          }
+        },
+        "changed_sources": []
+      },
+      "terminals": {
+        "scope": "compile-only",
+        "lib": {
+          "exit_code": 101,
+          "session": 14486,
+          "errors": [
+            {
+              "code": "E0271",
+              "message": "expected `Iter<'_, DefinitionId>` to be an iterator that yields `&&_`, but it yields `&DefinitionId`",
+              "primary": [
+                {
+                  "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                  "line": 1235,
+                  "label": "expected `&&_`, found `&DefinitionId`"
+                }
+              ]
+            },
+            {
+              "code": "E0599",
+              "message": "the method `collect` exists for struct `Copied<Copied<std::slice::Iter<'_, DefinitionId>>>`, but its trait bounds were not satisfied",
+              "primary": [
+                {
+                  "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                  "line": 1235,
+                  "label": "method cannot be called on `Copied<Copied<std::slice::Iter<'_, DefinitionId>>>` due to unsatisfied trait bounds"
+                }
+              ]
+            },
+            {
+              "code": "E0308",
+              "message": "mismatched types",
+              "primary": [
+                {
+                  "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                  "line": 1240,
+                  "label": "expected `&DefinitionId`, found `DefinitionId`"
+                }
+              ]
+            }
+          ]
+        },
+        "cli": "not started: lib failed",
+        "digester": "not started: lib failed",
+        "controls": "unexecuted",
+        "runtime": "unexecuted",
+        "all_processes_terminal": true
+      },
+      "digester-after-build.json": {
+        "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+        "sha256": "aa585ff08d146d45daa76e1bf490d649744566fa514157caea4a19d1c7aae1f4",
+        "fresh": false,
+        "matches_preexisting": true
+      },
+      "digester-after-runtime.json": {
+        "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+        "sha256": "aa585ff08d146d45daa76e1bf490d649744566fa514157caea4a19d1c7aae1f4",
+        "fresh": false,
+        "matches_preexisting": true
+      },
+      "preexisting-binaries.json": {
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "6eeff255fc80382ec39ef978613e2bb759c6b7475bee8e18418073f5e2ad5d7d",
+          "fresh": false
+        },
+        "digester": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+          "sha256": "aa585ff08d146d45daa76e1bf490d649744566fa514157caea4a19d1c7aae1f4",
+          "fresh": false
+        }
+      }
+    },
+    "V519": {
+      "directory": "artifacts/validation-current-v519",
+      "files": {
+        "after-build.json": "c13fb258fd03e70fad6474bd8fd4f3b1d86376cdb16fb635a68e172213555d9f",
+        "after-runtime.json": "ae73f65f84519dc6919df613ee28bf80c20c92857f8ec3ec95fed8064be8f48a",
+        "before.json": "5b3c0939f5cf9bf4f53df67f29766fe1f3ea8ebbbe6c1465dbf2b30fcc2c42bc",
+        "build-terminal.json": "bc3fcf6b10e44136742870f0dc8efc8d7adc8337aa188756facc2ea8ecd3f4ad",
+        "cli-build.log": "ff7d4d6ed1c1b552357720ebf8e8d6ef9aa13e89f8347576d958f49c7861a3ff",
+        "digester-after-build.json": "9ef39ee19a55e85e0db44f32c3b3f442d85310f51f321741a25b1aa52cd6828e",
+        "digester-after-runtime.json": "c71b7158d73dcefa348853089c8729a6b67fbaa3ff7b7b5e5e2cb0c35785355a",
+        "lib-build.jsonl": "97f3f9d68bdcc16ce003d41addddc3c73682a9dcad85466965cdebd9bf74fbc8",
+        "lib-build.log": "7da5674e89b27cdcd0b8e313af30be17886eedcbc13e84e38f7208c790079ea5",
+        "preexisting-binaries.json": "698f17a7472467a7c564f70e44a5e2de75e947bb69aacb4e04b5cd649a95a15f",
+        "source-delta.json": "b328715b0c30811cd8b0733be304ca030766488c11e243171cf0df0d7bbdbf26",
+        "source-digester-build.log": "ff988738cb6b1dbf7aa6a775af7238f4191dc0c07495bdcee5ad0b15c20b0100"
+      },
+      "before": {
+        "head": "da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42",
+        "file_count": 8729,
+        "source_sha256": "9c0456da588978bc8b284223e15bbf41fef6284eb002189c80882daec5c8fc6c",
+        "binaries": {}
+      },
+      "after-build": {
+        "head": "da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42",
+        "file_count": 8729,
+        "source_sha256": "9c0456da588978bc8b284223e15bbf41fef6284eb002189c80882daec5c8fc6c",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "binaries": {
+          "test": {
+            "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+            "sha256": "45ddd6e5132618349000a6490f8a6ab74285cf07c7f491be881653391ab02c46"
+          },
+          "cli": {
+            "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "sha256": "771e06f24865c7c137d154c01b7b6c7f68ca12ce9eb21460cb8209e65e732dae"
+          }
+        },
+        "changed_sources": []
+      },
+      "after-runtime": {
+        "head": "da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42",
+        "file_count": 8729,
+        "source_sha256": "9c0456da588978bc8b284223e15bbf41fef6284eb002189c80882daec5c8fc6c",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "binaries": {
+          "test": {
+            "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+            "sha256": "45ddd6e5132618349000a6490f8a6ab74285cf07c7f491be881653391ab02c46"
+          },
+          "cli": {
+            "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "sha256": "771e06f24865c7c137d154c01b7b6c7f68ca12ce9eb21460cb8209e65e732dae"
+          }
+        },
+        "changed_sources": []
+      },
+      "terminals": {
+        "scope": "compile-only",
+        "controls": "unexecuted",
+        "runtime": "unexecuted",
+        "all_processes_terminal": true,
+        "lib": {
+          "exit_code": 0,
+          "cargo_seconds": 52.63,
+          "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+          "log": "lib-build.log"
+        },
+        "cli": {
+          "exit_code": 0,
+          "cargo_seconds": 44.59,
+          "command": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr",
+          "log": "cli-build.log"
+        },
+        "digester": {
+          "exit_code": 0,
+          "cargo_seconds": 0.75,
+          "command": "cargo +1.99.0 build --offline --locked -p xtask --example lrr_source_digests",
+          "log": "source-digester-build.log"
+        }
+      },
+      "digester-after-build.json": {
+        "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+        "sha256": "271816cec27a8430df20292f7716b221afe3598f53205d594893f0906f48f8a0",
+        "fresh": true,
+        "build_exit_code": 0
+      },
+      "digester-after-runtime.json": {
+        "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+        "sha256": "271816cec27a8430df20292f7716b221afe3598f53205d594893f0906f48f8a0",
+        "fresh": true,
+        "build_exit_code": 0,
+        "matches_build": true
+      },
+      "preexisting-binaries.json": {
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "6eeff255fc80382ec39ef978613e2bb759c6b7475bee8e18418073f5e2ad5d7d",
+          "fresh": false
+        },
+        "digester": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+          "sha256": "aa585ff08d146d45daa76e1bf490d649744566fa514157caea4a19d1c7aae1f4",
+          "fresh": false
+        }
+      }
+    }
+  },
+  "acceptance": {
+    "new_upstream_runtime_passes": 0,
+    "refreshed_suite_delta": false,
+    "root_activation": "held",
+    "interpreter": "incomplete",
+    "guest_jit_allowed": false
+  },
+  "source_changes_after_v519": "pinned impl-super-outlives elaborator admission, independent ADT query slots/Q90, source caller assumptions and root response transport require their own validation",
+  "corrections": {
+    "V517": "Remove invalid root IntoKind/private visit module imports; use actual pinned public reexports in Q89.",
+    "V518": "Explicit slice iteration for Known associated member/type lists avoids pinned inherent SliceLike double copying and owned map key mismatch.",
+    "V519": "All three builds terminal0, source/HEAD/binary guards pass; no controls or runtime bodies executed."
+  }
+}

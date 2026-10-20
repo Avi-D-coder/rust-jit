@@ -71,6 +71,7 @@ pub(crate) struct StateRef<'cx, F: SourceFacts<'cx>> {
         WithCachedTypeInfo<Binder<Context<'cx, F>, PredicateKind<Context<'cx, F>>>>,
     >,
     clause_lists: &'cx InternPool<'cx, Vec<Clause<'cx, F>>>,
+    spanned_clauses: &'cx InternPool<'cx, Vec<(Clause<'cx, F>, Span)>>,
     clauses: &'cx InternPool<'cx, WithCachedTypeInfo<List<'cx, Clause<'cx, F>>>>,
     existentials:
         &'cx InternPool<'cx, Vec<Binder<Context<'cx, F>, ExistentialPredicate<Context<'cx, F>>>>>,
@@ -111,6 +112,7 @@ pub(crate) struct State<'cx, F: SourceFacts<'cx>> {
         WithCachedTypeInfo<Binder<Context<'cx, F>, PredicateKind<Context<'cx, F>>>>,
     >,
     clause_lists: InternPool<'cx, Vec<Clause<'cx, F>>>,
+    spanned_clauses: InternPool<'cx, Vec<(Clause<'cx, F>, Span)>>,
     clauses: InternPool<'cx, WithCachedTypeInfo<List<'cx, Clause<'cx, F>>>>,
     existentials:
         InternPool<'cx, Vec<Binder<Context<'cx, F>, ExistentialPredicate<Context<'cx, F>>>>>,
@@ -145,6 +147,7 @@ impl<'cx, F: SourceFacts<'cx>> State<'cx, F> {
             trees: InternPool::default(),
             predicates: InternPool::default(),
             clause_lists: InternPool::default(),
+            spanned_clauses: InternPool::default(),
             clauses: InternPool::default(),
             existentials: InternPool::default(),
             bound_kinds: InternPool::default(),
@@ -185,6 +188,7 @@ impl<'cx, F: SourceFacts<'cx>> State<'cx, F> {
             trees: &self.trees,
             predicates: &self.predicates,
             clause_lists: &self.clause_lists,
+            spanned_clauses: &self.spanned_clauses,
             clauses: &self.clauses,
             existentials: &self.existentials,
             bound_kinds: &self.bound_kinds,
@@ -333,6 +337,15 @@ impl<'cx, F: SourceFacts<'cx>> AllocateList<'cx, Pattern<'cx, F>> for Context<'c
             List::default()
         } else {
             List(Some(self.state.pattern_lists.intern(values)))
+        }
+    }
+}
+impl<'cx, F: SourceFacts<'cx>> AllocateList<'cx, (Clause<'cx, F>, Span)> for Context<'cx, F> {
+    fn list(self, values: Vec<(Clause<'cx, F>, Span)>) -> List<'cx, (Clause<'cx, F>, Span)> {
+        if values.is_empty() {
+            List::default()
+        } else {
+            List(Some(self.state.spanned_clauses.intern(values)))
         }
     }
 }

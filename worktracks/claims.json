@@ -2170,11 +2170,17 @@
         "crates/lrr/facade/core/cmp.rs",
         "crates/lrr/src/traits/upstream/mod.rs",
         "crates/lrr/src/traits/upstream/source_default_bounds.rs",
-        "worktracks/evidence/2026-10-20-v515-v516-bound-contexts.json"
+        "worktracks/evidence/2026-10-20-v515-v516-bound-contexts.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-query-facts-source-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-query-fact-split.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-source-adt-facts.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-impl-super-outlives-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-predicate-emission.md",
+        "crates/lrr/src/engine/run_call_inputs.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-20T22:13:37.862292+00:00",
+      "updated_at": "2026-10-20T22:54:23.302892+00:00",
       "review_after": "2026-10-20T10:52:01.627878+00:00",
       "shared_interfaces": [
         {
@@ -2592,10 +2598,18 @@
             "fixtures/upstream/rustc-checkout/manifest.json"
           ],
           "scope": "Same implementing root owns the existing reservation and the common bound provenance/Q88 integration; exact path remains exclusively reserved under the existing claim. No ownership transfer or additional writer."
+        },
+        {
+          "claim": "LOCAL-044",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/engine/run.rs"
+          ],
+          "scope": "Existing same-root reservation retains run.rs ownership. New disjoint run_call_inputs.rs is LOCAL-049; shared edit only registers inactive source transport. No active-call/root/commit admission claimed."
         }
       ],
-      "latest_component_scope": "V515/V516 HELD M020 bound-context preparation. Shared actual owner/site/parameter provenance replaces Q84 flattened written input; Q78/Q82/Q88 retain one lowerer and encoder. Q88 filters before unrelated Type/HRTB preparation, retains selected nested associated pending, records immediate dependencies only. Pinned cmp const trait headers/PointeeSized bounds restored without changing method bodies. Authenticated Sized insertion/default prefix respects Declaration versus TraitProbe domains. V515 lib101 E0574 cfg observer preserved; V516 qualifies model::Span only. Three fresh builds/all11 controls pass at 6b06fbc81e9a2d96bbde7d32b6b57e15865a098ec7761de6fca8d1fa11919596 /8725inputs, with source/HEAD/test/CLI/DG closing guards. New5 controls each cover12 edition/original-user-wrapper worlds; existing6 source/constructor controls pass. Owning2015 runtime remains3/4pass13checks each, repr128 executor LRR-E-OP-TYPE/noChecks; zero new runtime gains or refreshed suite total. Audits all0,235 pinned files/4171712bytes/originalRustChanges0/Gitverified. Two negative controls and cross-predicate filtered ordering execution remain unexecuted; complete recursive clauses/elaboration, typed fact producer, exact root/caller ParamEnv/inference owner and VM migration remain held. No task/milestone, architecture, interpreter, JIT, full-fixture, Linux or performance gate closed."
+      "latest_component_scope": "V517-V521 HELD M019/M020 shared query-fact domains and actual pinned impl-super-outlives preparation. QueryFact distinguishes unpublished/known/not-applicable domains; actual trait flags never imply empty candidate coverage. ReadyProvider/replaceable-goal entry removed; root activation stays private and unavailable. Q89 actual source head/implied/Sized inputs run pinned elaborate/filter in the same provider and context, with exact configuration and callback-closure guards. Independent Q90 ADT declaration/discriminant/optional-field domains, source-proven empty caller assumptions and original-owner root response transport compile, but their new execution paths remain unmeasured. Failed V517/V518/V520 compile attempts preserved; V519 compile-only all0. Final V521 lib/CLI/digester builds0 plus one focused control0 across36edition/original-user-wrapper worlds:36actual elaborations,12genuine static-type outlives rows,12typed inherent NotApplicable holds; memo/currentness/epoch/cold checks. Source/HEAD/test/CLI/DG closing guards pass at 2dcc5fd54cd54ff3cf2ac812e3b7cd0e7bf4f883414d9a659c7b9300abef2a0c /8732inputs. Owning2015 runtime constructor passes13checks, repr128 still OP-TYPE; zero new runtime gains/no suite refresh. Shared positive PointeeSized transient lowering remains a newly source-confirmed compiler-IR prerequisite; raw trait graph cardinality is not a permanent semantic assertion. Complete fact factory, exact root/inference/caller/response activation and runtime migration remain held. No task/milestone/interpreter/JIT/full-fixture/Linux/performance gate closed."
     }
   ],
-  "updated_at": "2026-10-20T22:13:37.862292+00:00"
+  "updated_at": "2026-10-20T22:54:23.302892+00:00"
 }

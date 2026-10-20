@@ -393,6 +393,20 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
+            QueryKey::SourceAdtFacts(key) => {
+                return match crate::traits::upstream::source_adt_facts::PreparedSourceAdtFacts::prepare(db,key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::SourceAdtFacts(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
+            QueryKey::SourceImplOutlives(key) => {
+                return match crate::traits::upstream::source_impl_outlives::PreparedSourceImplOutlives::prepare(db,key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::SourceImplOutlives(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::SourceImplSemantics(key) => {
                 return match crate::traits::upstream::source_impl_semantics::PreparedSourceImplSemantics::prepare(db,key) {
                     QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::SourceImplSemantics(Box::new(value))),

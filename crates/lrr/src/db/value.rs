@@ -125,6 +125,8 @@ pub enum QueryValue {
     SourceTraitSemantics(Box<crate::traits::upstream::source_trait_semantics::PreparedSourceTraitSemantics>),
     SourceImplSemantics(Box<crate::traits::upstream::source_impl_semantics::PreparedSourceImplSemantics>),
     SourceTraitClauses(Box<crate::traits::upstream::source_trait_clauses::PreparedSourceTraitClauses>),
+    SourceImplOutlives(Box<crate::traits::upstream::source_impl_outlives::PreparedSourceImplOutlives>),
+    SourceAdtFacts(Box<crate::traits::upstream::source_adt_facts::PreparedSourceAdtFacts>),
     SourceLangIdentity(Box<crate::traits::upstream::source_lang_identity::PreparedSourceLangIdentity>),
     ImplSourceTypes(Box<crate::traits::upstream::source_terms::PreparedImplSourceTypes>),
     ImplSourcePredicates(Box<crate::traits::upstream::source_predicates::PreparedImplSourcePredicates>),
@@ -272,6 +274,8 @@ impl QueryValue {
         if let (Self::SourceTraitSemantics(value), QueryKey::SourceTraitSemantics(key)) = (self,key) { return value.key()==key.as_ref(); }
         if let (Self::SourceImplSemantics(value), QueryKey::SourceImplSemantics(key)) = (self,key) { return value.key()==key.as_ref(); }
         if let (Self::SourceTraitClauses(value), QueryKey::SourceTraitClauses(key)) = (self,key) { return value.key()==key.as_ref(); }
+        if let (Self::SourceImplOutlives(value), QueryKey::SourceImplOutlives(key)) = (self,key) { return value.key()==key.as_ref(); }
+        if let (Self::SourceAdtFacts(value), QueryKey::SourceAdtFacts(key)) = (self,key) { return value.key()==key.as_ref(); }
         if let (Self::TraitAssociatedTypes(value), QueryKey::TraitAssociatedTypes(key)) = (self,key) { return value.key()==key.as_ref(); }
         if let (Self::DefinitionHeaderPlan(value), QueryKey::DefinitionHeaderPlan(key)) = (self,key) { return value.key()==key.as_ref(); }
         if let (Self::SourceLangIdentity(value), QueryKey::SourceLangIdentity(key)) = (self,key) { return value.key()==key.as_ref(); }
@@ -514,6 +518,8 @@ impl QueryValue {
             Self::SourceTraitSemantics(value) => { e.u32(85); e.record(value.as_ref()); }
             Self::SourceImplSemantics(value) => { e.u32(86); e.record(value.as_ref()); }
             Self::SourceTraitClauses(value) => { e.u32(88); e.record(value.as_ref()); }
+            Self::SourceImplOutlives(value) => { e.u32(89); e.record(value.as_ref()); }
+            Self::SourceAdtFacts(value) => { e.u32(90); e.record(value.as_ref()); }
             Self::ImplSourceTypes(value) => { e.u32(68); e.record(value.as_ref()); }
             Self::SourcePatternName(value) => { e.u32(72); e.record(value.as_ref()); }
             Self::PreparedBodyTypeApplication(value) => { e.u32(73); e.record(value.as_ref()); }
@@ -711,7 +717,7 @@ impl QueryValue {
             Self::ConstructorPlan(v) => v.estimated_bytes().unwrap_or(usize::MAX),
             // E006: no new retained-admission memory accounting.
             Self::ArrayRepeatPlan(_) | Self::PreparedArrayRepeat(_) | Self::DeclarationOwnerTemplate(_)
-            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) | Self::DeclarationGenerics(_) | Self::DeclarationGenericTypes(_) | Self::ImplTraitIdentity(_) | Self::ImplTraitCatalog(_) | Self::SolverConfiguration(_) | Self::AdtSourceFields(_) | Self::DefinitionHeaderPlan(_) | Self::TraitAssociatedTypes(_) | Self::DeclarationSourcePredicates(_) | Self::SourceVarianceQueries(_) | Self::SourceDeclarationClauses(_) | Self::SourceDeclarationClauseHierarchy(_) | Self::SourceItemBounds(_) | Self::SourceDefaultBounds(_) | Self::SourceDefinitionSemantics(_) | Self::SourceAliasLayouts(_) | Self::SourceTraitSemantics(_) | Self::SourceImplSemantics(_) | Self::SourceTraitClauses(_) | Self::SourceLangIdentity(_) | Self::ImplSourceTypes(_) | Self::ImplSourcePredicates(_) => 0,
+            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) | Self::DeclarationGenerics(_) | Self::DeclarationGenericTypes(_) | Self::ImplTraitIdentity(_) | Self::ImplTraitCatalog(_) | Self::SolverConfiguration(_) | Self::AdtSourceFields(_) | Self::DefinitionHeaderPlan(_) | Self::TraitAssociatedTypes(_) | Self::DeclarationSourcePredicates(_) | Self::SourceVarianceQueries(_) | Self::SourceDeclarationClauses(_) | Self::SourceDeclarationClauseHierarchy(_) | Self::SourceItemBounds(_) | Self::SourceDefaultBounds(_) | Self::SourceDefinitionSemantics(_) | Self::SourceAliasLayouts(_) | Self::SourceTraitSemantics(_) | Self::SourceImplSemantics(_) | Self::SourceTraitClauses(_) | Self::SourceImplOutlives(_) | Self::SourceAdtFacts(_) | Self::SourceLangIdentity(_) | Self::ImplSourceTypes(_) | Self::ImplSourcePredicates(_) => 0,
             Self::AssociatedItemQualifier(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::AssociatedEquations(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::NominalMember(value) => value.metadata_bytes().unwrap_or(usize::MAX),

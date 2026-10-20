@@ -157,6 +157,11 @@ impl PreparedSourceTraitClauses {
     pub(crate) fn pending_dependencies(&self) -> &[PendingTraitClauseDependency] {
         &self.pending_dependencies
     }
+    /// Retained actual inputs for a common source-context metadata closure.
+    /// Availability remains pending()'s contract; this is not query admission.
+    pub(super) fn bindings(&self) -> &SourceBindings {
+        &self.bindings
+    }
     pub(super) fn generic_layouts(&self) -> Result<SourceGenericLayouts, Diagnostic> {
         if let Some(why) = self.pending() {
             return Err(fault(&format!(

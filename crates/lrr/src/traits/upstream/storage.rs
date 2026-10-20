@@ -30,6 +30,11 @@ impl<T> ScopedCache<T> {
         *slot = Some(value);
         CacheGuard(self)
     }
+    /// Read an admitted immutable preparation scope, if one is active. The
+    /// callback cannot retain a reference to the scope or mutate its inputs.
+    pub(super) fn with_if_entered<R>(&self, run: impl FnOnce(&T) -> R) -> Option<R> {
+        self.value.borrow().as_ref().map(run)
+    }
     pub(super) fn with<R>(&self, run: impl FnOnce(&mut T) -> R) -> R {
         run(self
             .value

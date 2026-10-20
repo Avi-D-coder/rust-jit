@@ -177,7 +177,7 @@ impl<'cx, F: SourceFacts<'cx>> ty::inherent::Ty<Context<'cx, F>> for Ty<'cx, F> 
                 adt.context
                     .services()
                     .adt_info(adt.context, adt.definition)
-                    .unsafe_fields
+                    .unsafe_fields.copied("ADT unsafe fields")
             }
             _ => false,
         }

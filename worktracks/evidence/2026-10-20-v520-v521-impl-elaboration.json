@@ -1,0 +1,646 @@
+{
+  "schema": "lrr/source-checkpoint-evidence/v1",
+  "recorded_at": "2026-10-20T22:54:23.302892+00:00",
+  "source_baseline": "da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42",
+  "scope": "V517-V521 HELD M019/M020 shared query-fact domains and actual pinned impl-super-outlives preparation. QueryFact distinguishes unpublished/known/not-applicable domains; actual trait flags never imply empty candidate coverage. ReadyProvider/replaceable-goal entry removed; root activation stays private and unavailable. Q89 actual source head/implied/Sized inputs run pinned elaborate/filter in the same provider and context, with exact configuration and callback-closure guards. Independent Q90 ADT declaration/discriminant/optional-field domains, source-proven empty caller assumptions and original-owner root response transport compile, but their new execution paths remain unmeasured. Failed V517/V518/V520 compile attempts preserved; V519 compile-only all0. Final V521 lib/CLI/digester builds0 plus one focused control0 across36edition/original-user-wrapper worlds:36actual elaborations,12genuine static-type outlives rows,12typed inherent NotApplicable holds; memo/currentness/epoch/cold checks. Source/HEAD/test/CLI/DG closing guards pass at 2dcc5fd54cd54ff3cf2ac812e3b7cd0e7bf4f883414d9a659c7b9300abef2a0c /8732inputs. Owning2015 runtime constructor passes13checks, repr128 still OP-TYPE; zero new runtime gains/no suite refresh. Shared positive PointeeSized transient lowering remains a newly source-confirmed compiler-IR prerequisite; raw trait graph cardinality is not a permanent semantic assertion. Complete fact factory, exact root/inference/caller/response activation and runtime migration remain held. No task/milestone/interpreter/JIT/full-fixture/Linux/performance gate closed.",
+  "attempts": {
+    "V520": {
+      "files": {
+        "after-build.json": "0f09abed67e653b48efa832905977ea665fc4770883898379608524c08283296",
+        "after-runtime.json": "6cc1c06518925579b7a71f399d5c28363f902095dcbd0b7dd890d5ca7bfaa1fb",
+        "before.json": "5b24b7a2d36e1f2b0a93ef14229f10d4cf0dcad10035db47a6321516607b6480",
+        "build-terminal.json": "748d3a18ee93879c81ce743afaaca168aaf76137ac7aaddce951b442d30dedb9",
+        "digester-after-build.json": "3c62184b4cc9f37dfe9cc710012ecac76c7a545066e47edb3de04a951b36e37f",
+        "digester-after-runtime.json": "3c62184b4cc9f37dfe9cc710012ecac76c7a545066e47edb3de04a951b36e37f",
+        "lib-build.jsonl": "f805aa1ae6aaf627946d8a52b3212b22ca7adf0fef4e6c58701a1c9b4538101b",
+        "lib-build.log": "a7cd3983c5fea980bcae9c2cee61b7f05f5b131e2f3e8dce1c2d50ab018abeb9",
+        "old-binary-closing-guards.json": "c7b811ad987e78fc12acf58e423a5d2cf3a545a22f4a6e54ac245f9ddd6528bb",
+        "preexisting-binaries.json": "c6cbfb60f0c4f6e705ed8402322ef4539e325b8dc3cacd113e61d2f954d4dcf4",
+        "source-delta.json": "e32eb0cc37b2c0f54cbc8f572958a6b36f98be91d2aba4a29f12e8ef07213509"
+      },
+      "before": {
+        "head": "da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42",
+        "file_count": 8732,
+        "source_sha256": "f4d77ef0b0d4261a6529385ddd994c9a920e6442d9e4eaa40f9f02009447cb02",
+        "binaries": {}
+      },
+      "after-build": {
+        "head": "da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42",
+        "file_count": 8732,
+        "source_sha256": "f4d77ef0b0d4261a6529385ddd994c9a920e6442d9e4eaa40f9f02009447cb02",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "changed_sources": [],
+        "binaries": {
+          "cli": {
+            "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "sha256": "771e06f24865c7c137d154c01b7b6c7f68ca12ce9eb21460cb8209e65e732dae"
+          }
+        }
+      },
+      "after-runtime": {
+        "head": "da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42",
+        "file_count": 8732,
+        "source_sha256": "f4d77ef0b0d4261a6529385ddd994c9a920e6442d9e4eaa40f9f02009447cb02",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "changed_sources": [],
+        "binaries": {
+          "cli": {
+            "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "sha256": "771e06f24865c7c137d154c01b7b6c7f68ca12ce9eb21460cb8209e65e732dae"
+          }
+        }
+      },
+      "build-terminal.json": {
+        "scope": "lib compile failed; all dependent phases unexecuted",
+        "lib": {
+          "exit_code": 101,
+          "session": 86609,
+          "errors": [
+            {
+              "code": "E0308",
+              "message": "mismatched types",
+              "primary": [
+                {
+                  "file": "crates/lrr/src/traits/upstream/source_caller_clauses.rs",
+                  "line": 126,
+                  "label": "expected `Option<&PreparedSolverConfiguration>`, found `Option<&Box<_>>`"
+                }
+              ]
+            },
+            {
+              "code": "E0277",
+              "message": "the trait bound `&[(Clause<'cx, PreparedProvider<'cx>>, Span)]: TypeFoldable<_>` is not satisfied",
+              "primary": [
+                {
+                  "file": "crates/lrr/src/traits/upstream/prepared.rs",
+                  "line": 1045,
+                  "label": "unsatisfied trait bound"
+                }
+              ]
+            },
+            {
+              "code": "E0596",
+              "message": "cannot borrow `*db` as mutable, as it is behind a `&` reference",
+              "primary": [
+                {
+                  "file": "crates/lrr/src/traits/upstream/source_caller_clauses.rs",
+                  "line": 145,
+                  "label": "`db` is a `&` reference, so it cannot be borrowed as mutable"
+                }
+              ]
+            }
+          ]
+        },
+        "cli": "not started",
+        "digester": "not started",
+        "controls": "unexecuted",
+        "runtime": "unexecuted",
+        "all_processes_terminal": true
+      },
+      "digester-after-build.json": {
+        "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+        "sha256": "271816cec27a8430df20292f7716b221afe3598f53205d594893f0906f48f8a0",
+        "fresh": false,
+        "matches_preexisting": true
+      },
+      "digester-after-runtime.json": {
+        "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+        "sha256": "271816cec27a8430df20292f7716b221afe3598f53205d594893f0906f48f8a0",
+        "fresh": false,
+        "matches_preexisting": true
+      }
+    },
+    "V521": {
+      "files": {
+        "after-build.json": "274a6371e79885e0650055df68b6390be794425077e4c4eb32f00976772f87d1",
+        "after-runtime.json": "39805c482ba3da70d86e50c9d30589ae2ff8d6af70b92b9c8fc62156f3e30dbb",
+        "before.json": "2d6a0fb8253e17e910742b78551230b4a73d01e6d4d5c46046435495fdd23506",
+        "build-terminal.json": "db1045fc0215c5ee380262188b8f839359221736a390c8e1bb73478081c641b7",
+        "cli-build.log": "6704a44b8c34f667bb92a07e9c561f512eee9dc9b87664b2b71ff0af554cbebc",
+        "control-0.log": "1820eac911ae7bf14d9ae681d506da4db18e21d1b72d2b45636b9668c1069a88",
+        "control-results.json": "c846319bb8781bc417bf5302e33bd35d38efe782072abbffd43b4de229948ec3",
+        "controls-run.log": "7d651184d58569bd0404817545df7c4d954dad451e423f2f2d3d28d7ead14d07",
+        "digester-after-build.json": "e346ef6a74fa2b790b857852d3fe0a4e2b2556f8a0680fe2017603f045aca620",
+        "digester-after-runtime.json": "e5f7e246d4700af7997d0000772ed1896a19df2bac1924fd12c46e70cbbb8274",
+        "lib-build.jsonl": "c07a915d58f28661b48ebcd99d34e44c48f0d33c7c2dd53d358ac1f6461ad918",
+        "lib-build.log": "cf257ceca8dbb364d60edf2f2e7346a739b9bf08ad4bef0ccdb91d50984bcf5f",
+        "observed-control-counts.json": "479997168cb016433f779a6cd37c101072df648a3712abb5afcb6858c6aad25d",
+        "preexisting-binaries.json": "c6cbfb60f0c4f6e705ed8402322ef4539e325b8dc3cacd113e61d2f954d4dcf4",
+        "runtime-run.log": "5e05e6a50e4145507c6cd563f98aebac05a1ac73d6c9c603955e35a3ba76a9a3",
+        "runtime-summary.json": "6838b913ebb93eac2c91f111bce4eadc8636eaa7499a9eafef17db2a811982b0",
+        "source-delta.json": "11e043e4f73dfd31a4664278e31bee20f5d72f7b59216438360c7fcd052ba3e4",
+        "source-digester-build.log": "4c88a2c3d29f2e2e5e75ab18f89daef223bd40b85f6a425954c1fe89d4e1dc20",
+        "terminals.json": "b3c2171422e7670369e21d0529a3b53dcd49277e72ec27d1f482d50a0431be96"
+      },
+      "before": {
+        "head": "da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42",
+        "file_count": 8732,
+        "source_sha256": "2dcc5fd54cd54ff3cf2ac812e3b7cd0e7bf4f883414d9a659c7b9300abef2a0c",
+        "binaries": {}
+      },
+      "after-build": {
+        "head": "da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42",
+        "file_count": 8732,
+        "source_sha256": "2dcc5fd54cd54ff3cf2ac812e3b7cd0e7bf4f883414d9a659c7b9300abef2a0c",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "changed_sources": [],
+        "binaries": {
+          "test": {
+            "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+            "sha256": "164427793600321745cbcccc5ef7089e36bebcc1e7f3d1130428e6942ecfedad"
+          },
+          "cli": {
+            "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "sha256": "109864d16d0da4346135e6d6e1c54d1e248b83f8c7e7abafd156e244f9aa029b"
+          }
+        }
+      },
+      "after-runtime": {
+        "head": "da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42",
+        "file_count": 8732,
+        "source_sha256": "2dcc5fd54cd54ff3cf2ac812e3b7cd0e7bf4f883414d9a659c7b9300abef2a0c",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "changed_sources": [],
+        "binaries": {
+          "test": {
+            "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+            "sha256": "164427793600321745cbcccc5ef7089e36bebcc1e7f3d1130428e6942ecfedad"
+          },
+          "cli": {
+            "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "sha256": "109864d16d0da4346135e6d6e1c54d1e248b83f8c7e7abafd156e244f9aa029b"
+          }
+        }
+      },
+      "build-terminal.json": {
+        "scope": "one exact elaborator control plus two runtime witnesses; other new inputs unexercised",
+        "controls": "not started",
+        "runtime": "not started",
+        "lib": {
+          "exit_code": 0,
+          "cargo_seconds": 45.51,
+          "log": "lib-build.log"
+        },
+        "cli": {
+          "exit_code": 0,
+          "cargo_seconds": 38.01,
+          "log": "cli-build.log"
+        },
+        "digester": {
+          "exit_code": 0,
+          "cargo_seconds": 0.67,
+          "log": "source-digester-build.log"
+        }
+      },
+      "terminals.json": {
+        "scope": "one exact elaborator control plus two runtime witnesses; other new inputs unexercised",
+        "controls": {
+          "exit_code": 0,
+          "session": 76777
+        },
+        "runtime": {
+          "exit_code": 1,
+          "session": 85774,
+          "report": "/private/tmp/lrr-v521-impl-outlives-runtime/report.json"
+        },
+        "lib": {
+          "exit_code": 0,
+          "cargo_seconds": 45.51,
+          "log": "lib-build.log"
+        },
+        "cli": {
+          "exit_code": 0,
+          "cargo_seconds": 38.01,
+          "log": "cli-build.log"
+        },
+        "digester": {
+          "exit_code": 0,
+          "cargo_seconds": 0.67,
+          "log": "source-digester-build.log"
+        },
+        "all_processes_terminal": true
+      },
+      "control-results.json": [
+        {
+          "selector": "cli::preentry_loader_tests::upstream_projection_types::unchanged_impl_super_outlives_uses_pinned_elaborator_all_editions_and_origins",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+            "cli::preentry_loader_tests::upstream_projection_types::unchanged_impl_super_outlives_uses_pinned_elaborator_all_editions_and_origins",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 97.624,
+          "log": "control-0.log"
+        }
+      ],
+      "observed-control-counts.json": [
+        {
+          "index": 0,
+          "exit": 0,
+          "seconds": 97.624,
+          "worlds_observed": 36,
+          "elaborations": 36,
+          "outlives": 12,
+          "typed_domain_holds": 12,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "worlds": [
+            {
+              "case": "tests/ui/enum-discriminant/repr128.rs",
+              "edition": 2015,
+              "origin": 0,
+              "elaborations": 2,
+              "outlives": 0,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/self/builtin-superkinds-self-type.rs",
+              "edition": 2015,
+              "origin": 0,
+              "elaborations": 1,
+              "outlives": 1,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/generic-associated-types/streaming_iterator.rs",
+              "edition": 2015,
+              "origin": 0,
+              "elaborations": 0,
+              "outlives": 0,
+              "typed_domain_holds": 1
+            },
+            {
+              "case": "tests/ui/enum-discriminant/repr128.rs",
+              "edition": 2015,
+              "origin": 1,
+              "elaborations": 2,
+              "outlives": 0,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/self/builtin-superkinds-self-type.rs",
+              "edition": 2015,
+              "origin": 1,
+              "elaborations": 1,
+              "outlives": 1,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/generic-associated-types/streaming_iterator.rs",
+              "edition": 2015,
+              "origin": 1,
+              "elaborations": 0,
+              "outlives": 0,
+              "typed_domain_holds": 1
+            },
+            {
+              "case": "tests/ui/enum-discriminant/repr128.rs",
+              "edition": 2015,
+              "origin": 2,
+              "elaborations": 2,
+              "outlives": 0,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/self/builtin-superkinds-self-type.rs",
+              "edition": 2015,
+              "origin": 2,
+              "elaborations": 1,
+              "outlives": 1,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/generic-associated-types/streaming_iterator.rs",
+              "edition": 2015,
+              "origin": 2,
+              "elaborations": 0,
+              "outlives": 0,
+              "typed_domain_holds": 1
+            },
+            {
+              "case": "tests/ui/enum-discriminant/repr128.rs",
+              "edition": 2018,
+              "origin": 0,
+              "elaborations": 2,
+              "outlives": 0,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/self/builtin-superkinds-self-type.rs",
+              "edition": 2018,
+              "origin": 0,
+              "elaborations": 1,
+              "outlives": 1,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/generic-associated-types/streaming_iterator.rs",
+              "edition": 2018,
+              "origin": 0,
+              "elaborations": 0,
+              "outlives": 0,
+              "typed_domain_holds": 1
+            },
+            {
+              "case": "tests/ui/enum-discriminant/repr128.rs",
+              "edition": 2018,
+              "origin": 1,
+              "elaborations": 2,
+              "outlives": 0,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/self/builtin-superkinds-self-type.rs",
+              "edition": 2018,
+              "origin": 1,
+              "elaborations": 1,
+              "outlives": 1,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/generic-associated-types/streaming_iterator.rs",
+              "edition": 2018,
+              "origin": 1,
+              "elaborations": 0,
+              "outlives": 0,
+              "typed_domain_holds": 1
+            },
+            {
+              "case": "tests/ui/enum-discriminant/repr128.rs",
+              "edition": 2018,
+              "origin": 2,
+              "elaborations": 2,
+              "outlives": 0,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/self/builtin-superkinds-self-type.rs",
+              "edition": 2018,
+              "origin": 2,
+              "elaborations": 1,
+              "outlives": 1,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/generic-associated-types/streaming_iterator.rs",
+              "edition": 2018,
+              "origin": 2,
+              "elaborations": 0,
+              "outlives": 0,
+              "typed_domain_holds": 1
+            },
+            {
+              "case": "tests/ui/enum-discriminant/repr128.rs",
+              "edition": 2021,
+              "origin": 0,
+              "elaborations": 2,
+              "outlives": 0,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/self/builtin-superkinds-self-type.rs",
+              "edition": 2021,
+              "origin": 0,
+              "elaborations": 1,
+              "outlives": 1,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/generic-associated-types/streaming_iterator.rs",
+              "edition": 2021,
+              "origin": 0,
+              "elaborations": 0,
+              "outlives": 0,
+              "typed_domain_holds": 1
+            },
+            {
+              "case": "tests/ui/enum-discriminant/repr128.rs",
+              "edition": 2021,
+              "origin": 1,
+              "elaborations": 2,
+              "outlives": 0,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/self/builtin-superkinds-self-type.rs",
+              "edition": 2021,
+              "origin": 1,
+              "elaborations": 1,
+              "outlives": 1,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/generic-associated-types/streaming_iterator.rs",
+              "edition": 2021,
+              "origin": 1,
+              "elaborations": 0,
+              "outlives": 0,
+              "typed_domain_holds": 1
+            },
+            {
+              "case": "tests/ui/enum-discriminant/repr128.rs",
+              "edition": 2021,
+              "origin": 2,
+              "elaborations": 2,
+              "outlives": 0,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/self/builtin-superkinds-self-type.rs",
+              "edition": 2021,
+              "origin": 2,
+              "elaborations": 1,
+              "outlives": 1,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/generic-associated-types/streaming_iterator.rs",
+              "edition": 2021,
+              "origin": 2,
+              "elaborations": 0,
+              "outlives": 0,
+              "typed_domain_holds": 1
+            },
+            {
+              "case": "tests/ui/enum-discriminant/repr128.rs",
+              "edition": 2024,
+              "origin": 0,
+              "elaborations": 2,
+              "outlives": 0,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/self/builtin-superkinds-self-type.rs",
+              "edition": 2024,
+              "origin": 0,
+              "elaborations": 1,
+              "outlives": 1,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/generic-associated-types/streaming_iterator.rs",
+              "edition": 2024,
+              "origin": 0,
+              "elaborations": 0,
+              "outlives": 0,
+              "typed_domain_holds": 1
+            },
+            {
+              "case": "tests/ui/enum-discriminant/repr128.rs",
+              "edition": 2024,
+              "origin": 1,
+              "elaborations": 2,
+              "outlives": 0,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/self/builtin-superkinds-self-type.rs",
+              "edition": 2024,
+              "origin": 1,
+              "elaborations": 1,
+              "outlives": 1,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/generic-associated-types/streaming_iterator.rs",
+              "edition": 2024,
+              "origin": 1,
+              "elaborations": 0,
+              "outlives": 0,
+              "typed_domain_holds": 1
+            },
+            {
+              "case": "tests/ui/enum-discriminant/repr128.rs",
+              "edition": 2024,
+              "origin": 2,
+              "elaborations": 2,
+              "outlives": 0,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/self/builtin-superkinds-self-type.rs",
+              "edition": 2024,
+              "origin": 2,
+              "elaborations": 1,
+              "outlives": 1,
+              "typed_domain_holds": 0
+            },
+            {
+              "case": "tests/ui/generic-associated-types/streaming_iterator.rs",
+              "edition": 2024,
+              "origin": 2,
+              "elaborations": 0,
+              "outlives": 0,
+              "typed_domain_holds": 1
+            }
+          ]
+        }
+      ],
+      "runtime-summary.json": {
+        "selected_batch_passed": false,
+        "native_execution": false,
+        "input_guard": "all_imported_originals_manifest_and_binary_unchanged",
+        "cases": [
+          {
+            "case": "tests/ui/enum-discriminant/repr128.rs",
+            "status": "interpreter_failure",
+            "edition": 2015,
+            "exit": 2,
+            "checks_type": "dict",
+            "checks_count": 0,
+            "checks": {},
+            "code": "LRR-E-OP-TYPE",
+            "message": "operator requires supported concrete primitive operand descriptors",
+            "phase": "executor",
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/enum-discriminant/repr128.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "37b35118514fd0962623c6a0297f1e43b55fee130ecb389ab197bc8537da2b62"
+            ],
+            "capture_context": "37b35118514fd0962623c6a0297f1e43b55fee130ecb389ab197bc8537da2b62",
+            "source_sha256": "66af2eb56be2026a744d2169f8467d11df4c75e8ea21d204f0948db2c8e445bc"
+          },
+          {
+            "case": "tests/ui/associated-types/assoc-type-in-struct-constructor.rs",
+            "status": "runtime_contract_pass",
+            "edition": 2015,
+            "exit": 0,
+            "checks_type": "dict",
+            "checks_count": 13,
+            "checks": {
+              "clean_process_exit": true,
+              "protocol_not_guest_output": true,
+              "separate_host_preparation": true,
+              "owning_edition": true,
+              "completed_main": true,
+              "complete_capture": true,
+              "closed_guest_streams": true,
+              "actual_dispatch": true,
+              "terminal_and_cleanup": true,
+              "no_unobserved_boundaries": true,
+              "root_path": true,
+              "entry_identity": true,
+              "captured_originals": true
+            },
+            "code": null,
+            "message": null,
+            "phase": null,
+            "argv": [
+              "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "--edition",
+              "2015",
+              "run",
+              "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/associated-types/assoc-type-in-struct-constructor.rs",
+              "--runtime-capture",
+              "--capture-context",
+              "9dd1c861986b48b7b8f4f86b9115f0408ae84dbb9938fb25d0bb6425c5de69e8"
+            ],
+            "capture_context": "9dd1c861986b48b7b8f4f86b9115f0408ae84dbb9938fb25d0bb6425c5de69e8",
+            "source_sha256": "8b7183304d6ee634fb3484db7aa3a00ece816496df723a904754198475de58b3"
+          }
+        ]
+      },
+      "digester-after-build.json": {
+        "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+        "sha256": "5b5ddb2c70ad2cc69868becefcb32fe3c040ecb5376bd388b1e56c2b8972786c",
+        "fresh": true,
+        "build_exit_code": 0
+      },
+      "digester-after-runtime.json": {
+        "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+        "sha256": "5b5ddb2c70ad2cc69868becefcb32fe3c040ecb5376bd388b1e56c2b8972786c",
+        "fresh": true,
+        "matches_build": true
+      }
+    }
+  },
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-20-query-facts-source-review.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-20-impl-super-outlives-controls.json",
+  "acceptance": {
+    "new_runtime_passes": 0,
+    "refreshed_suite_delta": false,
+    "runtime_root": "held",
+    "fact_factory": "incomplete",
+    "interpreter": "incomplete",
+    "guest_jit_allowed": false
+  },
+  "known_gap": {
+    "source": "rustc/rust/compiler/rustc_hir_analysis/src/hir_ty_lowering/mod.rs:983-1002",
+    "solver": "rustc/rust/compiler/rustc_next_trait_solver/src/solve/assembly/mod.rs:645-646",
+    "policy": "Positive authentic PointeeSized bounds must be transient at common lowering; source recipes stay retained; current raw/implied graph is not full compiler-clause acceptance."
+  }
+}

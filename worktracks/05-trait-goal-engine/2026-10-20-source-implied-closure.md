@@ -139,3 +139,110 @@ Frozen inspected SHA256 inputs:
 - pinned outlives.rs: d6dfd70b229b97e0fb835874448cba78ee306002040895116a6f72d1ca0bf563
 - query-domain-fact-factory.md: 272bb12d6f264ab0f7d6d6ce852f91e5723cb32764a4e18d61c7a3edc19b72d6
 No source implementation or executable acceptance has occurred in this task.
+
+Authorized implementation refinement at pushed da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42:
+parent returned source ownership for ONLY new source_impl_outlives.rs and Q88's
+read-only bindings accessor plus this record. No prepared/mod/DB/test/tool edits.
+SourceImplOutlivesKey aliases actual ImplHeaderSyntaxKey. Retain Q86 + Q88
+Implied/Q76 graph/root configuration/catalog arcs and every concrete pending
+source requirement. Expose exact merged generic layouts and encode_inputs over
+one real Cx; encoded result contains actual checked impl TraitRef, per-ID immediate
+clauses/spans and genuine per-ID Sized classification, together with typed encoded
+callback requirements. Inspect every actual encoded clause form: HostEffect is
+an ImpliedConstBounds hold until its genuine producer exists; TypeOutlives scans
+actual shared TypeIR solely for escaping-alias callback requirements, leaving all
+semantic outlives derivation to upstream. No fabricated empty result or fake
+TraitFacts. Parent-owned provider admission consumes these private-constructor
+inputs, runs pinned elaborate/filter and publishes output; this module does not
+invoke the iterator on an unadmitted context or issue a root certificate.
+
+Implementation handoff at owned source fingerprints below
+
+Implemented ONLY source_impl_outlives.rs and Q88 read-only bindings() accessor.
+PreparedSourceImplOutlives owns actual Q86 root, exact DiscoverySeal input,
+Q88(Implied) and Q76 roots by actual declaration ID, root SolverConfiguration,
+separate TraitImpl/NotApplicable/Pending domain and every concrete source hold.
+A BTreeSet work queue deduplicates data-key preparation; retained Q88 roots keep
+all edges and pending rows. It performs no clause substitution/cycle resolution,
+normalization, candidate selection or semantic visited scheduling. Source/trait/
+lang/config keys and actual catalog pointer identity are checked. Config is the
+real selected catalog root, not a caller-invented option set. The source plan's
+pending() is capture availability only: domain and encoded requirements remain
+independent checks. An inherent impl is NotApplicable, never an empty answer.
+
+Concrete parent-facing methods: catalog_input(), configuration(), generic_layouts(),
+implementation_plan(), trait_plans(), encode_inputs(cx). Configuration is retained
+by the actual source plan; encoding accepts no replacement configuration/head.
+Merged SourceGenericLayouts uses every genuine Q86/Q88 SourceBindings in one
+source catalog, retaining all associated/generic namespace checks. The Q88 file
+change only exposes its existing immutable SourceBindings. CurrentSourceImplOutlives
+captures the actual memo key/fingerprint and PreparedInputGuard dependency closure.
+Parent owns module/DB registration and admitted provider table integration.
+
+EncodedImplOutlivesInputs has private construction and read-only implementation(),
+head(), implied(), sized(), requirements(), source_fingerprint() getters. It
+contains the actual checked symbolic impl TraitRef, real DefinitionId-keyed
+complete immediate (Clause,Span) vectors, and per-ID Sized equality derived from
+Q76 classification. Q85 sizedness flags or sparse-map absence are not substituted.
+Unknown classification remains source pending; each actual encoded trait row
+requires its authentic Sized answer, and positive non-Sized rows require the
+actual immediate implied query key. Metadata from a different Cx source world
+or a head with a different authentic trait is refused before returning inputs.
+
+Every actual encoded clause form is inspected. HostEffect yields a concrete
+ImpliedConstBounds(actual trait ID) requirement. Inert clause kinds follow the
+exact pinned match. TypeOutlives with a bound RHS has the pinned early exit.
+For a non-bound RHS, actual head arguments AND all retained clause inputs are
+inspected conservatively; raw Self/T subjects alone are insufficient because
+real impl/intermediate arguments may introduce aliases under substitution.
+Any shared has_bound_vars input yields OutlivesBoundInputs pending until a
+binder-aware callback proof exists; any escaping alias records its actual
+AliasTyKind variance requirement; a FnDef argument binder that violates the
+pinned no_bound_vars precondition records OutlivesFunctionBinder(actual ID).
+These holds may overprepare relative to a particular path but cannot forge
+query absence. The visitor only discovers missing callback/input domains; it
+derives no outlives components, clauses or region relationships and performs no
+substitution/normalization. When no TypeOutlives form exists, that branch is
+unreachable from this actual head/immediate graph. When no HostEffect form exists,
+that callback family is likewise genuinely absent in these encoded values.
+
+The module does NOT invoke elaborate or emit a precomputed [] super-outlives
+answer. Parent's private admitted context must consume the exact retained source
+inputs, check all requirements, install real independent callback tables and
+only then invoke the retained pinned elaborate/filter. No fake complete
+DefinitionFacts, arbitrary provider token or descriptor-as-certificate exists.
+A root/session/inference owner or another goal cannot borrow this source input
+bundle as its admission. Genuine simple trait-only graphs are materializable;
+HostEffect, escaping/bound input variance, unsupported source const/GAT/binder/
+alias defaults and broader runtime closure retain explicit holds.
+
+Eight-mode final source review at exact hashes below:
+1. No separate assertion/expression compiler/evaluator.
+2. No literal/break-only macro-output execution route.
+3. No context-specific numeric/member selection, primitive list or side solver.
+4. Same Q86/Q88/Q76 original/generated source receipt/edition/epoch identities;
+   unavailable actual joins remain typed pending, not origin bypasses.
+5. No patterns, static checking or eager cold body/arm/signature preparation.
+6. Actual pure queries/Arc plans prepare once; context encoding does no DB calls,
+   parsing or source IO; installed runtime cannot reconstruct this metadata plan.
+7. Only demanded trait-key dependency graph and existing query guards, no hot
+   world census/unrelated namespace-map comparison or new publication policy.
+8. No BodyIndex copies or whole-file syntax searches; shared TypeIR dependency
+   inspection visits actual encoded inputs, not executable syntax/body trees.
+No new production unsafe, resource cap or static-rule refusal. Cold work is
+O((V+E) log V) data-key bookkeeping plus existing source queries, actual map/layout
+merge and TypeIR encoding/visitation. Unsupported-input vectors retain concrete
+reasons and roots; no measured performance/scaling claim is made. Legacy trait
+paths are not extended, removed or certified by this component.
+
+Final owned code SHA256:
+- source_impl_outlives.rs: 43f2dec9d364d064230838bbfa3fb8ac08ff60ec44210734976d0f8fcdef2a97
+- source_trait_clauses.rs (accessor only): c6f85d018ff97774fe45ba2c483c153abcca9959311c9ffd09b09dc640efd51a
+Scoped Rust1.99 rustfmt and git diff --check completed; no tests/builds/compiler/
+interpreter or new agents were run. Independent existing reviewer was notified;
+its review/parent integration and actual validation terminals are separate.
+Current source API is a genuine connected input boundary for the parent-owned
+PreparedProvider, not a completed impl_super_outlives/root/runtime milestone.
+Unchanged repr128, ordinary/user/wrapper and four-edition acceptance remain
+validator-owned/unexecuted by this worker. Retain the existing abort policy and
+all interpreter/JIT gates. Source edits stop at handoff pending parent ownership.

@@ -346,3 +346,416 @@ validation process is terminal, and source/target ownership was explicitly
 returned before any subsequent source repair. The decisive next common-engine
 work remains the authenticated explicit-implied/elaboration closure and scoped
 entry certificate described above.
+
+## Independent query-domain and reached-input review after V516
+
+Read-only production review baseline:
+`da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42`. Source is mutable during this
+review; this section is a design/source handoff, not a new frozen-source or
+execution receipt. No Cargo, compiler, control or runtime command was run.
+V516 evidence stays attached to its original fingerprint. Final integration
+requires a renewed exact-source review and the separately authorized validation.
+
+The changed common entry points are PreparedProvider::{publish,ready}, its
+SourceFacts implementation, query_facts::QueryFact, root_variables::RootVariables,
+the new root_input transport, engine/run_call_inputs::ReachedCallInputs, and
+source_impl_outlives::PreparedSourceImplOutlives. The new packet is inactive:
+run.rs has only module registration and an anchor before existing fallback.
+There is no measured upstream root or runtime improvement from these additions.
+
+### Validators that survive independent availability
+
+`QueryFact::Known(None/false/[])` is a semantic answer. Unprepared and
+NotApplicable are not answers. Callback require() may signal an adapter
+invariant fault, but must never become the mechanism for discovering missing
+source data under the unchanged host-abort policy. Admission must reject the
+missing demanded domain before entry. The historical coarse ready() and its
+same-Cx evaluate_prepared API remain insufficient for sparse root admission;
+NotApplicable being classified as prepared does not authorize a query outside
+its genuine domain.
+
+| Published domain | Required retained validation |
+| --- | --- |
+| Definition and generics | Actual DefinitionReceipt source/header/context/parse/generic declaration, world/locality and owning profile; require_generic_value equality with SourceGenericLayouts including source parameter namespace/order, inherited count and const parameter Types. Counts alone do not suffice. |
+| Impl identity/head | Actual catalog classification and raw-to-canonical join, source scope/range/header identity, unique translated identities and actual trait membership. |
+| Candidate coverage | Authentic complete trait bucket, all relevant constructor and blanket impls, pinned simplify_type classification, duplicate/order checks and exact catalog comparison. A flags-only trait row must not create an empty bucket. |
+| Nominal metadata | Actual schema kind/name/variant and field order, flattened field-Type agreement and authentic enum representation. model::AdtDefinition still reads one complete AdtInfo even for is_enum/discriminant queries; a sparse skeleton is not sufficient. |
+| Language identity | Independently known role lookup and per-definition role/known absence, same-world actual source kind and parent joins, consistent forward/reverse mapping. A missing map key must not become false/None. |
+| Associated lists/leaves | Each published list independently validates its actual members, type roles, world/parent/order; requested leaves validate actual member identity, same-trait containers, defining/finalizing ancestry and source parent/name. Unpublished unrelated leaves may remain unavailable. |
+| Specialization | Known ancestry must be complete for the supported query domain, or use a genuine per-pair answer. Missing membership in an unpublished relation is not a known false result. |
+
+The draft addresses candidate seeding and language absence: only known
+implementation coverage seeds a bucket, and callbacks require an actual
+per-definition classification entry. One further concrete review finding was
+sent to the lead: associated_types validation was nested under a known
+associated_items list. Independently publishing associated_types must validate
+that list without demanding unrelated associated function/constant coverage.
+The same independence rule applies to every known list or optional value.
+
+### Actual root and preparation capability
+
+Same Cx is not inference ownership: two SolverContexts in one Cx can both
+allocate integer variable zero. RootVariables checks its exact owner while
+encoding; the final root capability must retain that owner through evaluation
+and export, together with the exact encoded goal, caller ParamEnv, typing mode,
+site and registered inference-variable families. It must not accept replacement
+goal/environment/delegate arguments after admission. A private fresh attempt
+or consuming borrowed session around the existing upstream entry is sufficient;
+no new canonicalizer, transaction engine or cycle scheduler is authorized.
+
+The caller environment comes from authentic caller own/parent clause receipts
+and actual substitutions. A missing GenericEnv is not proof of an empty
+ParamEnv. Callee requirements remain goals: inserting the target projected
+PartialEq obligation into assumptions can prove itself and can shadow impl
+candidates (pinned solve/assembly/mod.rs ParamEnv candidate handling).
+
+Source preparation must close every callback family actually reachable from
+the ground root, caller environment, substitutions and all relevant candidate
+heads. It need not complete unrelated function signatures, coroutine data,
+CTFE/transmute or dyn domains when actual Types/mode cannot reach them. In
+pinned trait_goals.rs::consider_impl_candidate, genuine impl head, polarity,
+defaultness, generics, clauses_of and impl_super_outlives are immediate demands;
+reflection genericity is conditional on reflection mode. Coinductiveness,
+marker and candidate-preference flags have separate real callers. Rigid
+projections/opaque Types can additionally demand item-self bounds; do not reuse
+a ground DiscriminantKind certificate for arbitrary symbolic alias roots.
+
+Tables/indexes are immutable before the first live solver/cache use. Do not
+publish extra source facts into a context after an attempted root. The raw
+proof-tree root hook also needs the admitted closure; its current context/index
+checks are not a separate permission for arbitrary canonical inputs.
+
+Pinned GoalEvaluation.goal is the pre-response input (solve/mod.rs documents
+this). Resolve the original RootVariables after upstream response application;
+retain ambiguity/external-constraint semantics. Export owned results and check
+actual execution authority before changing VM hints/dictionaries. This review
+does not claim that any such root consumer is installed.
+
+### Bounded worker review
+
+ReachedCallInputs captures actual selected call/source/signature/body handles,
+explicit argument relations and live literal handles; it does not unify them.
+Literal deduplication follows validated live kind/handle identity, not equal
+spelling or numeric payload. CallerSourceContext explicitly does not certify
+caller clauses. The initially added global source_revision gate was removed
+after review because unrelated publication should not invalidate relevant
+prepared input guards. Existing SourceCallable::revalidate remains broader
+legacy debt. The final reviewed packet SHA256 is
+`7f4746815d24b0d822eebe632fd495d63347dc57d83fe32189f7f6aa538cd019`.
+
+The packet's require_current checks retained inputs, not a full attempt/commit
+certificate. Ordinary CallIdentity is site-based; repeated calls or another
+activation can reproduce pc/body/value observations. Future activation must
+bind the actual run/frame/call attempt and current result expectation,
+especially across suspension. These are explicit activation holds. Keeping
+the inactive packet adds no legacy-path capture allocations.
+
+The source_impl_outlives draft retains authentic Q86 head/catalog, Q88 Implied
+roots, per-ID Q76 classification, merged bindings and actual configuration. Its
+ClauseKind inspection preserves HostEffect, escaping-alias variance and FnDef
+binder requirements before the pinned iterator is entered. A finite DefId
+metadata worklist is neither recursive-query completion nor semantic
+instantiation/cycle proof; empty requirements is not arbitrary provider/root
+permission. The parent must admit the genuine pinned elaborator callback
+closure. No separate elaborator or source query inside a callback is introduced.
+
+### Eight recurring architecture modes
+
+1. No assertion evaluator is added: the inactive packet attaches to the common
+   reached CallSeal path. Actual root/runtime use remains unexecuted.
+2. No scalar/break-only macro executor is added; source identity is retained
+   through existing body/source joins. Generated execution evidence is pending.
+3. Equal/Coerce relations and inference families are transported without a
+   local unifier or method-name/numeric policy. Upstream inference is still held.
+4. There is no new generated-source rejection; genuine generated source/header
+   receipts remain required through the common catalog. Origin evidence awaits
+   the final affected controls.
+5. The changed modules neither lower cold bodies nor add pattern machinery.
+   Candidate preparation must include relevant semantic candidates without
+   eagerly preparing their executable bodies.
+6. Source plans remain memoized immutable handles; future callbacks read frozen
+   tables. Packet capture is not installed, so no repeated-call performance
+   claim is established.
+7. Candidate/catalog validation is cold preparation work. No new hot full-world
+   scan is authorized. The removed packet revision gate avoids one new source
+   of unrelated invalidation; relevant positive/negative buckets still govern.
+8. BodyIndex and source plans are retained by Arc, not deep-copied for packet
+   capture. The real source-range join remains preparation work; no installed
+   repeated whole-file search is evidenced.
+
+The actual root, complete factory, guarded exact-once result commit, all-origin
+runtime matrix, obsolete-route removal and interpreter/JIT gates remain open.
+
+### V517 frozen-source review delta
+
+The compile-only candidate is frozen at HEAD
+`da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42`, fingerprint
+`9354775bd2f6240d3886c63d4df84d3129e2ee3f29ef89be44775924e215f154`,
+8,729 inputs. The actual before guard matches this authorization. Compared with
+the mutable review above, the lead removed ReadyProvider/evaluate_prepared and
+retained only metadata-only PreparedIndexSnapshot. The raw proof callback now
+requires an inactive root-session guard before its context/index checks. This
+is withdrawal of an unbound entry prototype, not installation of root admission.
+
+The independently published associated_types list now validates each retained
+declaration's world, uniqueness, source alias role and actual parent even when
+associated_items is unavailable. Candidate buckets remain dependent on known
+complete implementation coverage, and language classification requires a real
+per-definition entry. These inspected deltas address the concrete split findings
+above; source producers still own semantic completeness of answers they publish.
+
+The all-eight review above applies to this exact candidate with these deltas.
+Packet and Q89 outlives inputs remain inactive. A library no-run build, CLI and
+digester builds are the only authorized execution for V517. No test bodies,
+runtime fixtures, root inference, feature closure or runtime gain are implied.
+
+V517 library compilation terminated 101. The actual errors are E0432 at
+source_impl_outlives.rs:36 (unavailable rustc_type_ir::IntoKind import) and four
+E0603 diagnostics at line 38 (private rustc_type_ir::visit imports). The bounded
+source review did not establish those imports' compatibility; the actual
+compiler result supersedes the earlier absence of a mechanical finding.
+CLI/digester builds were not started. No test body, runtime fixture or root ran.
+
+Reproduction is the maintained direct-checkout command:
+`cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json`.
+Actual JSON/log/terminal and guard outputs are in
+`artifacts/validation-current-v517`. Both closing standard guards terminated 0:
+same authorized HEAD/fingerprint, 8,729 inputs and zero source changes. The CLI
+is explicitly the old V516 binary, SHA256
+`6eeff255fc80382ec39ef978613e2bb759c6b7475bee8e18418073f5e2ad5d7d`;
+the separate old digester guard matches
+`aa585ff08d146d45daa76e1bf490d649744566fa514157caea4a19d1c7aae1f4`.
+The previous test binary also remains unchanged. Every process is terminal and
+source/target ownership was returned before any repair. This failed compile
+establishes no new component, runtime, root, full-fixture or milestone acceptance.
+
+V518 retains the same HEAD and 8,729 inputs, fingerprint
+`9cbf650493469db1a8d5c9110a91c6f2d81e0b88879fe94cd2bd06c92c5c3eb2`.
+Its manifest delta is only source_impl_outlives.rs. Source inspection confirms
+the import repair uses public crate-root visitor reexports and the existing
+inherent trait import; production semantics and the eight-mode review above
+are unaffected by this mechanical change.
+
+The V518 library no-run command terminated 101 with E0271/E0599 at
+prepared.rs:1235 (an extra copied() on the inherent by-value slice iterator) and
+E0308 at line 1240 (DefinitionId passed where the map expects a reference).
+No dependent CLI/digester build or test/runtime execution occurred. Both closing
+standard guards terminated 0 against the exact V518 fingerprint/HEAD with zero
+changed inputs. Old CLI/digester hashes remain the V516 hashes above, explicitly
+not fresh V518 builds. Compact errors, actual terminal, source delta and guards
+are in artifacts/validation-current-v518. Every process is terminal and
+source/target ownership was returned before repair. No acceptance gain is claimed.
+
+V519 is frozen at the same HEAD and 8,729 inputs, fingerprint
+`9c0456da588978bc8b284223e15bbf41fef6284eb002189c80882daec5c8fc6c`.
+Its manifest delta from V518 contains only prepared.rs; inspection confirms
+explicit standard slice iterators in the known associated-list checks, retaining
+the same identity/role/parent validation. This mechanical iterator repair does
+not change the all-eight source-review conclusions above. The withdrawn
+unbound root prototype remains absent, the proof-root guard remains inactive,
+and packet/Q89 consumer/root admission remain held. Compilation is a separate
+pending observation until its actual terminal; no test/runtime is authorized
+by this compile-only freeze.
+
+V519 actual build terminals are all 0: library no-run 52.63s, CLI 44.59s and
+digester 0.75s (Cargo-reported). Actual Cargo JSON selects the test binary with
+SHA256 `45ddd6e5132618349000a6490f8a6ab74285cf07c7f491be881653391ab02c46`;
+fresh CLI is `771e06f24865c7c137d154c01b7b6c7f68ca12ce9eb21460cb8209e65e732dae`;
+fresh digester is `271816cec27a8430df20292f7716b221afe3598f53205d594893f0906f48f8a0`.
+Both standard closing guards terminated 0 at the exact V519 fingerprint/HEAD,
+8,729 inputs and zero source changes; test/CLI hashes match after-build. The
+separate closing digester guard also matches. Actual commands, terminals,
+source delta and binary guards are retained in artifacts/validation-current-v519.
+All processes are terminal and source/target ownership was returned.
+
+No control/test body or runtime fixture executed in V519. This is successful
+host compilation of the held metadata/input slice, not activation or acceptance
+of a source factory, root session, packet commit, complete elaboration closure,
+runtime feature or milestone. V517/V518 failures remain preserved at their own
+fingerprints. A subsequent test selection requires its actual changed-source
+justification; no unchanged eleven-control batch was automatically replayed.
+
+## Pinned impl-super-outlives consumer and focused control draft
+
+After V519 ownership return the source is mutable again. This review covers the
+lead's PreparedProvider::prepare_impl_super_outlives and the one newly assigned
+CLI control; its final fingerprint remains pending. No Cargo or test/runtime
+execution occurred during this draft.
+
+The pinned collect/item_bounds.rs:530-542 algorithm maps the actual impl trait
+head through rustc_type_ir::elaborate::elaborate and retains only TypeOutlives
+and RegionOutlives. The new consumer follows that algorithm in the same
+PreparedProvider: genuine Q89 source plans encode before entry, their typed
+callback requirements must be empty, and a private preparation scope supplies
+immutable interned implied-clause lists and per-definition Sized classifications.
+The scope does not publish final facts or enable a root, and callbacks perform
+no DB/source query. Bound substitution, deduplication, cycle traversal and
+outlives decomposition remain with the retained upstream algorithms.
+
+For the actual nonescaping PartialEq/PointeeSized graph, elaborate.rs:129-224
+uses is_trait_lang_item(id,Sized) before polarity filtering, and
+explicit_implied_clauses_of(id) for positive non-Sized trait clauses. Context
+anonymization, Clause::instantiate_supertrait, EarlyBinder/ArgFolder folds,
+interning and component reconstruction are local IR operations. Actual argument
+compatibility/layouts are still required before encoding. HostEffect adds
+explicit_implied_const_bounds; an escaping alias in a TypeOutlives subject adds
+opt_alias_variances. Q89 retains those requirements and its conservative bound
+input/FnDef holds before algorithm entry. item_self_bounds belongs to a different
+outlives helper and is not called directly by this elaborator path. Candidate
+indexes, normalization, ADT fields and full clauses_of are not demands of this
+bounded computation alone.
+
+Debug paths were inspected separately: model Ty/Clause/Predicate/List wrappers,
+Interned, DefinitionId/SourceParameter and Context formatting are structural;
+printing.rs::TraitRef prints retained definition/args. Pinned trace/panic
+formatting therefore adds no source query family for these inputs. This is a
+source conclusion, not a successful debug-enabled execution receipt.
+
+The owned new control is appended only to
+cli/preentry_loader_tests/upstream_projection_types.rs; the preexisting prefix
+was preserved and only the new function was formatted. It uses unchanged
+official fixtures and their existing configured source-world harness:
+
+- repr128.rs supplies actual i128/u128 PartialEq candidate declarations selected
+  from the authentic complete catalog, never a caller-supplied impl list. Their
+  expected empty filtered output must come from the real pinned iterator.
+- builtin-superkinds-self-type.rs supplies Foo: Send + Sized + 'static and its
+  actual generic impl. It must yield precisely the real impl T parameter's
+  TypeOutlives-to-Static row, preventing all-empty vacuous evidence.
+- streaming_iterator.rs supplies the independently captured new member and its
+  real StreamEnumerate inherent parent. Q89 must classify that source domain
+  NotApplicable. This is a source-domain hold observation; the elaborator is
+  not invoked for the inherent impl.
+
+The single selector is tracked in 2026-10-20-impl-super-outlives-controls.json.
+Its intended assertions cover four editions and original/user emit/wrapper
+sources, exact canonical IDs/source fingerprints, static ParamKey identity,
+Q89 memo reuse/currentness, no signature/body/thunk/pattern preparation, epoch
+revocation followed by source withdrawal. Withdrawal after epoch is not an
+independent fresh-source-withdrawal control. Intended counts (36 worlds, 36
+elaborations, 12 outlives and 12 typed domain holds) are unexecuted expectations,
+not measurements. No unchanged original is edited or replaced by a fragment.
+
+All eight review modes remain scoped as follows: (1)-(3) no assertion evaluator,
+macro scalar executor, numeric rule or local solver is added; (4) the same actual
+source joins serve every origin; (5) only source/header metadata is demanded and
+executable bodies stay cold by assertion; (6) memo plans/IR inputs are retained
+and the actual iterator runs only on demanded preparation; (7) relevant query
+roots/guards govern currentness, with no new installed global scan; (8) source
+plans and bodies retain Arcs rather than deep copies. These are source-reviewed
+claims with pending control execution, not proof of the entire runtime matrix.
+The actual root/caller ParamEnv/inference owner/guarded commit and obsolete
+runtime fallback removal remain held. On eventual real activation, unchanged
+repr128 is the primary runtime witness; extra constructor replay requires an
+actual change to their active shared CallSeal/commit path.
+
+### V520/V521 frozen review and failed attempt
+
+V520 froze HEAD da1cdc0c3fa3aa4872ba4e4a7afaabe8fd974d42, 8,732 inputs,
+fingerprint `f4d77ef0b0d4261a6529385ddd994c9a920e6442d9e4eaa40f9f02009447cb02`.
+The library no-run build terminated 101: E0308 source_caller_clauses.rs:126
+(boxed configuration reference), E0596 line 145 (mutable input lookup through
+an immutable DB reference), and E0277 prepared.rs:1045 (EarlyBinder needs a
+foldable retained List rather than its borrowed slice). CLI/digester builds,
+the new control and both runtime fixtures were unexecuted. Closing source/HEAD
+guards terminated 0, zero changed inputs; old V519 CLI/digester hashes stayed
+unchanged and are explicitly not fresh builds. Every process was terminal and
+ownership returned before repair. Actual logs/terminal/guards are retained in
+artifacts/validation-current-v520.
+
+V521 freezes the same HEAD and 8,732 inputs at fingerprint
+`2dcc5fd54cd54ff3cf2ac812e3b7cd0e7bf4f883414d9a659c7b9300abef2a0c`.
+Its manifest delta contains only prepared.rs and source_caller_clauses.rs;
+inspection confirms Box::as_ref, exact published-input fingerprint currentness
+alongside retained memo guards, and EarlyBinder over the foldable List mapped
+to its arena slice. These mechanical repairs retain the reviewed semantic
+boundaries and all-eight conclusions. V521 execution remains separately pending.
+
+The new Q90 source_adt_facts was also independently read: Q75/receipt/schema and
+enum-representation joins, optional field-Type demand, actual shape proof and
+whole-memo/auxiliary currentness are retained. declaration_info leaves all
+unproduced destructor/Copy/sizedness/language-related semantics Unprepared;
+neither a declaration nor missing map becomes a false/empty semantic answer.
+The source/type/configuration guard is exact and shared Arc payloads preserve
+the owned source proof. This is source review only: the focused Q89 control
+does not exercise Q90 publication, callback leaves or field materialization.
+
+The caller null branch was checked against pinned rustc_ty_utils::param_env
+(ty.rs:150-206), clauses_of.rs and outlives/mod.rs. An authentic standalone
+ordinary Fn with complete zero parameter count, no parent/written/feature
+clauses, generic_const_exprs disabled and nonconditional constness can establish
+empty assumptions. It excludes trait Self, default associated-method RPITIT,
+const-effect and inferred-function branches. The retained explicit Q81 hierarchy
+is separately unavailable for broader callers, not promoted to complete clauses.
+Configuration is bound to the actual provider as well as retained source input.
+
+The root_response module is portable result transport only. Same-owner original
+RootVariables and original family-matching keys represent unresolved variables;
+fresh unknown variables remain Pending. Reverse definition/generic/Q77 joins
+authenticate supported Types, and unsupported rigid aliases/regions/constants
+remain typed holds. Solver Certainty/external constraints, runtime activation,
+current result expectation and exact-once commit are still the future consumer's
+authority; no response DTO certifies them. No caller/export execution acceptance
+is inferred from a neighboring elaborator control or successful host compilation.
+
+An additional shared-source prerequisite was found while V521 remained frozen:
+pinned hir_ty_lowering/mod.rs:983-1002 treats a genuine positive PointeeSized
+bound as transient and discards its middle-IR clause. Current common source
+transport still encodes that written bound as Implemented. The new control's
+implied_traits >= 2 assertion reflects that current transport and must not become
+a future requirement that PointeeSized remain an encoded trait clause. Remove
+or revise that cardinality expectation with the common lowering repair, retaining
+the real head/source/output checks. No source change was made during validation.
+Executing the real upstream iterator over these current inputs is component
+evidence; it cannot certify exact compiler-query input completeness. The common
+bound-lowering repair remains a prerequisite to root/factory activation.
+
+### V521 actual terminals and bounded evidence
+
+Library no-run, CLI and digester builds all terminated 0 (Cargo 45.51s, 38.01s,
+0.67s). Actual Cargo JSON selected test SHA256
+`164427793600321745cbcccc5ef7089e36bebcc1e7f3d1130428e6942ecfedad`;
+CLI `109864d16d0da4346135e6d6e1c54d1e248b83f8c7e7abafd156e244f9aa029b`;
+fresh digester
+`5b5ddb2c70ad2cc69868becefcb32fe3c040ecb5376bd388b1e56c2b8972786c`.
+
+Only the exact selector in 2026-10-20-impl-super-outlives-controls.json executed.
+It terminated 0 in 97.624s, exactly one test body, with unchanged source/HEAD/test
+binary guards. Actual parsed rows (not inferred from final assertions) record
+36 source worlds: 36 elaborations, 12 filtered outlives rows and 12 typed
+inherent-domain holds. The repr128 worlds execute the real upstream iterator
+for both primitive PartialEq impls; Foo worlds return the actual T:'static row;
+streaming worlds observe NotApplicable without invoking that iterator. All four
+editions and three origins completed, with memo/cold/currentness/epoch assertions.
+Withdrawal assertions follow epoch revocation, not an independent withdrawal.
+Actual per-world observations are in
+artifacts/validation-current-v521/observed-control-counts.json. The source-input
+PointeeSized defect above still limits compiler-query completeness; this pass
+does not close that prerequisite.
+
+The selected runtime batch terminated 1. Both originals ran in owning Rust 2015
+with embedded facade and native_execution=false. The associated constructor
+passed all 13 runtime-contract checks; repr128 retained exit 2, executor
+LRR-E-OP-TYPE, `operator requires supported concrete primitive operand descriptors`,
+with no runtime-check acceptance. Imported originals, manifest and binary stayed
+unchanged. The report is
+/private/tmp/lrr-v521-impl-outlives-runtime/report.json; compact argv/capture/
+diagnostic/check evidence is in artifacts/validation-current-v521/runtime-summary.json.
+There are zero new stock gains; diagnostic/tooling/full-suite/JIT remain unassessed
+or held. Q90, caller null-environment encoding and response export have only
+source review/host compilation here, with no executed production observation.
+
+After-build and closing after-runtime guards terminated 0 at the exact V521
+fingerprint/HEAD, 8,732 inputs and zero source changes. Actual test/CLI hashes
+match after-build, and the separate fresh digester closing hash also matches.
+Every Cargo/control/runtime process is terminal. Source and target ownership
+were explicitly returned before further repairs; no automatic broad replay ran.
+
+Reproduce builds using the maintained direct Rust1.99 offline/locked commands
+above, then run tools/validation/run_controls.py against the one-selector tracked
+selection. The runtime command is tools/rustc_checkout_runtime.py with
+LRR_EMBEDDED_FACADE=1, --lrr target/debug/lrr,
+--source-digester target/debug/examples/lrr_source_digests, a new --report-dir,
+--timeout 240, and only --case tests/ui/enum-discriminant/repr128.rs and
+--case tests/ui/associated-types/assoc-type-in-struct-constructor.rs. Raw terminals,
+actual command receipts and guards remain in artifacts/validation-current-v521.

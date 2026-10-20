@@ -536,3 +536,222 @@ fn unchanged_projection_fixture_trait_members_keep_actual_source_identity_all_ed
     }
     assert_eq!(worlds, 24);
 }
+
+#[test]
+fn unchanged_impl_super_outlives_uses_pinned_elaborator_all_editions_and_origins() {
+    use crate::traits::{
+        header_syntax::ImplHeaderSyntaxKey,
+        term::{ParamKey, TyTerm},
+        upstream::source_impl_outlives::{
+            CurrentSourceImplOutlives, ImplOutlivesDomain, check_actual_impl_elaboration,
+        },
+    };
+    let mut worlds = 0;
+    let mut elaborations = 0;
+    let mut outlives = 0;
+    let mut typed_holds = 0;
+    for edition in [2015, 2018, 2021, 2024] {
+        for origin in 0..3 {
+            for (case, first_item, kind) in [
+                (
+                    "tests/ui/enum-discriminant/repr128.rs",
+                    "use std::intrinsics",
+                    0,
+                ),
+                (
+                    "tests/ui/self/builtin-superkinds-self-type.rs",
+                    "use std::sync",
+                    1,
+                ),
+                (
+                    "tests/ui/generic-associated-types/streaming_iterator.rs",
+                    "use std::fmt",
+                    2,
+                ),
+            ] {
+                let (mut db, seal, root, temporary) =
+                    fixture_world(case, first_item, edition, origin);
+                let rows = actual_rows(&mut db, &seal);
+                db.trace.detailed = true;
+                let before = db.trace.events.len();
+                let inventory = ready(db.fetch(
+                    &SyntaxProvider,
+                    QueryKey::PreparedScopeImplHeaders(seal.clone()),
+                ))
+                .value;
+                let QueryValue::PreparedScopeImplHeaders(inventory) = inventory.as_ref() else {
+                    unreachable!()
+                };
+                let mut selected = Vec::new();
+                let expected_trait =
+                    if kind == 2 {
+                        // Select the actual unchanged inherent impl through its
+                        // independently captured new member, never a fabricated key.
+                        let new =
+                            actual_named(&rows, root.crate_key, &[], "new", ItemKind::Function);
+                        let attached = super::upstream_generated_projection_fields::actual_rows(
+                            &mut db, &seal,
+                        );
+                        let parent = super::upstream_associated_predicates::parent(&attached, new);
+                        for raw in inventory.inventory_root().headers() {
+                            if inventory
+                                .canonical_owner(raw.identity)
+                                .is_some_and(|owner| owner.identity() == parent)
+                            {
+                                selected.push((raw.identity, parent));
+                            }
+                        }
+                        assert_eq!(selected.len(), 1, "actual StreamEnumerate inherent impl");
+                        None
+                    } else {
+                        let target = if kind == 0 {
+                            let core = crate::facade::unit(
+                                &ProfileIdentity {
+                                    edition,
+                                    ..ProfileIdentity::current()
+                                },
+                                "core",
+                            );
+                            actual_named(&rows, core, &["cmp"], "PartialEq", ItemKind::Trait)
+                        } else {
+                            actual_named(&rows, root.crate_key, &[], "Foo", ItemKind::Trait)
+                        };
+                        let catalog = ready(
+                            db.fetch(&SyntaxProvider, QueryKey::ImplTraitCatalog(seal.clone())),
+                        )
+                        .value;
+                        let QueryValue::ImplTraitCatalog(catalog) = catalog.as_ref() else {
+                            unreachable!()
+                        };
+                        for &(raw, canonical) in catalog.candidates(target).unwrap() {
+                            if kind == 0 {
+                                let head = ready(db.fetch(
+                                    &SyntaxProvider,
+                                    QueryKey::ImplHeadTypes(Box::new(ImplHeaderSyntaxKey {
+                                        inventory: seal.clone(),
+                                        implementation: raw,
+                                    })),
+                                ))
+                                .value;
+                                let QueryValue::ImplHeadTypes(head) = head.as_ref() else {
+                                    unreachable!()
+                                };
+                                if !matches!(head.result(),
+                                crate::frontend::impl_head_types::ImplHeadTypeResult::Resolved {
+                                    self_type: TyTerm::Primitive(crate::ir::op::PrimitiveType::I128
+                                        | crate::ir::op::PrimitiveType::U128), ..
+                                }) {
+                                    continue;
+                                }
+                            } else if rows
+                                .get(&canonical)
+                                .is_none_or(|item| item.scope.crate_key != root.crate_key)
+                            {
+                                continue;
+                            }
+                            selected.push((raw, canonical));
+                        }
+                        assert_eq!(selected.len(), if kind == 0 { 2 } else { 1 });
+                        Some(target)
+                    };
+                let mut held = Vec::new();
+                let mut local_elaborations = 0;
+                let mut local_outlives = 0;
+                let mut local_holds = 0;
+                for (raw, canonical) in selected {
+                    let key = ImplHeaderSyntaxKey {
+                        inventory: seal.clone(),
+                        implementation: raw,
+                    };
+                    let query = QueryKey::SourceImplOutlives(Box::new(key.clone()));
+                    let first = ready(db.fetch(&SyntaxProvider, query.clone()));
+                    let current = ready(CurrentSourceImplOutlives::capture(&mut db, &key));
+                    let plan = current.plan();
+                    assert_eq!(plan.key(), &key);
+                    if let Some(expected_trait) = expected_trait {
+                        assert_eq!(
+                            plan.domain(),
+                            ImplOutlivesDomain::TraitImpl {
+                                implementation: canonical,
+                                trait_definition: expected_trait,
+                            }
+                        );
+                        assert!(
+                            plan.requirements().is_empty(),
+                            "actual source requirements: {:?}",
+                            plan.requirements()
+                        );
+                        let observed = check_actual_impl_elaboration(&mut db, &key).unwrap();
+                        assert_eq!(observed.implementation, canonical);
+                        assert_eq!(observed.trait_definition, expected_trait);
+                        assert_eq!(observed.source, plan.fingerprint());
+                        assert!(
+                            observed.implied_traits >= 2,
+                            "genuine trait graph includes PointeeSized"
+                        );
+                        if kind == 0 {
+                            assert_eq!(
+                                observed.outlives, 0,
+                                "pinned filtering of primitive PartialEq graph"
+                            );
+                            assert!(observed.static_type_parameters.is_empty());
+                        } else {
+                            let generics = ready(
+                                db.fetch(&SyntaxProvider, QueryKey::DeclarationGenerics(canonical)),
+                            )
+                            .value;
+                            let QueryValue::DeclarationGenerics(generics) = generics.as_ref()
+                            else {
+                                unreachable!()
+                            };
+                            assert_eq!(generics.parameters().len(), 1);
+                            assert_eq!(generics.parameters()[0].name, "T");
+                            assert_eq!(observed.outlives, 1, "actual Foo requires T:'static");
+                            assert_eq!(
+                                observed.static_type_parameters,
+                                vec![ParamKey {
+                                    definition: canonical,
+                                    ordinal: generics.parameters()[0].ordinal,
+                                }]
+                            );
+                        }
+                        local_elaborations += 1;
+                        local_outlives += observed.outlives;
+                    } else {
+                        assert_eq!(
+                            plan.domain(),
+                            ImplOutlivesDomain::NotApplicable,
+                            "inherent impl is not a trait-impl elaboration input"
+                        );
+                        assert_eq!(plan.pending(), None);
+                        local_holds += 1;
+                    }
+                    let again = ready(db.fetch(&SyntaxProvider, query));
+                    assert!(first.cacheable && Arc::ptr_eq(&first.value, &again.value));
+                    assert_eq!(first.fingerprint, again.fingerprint);
+                    current.require_current(&db).unwrap();
+                    held.push(current);
+                }
+                assert_cold(&db, before);
+                db.begin_expansion_epoch(2).unwrap();
+                assert!(held.iter().all(|plan| plan.require_current(&db).is_err()));
+                db.publish_inputs(BTreeMap::new()).unwrap();
+                assert!(held.iter().all(|plan| plan.require_current(&db).is_err()));
+                worlds += 1;
+                elaborations += local_elaborations;
+                outlives += local_outlives;
+                typed_holds += local_holds;
+                eprintln!(
+                    "actual pinned impl-super-outlives {case},edition{edition},origin{origin}: {local_elaborations}elaborations,{local_outlives}outlives,{local_holds}typed-domain-holds; canonical source IDs, actual static parameter, memo/currentness/epoch revocation, bodies cold; root/runtime held"
+                );
+                if let Some(path) = temporary {
+                    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+                }
+            }
+        }
+    }
+    assert_eq!(
+        (worlds, elaborations, outlives, typed_holds),
+        (36, 36, 12, 12)
+    );
+}
