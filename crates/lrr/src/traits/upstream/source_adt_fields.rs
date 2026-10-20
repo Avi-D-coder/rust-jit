@@ -79,6 +79,9 @@ impl PreparedAdtSourceFields {
     pub fn pending(&self) -> Option<SourceAdtFieldsPending> { self.pending }
     pub(super) fn kind(&self) -> AdtKind { self.kind }
     pub(super) fn name(&self) -> &str { &self.name }
+    pub(super) fn source_field_types(&self) -> impl Iterator<Item = &TyTerm> {
+        self.variants.iter().flat_map(|variant| variant.fields.iter().map(|field| &field.ty))
+    }
     pub(super) fn schema(&self) -> &NominalSchema {
         let QueryValue::TypeSchema(schema) = self.schema.as_ref() else { unreachable!("captured ADT schema") };
         schema
@@ -481,13 +484,28 @@ pub(crate) enum ProjectionSelfExpectation {
     Nominal(Digest),
 }
 #[cfg(test)]
+#[derive(Debug, Clone)]
+pub(crate) enum ProjectionOwnArgumentExpectation {
+    StaticRegion,
+    NominalParameters { definition: Digest, parameters: Vec<crate::traits::term::ParamKey> },
+}
+#[cfg(test)]
+impl ProjectionOwnArgumentExpectation {
+    fn kind(&self) -> crate::traits::term::BoundKind {
+        use crate::traits::term::BoundKind;
+        match self { Self::StaticRegion => BoundKind::Region, _ => BoundKind::Type }
+    }
+}
+#[cfg(test)]
 pub(crate) struct DeclaredProjectionFieldExpectation<'a> {
+    pub(crate) kind: AdtKind,
     pub(crate) field_name: &'a str,
     pub(crate) wrappers: &'a [Digest],
     pub(crate) trait_definition: Digest,
     pub(crate) associated_definition: Digest,
     pub(crate) self_type: ProjectionSelfExpectation,
     pub(crate) unsigned_trait_arguments: &'a [rustc_type_ir::UintTy],
+    pub(crate) own_arguments: &'a [ProjectionOwnArgumentExpectation],
     pub(crate) parent_count: usize,
 }
 
@@ -513,7 +531,7 @@ pub(crate) fn check_actual_declared_projection_field(
     if let Some(pending) = plan.pending() {
         return Err(fault(&format!("actual declared projection field prerequisite pending: {pending:?}")));
     }
-    assert_eq!(plan.kind(), AdtKind::Struct);
+    assert_eq!(plan.kind(), expected.kind);
     assert_eq!(plan.variants.len(), 1);
     assert_eq!(plan.variants[0].fields.len(), 1);
     assert_eq!(plan.variants[0].fields[0].name, expected.field_name);
@@ -533,12 +551,28 @@ pub(crate) fn check_actual_declared_projection_field(
     assert_eq!(binding.trait_definition.source(), expected.trait_definition);
     let layouts = plan.generic_layouts()?;
     assert_eq!(layouts.projection_parent(binding.associated_definition), Some(binding.trait_definition));
-    let expected_kinds = vec![BoundKind::Type; expected.parent_count];
+    assert_eq!(source.item_args.len(), expected.own_arguments.len());
+    for (actual, expected) in source.item_args.iter().zip(expected.own_arguments) {
+        use crate::traits::term::{GenericArg, RegionTerm};
+        match expected {
+            ProjectionOwnArgumentExpectation::StaticRegion => assert!(matches!(actual, GenericArg::Region(RegionTerm::Static))),
+            ProjectionOwnArgumentExpectation::NominalParameters { definition, parameters } => {
+                let GenericArg::Type(TyTerm::Nominal(actual, args)) = actual else { panic!("actual own nominal argument missing") };
+                assert_eq!(actual, definition);
+                assert_eq!(args.len(), parameters.len());
+                for (actual, expected) in args.iter().zip(parameters) {
+                    assert!(matches!(actual, GenericArg::Type(TyTerm::Param(actual)) if actual == expected));
+                }
+            }
+        }
+    }
+    let mut expected_kinds = vec![BoundKind::Type; expected.parent_count];
+    expected_kinds.extend(expected.own_arguments.iter().map(|argument| argument.kind()));
     assert_eq!(layouts.projection_argument_kinds(binding.associated_definition), Some(expected_kinds.as_slice()));
     let associated = layouts.get(binding.associated_definition).expect("actual associated generic declaration");
     let layout = associated.layout().expect("actual associated source binder");
     assert!(layout.implicit_self);
-    assert_eq!(layout.own, 0);
+    assert_eq!(layout.own as usize, expected.own_arguments.len());
     assert_eq!(layout.inherited as usize + 1, expected.parent_count);
     let input = Arc::clone(&plan.bindings.catalog);
     let InputValue::DiscoverySeal(catalog) = input.as_ref() else { unreachable!("actual field catalog") };
@@ -572,14 +606,31 @@ pub(crate) fn check_actual_declared_projection_field(
         assert_eq!(def_id, binding.associated_definition);
         assert_eq!(cx.projection_parent(def_id), binding.trait_definition);
         assert_eq!(cx.generics_of(def_id).parent_count, expected.parent_count);
-        assert_eq!(cx.generics_of(def_id).count(), expected.parent_count);
+        assert_eq!(cx.generics_of(def_id).count(), expected.parent_count + expected.own_arguments.len());
         assert!(cx.check_alias_term_args_compatible(alias.kind.into(), alias.args));
         let wrong = cx.list(Vec::<Arg<'_, prepared::PreparedProvider<'_>>>::new());
         assert!(!cx.check_alias_term_args_compatible(alias.kind.into(), wrong));
         assert_eq!(ty::AliasTy::new_from_args(cx, alias.kind, alias.args), alias);
         let (reference, own) = alias.trait_ref_and_own_args(cx);
         assert_eq!(reference.def_id, binding.trait_definition);
-        assert!(own.is_empty());
+        assert_eq!(own.len(), expected.own_arguments.len());
+        for (actual, expected) in own.iter().zip(expected.own_arguments) {
+            match expected {
+                ProjectionOwnArgumentExpectation::StaticRegion => assert!(matches!(actual,
+                    Arg::Region(actual) if matches!(actual.kind(), ty::RegionKind::ReStatic))),
+                ProjectionOwnArgumentExpectation::NominalParameters { definition, parameters } => {
+                    let Arg::Type(actual) = actual else { panic!("encoded own Type argument missing") };
+                    let ty::TyKind::Adt(actual, args) = actual.kind() else { panic!("encoded own nominal argument missing") };
+                    assert_eq!(actual.definition.source(), *definition);
+                    assert_eq!(actual.definition.world(), cx.services().source_world());
+                    assert_eq!(args.items().len(), parameters.len());
+                    for (actual, expected) in args.items().iter().zip(parameters) {
+                        assert!(matches!(actual, Arg::Type(actual)
+                            if matches!(actual.kind(), ty::TyKind::Param(parameter) if parameter.source() == *expected)));
+                    }
+                }
+            }
+        }
         assert_eq!(reference.args.items().len(), 1 + expected.unsigned_trait_arguments.len());
         let Arg::Type(self_type) = reference.args.items()[0] else { panic!("actual trait Self Type missing") };
         match expected.self_type {

@@ -223,8 +223,7 @@ pub(super) struct DefinitionFacts<'cx> {
     pub(super) name: Symbol<'cx>,
     pub(super) span: Span,
     pub(super) generics: Generics<'cx, PreparedProvider<'cx>>,
-    pub(super) variances: &'cx [Variance],
-    pub(super) alias_variances: Option<&'cx [Variance]>,
+    pub(super) variance_queries: super::source_variance_queries::DefinitionVarianceQueries<'cx>,
     pub(super) ty: Option<Early<'cx, T<'cx>>>,
     pub(super) opaque_hidden: Option<Early<'cx, T<'cx>>>,
     pub(super) constant: Option<ConstFacts<'cx>>,
@@ -647,6 +646,8 @@ impl<'cx> PreparedProvider<'cx> {
         }
         let world = self.world;
         for (id, row) in &facts.definitions {
+            row.variance_queries.require_source(&row.receipt, row.generics, row.impl_trait_in_trait,
+                &self.settings.catalog.seal.key())?;
             let source = self.settings.construction_generics.and_then(|source| source.get(*id))
                 .ok_or_else(|| fault("typed definition lacks actual generic source preparation"))?;
             if !row.receipt.matches_generics(source) || self.require_generic_value(*id, row.generics).is_err() {
@@ -1041,15 +1042,16 @@ impl<'cx> SourceFacts<'cx> for PreparedProvider<'cx> {
             .unwrap_or_else(|| self.definition(id).generics)
     }
     fn variances_of(self, _: Cx<'cx>, id: DefinitionId) -> &'cx [Variance] {
-        self.definition(id).variances
+        self.definition(id).variance_queries.variances_of()
     }
     fn opt_alias_variances(
         self,
         _: Cx<'cx>,
         kind: impl Into<AliasTermKind<Cx<'cx>>>,
     ) -> Option<&'cx [Variance]> {
-        self.definition(alias_definition(kind.into()))
-            .alias_variances
+        super::source_variance_queries::opt_alias_variances(kind.into(),
+            |id| self.definition(id).impl_trait_in_trait,
+            |id| self.definition(id).variance_queries.variances_of())
     }
     fn type_of(self, _: Cx<'cx>, id: DefinitionId) -> Early<'cx, T<'cx>> {
         self.definition(id)

@@ -7,7 +7,7 @@ use crate::{
     syntax::{signatures::{DefinitionParameter, GenericKind, GenericSourceLayout},
         outline::{HeaderRecipe, DeclarationContext}, parse::ParseKey},
 };
-use ra_ap_syntax::{AstNode, ast};
+use ra_ap_syntax::{AstNode, WalkEvent, ast};
 use std::sync::Arc;
 
 #[path = "opaque_return_headers.rs"]
@@ -25,6 +25,10 @@ pub struct DeclarationGenerics {
     /// function's inherited Self. Neither changes ordinary source ordinals.
     trait_self: bool,
     function: bool,
+    /// Syntax evidence only: anonymous compiler parameter identities have not
+    /// been produced. Neither location is a DefinitionId or a guessed count.
+    argument_impl_traits: Vec<crate::syntax::spans::SourceRange>,
+    parameter_type_macros: Vec<crate::syntax::spans::SourceRange>,
     opaque_returns: Option<OpaqueReturnHeaders>,
     const_types: std::collections::BTreeMap<u32, crate::syntax::spans::SourceRange>,
 }
@@ -34,6 +38,11 @@ impl DeclarationGenerics {
     pub fn layout(&self) -> Option<GenericSourceLayout> { self.layout }
     pub(crate) fn has_trait_self(&self) -> bool { self.trait_self }
     pub(crate) fn is_function(&self) -> bool { self.function }
+    pub(crate) fn argument_impl_traits(&self) -> &[crate::syntax::spans::SourceRange] { &self.argument_impl_traits }
+    pub(crate) fn parameter_type_macros(&self) -> &[crate::syntax::spans::SourceRange] { &self.parameter_type_macros }
+    pub(crate) fn has_unproduced_parameter_identities(&self) -> bool {
+        !self.argument_impl_traits.is_empty() || !self.parameter_type_macros.is_empty()
+    }
     pub(crate) fn opaque_returns(&self) -> Option<&OpaqueReturnHeaders> { self.opaque_returns.as_ref() }
     pub(crate) fn opaque_return_syntax(&self, position: u32) -> Result<Option<ast::ImplTraitType>, Diagnostic> {
         match (self.opaque_returns.as_ref(), self.source_parts()) {
@@ -61,7 +70,8 @@ impl DeclarationGenerics {
     }
     pub(crate) fn prepare(db: &mut Database, definition: Digest) -> QueryPoll<Self> {
         let mut result = Self { definition, metadata: None, parsed: None, parameters: Vec::new(),
-            layout: None, trait_self: false, function: false, opaque_returns: None, const_types: std::collections::BTreeMap::new() };
+            layout: None, trait_self: false, function: false, argument_impl_traits: Vec::new(),
+            parameter_type_macros: Vec::new(), opaque_returns: None, const_types: std::collections::BTreeMap::new() };
         let source = db.input(&InputKey::DefinitionSource(definition));
         let header = db.input(&InputKey::DefinitionHeader(definition));
         let context = db.input(&InputKey::DeclarationContext(definition));
@@ -94,6 +104,28 @@ impl DeclarationGenerics {
             let function = match tree.function_header(definition, recipe, declaration, None) {
                 Ok(function) => function, Err(error) => return QueryPoll::Ready(Err(error)),
             };
+            // Inspect only retained parameter Types. An executable const
+            // expression can contain declarations belonging to another demand;
+            // those must not change this function's parameter completeness.
+            if let Some(parameters) = function.param_list() {
+                for ty in parameters.params().filter_map(|parameter| parameter.ty())
+                    .chain(parameters.self_param().and_then(|parameter| parameter.ty())) {
+                    let mut walk = ty.syntax().preorder();
+                    while let Some(event) = walk.next() {
+                        let WalkEvent::Enter(node) = event else { continue; };
+                        if ast::Expr::can_cast(node.kind()) || ast::Item::can_cast(node.kind()) {
+                            walk.skip_subtree(); continue;
+                        }
+                        if ast::MacroType::can_cast(node.kind()) {
+                            result.parameter_type_macros.push(crate::syntax::ast_adapter::range(node.text_range()));
+                            walk.skip_subtree(); continue;
+                        }
+                        if ast::ImplTraitType::can_cast(node.kind()) {
+                            result.argument_impl_traits.push(crate::syntax::ast_adapter::range(node.text_range()));
+                        }
+                    }
+                }
+            }
             result.opaque_returns = match OpaqueReturnHeaders::capture(tree, definition, &function) {
                 Ok(plan) => plan, Err(error) => return QueryPoll::Ready(Err(error)),
             };
@@ -114,10 +146,13 @@ impl DeclarationGenerics {
 }
 fn fault(message: &str) -> Diagnostic { Diagnostic::new("LRR-E-DECLARATION-GENERICS", message.into()) }
 impl StableEncode for DeclarationGenerics {
-    const DOMAIN: &'static str = "lrr/v3/actual-declaration-generics";
+    const DOMAIN: &'static str = "lrr/v4/actual-declaration-generics";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.definition); e.option(&self.layout, |e, layout| e.record(layout));
         e.bool(self.trait_self); e.bool(self.function);
+        for sites in [&self.argument_impl_traits, &self.parameter_type_macros] {
+            e.sequence(sites, |e, range| { e.u32(range.start); e.u32(range.end); });
+        }
         e.option(&self.opaque_returns,|e,plan| e.record(plan));
         e.map(&self.const_types, |e, ordinal, range| { e.u32(*ordinal); e.u32(range.start); e.u32(range.end); });
         e.sequence(&self.parameters, |e, p| {

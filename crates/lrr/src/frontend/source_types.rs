@@ -770,32 +770,12 @@ pub(super) fn resolve_actual_type(
                 };
                 // Written generic arguments of a nominal (`W<T>`); lifetime
                 // arguments are regions and carry no runtime type.
-                let mut arguments = Vec::new();
-                let generic = ra_ap_syntax::ast::HasGenericArgs::generic_arg_list(&segment);
-                if let Some(list) = &generic {
-                    for argument in list.generic_args() {
-                        match argument {
-                            ast::GenericArg::TypeArg(argument) => {
-                                let Some(ty) = argument.ty() else {
-                                    return QueryPoll::Ready(Ok(None));
-                                };
-                                match walk(db, graph, sources, signature, &ty) {
-                                    QueryPoll::Ready(Ok(Some(term))) => {
-                                        arguments.push(crate::traits::term::GenericArg::Type(term))
-                                    }
-                                    other => return other,
-                                }
-                            }
-                            ast::GenericArg::LifetimeArg(argument) => {
-                                let Some(region) = argument.lifetime().and_then(|lifetime| signature.region(&lifetime)) else {
-                                    return QueryPoll::Ready(Ok(None));
-                                };
-                                arguments.push(crate::traits::term::GenericArg::Region(region));
-                            }
-                            _ => return QueryPoll::Ready(Ok(None)),
-                        }
-                    }
-                }
+                let mut arguments = match written_generic_arguments(db, graph, sources, signature, &segment) {
+                    QueryPoll::Ready(Ok(Some(arguments))) => arguments,
+                    QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
                 // `Self` of an impl: its written self type, whose generic
                 // names are the function's inherited impl parameters.
                 if segment.kind() == Some(ast::PathSegmentKind::SelfTypeKw) {
@@ -892,34 +872,15 @@ pub(super) fn resolve_actual_type(
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
-        let mut arguments = Vec::new();
-        if let Some(list) = path
-            .segment()
-            .and_then(|segment| ra_ap_syntax::ast::HasGenericArgs::generic_arg_list(&segment))
-        {
-            for argument in list.generic_args() {
-                match argument {
-                    ast::GenericArg::TypeArg(argument) => {
-                        let Some(ty) = argument.ty() else {
-                            return QueryPoll::Ready(Ok(None));
-                        };
-                        match walk(db, graph, sources, signature, &ty) {
-                            QueryPoll::Ready(Ok(Some(term))) => {
-                                arguments.push(crate::traits::term::GenericArg::Type(term))
-                            }
-                            other => return other,
-                        }
-                    }
-                    ast::GenericArg::LifetimeArg(argument) => {
-                                let Some(region) = argument.lifetime().and_then(|lifetime| signature.region(&lifetime)) else {
-                                    return QueryPoll::Ready(Ok(None));
-                                };
-                                arguments.push(crate::traits::term::GenericArg::Region(region));
-                            }
-                    _ => return QueryPoll::Ready(Ok(None)),
-                }
-            }
-        }
+        let arguments = match path.segment() {
+            Some(segment) => match written_generic_arguments(db, graph, sources, signature, &segment) {
+                QueryPoll::Ready(Ok(Some(arguments))) => arguments,
+                QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            },
+            None => return QueryPoll::Ready(Ok(None)),
+        };
         let normalizer = match AliasNormalizer::new(graph, sources) {
             Ok(normalizer) => normalizer,
             Err(error) => return QueryPoll::Ready(Err(error)),
@@ -952,11 +913,15 @@ pub(super) fn resolve_actual_type(
         let Some(segment) = path.segment() else {
             return QueryPoll::Ready(Ok(None));
         };
-        if ra_ap_syntax::ast::HasGenericArgs::generic_arg_list(&segment).is_some()
-            || qualifier.qualifier().is_some()
-        {
+        if qualifier.qualifier().is_some() {
             return QueryPoll::Ready(Ok(None));
         }
+        let item_args = match written_generic_arguments(db, graph, sources, signature, &segment) {
+            QueryPoll::Ready(Ok(Some(arguments))) => arguments,
+            QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
         let Some(name) = segment.name_ref().map(|name| name.text().to_string()) else {
             return QueryPoll::Ready(Ok(None));
         };
@@ -973,7 +938,7 @@ pub(super) fn resolve_actual_type(
                     args,
                 },
                 item: crate::frontend::member_index::associated_name_key(&name),
-                item_args: Vec::new(),
+                item_args,
             }))
         };
         // `<Ty as Trait>::Name` (and `<Ty>::Name`): the written self type is
@@ -1223,6 +1188,49 @@ pub(super) fn resolve_actual_type(
 
     walk(db, graph, sources, signature, ty)
 }
+/// One positional Type/region argument route for nominal, trait and associated
+/// segments. The actual owning declaration supplies name and region identity.
+fn written_generic_argument(
+    db: &mut Database, graph: &NameNamespaces, sources: &[&PreparedSourceView],
+    declaration: &WrittenTypeDeclaration<'_>, argument: ra_ap_syntax::ast::GenericArg,
+) -> QueryPoll<Option<crate::traits::term::GenericArg>> {
+    use ra_ap_syntax::ast;
+    use crate::traits::term::GenericArg;
+    match argument {
+        ast::GenericArg::TypeArg(argument) => {
+            let Some(ty) = argument.ty() else { return QueryPoll::Ready(Ok(None)); };
+            match resolve_actual_type(db, graph, sources, declaration, &ty) {
+                QueryPoll::Ready(Ok(term)) => QueryPoll::Ready(Ok(term.map(GenericArg::Type))),
+                QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+            }
+        }
+        ast::GenericArg::LifetimeArg(argument) => QueryPoll::Ready(Ok(argument.lifetime()
+            .and_then(|lifetime| declaration.region(&lifetime)).map(GenericArg::Region))),
+        // Const argument Types and associated equalities require their own
+        // actual declaration metadata. They never become positional guesses.
+        _ => QueryPoll::Ready(Ok(None)),
+    }
+}
+fn written_generic_arguments(
+    db: &mut Database, graph: &NameNamespaces, sources: &[&PreparedSourceView],
+    declaration: &WrittenTypeDeclaration<'_>, segment: &ra_ap_syntax::ast::PathSegment,
+) -> QueryPoll<Option<Vec<crate::traits::term::GenericArg>>> {
+    use ra_ap_syntax::ast::HasGenericArgs;
+    let mut arguments = Vec::new();
+    if let Some(list) = segment.generic_arg_list() {
+        for argument in list.generic_args() {
+            match written_generic_argument(db, graph, sources, declaration, argument) {
+                QueryPoll::Ready(Ok(Some(argument))) => arguments.push(argument),
+                QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+        }
+    }
+    QueryPoll::Ready(Ok(Some(arguments)))
+}
+
 pub(super) fn projection_trait(
     db: &mut Database,
     graph: &NameNamespaces,
@@ -1249,28 +1257,14 @@ pub(super) fn projection_trait(
         .and_then(|segment| ast::HasGenericArgs::generic_arg_list(&segment))
     {
         for argument in list.generic_args() {
-            match argument {
-                ast::GenericArg::LifetimeArg(argument) => {
-                    let Some(region) = argument.lifetime().and_then(|lifetime| signature.region(&lifetime)) else {
-                        return QueryPoll::Ready(Ok(None));
-                    };
-                    arguments.push(crate::traits::term::GenericArg::Region(region));
-                }
-                ast::GenericArg::AssocTypeArg(_) => {}
-                ast::GenericArg::TypeArg(argument) => {
-                    let Some(ty) = argument.ty() else {
-                        return QueryPoll::Ready(Ok(None));
-                    };
-                    match resolve_actual_type(db, graph, sources, signature, &ty) {
-                        QueryPoll::Ready(Ok(Some(term))) => {
-                            arguments.push(crate::traits::term::GenericArg::Type(term))
-                        }
-                        QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
-                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-                    }
-                }
-                _ => return QueryPoll::Ready(Ok(None)),
+            // Equality bindings are collected separately from positional
+            // trait arguments by the existing source constraint service.
+            if matches!(argument, ast::GenericArg::AssocTypeArg(_)) { continue; }
+            match written_generic_argument(db, graph, sources, signature, argument) {
+                QueryPoll::Ready(Ok(Some(argument))) => arguments.push(argument),
+                QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(None)),
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             }
         }
     }

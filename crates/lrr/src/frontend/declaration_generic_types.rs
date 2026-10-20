@@ -42,6 +42,7 @@ impl DeclarationGenericTypes {
         let QueryValue::PreparedScopeImplHeaders(inventory) = result.environment.as_ref() else { return QueryPoll::Ready(Err(fault("generic Type environment query differs"))); };
         let Some(environment) = inventory.inventory_root().environment() else { pending!(Environment); };
         let declaration = result.declaration();
+        if declaration.has_unproduced_parameter_identities() { pending!(Parameters); }
         let Some(layout) = declaration.layout() else { pending!(Parameters); };
         let Some((source, header, context, parsed)) = declaration.source_parts() else { pending!(Parameters); };
         let syntax = match parsed.syntax_at(context.range, |node| ast::Item::can_cast(node.kind())) {

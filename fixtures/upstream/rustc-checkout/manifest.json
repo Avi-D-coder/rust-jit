@@ -10434,6 +10434,12 @@
       "bytes": 885
     },
     {
+      "path": "tests/ui/generic-associated-types/issue-87750.rs",
+      "git_blob": "927083605294c61632bf3d7889cffe2b6bfe5ace",
+      "sha256": "8ffcfd0c04408679d061ac8208076bf0f093652ad3a6175311440cdeeb7f2659",
+      "bytes": 387
+    },
+    {
       "path": "tests/ui/generic-associated-types/iterable.rs",
       "git_blob": "980070e580d6098ea2b9b47da631db7463ef1f01",
       "sha256": "80211f6b79333d3ab5898e14c1cd094a00fcec9043a86808dbcff23eb9b13a3f",
@@ -20766,6 +20772,18 @@
       "bytes": 245
     },
     {
+      "path": "tests/ui/variance/variance-use-invariant-struct-1.rs",
+      "git_blob": "72f50f3459d1a47d8002a84043e6117f60b0d5ff",
+      "sha256": "535c0701eecac0cfb077d27df5135c63bf8c4510523876c4b0b3da40be2c497a",
+      "bytes": 507
+    },
+    {
+      "path": "tests/ui/variance/variance-use-invariant-struct-1.stderr",
+      "git_blob": "b9ca6e7d596d968a8682cb3b7c4f138b46f7f904",
+      "sha256": "70eae3d5d77b3937d2c791d330ccecd9d3b0eb5c71e08af1cca2714534fb5e82",
+      "bytes": 1526
+    },
+    {
       "path": "tests/ui/view-types/must-restrict.rs",
       "git_blob": "c0e1f5115d27c7789406b76ccc0fc4492a948f99",
       "sha256": "59a782d7713017944803cfade64660d483cd2d35afed7cc070c48acf321d9454",
@@ -31017,6 +31035,14 @@
       "path": "tests/ui/generic-associated-types/issue-76826.rs",
       "directives": [
         "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/generic-associated-types/issue-87750.rs",
+      "directives": [
+        "//@ check-pass"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"
@@ -43361,6 +43387,12 @@
       "directives": [
         "//@ run-pass"
       ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/variance/variance-use-invariant-struct-1.rs",
+      "directives": [],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"
     },

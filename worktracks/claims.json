@@ -2083,11 +2083,24 @@
         "crates/lrr/src/cli/preentry_loader_tests/generated_namespace_publication.rs",
         "worktracks/05-trait-goal-engine/2026-10-20-generated-member-namespaces.md",
         "worktracks/05-trait-goal-engine/2026-10-20-generated-projection-fields.md",
-        "worktracks/evidence/2026-10-20-v498-v501-source-projections.json"
+        "worktracks/evidence/2026-10-20-v498-v501-source-projections.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-gat-source-arguments.md",
+        "crates/lrr/src/cli/preentry_loader_tests/upstream_gat_fields.rs",
+        "fixtures/upstream/rustc-checkout/tests/ui/generic-associated-types/issue-87750.rs",
+        "worktracks/05-trait-goal-engine/2026-10-20-gat-variance-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-variance.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-variance-query-domain.md",
+        "crates/lrr/src/cli/preentry_loader_tests/upstream_variance_queries.rs",
+        "crates/lrr/src/cli/preentry_loader_tests/upstream_variance_fields.rs",
+        "tools/upstream_variance.py",
+        "fixtures/upstream/rustc-checkout/tests/ui/variance/variance-use-invariant-struct-1.rs",
+        "fixtures/upstream/rustc-checkout/tests/ui/variance/variance-use-invariant-struct-1.stderr",
+        "worktracks/05-trait-goal-engine/2026-10-20-gat-variance-review.md",
+        "worktracks/evidence/2026-10-20-v502-v503-gat-variance.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-20T18:47:00.579172+00:00",
+      "updated_at": "2026-10-20T19:20:29.127465+00:00",
       "review_after": "2026-10-20T10:52:01.627878+00:00",
       "shared_interfaces": [
         {
@@ -2425,10 +2438,18 @@
             "crates/lrr/src/frontend/trait_declarations.rs"
           ],
           "scope": "Same-root M020 shared actual trait member-scope receipt and ordinary shorthand projection consumer; worker/lead on disjoint files, no reservation transfer. V500 unchanged generated shorthand witness and bounded follow-on record govern repair."
+        },
+        {
+          "claim": "LOCAL-046",
+          "owner": "/root",
+          "paths": [
+            "fixtures/upstream/rustc-checkout/manifest.json"
+          ],
+          "scope": "Same-root incremental unchanged GAT source witness import; existing original licenses retained, no fixture/runtime acceptance claim."
         }
       ],
-      "latest_component_scope": "V501 HELD M020 actual source projections and common generated member namespaces. TraitAssociatedTypes(tag77) resolves legacy item lookup keys to actual associated declarations; DeclarationSourcePredicates(tag78) collects actual own bounds. Shared TypeIR uses real alias/generic parent identities and pinned AliasTy constructors; nominal type_of payloads stay cold. Authenticated generated contributions merge through ordinary granular scope publication and restore original bases on epoch change. Function Type lookup uses its actual header receipt; shorthand bounds and Q77 share one retained TraitDeclaration member-scope receipt, removing duplicate derivation. Final macOS1.99 lib/CLI/digester,5source audits plus exact upstream-object verification and9/9controls pass with matching source/HEAD/test/CLI guards. Controls cover12iterator worlds/24fields,12own-bound worlds/36clauses/12projected,24trait-member worlds,24cold nominal worlds/48enum-unionheaders,36header worlds/276root+24facet headers,36field worlds/96fields/0pending,24local/generic generated-field worlds/24fields with epoch checks, and4edition namespace merge/negative-positive/withdrawal worlds. V498 compile/provenance and V499/V500 generated source failures remain preserved at their original fingerprints. Generic-derived-type remains runtime-contract pass; repr128 remains LRR-E-OP-TYPE. Zero new distinct stock gains/refreshed suite total or task/milestone/interpreter/JIT closure. Complete applicable source facts, query-domain/variance representation, lang registry, predicate closure, generated associated fragments/GATs, root admission/member/VM remain held."
+      "latest_component_scope": "V503 HELD M020 common GAT arguments and pinned source variance. One retained Type/region collector serves nominal, trait and associated paths; actual qualified own regions and shorthand own nominal Types reach genuine AliasTy parent/own layouts. SourceVarianceQueries(tag79) authenticates upstream total generic counts/query domains and retains actual pinned nominal variance results, replacing arbitrary fact slices. Common declaration metadata holds unproduced APIT/type-macro parameter identities before count publication. The complete registered compiler variance terms, constraint walk and fixed point reuse demanded local field inputs; source-role/domain adapters are independently reviewed. V502 six mechanical compile errors and guarded failed attempt remain preserved. Final macOS1.99 lib/CLI/digester, six source audits plus exact upstream-object verification, and7/7focused controls pass with source/HEAD/test/CLI closing guards and separate fresh digester identity. Actual observations:12qualified GAT worlds,12recursive own-Type GAT worlds,24variance-domain worlds/96declaration checks,24APIT worlds,12invariant pointer worlds; prior36field worlds/96fields/0pending and12generic generated projection-field worlds maintained. Generic-derived-type remains a runtime-contract pass; repr128 remains LRR-E-OP-TYPE. Zero new distinct stock runtime gains, refreshed suite total or task/milestone/interpreter/JIT closure. Complete declaration/parent/item predicate and registry production, applicable fact admission, function/opaque/foreign variance, anonymous identities, full GAT normalization and actual upstream root/member/VM integration remain held."
     }
   ],
-  "updated_at": "2026-10-20T18:06:02.280043+00:00"
+  "updated_at": "2026-10-20T19:20:29.127465+00:00"
 }

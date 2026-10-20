@@ -7,6 +7,8 @@
 pub(crate) mod source_generics;
 pub(crate) mod source_adt_fields;
 pub(crate) mod source_definition_headers;
+pub(crate) mod source_variance_queries;
+mod variance;
 pub(crate) mod source_lang_identity;
 mod lang_names;
 mod source_bindings;

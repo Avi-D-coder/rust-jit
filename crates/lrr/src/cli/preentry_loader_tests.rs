@@ -3567,5 +3567,14 @@ mod upstream_projection_types;
 #[path = "preentry_loader_tests/upstream_generated_projection_fields.rs"]
 mod upstream_generated_projection_fields;
 
+#[path = "preentry_loader_tests/upstream_gat_fields.rs"]
+mod upstream_gat_fields;
+
+#[path = "preentry_loader_tests/upstream_variance_queries.rs"]
+mod upstream_variance_queries;
+
+#[path = "preentry_loader_tests/upstream_variance_fields.rs"]
+mod upstream_variance_fields;
+
 #[path = "preentry_loader_tests/generated_namespace_publication.rs"]
 mod generated_namespace_publication;

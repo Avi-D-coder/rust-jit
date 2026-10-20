@@ -23,8 +23,8 @@ fn ready<T>(poll: QueryPoll<T>) -> T {
         QueryPoll::NeedInput(input) => panic!("actual local projected field input: {input:?}"),
     }
 }
-struct SourceRow { item: ItemOutline, parse: ParseKey, generated: bool }
-fn actual_rows(db: &mut Database, seal: &SealKey) -> BTreeMap<Digest, SourceRow> {
+pub(super) struct SourceRow { pub(super) item: ItemOutline, pub(super) parse: ParseKey, pub(super) generated: bool }
+pub(super) fn actual_rows(db: &mut Database, seal: &SealKey) -> BTreeMap<Digest, SourceRow> {
     let inventory = ready(db.fetch(&SyntaxProvider, QueryKey::PreparedScopeImplHeaders(seal.clone()))).value;
     let QueryValue::PreparedScopeImplHeaders(inventory) = inventory.as_ref() else { panic!("actual source inventory differs") };
     let environment = inventory.inventory_root().environment().expect("completed actual environment");
@@ -46,7 +46,7 @@ fn actual_rows(db: &mut Database, seal: &SealKey) -> BTreeMap<Digest, SourceRow>
     }
     rows
 }
-fn named(rows: &BTreeMap<Digest, SourceRow>, unit: Digest, module: &[&str], name: &str, kind: ItemKind) -> Digest {
+pub(super) fn named(rows: &BTreeMap<Digest, SourceRow>, unit: Digest, module: &[&str], name: &str, kind: ItemKind) -> Digest {
     let found = rows.iter().filter(|(_, row)| row.item.scope.crate_key == unit
         && row.item.scope.module_path.iter().map(String::as_str).eq(module.iter().copied())
         && row.item.def_key.declared_name == name && row.item.def_key.item_kind == kind)
@@ -54,7 +54,7 @@ fn named(rows: &BTreeMap<Digest, SourceRow>, unit: Digest, module: &[&str], name
     assert_eq!(found.len(), 1, "actual source {module:?}::{name} must be unique");
     found[0]
 }
-fn associated(rows: &BTreeMap<Digest, SourceRow>, parent: Digest, name: &str) -> Digest {
+pub(super) fn associated(rows: &BTreeMap<Digest, SourceRow>, parent: Digest, name: &str) -> Digest {
     let owner = &rows[&parent];
     assert_eq!(owner.item.def_key.item_kind, ItemKind::Trait);
     let mut scope = owner.item.scope.clone();
@@ -69,7 +69,7 @@ fn associated(rows: &BTreeMap<Digest, SourceRow>, parent: Digest, name: &str) ->
     assert_eq!(found.len(), 1, "actual trait associated declaration must be unique");
     found[0]
 }
-fn assert_cold(db: &Database, before: usize) {
+pub(super) fn assert_cold(db: &Database, before: usize) {
     assert!(db.trace.events[before..].iter().all(|event| !matches!(event.key,
         QueryKey::FunctionSignature(_) | QueryKey::BodyStructure(_)
         | QueryKey::Thunk(_) | QueryKey::PatternPlan(_))),
@@ -121,8 +121,9 @@ fn check_fixture(case: &str, first_item: &str, owner_name: &str, trait_name: &st
             } else { Vec::new() };
             let arguments = if boxed { vec![rustc_type_ir::UintTy::Usize] } else { Vec::new() };
             let expected = DeclaredProjectionFieldExpectation {
+                kind: crate::traits::upstream::model::AdtKind::Struct,
                 field_name, wrappers: &wrappers, trait_definition: parent, associated_definition: item,
-                self_type, unsigned_trait_arguments: &arguments, parent_count: 1 + arguments.len(),
+                self_type, unsigned_trait_arguments: &arguments, own_arguments: &[], parent_count: 1 + arguments.len(),
             };
             db.trace.detailed = true;
             let before = db.trace.events.len();

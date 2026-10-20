@@ -1,0 +1,13 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Common actual GAT Type/region arguments, source-authenticated variance query domain and pinned nominal variance algorithm. Complete factory/root/normalization/member/runtime/JIT remain held.",
+  "controls": [
+    "cli::preentry_loader_tests::upstream_gat_fields::unchanged_streaming_iterator_gat_retains_own_static_region_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_gat_fields::unchanged_recursive_gat_field_retains_own_nominal_type_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_variance_queries::unchanged_source_variance_query_domains_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_variance_queries::unchanged_argument_impl_trait_never_claims_zero_upstream_generics_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_variance_fields::unchanged_mutable_pointer_field_is_invariant_all_editions_and_origins",
+    "cli::preentry_loader_tests::unchanged_nominal_fields_encode_through_shared_source_types_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_generated_projection_fields::unchanged_generic_trait_associated_field_encodes_actual_generated_parent_arguments_all_editions_and_origins"
+  ]
+}

@@ -4,6 +4,8 @@ Integrate the pinned next-generation rustc trait solver with LRR's demand-driven
 
 ## Current boundary
 
+Current checkpoint V503 is a **held source component**, with7/7 focused controls and unchanged runtime replay outcomes. Common GAT arguments and source-authenticated variance metadata retain the pinned algorithm. No runtime upstream-root caller or complete fact factory exists yet. Next prioritize actual parent/item predicate queries and sound demanded-fact admission before runtime member migration; do not expand variance fixtures as a substitute for that join. Earlier receipts below remain historical component scope. [Evidence](../evidence/2026-10-20-v502-v503-gat-variance.json).
+
 Latest held M019/M020 source component: V388 real own impl clauses, common explicit region argument/default metadata and retained alias target AST/mixed substitution. Both builds/6controls pass, including60clause worlds/144clauses and12alias worlds. Conditional and both alias runtime probes remain failing all4editions; generic-fn2024 passes. Four clients and full source/root/member/VM integration remain open. [Evidence](../evidence/2026-10-19-v381-v388-source-impl-clauses.json).
 
 Latest held M019/M020 source component: V380 actual opaque return sites/parents/bounds/editions and unresolved type-macro frontiers share DeclarationGenerics and DefinitionReceipt. Both builds/4controls pass. Runtime2024 generic-fn passes; nesting still fails unbound U. Actual opaque semantic facts/root/member/VM integration remains open. [Evidence](../evidence/2026-10-19-v377-v380-retained-opaque-return.json).

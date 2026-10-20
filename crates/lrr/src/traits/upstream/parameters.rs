@@ -38,6 +38,16 @@ pub(super) enum DeclaredParameterPreparation<'a> {
 impl<'a> DeclarationParameters<'a> {
     pub(super) fn prepare(declaration: &'a crate::frontend::declaration_generics::DeclarationGenerics)
         -> Result<DeclaredParameterPreparation<'a>, Diagnostic> {
+        // Written generic syntax is not a complete upstream parameter list
+        // when lowering must introduce argument-position impl Trait identities.
+        // Keep ordinary source ordinals/layout unchanged and do not claim even
+        // a zero total count until the actual anonymous identity producer exists.
+        if !declaration.argument_impl_traits().is_empty() {
+            return Ok(DeclaredParameterPreparation::Pending(ParameterPending::AnonymousFunctionParameters));
+        }
+        if !declaration.parameter_type_macros().is_empty() {
+            return Ok(DeclaredParameterPreparation::Pending(ParameterPending::FunctionParameterMacros));
+        }
         let Some(layout) = declaration.layout() else {
             return Ok(DeclaredParameterPreparation::Pending(if declaration.is_function() {
                 ParameterPending::FunctionRegionBinders
@@ -113,6 +123,12 @@ pub(crate) enum ParameterPending {
     /// Pinned collect/generics_of.rs:270 and is_late_bound. Written function
     /// lifetimes cannot all be silently treated as early parameters.
     FunctionRegionBinders,
+    /// Actual parameter Type contains impl Trait; compiler-created anonymous
+    /// generic declaration identities have not been supplied by preparation.
+    AnonymousFunctionParameters,
+    /// A parameter Type macro can introduce anonymous parameters. Its ordinary
+    /// admitted expansion must join source metadata before count completeness.
+    FunctionParameterMacros,
 }
 impl<'a> SignatureParameters<'a> {
     pub(crate) fn prepare(signature: &'a FunctionSignature) -> Result<ParameterPreparation<'a>, Diagnostic> {
