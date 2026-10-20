@@ -272,7 +272,7 @@ impl<'a> AliasNormalizer<'a> {
                 }
                 other => return QueryPoll::Ready(Ok(AliasTarget::Unresolved(other))),
             }
-            if matches!(item.definition.item_kind, ItemKind::Struct | ItemKind::Enum) {
+            if item.definition.item_kind.is_nominal_type() {
                 return QueryPoll::Ready(Ok(AliasTarget::Nominal(definition)));
             }
             if item.definition.item_kind != ItemKind::TypeAlias {

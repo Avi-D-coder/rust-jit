@@ -80,8 +80,11 @@ fn declared_repr(schema: &NominalSchema, name: &str) -> Result<Repr, Diagnostic>
             match hint {
                 "C" => repr.c = true,
                 "transparent" => repr.transparent = true,
-                "packed" => repr.packed = Some(number(argument)?.unwrap_or(1)),
-                "align" => repr.align = number(argument)?,
+                "packed" => {
+                    let pack = number(argument)?.unwrap_or(1);
+                    repr.packed = Some(repr.packed.map_or(pack, |prior| prior.min(pack)));
+                }
+                "align" => repr.align = repr.align.max(number(argument)?),
                 "u8" => repr.int = int(1, false),
                 "i8" => repr.int = int(1, true),
                 "u16" => repr.int = int(2, false),

@@ -475,6 +475,10 @@ impl SourceDiscovery {
             self.producers,
             self.pending_nested.as_ref().map(|ticket| ticket.job())
         )];
+        for (job, fragment) in &self.nested_fragments {
+            rows.extend(fragment.pending_source_evidence().into_iter()
+                .map(|row| format!("fragment job={job:?} {row}")));
+        }
         for (ordinal, index) in &self.nested_sources {
             if !index.is_complete() {
                 rows.push(format!(

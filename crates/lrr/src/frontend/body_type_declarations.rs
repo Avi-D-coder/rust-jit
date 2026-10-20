@@ -628,7 +628,7 @@ pub(super) fn prepare(db: &mut Database, prefix: LocalTypePrefix) -> QueryPoll<B
     if canonical.item_kind == ItemKind::TypeAlias {
         return pending(BodyTypeDemand::AliasContext(identity));
     }
-    if !matches!(canonical.item_kind, ItemKind::Struct | ItemKind::Enum) {
+    if !canonical.item_kind.is_nominal_type() {
         return pending(BodyTypeDemand::TypeRecipe(identity));
     }
     let syntax = checked!(parsed.syntax_at(context.range, |node| ast::Item::can_cast(node.kind())));
@@ -638,6 +638,7 @@ pub(super) fn prepare(db: &mut Database, prefix: LocalTypePrefix) -> QueryPoll<B
     let name = match &syntax {
         ast::Item::Struct(item) => item.name(),
         ast::Item::Enum(item) => item.name(),
+        ast::Item::Union(item) => item.name(),
         _ => None,
     };
     let Some(name) = name else {

@@ -3395,3 +3395,44 @@ fn unchanged_generic_annotation_preserves_actual_frame_owner_all_editions_and_or
     }
     assert_eq!(count,12);
 }
+
+#[test]
+fn unchanged_union_declarations_use_shared_metadata_all_editions_and_origins() {
+    use crate::{
+        db::{dependency::{InputKey,InputValue},key::QueryKey,poll::QueryPoll,provider::SyntaxProvider,value::QueryValue},
+        frontend::source_body_context::type_occurrences::BodyTypeSegment,
+        ir::pc::Phase,source::manifest::{ItemKind,Namespace},syntax::imports::ImportSegment,
+        runtime::shape::TypeKey,
+    };
+    fn ready<T>(poll:QueryPoll<T>)->T{match poll{QueryPoll::Ready(Ok(value))=>value,QueryPoll::Ready(Err(error))=>panic!("actual union Type: {error:?}"),QueryPoll::NeedInput(input)=>panic!("actual union Type input: {input:?}")}}
+    let original=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout/tests/ui/union/union-align.rs");
+    let text=std::fs::read_to_string(&original).unwrap();let(prefix,items)=text.split_at(text.find("\nuse std::mem").unwrap());let mut worlds=0;let mut uses=0;
+    for edition in [2015,2018,2021,2024] {
+        let mut paths=vec![original.clone()];
+        for wrapper in [false,true] {let outer=if wrapper{"macro_rules! outer {($($t:tt)*)=>{emit!{$($t)*}}}"}else{""};let invoke=if wrapper{"outer"}else{"emit"};paths.push(temporary_source(&format!("union-type-{edition}-{wrapper}"),&format!("{prefix}\nmacro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} {outer} {invoke}!{{{items}}}")));}
+        for(origin,path)in paths.iter().enumerate() {
+            let(mut db,discovery,scope)=configured_impl_catalog_discovery(path,edition).unwrap();discovery.publish(&mut db).unwrap();
+            let headers=ready(db.fetch(&SyntaxProvider,QueryKey::PreparedScopeImplHeaders(discovery.key().clone()))).value;let QueryValue::PreparedScopeImplHeaders(headers)=headers.as_ref()else{panic!()};let environment=headers.inventory_root().environment().unwrap();let views=environment.sources().iter().collect::<Vec<_>>();
+            let lookup=|name:&str|environment.names().lookup_source_path(Namespace::Value,&[ImportSegment::Name(name.into())],false,&scope,edition).unwrap();let crate::frontend::names::NameLookup::Defined(found)=lookup("main")else{panic!()};
+            let body=db.input(&InputKey::DefinitionBody(found.identity)).unwrap();let InputValue::DefinitionBody(body)=body.as_ref()else{panic!()};let plan=ready(db.prepare_source_local_plan(&discovery,&views,&body.key()));let source=plan.context().source();let index=source.index();
+            db.trace.detailed=true;let start=db.trace.events.len();let before=uses;let mut guards=Vec::new();
+            let crate::frontend::names::NameLookup::Defined(declaration)=environment.names().lookup_source_path(Namespace::Type,&[ImportSegment::Name("U16".into())],false,&scope,edition).unwrap()else{panic!("actual module union declaration missing")};
+            let normalizer=crate::frontend::type_aliases::AliasNormalizer::new(environment.names(),&views).unwrap();assert!(matches!(ready(normalizer.normalize(&mut db,declaration.identity)),crate::frontend::type_aliases::AliasTarget::Nominal(id)if id==declaration.identity));
+            let schema_key=QueryKey::TypeSchema(declaration.identity);let selected=ready(db.fetch(&SyntaxProvider,schema_key.clone()));let QueryValue::TypeSchema(schema)=selected.value.as_ref()else{panic!()};assert_eq!(schema.variants.len(),1);assert_eq!(schema.variants[0].fields.len(),2);
+            let names=ready(crate::frontend::types::SchemaNames::from_current_database(&mut db,environment.names(),&views,schema));let binding=ready(names.bind_variant_current(&mut db,&views,None));let crate::frontend::types::NominalBinding::Ready(bound)=binding else{panic!("actual union field metadata pending")};
+            let mut store=crate::runtime::cell::GuestStore::new(1,u32::MAX,usize::MAX).unwrap();let descriptor=store.intern_nominal_with(&bound,&[]).unwrap();assert!(matches!(store.type_descriptor(descriptor).unwrap().key.as_ref(),TypeKey::Nominal{definition,..}if definition.item_kind==ItemKind::Union));
+            let guard=ready(db.prepare_input_guard(&SyntaxProvider,&schema_key,selected.fingerprint));guard.require_current(&db).unwrap();guards.push(guard);let cached=ready(db.fetch(&SyntaxProvider,schema_key));assert!(std::sync::Arc::ptr_eq(&selected.value,&cached.value));
+            for node in index.nodes() {
+                let Some(occurrence)=ready(plan.context().body_type_occurrence(&mut db,node.id))else{continue};if !matches!(occurrence.segments(),[BodyTypeSegment::Name(name)]if name.name()=="U16"){continue}
+                assert_eq!(occurrence.usage(),crate::frontend::source_body_context::type_occurrences::BodyTypeUse::RecordConstructor);
+                let prefix=ready(plan.type_prefix(&mut db,node.id));let crate::frontend::source_locals::owned_plan::LocalTypePrefixSelection::Lookup(crate::frontend::names::NameLookup::NeedInput(producer))=prefix.selection()else{panic!("unexpanded body producer must prevent a module fallback")};
+                assert!(plan.context().facts().events.iter().any(|event|matches!(event.kind,crate::syntax::entered_macros::BodyMacroEventKind::Producer{identity,..}if identity==*producer)),"the pending prefix must name an actual body producer");
+                let site=index.pc(node.id,Phase::Entry).unwrap();let key=QueryKey::PreparedBodyTypeApplication(site);let selected=ready(db.fetch(&SyntaxProvider,key.clone()));let QueryValue::PreparedBodyTypeApplication(application)=selected.value.as_ref()else{panic!()};assert!(application.source().is_none(),"module metadata cannot authorize an unresolved body use");
+                let guard=ready(db.prepare_input_guard(&SyntaxProvider,&key,selected.fingerprint));guard.require_current(&db).unwrap();guards.push(guard);uses+=1;
+            }
+            assert!(uses-before>=2,"actual union record Type occurrences must remain pending their body producer");assert!(!db.trace.events[start..].iter().any(|event|matches!(event.key,QueryKey::Thunk(_))),"metadata demand must not lower guest bodies");db.publish_inputs(std::collections::BTreeMap::new()).unwrap();assert!(guards.iter().all(|guard|guard.require_current(&db).is_err()));worlds+=1;
+            eprintln!("union metadata edition={edition} origin={origin}: actual nominal schema/kind, cached Type guard revoked, no executable entry");
+        }
+    }
+    assert_eq!(worlds,12);assert!(uses>=24);
+}

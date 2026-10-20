@@ -457,7 +457,7 @@ fn lookup_type_declaration_using(
         return QueryPoll::Ready(lookup_declaration_inner(db, declaration, parse, written_name, selected_range));
     }
     let key = match definition.item_kind {
-        ItemKind::Struct | ItemKind::Enum => QueryKey::TypeSchema(declaration.definition),
+        kind if kind.is_nominal_type() => QueryKey::TypeSchema(declaration.definition),
         ItemKind::TypeAlias => QueryKey::TypeAlias(declaration.definition),
         ItemKind::Trait => QueryKey::TraitDeclaration(declaration.definition),
         _ => {

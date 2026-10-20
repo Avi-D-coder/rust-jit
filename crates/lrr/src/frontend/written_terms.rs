@@ -9,7 +9,7 @@ use crate::{
         key::QueryKey, memo::Database, poll::QueryPoll, provider::SyntaxProvider, value::QueryValue,
     },
     ir::written_type::WrittenType,
-    source::{changes::PreparedSourceView, manifest::ItemKind},
+    source::changes::PreparedSourceView,
     syntax::signatures::GenericKind,
     traits::term::{ConstTerm, GenericArg, RegionTerm, TyTerm},
 };
@@ -135,7 +135,7 @@ fn written_type(
                 // function item's own Type) has no written form here.
                 Err(_) => return open(),
             };
-            if !matches!(definition.item_kind, ItemKind::Struct | ItemKind::Enum) {
+            if !definition.item_kind.is_nominal_type() {
                 return open();
             }
             let captured = match db.fetch(&SyntaxProvider, QueryKey::TypeSchema(*identity)) {

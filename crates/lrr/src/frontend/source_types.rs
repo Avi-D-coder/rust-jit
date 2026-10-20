@@ -2211,7 +2211,7 @@ fn prepare_nominal(
     };
     if schema.definition != identity
         || definition.namespace != Namespace::Type
-        || !matches!(definition.item_kind, ItemKind::Struct | ItemKind::Enum)
+        || !definition.item_kind.is_nominal_type()
         || !matches!(db.input(&InputKey::DefinitionHeader(identity)).as_deref(),Some(InputValue::DefinitionHeader(header)) if header==&schema.header)
         || !matches!(db.input(&InputKey::DeclarationContext(identity)).as_deref(),Some(InputValue::DeclarationContext(context)) if context.scope==schema.scope)
         || !matches!(db.input(&InputKey::DefinitionSource(identity)).as_deref(),Some(InputValue::DefinitionSource(parse)) if parse.profile==schema.header.profile)
@@ -2442,11 +2442,11 @@ pub(super) fn local_type_owner(db: &mut Database, identity: crate::core::digest:
         matches!(owner.definition.item_kind, ItemKind::Struct | ItemKind::Enum | ItemKind::Union | ItemKind::TypeAlias)))
 }
 
-/// Keep the existing nominal consumers restricted to their admitted kinds.
+/// Nominal Type metadata includes unions; value constructors check their own kind.
 pub(super) fn local_nominal_owner(db: &mut Database, identity: crate::core::digest::Digest)
     -> QueryPoll<Option<LocalDeclarationOwner>> {
     local_type_owner(db, identity).map(|owner| owner.filter(|owner|
-        matches!(owner.definition.item_kind, ItemKind::Struct | ItemKind::Enum)))
+        owner.definition.item_kind.is_nominal_type()))
 }
 
 /// Supplemental retained-source alias control; never a source authority bypass.

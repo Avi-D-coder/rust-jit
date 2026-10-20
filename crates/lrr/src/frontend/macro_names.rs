@@ -1031,9 +1031,9 @@ impl MacroNamespaces {
             if imported != PathLookup::Absent {
                 return Ok(imported);
             }
-            if let Some(unit) = self.preludes.get(scope) {
+            if let Some(unit) = self.inherited_prelude(scope) {
                 let prelude =
-                    self.lookup_from(&MacroPath::new(*unit, vec![name.clone()])?, scope)?;
+                    self.lookup_from(&MacroPath::new(unit, vec![name.clone()])?, scope)?;
                 if prelude != PathLookup::Absent {
                     return Ok(prelude);
                 }
@@ -1102,6 +1102,18 @@ impl MacroNamespaces {
         self.preludes.insert(scope, unit);
         self.prelude_bytes = bytes;
         Ok(())
+    }
+    /// Generated children inherit the owning module's prepared implicit
+    /// prelude. An explicit nearer policy wins; another crate never supplies it.
+    fn inherited_prelude(&self, scope: &ScopeKey) -> Option<Digest> {
+        let mut owner = scope.clone();
+        owner.owner = None;
+        loop {
+            if let Some(unit) = self.preludes.get(&owner) {
+                return Some(*unit);
+            }
+            owner.module_path.pop()?;
+        }
     }
     pub(crate) fn disable_implicit(&mut self, scope: ScopeKey) -> Result<(), Diagnostic> {
         if scope.owner.is_some() {
@@ -2131,6 +2143,56 @@ impl MacroNamespaces {
             1 => PathLookup::Defined(definitions.pop_first().expect("one definition")),
             _ => PathLookup::Ambiguous(definitions.into_iter().collect()),
         })
+    }
+}
+
+#[cfg(test)]
+mod inherited_prelude_tests {
+    use super::*;
+    use crate::syntax::imports::ImportSegment;
+
+    #[test]
+    fn descendants_keep_prepared_preludes_and_namespace_priority() {
+        for edition in [2015, 2018, 2021, 2024] {
+            let consumer = Digest([231; 32]);
+            let library = Digest([232; 32]);
+            let alternate = Digest([233; 32]);
+            let root = ScopeKey { crate_key: consumer, module_path: vec![], owner: None };
+            let child = ScopeKey { module_path: vec!["generated".into()], ..root.clone() };
+            let leaf = ScopeKey { module_path: vec!["generated".into(), "nested".into()], ..root.clone() };
+            let name = MacroName::parse("operation", edition).unwrap();
+            let path = |unit| MacroPath::new(unit, vec![name.clone()]).unwrap();
+            let first = MacroDefinition { identity: Digest([234; 32]), defining_unit: library, definition_edition: edition };
+            let second = MacroDefinition { identity: Digest([235; 32]), defining_unit: alternate, definition_edition: edition };
+            let segments = [ImportSegment::Name("operation".into())];
+            let lookup = |names: &MacroNamespaces, scope: &ScopeKey|
+                names.lookup_invocation_segments(&segments, false, scope, edition).unwrap();
+            let mut names = MacroNamespaces::default();
+            names.define(path(library), first.clone()).unwrap();
+            names.define(path(alternate), second.clone()).unwrap();
+            names.set_prelude(root.clone(), library).unwrap();
+            assert_eq!(lookup(&names, &leaf), PathLookup::Defined(first.clone()));
+            names.set_prelude(child.clone(), alternate).unwrap();
+            assert_eq!(lookup(&names, &leaf), PathLookup::Defined(second));
+            assert_eq!(lookup(&names, &root), PathLookup::Defined(first));
+            let foreign = ScopeKey { crate_key: Digest([236; 32]), ..leaf.clone() };
+            assert_eq!(lookup(&names, &foreign), PathLookup::Absent);
+            let mut disabled = names.clone();
+            disabled.disable_implicit(child).unwrap();
+            assert_eq!(lookup(&disabled, &leaf), PathLookup::Absent);
+            let local_path = MacroPath::new(consumer, vec![
+                MacroName::parse("generated", edition).unwrap(),
+                MacroName::parse("nested", edition).unwrap(), name,
+            ]).unwrap();
+            let pending = Digest([237; 32]);
+            names.pending(local_path.clone(), pending).unwrap();
+            assert_eq!(lookup(&names, &leaf), PathLookup::NeedInput(pending));
+            let mut local = disabled;
+            let definition = MacroDefinition { identity: Digest([238; 32]), defining_unit: consumer, definition_edition: edition };
+            local.define(local_path, definition.clone()).unwrap();
+            assert_eq!(lookup(&local, &leaf), PathLookup::Defined(definition));
+            eprintln!("prelude edition={edition}: inherited/nearest, disabled ancestry, same-crate, local/pending priority");
+        }
     }
 }
 

@@ -1,0 +1,7 @@
+{
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_union_declarations_use_shared_metadata_all_editions_and_origins",
+    "cli::preentry_loader_tests::unchanged_generic_annotation_preserves_actual_frame_owner_all_editions_and_origins",
+    "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::official_three_call_plans_keep_nominal_identity_shared_rows_and_guarded_caller"
+  ]
+}

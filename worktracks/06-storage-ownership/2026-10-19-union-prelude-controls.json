@@ -1,0 +1,6 @@
+{
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_union_declarations_use_shared_metadata_all_editions_and_origins",
+    "frontend::macro_names::inherited_prelude_tests::descendants_keep_prepared_preludes_and_namespace_priority"
+  ]
+}

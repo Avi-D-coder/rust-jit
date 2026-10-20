@@ -359,7 +359,7 @@ impl TypeRegistry {
                 const_args,
             } => {
                 if definition.namespace != Namespace::Type
-                    || !matches!(definition.item_kind, ItemKind::Struct | ItemKind::Enum)
+                    || !definition.item_kind.is_nominal_type()
                     || args.len().checked_add(const_args.len()).is_none()
                 {
                     return Err(super::value::invalid());

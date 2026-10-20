@@ -87,6 +87,11 @@ pub enum ItemKind {
     ExternBlock,
 }
 impl ItemKind {
+    /// Nominal Type declarations share source/schema admission. Their value
+    /// construction and storage rules are selected separately by kind.
+    pub(crate) fn is_nominal_type(self) -> bool {
+        matches!(self, Self::Struct | Self::Enum | Self::Union)
+    }
     pub(crate) fn tag(self) -> u32 {
         match self {
             Self::Function => 1,

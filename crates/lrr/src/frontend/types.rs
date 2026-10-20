@@ -727,10 +727,7 @@ impl<'a> SchemaNames<'a> {
         if definition.namespace != crate::source::manifest::Namespace::Type
             || definition.crate_key != schema.scope.crate_key
             || definition.module_path != schema.scope.module_path
-            || !matches!(
-                definition.item_kind,
-                crate::source::manifest::ItemKind::Struct | crate::source::manifest::ItemKind::Enum
-            )
+            || !definition.item_kind.is_nominal_type()
         {
             return QueryPoll::Ready(Err(schema_fault(
                 "nominal schema canonical declaration differs",

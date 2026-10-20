@@ -810,6 +810,15 @@ pub(crate) struct BlockedMacroSite<'a> {
     pub span: &'a crate::syntax::token_wire::SpanRecord,
 }
 impl DeclarationFragment {
+    /// Observe the retained frontier without resolving or expanding any source.
+    pub(crate) fn pending_source_evidence(&self) -> Vec<String> {
+        self.frames.iter().filter_map(|frame| {
+            let identity = frame.next_pending_producer()?;
+            let producer = frame.output().scan().producers().iter()
+                .find(|producer| producer.identity == identity)?;
+            Some(format!("generated frontier {producer:?}"))
+        }).collect()
+    }
     /// Diagnostic facts from already admitted frames. This never resolves a
     /// name, expands a producer, changes a frontier or prepares a body.
     pub(crate) fn blocked_macro_site(

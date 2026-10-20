@@ -46,7 +46,7 @@ impl ParsedFile {
         }
         let selected = self
             .syntax_at(context.range, |node| {
-                ast::Struct::can_cast(node.kind()) || ast::Enum::can_cast(node.kind())
+                ast::Struct::can_cast(node.kind()) || ast::Enum::can_cast(node.kind()) || ast::Union::can_cast(node.kind())
             })?
             .and_then(ast::Item::cast)
             .filter(|item| tokens(item.syntax(), None) == header.tokens)
@@ -64,6 +64,14 @@ impl ParsedFile {
                     &generics,
                     cfg,
                     &mut remaining_fields,
+                )?;
+                (generics, vec![variant])
+            }
+            ast::Item::Union(item) => {
+                let generics = capture_generics(item.generic_param_list())?;
+                let fields = item.record_field_list().map(ast::FieldList::RecordFieldList);
+                let variant = capture_fields(
+                    fields, None, Vec::new(), definition, &generics, cfg, &mut remaining_fields,
                 )?;
                 (generics, vec![variant])
             }

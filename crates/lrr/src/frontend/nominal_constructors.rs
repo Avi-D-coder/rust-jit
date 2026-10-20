@@ -324,7 +324,7 @@ pub(crate) fn generic_annotation_base(
         Ok(definition) => definition,
         Err(error) => return QueryPoll::Ready(Err(error)),
     };
-    if !matches!(definition.item_kind, ItemKind::Struct | ItemKind::Enum) {
+    if !definition.item_kind.is_nominal_type() {
         return unsupported("generic Type application requires a nominal declaration");
     }
     let schema_key = QueryKey::TypeSchema(identity);
