@@ -33,11 +33,6 @@ pub(crate) struct SolverClients<'db> {
         ty::AliasConst<DbInterner<'db>>,
         &mut dyn FnMut(ty::Unnormalized<DbInterner<'db>, Ty<'db>>) -> Option<Ty<'db>>,
     ) -> Result<Option<Const<'db>>, ()>,
-    pub(crate) well_formed_goals: fn(
-        &InferenceContext<'db>,
-        ParamEnv<'db>,
-        Term<'db>,
-    ) -> Option<Vec<Goal<DbInterner<'db>, Predicate<'db>>>>,
     pub(crate) transmutable:
         fn(&InferenceContext<'db>, Ty<'db>, Ty<'db>, Const<'db>) -> Result<Certainty, NoSolution>,
 }
@@ -211,7 +206,18 @@ impl<'db> SolverDelegate for SolverContext<'db> {
         env: ParamEnv<'db>,
         term: Term<'db>,
     ) -> Option<Vec<Goal<Self::Interner, Predicate<'db>>>> {
-        (self.interner.services().solver_clients().well_formed_goals)(&self.0, env, term)
+        super::well_formed::unnormalized_obligations(
+            &self.0,
+            env,
+            term,
+            <Span as ty::inherent::Span<Self::Interner>>::dummy(),
+        )
+        .map(|obligations| {
+            obligations
+                .into_iter()
+                .map(|obligation| obligation.as_goal())
+                .collect()
+        })
     }
     fn make_deduplicated_region_constraints(
         &self,

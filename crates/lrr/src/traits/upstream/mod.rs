@@ -30,6 +30,7 @@ pub(crate) mod facts;
 pub(crate) mod expression_operators;
 pub(crate) mod identity;
 pub(crate) mod model;
+pub(crate) mod wf_values;
 pub(crate) mod parameters;
 #[cfg(test)]
 pub(crate) use prepared::{check_scope_receipts, check_completed_source_catalog, check_opaque_return_receipt};

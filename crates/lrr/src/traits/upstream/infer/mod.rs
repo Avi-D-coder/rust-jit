@@ -246,4 +246,6 @@ mod fast_path;
 
 pub(crate) mod delegate;
 
+pub(crate) mod well_formed;
+
 pub(crate) mod hidden_type_bounds;

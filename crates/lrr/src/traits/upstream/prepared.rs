@@ -84,6 +84,20 @@ impl DefinitionReceipt {
         let QueryValue::ParseFile(parsed) = self.parsed.as_ref() else { unreachable!("captured source parse") };
         parsed.syntax_at(context.range, |node| ast::Enum::can_cast(node.kind())).map(|node| node.is_some())
     }
+    fn nominal_kind_and_name(&self) -> Result<(AdtKind, String), Diagnostic> {
+        use ra_ap_syntax::ast::HasName;
+        let InputValue::DeclarationContext(context) = self.context.as_ref() else { unreachable!("captured source context") };
+        let QueryValue::ParseFile(parsed) = self.parsed.as_ref() else { unreachable!("captured source parse") };
+        let node = parsed.syntax_at(context.range, |node| ast::Item::can_cast(node.kind()))?
+            .and_then(ast::Item::cast).ok_or_else(|| fault("ADT actual source item absent"))?;
+        let (kind, name) = match node {
+            ast::Item::Struct(item) => (AdtKind::Struct, item.name()),
+            ast::Item::Enum(item) => (AdtKind::Enum, item.name()),
+            ast::Item::Union(item) => (AdtKind::Union, item.name()),
+            _ => return Err(fault("ADT source item is not nominal")),
+        };
+        Ok((kind, name.ok_or_else(|| fault("ADT source name absent"))?.text().to_string()))
+    }
     pub(super) fn same_source_metadata(&self, other: &Self) -> bool {
         self.definition == other.definition && matches!(
             (self.source.as_ref(),other.source.as_ref(),self.header.as_ref(),other.header.as_ref(),self.context.as_ref(),other.context.as_ref()),
@@ -284,9 +298,89 @@ impl AssociatedLeaf {
 }
 pub(super) struct AdtFacts<'cx> {
     pub(super) info: AdtInfo<'cx, PreparedProvider<'cx>>,
+    pub(super) source_variants: PreparedAdtVariants,
     pub(super) unsizing: DenseBitSet<u32>,
 }
+/// Captured actual nominal shape, not a proof of caller-supplied field Types.
+/// The complete source producer must translate each actual field occurrence
+/// before publishing typed facts; that producer remains an integration hold.
+pub(super) struct PreparedAdtVariants {
+    receipt: DefinitionReceipt,
+    schema: Arc<QueryValue>,
+    kind: AdtKind,
+    name: String,
+    guard: crate::db::memo::PreparedInputGuard,
+}
+impl PreparedAdtVariants {
+    pub(super) fn prepare(db: &mut Database, definition: Digest) -> QueryPoll<Self> {
+        let receipt = match DefinitionReceipt::observe(db, definition) {
+            QueryPoll::Ready(Ok(Some(receipt))) => receipt,
+            QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Err(fault("ADT source preparation is incomplete"))),
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let (kind, name) = match receipt.nominal_kind_and_name() {
+            Ok(actual) => actual,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let key = QueryKey::TypeSchema(definition);
+        let captured = match db.fetch(&SyntaxProvider, key.clone()) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::TypeSchema(schema) = captured.value.as_ref() else {
+            return QueryPoll::Ready(Err(fault("ADT source schema variant differs")));
+        };
+        if !captured.cacheable || !receipt.matches_enum_schema(schema) {
+            return QueryPoll::Ready(Err(fault("ADT actual source schema differs")));
+        }
+        let guard = match db.prepare_input_guard(&SyntaxProvider, &key, captured.fingerprint) {
+            QueryPoll::Ready(Ok(guard)) => guard,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        QueryPoll::Ready(Ok(Self { receipt, schema: captured.value, kind, name, guard }))
+    }
+    pub(super) fn require_current(&self, db: &Database) -> Result<(), Diagnostic> {
+        self.guard.require_current(db)
+    }
+    fn require_shape<'cx>(&self, definition: &DefinitionFacts<'cx>, info: &AdtInfo<'cx, PreparedProvider<'cx>>)
+        -> Result<(), Diagnostic> {
+        let QueryValue::TypeSchema(schema) = self.schema.as_ref() else { unreachable!("captured ADT source schema") };
+        if !self.receipt.same_source_metadata(&definition.receipt)
+            || !definition.receipt.matches_enum_schema(schema)
+            || info.kind != self.kind || definition.name.0 != self.name
+            || info.variants.len() != schema.variants.len()
+        {
+            return Err(fault("ADT variant metadata differs from its actual source schema"));
+        }
+        let mut flat = info.fields.iter();
+        for (actual, typed) in schema.variants.iter().zip(info.variants) {
+            if typed.name.0 != actual.name.as_deref().unwrap_or(&self.name)
+                || actual.fields.len() != typed.fields.len()
+            {
+                return Err(fault("ADT variant identity or field count differs"));
+            }
+            for (ordinal, (actual, typed)) in actual.fields.iter().zip(typed.fields).enumerate() {
+                let name_matches = match &actual.name {
+                    Some(name) => typed.name.0 == name,
+                    None => typed.name.0 == ordinal.to_string(),
+                };
+                if !name_matches || flat.next() != Some(typed.ty.skip_binder()) {
+                    return Err(fault("ADT field name, order or flattened Type view differs"));
+                }
+            }
+        }
+        if flat.next().is_some() {
+            return Err(fault("ADT flattened Type view contains extra fields"));
+        }
+        Ok(())
+    }
+}
 pub(super) struct LangItems {
+    /// Compiler WF helper lang item outside the shared solver's smaller enum.
+    pub(super) const_param_ty: Option<DefinitionId>,
     pub(super) traits: ty::data_structures::HashMap<SolverTraitLangItem, DefinitionId>,
     pub(super) projections: ty::data_structures::HashMap<SolverProjectionLangItem, DefinitionId>,
     pub(super) adts: ty::data_structures::HashMap<SolverAdtLangItem, DefinitionId>,
@@ -296,6 +390,7 @@ pub(super) struct LangItems {
 }
 impl LangItems {
     pub(super) fn new(
+        const_param_ty: Option<DefinitionId>,
         traits: ty::data_structures::HashMap<SolverTraitLangItem, DefinitionId>,
         projections: ty::data_structures::HashMap<SolverProjectionLangItem, DefinitionId>,
         adts: ty::data_structures::HashMap<SolverAdtLangItem, DefinitionId>,
@@ -312,6 +407,7 @@ impl LangItems {
             Ok(result)
         }
         Ok(Self {
+            const_param_ty,
             projection_by_definition: reverse(&projections)?,
             trait_by_definition: reverse(&traits)?,
             adt_by_definition: reverse(&adts)?,
@@ -493,6 +589,9 @@ impl<'cx> PreparedProvider<'cx> {
     pub(super) fn solver_clients(self) -> &'cx super::infer::delegate::SolverClients<'cx> {
         &self.data().clients.solver
     }
+    pub(super) fn const_param_ty_trait(self) -> Option<DefinitionId> {
+        self.data().lang.const_param_ty
+    }
     pub(super) fn associated_leaf(
         self, implementation: DefinitionId, item: DefinitionId,
     ) -> Result<AssociatedLeaf, ErrorToken> {
@@ -598,6 +697,7 @@ impl<'cx> PreparedProvider<'cx> {
         }
         for (id, row) in &facts.adts {
             let definition = facts.definitions.get(id).ok_or_else(|| fault("ADT definition is absent"))?;
+            row.source_variants.require_shape(definition, &row.info)?;
             match (&row.info.discriminant, definition.receipt.is_enum()?) {
                 (Some(plan), true) if row.info.kind == AdtKind::Enum && plan.matches(&definition.receipt) => {},
                 (None, false) if row.info.kind != AdtKind::Enum => {},
@@ -659,6 +759,12 @@ impl<'cx> PreparedProvider<'cx> {
                     return Err(fault("candidate belongs to a different actual trait"));
                 }
             }
+        }
+        if let Some(id) = facts.lang.const_param_ty
+            && (id.world() != world || !facts.traits.contains_key(&id)
+                || !facts.definitions.get(&id).is_some_and(|row| row.receipt.is_trait()))
+        {
+            return Err(fault("WF const-parameter lang item lacks its actual trait source"));
         }
         for (id, implementation) in &facts.implementations {
             if let Some(reference) = implementation.trait_ref {

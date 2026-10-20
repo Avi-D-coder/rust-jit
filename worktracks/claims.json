@@ -2043,11 +2043,19 @@
         "worktracks/05-trait-goal-engine/2026-10-20-upstream-associated-item-eligibility-review.md",
         "worktracks/evidence/2026-10-20-v487-upstream-associated-item-eligibility.json",
         "crates/lrr/src/traits/upstream/infer/delegate.rs",
-        "crates/lrr/src/traits/upstream/prepared.rs"
+        "crates/lrr/src/traits/upstream/prepared.rs",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-well-formed-goals.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-well-formed-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-well-formed-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-wf-values.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-adt-variants.md",
+        "worktracks/evidence/2026-10-20-v488-v492-upstream-well-formed-goals.json",
+        "tools/upstream_wellformed.py",
+        "tools/upstream_wf_values.py"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-20T16:17:59.942516+00:00",
+      "updated_at": "2026-10-20T16:56:52.432309+00:00",
       "review_after": "2026-10-20T10:52:01.627878+00:00",
       "shared_interfaces": [
         {
@@ -2322,5 +2330,5 @@
       "latest_component_scope": "V471-V478 HELD M019/M020/T060 source/client and M007 namespace repair. The complete pinned rustc Ty::discriminant_ty/coroutine rule plus three bound-region instantiation methods replace the discriminant function-pointer requirement; exact original hashes/mechanical generators pass. One extracted declaration repr parser serves existing runtime layout and retained source enum metadata, preserving usize/u64 source identity separately from physical width. Enum facts retain exact source/header/context/schema guards; full ADT/source/root readiness is not minted. V475 source-IR/client control passes164encoded source-head observations across60world rows, plus both existing layout controls; source matrix fails a real std intrinsic import. V476 attempted ordinary std re-export regresses all4selected runtimes at missing core module readiness; retained as failed evidence. Common named imports now accept already checked/installed non-root module aliases without synthetic item definitions, preserving frontiers/ambiguities. An ordinary embedded core::intrinsics public wrapper uses the exact pinned generic/reference/projected-result signature and existing closed helper; no new builtin ID or runtime Type guess. V477 source matrix passes60edition/origin worlds/180enum metadata encodings, including156unchanged-fixture source observations and24external usize/u64 header controls, cold-body/memo/withdrawal checks. Existing upstream ambiguity control passes; new host control fails an overly specific pending-ID oracle. Final V478 changes only that oracle, both builds and2/2affected controls pass; CLI/production byte-identical toV477. Unchanged discriminant_size/repr128 advance from imports to1188/1187 and28/27dispatch attempts/outcomes, then fail ownership/type and primitive operator boundaries. Generic union remains265failed at nested Iter<_> inference; union-align restored1462matched dispatches/25source calls/unit/empty streams/cleanup. Zero new complete distinct stock runtime gains or refreshed suite total. Remaining five semantic clients, real source/ADT facts/root/member/projection/VM joins, fixed-isize runtime intrinsic result, complete origin/currentness/cleanup and interpreter/JIT gates stay open. No full-fixture/diagnostic/tooling/Linux/performance closure."
     }
   ],
-  "updated_at": "2026-10-20T16:17:59.942516+00:00"
+  "updated_at": "2026-10-20T16:56:52.432309+00:00"
 }

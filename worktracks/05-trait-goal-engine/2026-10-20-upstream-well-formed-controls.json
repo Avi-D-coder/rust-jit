@@ -1,0 +1,8 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Actual source/context inference controls include direct full pinned well_formed_goals demand for scalar, unresolved Type/Const, reference and nested pointer IR. Nominal/aggregate/dyn/inherent branches, root, upstream runtime and full-fixture acceptance remain separate.",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+    "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions"
+  ]
+}

@@ -1,0 +1,523 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-20T16:56:52.432309+00:00",
+  "baseline": "43bad0f0e822464533c06be318777d89ab98f11c",
+  "source_sha256": "da04f55155f5811b42debdd5889d6accc306b2ba1faf6e868c66502eab159a97",
+  "status": "held_source_client_component",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "task_ids": [
+    "M020"
+  ],
+  "claims": [
+    "LOCAL-049"
+  ],
+  "team": {
+    "lead": "/root",
+    "delegates": [
+      "wf_value_helpers",
+      "wf_adt_metadata",
+      "wf_validation_review"
+    ],
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "high",
+    "direct_checkout": true,
+    "cargo_owner": "wf_validation_review"
+  },
+  "summary": "V492 HELD M020 pinned compiler well-formed goal client. SolverContext now directly runs the complete rustc unnormalized WF visitor; the required well_formed_goals callback is removed. Mechanically registered next-solver inherent projection, Term/feature/field binder, typed value-tree and scalar helpers retain original source hashes. Immutable ADT variant/field metadata and captured source-schema shape checks are added, while actual field-Type translation, complete parent clauses, value admission and currentness remain real producer obligations. Both macOS1.99 builds, digest helper and port audits pass;2/2actual source/context controls execute scalar, unresolved Type/Const, reference and nested-pointer WF behavior with ready still rejected. Nominal/aggregate/dyn/inherent/GCA/publication branches remain unexecuted. Unchanged generic-derived-type retains its199matched VM operations/output/cleanup; repr128 retains LRR-E-OP-TYPE at28attempts/27outcomes. These runtimes still use the existing interpreter resolver, not an upstream root. Closing source/HEAD/binary guards match. Zero new stock gains, refreshed totals or task/milestone/interpreter/JIT closure. Const evaluation/transmutation/reflection clients, actual source/ADT/ParamEnv/leaf producers, full root/member/VM joins and remaining negative/origin/currentness matrices stay held.",
+  "guards": {
+    "before": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-20T16:50:36.362339+00:00",
+      "head": "43bad0f0e822464533c06be318777d89ab98f11c",
+      "file_count": 8628,
+      "source_sha256": "da04f55155f5811b42debdd5889d6accc306b2ba1faf6e868c66502eab159a97",
+      "binaries": {}
+    },
+    "after-build": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-20T16:52:34.007736+00:00",
+      "head": "43bad0f0e822464533c06be318777d89ab98f11c",
+      "file_count": 8628,
+      "source_sha256": "da04f55155f5811b42debdd5889d6accc306b2ba1faf6e868c66502eab159a97",
+      "binaries": {
+        "test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-50ddc988e05221f9",
+          "sha256": "df7feae83f0175ac5d4e72f690f3c5860eb5bb280b3286c1582ef34be8c83538"
+        },
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "1ac0dbe94904a5dded8a6ff6252c1080905fb23869256376cd3fafb1bb5fb92d"
+        }
+      },
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": []
+    },
+    "after-runtime": {
+      "schema": "lrr/validation-inputs/v2",
+      "time_utc": "2026-10-20T16:55:53.057534+00:00",
+      "head": "43bad0f0e822464533c06be318777d89ab98f11c",
+      "file_count": 8628,
+      "source_sha256": "da04f55155f5811b42debdd5889d6accc306b2ba1faf6e868c66502eab159a97",
+      "binaries": {
+        "test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-50ddc988e05221f9",
+          "sha256": "df7feae83f0175ac5d4e72f690f3c5860eb5bb280b3286c1582ef34be8c83538"
+        },
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "1ac0dbe94904a5dded8a6ff6252c1080905fb23869256376cd3fafb1bb5fb92d"
+        }
+      },
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": [],
+      "binaries_match_build": true
+    }
+  },
+  "prior_failed_builds": [
+    {
+      "cohort": "v488",
+      "source_sha256": "ce7bc072122a4243bf478ac31e11a697409d97d92721af1b7d9c0bd4dbe78c23",
+      "lib_build_exit": 101,
+      "new_cli_or_runtime_executed": false,
+      "old_cli_receipt_only": true,
+      "closing_source_matches": true,
+      "closing_head_matches": true,
+      "errors": [
+        {
+          "code": null,
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 148,
+          "message": "cannot find macro `depanic` in this scope"
+        },
+        {
+          "code": null,
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 312,
+          "message": "cannot find macro `depanic` in this scope"
+        },
+        {
+          "code": null,
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 835,
+          "message": "cannot find macro `depanic` in this scope"
+        },
+        {
+          "code": "E0425",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 99,
+          "message": "cannot find type `ParamEnv` in crate `ty`"
+        },
+        {
+          "code": "E0425",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 186,
+          "message": "cannot find type `ExistentialList` in module `model`"
+        },
+        {
+          "code": "E0425",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 247,
+          "message": "cannot find type `Pattern` in crate `ty`"
+        },
+        {
+          "code": "E0425",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 825,
+          "message": "cannot find type `ExistentialList` in module `model`"
+        },
+        {
+          "code": "E0425",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 867,
+          "message": "cannot find type `ParamEnv` in crate `ty`"
+        },
+        {
+          "code": "E0425",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 872,
+          "message": "cannot find type `Args` in crate `ty`"
+        },
+        {
+          "code": "E0603",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 826,
+          "message": "struct import `Region` is private"
+        },
+        {
+          "code": "E0107",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 187,
+          "message": "struct takes 0 lifetime arguments but 1 lifetime argument was supplied"
+        },
+        {
+          "code": "E0107",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 187,
+          "message": "struct takes 1 generic argument but 0 generic arguments were supplied"
+        },
+        {
+          "code": "E0107",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 649,
+          "message": "struct takes 0 lifetime arguments but 1 lifetime argument was supplied"
+        },
+        {
+          "code": "E0107",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 649,
+          "message": "struct takes 1 generic argument but 0 generic arguments were supplied"
+        },
+        {
+          "code": "E0046",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 310,
+          "message": "not all trait items implemented, missing: `Result`"
+        },
+        {
+          "code": "E0107",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 826,
+          "message": "struct takes 0 lifetime arguments but 1 lifetime argument was supplied"
+        },
+        {
+          "code": "E0599",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 80,
+          "message": "no method named `trait_lang_item` found for struct `PreparedProvider<'cx>` in the current scope"
+        },
+        {
+          "code": "E0599",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 108,
+          "message": "no method named `is_infer` found for enum `model::Term<'cx, F>` in the current scope"
+        },
+        {
+          "code": "E0277",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 177,
+          "message": "the trait bound `Predicate<'_, PreparedProvider<'_>>: UpcastFrom<Context<'_, _>, _>` is not satisfied"
+        },
+        {
+          "code": "E0599",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 359,
+          "message": "no associated function or constant named `new_usize` found for struct `model::Ty<'cx, F>` in the current scope"
+        },
+        {
+          "code": "E0599",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 422,
+          "message": "no method named `output` found for struct `Unnormalized<I, T>` in the current scope"
+        },
+        {
+          "code": "E0599",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 596,
+          "message": "no method named `as_const` found for enum `model::Term<'cx, F>` in the current scope"
+        },
+        {
+          "code": "E0277",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 894,
+          "message": "the trait bound `Unnormalized<Context<'_, PreparedProvider<'_>>, Ty<'db, _>>: Relate<_>` is not satisfied"
+        },
+        {
+          "code": "E0308",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 898,
+          "message": "mismatched types"
+        }
+      ]
+    },
+    {
+      "cohort": "v489",
+      "source_sha256": "cb2e7ad610c8d566a3addcff61a5c7449c5b40975b910e2fdc633088e51938ef",
+      "lib_build_exit": 101,
+      "new_cli_or_runtime_executed": false,
+      "old_cli_receipt_only": true,
+      "closing_source_matches": true,
+      "closing_head_matches": true,
+      "errors": [
+        {
+          "code": "E0107",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 670,
+          "message": "struct takes 0 lifetime arguments but 1 lifetime argument was supplied"
+        },
+        {
+          "code": "E0107",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 670,
+          "message": "struct takes 1 generic argument but 0 generic arguments were supplied"
+        },
+        {
+          "code": "E0277",
+          "file": "/Users/avi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-0.1.44/src/macros.rs",
+          "line": 2886,
+          "message": "`Obligation<'db>` doesn't implement `std::fmt::Debug`"
+        },
+        {
+          "code": "E0277",
+          "file": "/Users/avi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-0.1.44/src/macros.rs",
+          "line": 2886,
+          "message": "`Obligation<'db>` doesn't implement `std::fmt::Debug`"
+        },
+        {
+          "code": "E0277",
+          "file": "/Users/avi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-0.1.44/src/macros.rs",
+          "line": 2886,
+          "message": "`Obligation<'db>` doesn't implement `std::fmt::Debug`"
+        },
+        {
+          "code": "E0283",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 911,
+          "message": "type annotations needed for `upstream::context::Context<'cx, F>`"
+        }
+      ]
+    },
+    {
+      "cohort": "v490",
+      "source_sha256": "3573114821af0252701b1ba8293d74f0e15d26400ca642923080ef4a2bef2cc1",
+      "lib_build_exit": 101,
+      "new_cli_or_runtime_executed": false,
+      "old_cli_receipt_only": true,
+      "closing_source_matches": true,
+      "closing_head_matches": true,
+      "errors": [
+        {
+          "code": "E0614",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 789,
+          "message": "type `model::Ty<'db, PreparedProvider<'db>>` cannot be dereferenced"
+        },
+        {
+          "code": "E0433",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 920,
+          "message": "cannot find type `TermKind` in this scope"
+        },
+        {
+          "code": "E0433",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 921,
+          "message": "cannot find type `TermKind` in this scope"
+        },
+        {
+          "code": "E0433",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 925,
+          "message": "cannot find type `TermKind` in this scope"
+        }
+      ]
+    },
+    {
+      "cohort": "v491",
+      "source_sha256": "600da0ff4596e11af2ffb86537617dd2a6222cb18f86dc29d2545dbffd0e9f2f",
+      "lib_build_exit": 101,
+      "new_cli_or_runtime_executed": false,
+      "old_cli_receipt_only": true,
+      "closing_source_matches": true,
+      "closing_head_matches": true,
+      "errors": [
+        {
+          "code": "E0283",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 663,
+          "message": "type annotations needed"
+        },
+        {
+          "code": "E0433",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 920,
+          "message": "cannot find type `TermKind` in this scope"
+        },
+        {
+          "code": "E0433",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 921,
+          "message": "cannot find type `TermKind` in this scope"
+        },
+        {
+          "code": "E0433",
+          "file": "crates/lrr/src/traits/upstream/infer/well_formed.rs",
+          "line": 925,
+          "message": "cannot find type `TermKind` in this scope"
+        }
+      ]
+    }
+  ],
+  "lib_build_exit": 0,
+  "cli_build_exit": 0,
+  "source_digester_build_exit": 0,
+  "inference_port_audit_exit": 0,
+  "value_helper_audit_exit": 0,
+  "controls": [
+    {
+      "selector": "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-50ddc988e05221f9",
+        "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 145.696,
+      "log": "control-0.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-50ddc988e05221f9",
+        "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 45.871,
+      "log": "control-1.log"
+    }
+  ],
+  "stock_batch_exit": 1,
+  "stock": [
+    {
+      "case": "tests/ui/enum-discriminant/repr128.rs",
+      "status": "interpreter_failure",
+      "mode": "run-pass",
+      "edition": 2015,
+      "source_sha256": "66af2eb56be2026a744d2169f8467d11df4c75e8ea21d204f0948db2c8e445bc",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/enum-discriminant/repr128.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "8614e4dc46852db19b372b3dcce1f638e0b6c8a57d038b73a3f79bfe0b719676"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 2,
+        "pid": 97723,
+        "elapsed_seconds": 4.826832125079818,
+        "stdout_bytes": 7361,
+        "stdout_sha256": "f3c363630d34976735ced7363f9b38a5a6ff807a926eb1043bede9b9ad7ec877",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "terminal": {
+        "code": "LRR-E-OP-TYPE",
+        "message": "operator requires supported concrete primitive operand descriptors"
+      }
+    },
+    {
+      "case": "tests/ui/generics/generic-derived-type.rs",
+      "status": "runtime_contract_pass",
+      "mode": "run-pass",
+      "edition": 2015,
+      "source_sha256": "59e07d17994d57e0175737319e69637680861a13e39a162cc2c12fe53e0ac06b",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/generics/generic-derived-type.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "ee01ef81afad80aaa402e74ea706a81c39af77309b8023865b5001a5d7565a69"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 0,
+        "pid": 97726,
+        "elapsed_seconds": 4.904205583035946,
+        "stdout_bytes": 2175,
+        "stdout_sha256": "2b4b6f5e5b2d63daf3165c7939cd716d067a613e96f8dadbe258e6e2b51f5037",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "guest_output": {
+        "stderr": "",
+        "stdout": "10\n10\n"
+      },
+      "output_contract": "closed_managed_bytes; upstream run-pass has no output comparison without check-run-results"
+    }
+  ],
+  "stock_input_guard": "all_imported_originals_manifest_and_binary_unchanged",
+  "native_execution": false,
+  "executed_new_client_shapes": [
+    "scalar Type",
+    "unresolved Type variable",
+    "unresolved Const variable",
+    "reference TypeOutlives",
+    "nested raw pointer to reference"
+  ],
+  "unexecuted_new_branches": [
+    "nominal ADT",
+    "aggregate constant WF/value helpers",
+    "dyn",
+    "inherent projection",
+    "GCA",
+    "ADT publication checks"
+  ],
+  "actual_upstream_root_invoked": false,
+  "source_producer_complete": false,
+  "new_distinct_stock_runtime_gains": 0,
+  "refreshed_suite_total": null,
+  "completed_spec_cards": [],
+  "upstream_runtime_acceptance": "incomplete",
+  "diagnostic_compatibility": "unassessed_in_this_run",
+  "compiler_tooling_compatibility": "unassessed_in_this_run",
+  "full_suite_compatibility": "incomplete",
+  "guest_jit_allowed": false,
+  "architecture_records": [
+    "worktracks/05-trait-goal-engine/2026-10-20-upstream-well-formed-goals.md",
+    "worktracks/05-trait-goal-engine/2026-10-20-upstream-well-formed-review.md",
+    "worktracks/05-trait-goal-engine/2026-10-20-upstream-well-formed-controls.json",
+    "worktracks/05-trait-goal-engine/2026-10-20-upstream-wf-values.md",
+    "worktracks/05-trait-goal-engine/2026-10-20-upstream-adt-variants.md"
+  ],
+  "reproduction": {
+    "build": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json; then cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json; then cargo +1.99.0 build --offline --locked -p lrr --example lrr_source_digests",
+    "audits": [
+      "python3.12 tools/sync_upstream_inference.py",
+      "python3.12 tools/upstream_wf_values.py"
+    ],
+    "controls": "python3.12 tools/validation/run_controls.py NEW_RUN_DIRECTORY worktracks/05-trait-goal-engine/2026-10-20-upstream-well-formed-controls.json",
+    "runtime": "LRR_EMBEDDED_FACADE=1 python3.12 tools/rustc_checkout_runtime.py --lrr target/debug/lrr --source-digester target/debug/examples/lrr_source_digests --report-dir NEW_REPORT_DIRECTORY --timeout 240 --case tests/ui/enum-discriminant/repr128.rs --case tests/ui/generics/generic-derived-type.rs"
+  },
+  "planning_checks": {
+    "worktracks_check_exit": 0,
+    "runtime_acceptance": false
+  }
+}

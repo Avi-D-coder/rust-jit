@@ -975,7 +975,7 @@ pub(crate) fn check_trait_fast_path<'cx>(cx: DbInterner<'cx>, reference: ty::Tra
 }
 
 // Actual SolverDelegate entry methods over the same source-owned context.
-// Four remaining metadata-dependent clients remain uninstalled/unexecuted.
+// Remaining metadata-dependent clients remain uninstalled/unexecuted.
 fn check_solver_delegate<'cx>(cx:DbInterner<'cx>,actual:Ty<'cx>,span:Span) {
     use super::{InferenceContext,delegate::SolverContext};
     use rustc_next_trait_solver::delegate::SolverDelegate as Delegate;
@@ -992,6 +992,22 @@ fn check_solver_delegate<'cx>(cx:DbInterner<'cx>,actual:Ty<'cx>,span:Span) {
     let boolean=cx.ty(ty::Bool);
     let value=Const::new(cx,ty::ConstKind::Value(ValueConst{ty:boolean,tree:cx.valtree(ty::ValTreeKind::Leaf(ScalarInt{bits:1,bytes:1}))}));
     let constant=Delegate::fresh_var_for_kind(&owner,value.into(),span,young).expect_const();
+    // Execute the full pinned WF client over actual context-owned IR. These
+    // shapes need no invented ADT/lang-item facts; root readiness stays closed.
+    let wf_env=crate::traits::upstream::model::ParamEnv(cx.clauses(crate::traits::upstream::model::List::default()));
+    assert!(Delegate::well_formed_goals(&owner,wf_env,boolean.into()).unwrap().is_empty());
+    assert!(Delegate::well_formed_goals(&owner,wf_env,ty.into()).is_none());
+    assert!(Delegate::well_formed_goals(&owner,wf_env,constant.into()).is_none());
+    let region=Region::new_static(cx);
+    let reference=Ty::new_ref(cx,region,boolean,ty::Mutability::Not);
+    let goals=Delegate::well_formed_goals(&owner,wf_env,reference.into()).unwrap();
+    assert_eq!(goals.len(),1);
+    assert_eq!(goals[0].param_env,wf_env);
+    assert_eq!(goals[0].predicate.kind().skip_binder(),ty::PredicateKind::Clause(ty::ClauseKind::TypeOutlives(ty::OutlivesClause(boolean,region))));
+    let pointer=Ty::new_ptr(cx,reference,ty::Mutability::Not);
+    let nested=Delegate::well_formed_goals(&owner,wf_env,pointer.into()).unwrap();
+    assert_eq!(nested,goals,"ordinary nested type traversal retains the same obligation");
+
     assert!(matches!(constant.kind(),ty::ConstKind::Infer(ty::InferConst::Var(_))));
     let arg=Delegate::instantiate_canonical_var(&owner,ty::CanonicalVarKind::Ty{ui:root,sub_root:ty::BoundVar::from_u32(0)},span,&[],|_|young).expect_ty();
     assert_eq!(Client::universe_of_ty(&*owner,arg.ty_vid().unwrap()),Some(young));

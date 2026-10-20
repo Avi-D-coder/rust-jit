@@ -712,6 +712,27 @@ pub(crate) enum AdtKind {
     Enum,
     Union,
 }
+/// Declaration-order metadata shared by ordinary source and expanded source.
+/// Variant and field identity is its position in the retained owner schema;
+/// neither needs a fabricated standalone source DefinitionId.
+pub(crate) struct AdtVariant<'cx, F: SourceFacts<'cx>> {
+    pub(crate) name: Symbol<'cx>,
+    pub(crate) fields: &'cx [AdtField<'cx, F>],
+}
+pub(crate) struct AdtField<'cx, F: SourceFacts<'cx>> {
+    pub(crate) name: Symbol<'cx>,
+    pub(crate) ty: EarlyBinder<Context<'cx, F>, Ty<'cx, F>>,
+}
+impl<'cx, F: SourceFacts<'cx>> AdtField<'cx, F> {
+    /// Pinned rustc_middle::ty::FieldDef::ty: preserve the unnormalized result.
+    pub(super) fn ty(
+        &self,
+        cx: Context<'cx, F>,
+        args: Args<'cx, F>,
+    ) -> Unnormalized<Context<'cx, F>, Ty<'cx, F>> {
+        self.ty.instantiate(cx, args)
+    }
+}
 pub(crate) struct AdtInfo<'cx, F: SourceFacts<'cx>> {
     pub(crate) kind: AdtKind,
     /// Actual enum source repr, not a caller-supplied integer Type.
@@ -721,6 +742,9 @@ pub(crate) struct AdtInfo<'cx, F: SourceFacts<'cx>> {
     pub(crate) manually_drop: bool,
     pub(crate) unsafe_fields: bool,
     pub(crate) fundamental: bool,
+    pub(crate) variants: &'cx [AdtVariant<'cx, F>],
+    /// Same declaration-order fields as `variants`, flattened for upstream's
+    /// AdtDef interface; prepared publication verifies the two views agree.
     pub(crate) fields: Types<'cx, F>,
     pub(crate) tail: Option<Ty<'cx, F>>,
     pub(crate) sized: Option<Ty<'cx, F>>,
@@ -728,6 +752,12 @@ pub(crate) struct AdtInfo<'cx, F: SourceFacts<'cx>> {
     pub(crate) destructor: Option<bool>,
 }
 impl<'cx, F: SourceFacts<'cx>> AdtDefinition<'cx, F> {
+    pub(super) fn variants(self) -> &'cx [AdtVariant<'cx, F>] {
+        self.info().variants
+    }
+    pub(super) fn variant(self, index: rustc_abi::VariantIdx) -> &'cx AdtVariant<'cx, F> {
+        &self.variants()[index.as_usize()]
+    }
     pub(super) fn is_enum(self) -> bool { self.info().kind == AdtKind::Enum }
     pub(super) fn enum_discriminant_type(self, cx: Context<'cx,F>) -> Ty<'cx,F> {
         assert_eq!(cx, self.context, "ADT discriminant belongs to another context");

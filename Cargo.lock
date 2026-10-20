@@ -921,6 +921,7 @@ dependencies = [
  "proptest",
  "ra_ap_syntax",
  "rustc-hash 2.1.3",
+ "rustc_abi",
  "rustc_index",
  "rustc_next_trait_solver",
  "rustc_type_ir",

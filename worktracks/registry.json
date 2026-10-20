@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-20T16:17:59.942516+00:00",
+  "updated_at": "2026-10-20T16:56:52.432309+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -552,9 +552,15 @@
             "worktracks/evidence/2026-10-20-v485-v486-discriminant-initializers.json",
             "worktracks/05-trait-goal-engine/2026-10-20-upstream-associated-item-eligibility.md",
             "worktracks/05-trait-goal-engine/2026-10-20-upstream-associated-item-eligibility-review.md",
-            "worktracks/evidence/2026-10-20-v487-upstream-associated-item-eligibility.json"
+            "worktracks/evidence/2026-10-20-v487-upstream-associated-item-eligibility.json",
+            "worktracks/05-trait-goal-engine/2026-10-20-upstream-well-formed-goals.md",
+            "worktracks/05-trait-goal-engine/2026-10-20-upstream-well-formed-review.md",
+            "worktracks/05-trait-goal-engine/2026-10-20-upstream-well-formed-controls.json",
+            "worktracks/05-trait-goal-engine/2026-10-20-upstream-wf-values.md",
+            "worktracks/05-trait-goal-engine/2026-10-20-upstream-adt-variants.md",
+            "worktracks/evidence/2026-10-20-v488-v492-upstream-well-formed-goals.json"
           ],
-          "latest_component_scope": "V487 HELD M020 actual pinned associated-item eligibility client. Registered full rustc SolverDelegate::fetch_eligible_assoc_item replaces the required eligible_assoc_item function pointer/dispatch, retaining final/default, every typing mode, deep resolution/further-specializable, source error and erasure branches. Immutable source facts now require explicit associated member/leaf outcomes with recorded world/definition/container/ancestry and relevant coverage checks; missing leaves are preparation failure, never semantic NotFound/NoSolution. Source specialization graph/leaf/member/error provenance production is not implemented by these structural data checks. Both macOS1.99 builds and exact original/full inference-port audit pass;2/2existing actual source/context/inference controls pass while keeping ready rejected. New eligibility/publication branches remain unexecuted, with no stub or fake complete provider. First wrong stock path selector fails before execution; corrected unchanged repr128 still fails generic operator typing at28/27VMattempt/outcomes, while generic-derived-type retains its199matched operations/expected10-newline-10-newline output and cleanup. Those runtimes use the existing legacy interpreter path, not an upstream root. Closing source/HEAD/test/CLI guards match. Zero new stock gains/refreshed totals or task/milestone/solver/JIT acceptance. Actual graph/leaf production, three remaining solver clients plus reflection metadata, full source/ADT/ParamEnv/root/member/VM joins and negative/origin/currentness matrices remain held."
+          "latest_component_scope": "V492 HELD M020 pinned compiler well-formed goal client. SolverContext now directly runs the complete rustc unnormalized WF visitor; the required well_formed_goals callback is removed. Mechanically registered next-solver inherent projection, Term/feature/field binder, typed value-tree and scalar helpers retain original source hashes. Immutable ADT variant/field metadata and captured source-schema shape checks are added, while actual field-Type translation, complete parent clauses, value admission and currentness remain real producer obligations. Both macOS1.99 builds, digest helper and port audits pass;2/2actual source/context controls execute scalar, unresolved Type/Const, reference and nested-pointer WF behavior with ready still rejected. Nominal/aggregate/dyn/inherent/GCA/publication branches remain unexecuted. Unchanged generic-derived-type retains its199matched VM operations/output/cleanup; repr128 retains LRR-E-OP-TYPE at28attempts/27outcomes. These runtimes still use the existing interpreter resolver, not an upstream root. Closing source/HEAD/binary guards match. Zero new stock gains, refreshed totals or task/milestone/interpreter/JIT closure. Const evaluation/transmutation/reflection clients, actual source/ADT/ParamEnv/leaf producers, full root/member/VM joins and remaining negative/origin/currentness matrices stay held."
         },
         {
           "id": "WT05-03",
@@ -1219,11 +1225,17 @@
       "worktracks/evidence/2026-10-20-v485-v486-discriminant-initializers.json",
       "worktracks/05-trait-goal-engine/2026-10-20-upstream-associated-item-eligibility.md",
       "worktracks/05-trait-goal-engine/2026-10-20-upstream-associated-item-eligibility-review.md",
-      "worktracks/evidence/2026-10-20-v487-upstream-associated-item-eligibility.json"
+      "worktracks/evidence/2026-10-20-v487-upstream-associated-item-eligibility.json",
+      "worktracks/05-trait-goal-engine/2026-10-20-upstream-well-formed-goals.md",
+      "worktracks/05-trait-goal-engine/2026-10-20-upstream-well-formed-review.md",
+      "worktracks/05-trait-goal-engine/2026-10-20-upstream-well-formed-controls.json",
+      "worktracks/05-trait-goal-engine/2026-10-20-upstream-wf-values.md",
+      "worktracks/05-trait-goal-engine/2026-10-20-upstream-adt-variants.md",
+      "worktracks/evidence/2026-10-20-v488-v492-upstream-well-formed-goals.json"
     ],
-    "source_checkpoint_note": "Confirmed unsigned source WIP commit cabd36719b and normal push to origin/codex/lrr-implementation (remote548d9d1b19->cabd36719b). All54staged files passed source guard (4682243bytes,0violations). Prior capacity-held approval attempts were not executed; the successful retry was reviewed normally. Source/fixture/runtime failures and all integration/full gates remain held; no PR code fetched/applied.",
+    "source_checkpoint_note": "Last confirmed pushed checkpoint before this V492 candidate is43bad0f0e822464533c06be318777d89ab98f11c. The component evidence identifies the exact candidate source fingerprint; committing/pushing it does not close any held integration or release gate.",
     "previous_source_checkpoint_commit": "548d9d1b190d9d7e03e5067cd3c71fa0e9d24ea4",
-    "source_checkpoint_commit": "cabd36719b014ba871ff6f3e756cc986c61ad23e",
+    "source_checkpoint_commit": "43bad0f0e822464533c06be318777d89ab98f11c",
     "artifact_retention": {
       "evidence": "worktracks/evidence/2026-10-18-artifact-retention.json",
       "workflow": "tools/validation/README.md",
@@ -1346,6 +1358,10 @@
       "evidence": "worktracks/evidence/2026-10-20-v487-upstream-associated-item-eligibility.json",
       "scope": "V487 HELD M020 actual pinned associated-item eligibility client. Registered full rustc SolverDelegate::fetch_eligible_assoc_item replaces the required eligible_assoc_item function pointer/dispatch, retaining final/default, every typing mode, deep resolution/further-specializable, source error and erasure branches. Immutable source facts now require explicit associated member/leaf outcomes with recorded world/definition/container/ancestry and relevant coverage checks; missing leaves are preparation failure, never semantic NotFound/NoSolution. Source specialization graph/leaf/member/error provenance production is not implemented by these structural data checks. Both macOS1.99 builds and exact original/full inference-port audit pass;2/2existing actual source/context/inference controls pass while keeping ready rejected. New eligibility/publication branches remain unexecuted, with no stub or fake complete provider. First wrong stock path selector fails before execution; corrected unchanged repr128 still fails generic operator typing at28/27VMattempt/outcomes, while generic-derived-type retains its199matched operations/expected10-newline-10-newline output and cleanup. Those runtimes use the existing legacy interpreter path, not an upstream root. Closing source/HEAD/test/CLI guards match. Zero new stock gains/refreshed totals or task/milestone/solver/JIT acceptance. Actual graph/leaf production, three remaining solver clients plus reflection metadata, full source/ADT/ParamEnv/root/member/VM joins and negative/origin/currentness matrices remain held.",
       "task_statuses_changed": false
+    },
+    "held_upstream_well_formed_goals": {
+      "evidence": "worktracks/evidence/2026-10-20-v488-v492-upstream-well-formed-goals.json",
+      "scope": "V492 HELD M020 pinned compiler well-formed goal client. SolverContext now directly runs the complete rustc unnormalized WF visitor; the required well_formed_goals callback is removed. Mechanically registered next-solver inherent projection, Term/feature/field binder, typed value-tree and scalar helpers retain original source hashes. Immutable ADT variant/field metadata and captured source-schema shape checks are added, while actual field-Type translation, complete parent clauses, value admission and currentness remain real producer obligations. Both macOS1.99 builds, digest helper and port audits pass;2/2actual source/context controls execute scalar, unresolved Type/Const, reference and nested-pointer WF behavior with ready still rejected. Nominal/aggregate/dyn/inherent/GCA/publication branches remain unexecuted. Unchanged generic-derived-type retains its199matched VM operations/output/cleanup; repr128 retains LRR-E-OP-TYPE at28attempts/27outcomes. These runtimes still use the existing interpreter resolver, not an upstream root. Closing source/HEAD/binary guards match. Zero new stock gains, refreshed totals or task/milestone/interpreter/JIT closure. Const evaluation/transmutation/reflection clients, actual source/ADT/ParamEnv/leaf producers, full root/member/VM joins and remaining negative/origin/currentness matrices stay held."
     }
   },
   "current_spec": {

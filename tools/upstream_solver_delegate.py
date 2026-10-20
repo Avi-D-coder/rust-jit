@@ -66,7 +66,6 @@ pub(crate) struct SolverClients<'db> {
     /// evaluation errors are represented as the actual error Const, as upstream.
     pub(crate) evaluate_const: fn(&InferenceContext<'db>, ParamEnv<'db>, ty::AliasConst<DbInterner<'db>>,
         &mut dyn FnMut(ty::Unnormalized<DbInterner<'db>,Ty<'db>>) -> Option<Ty<'db>>) -> Result<Option<Const<'db>>,()>,
-    pub(crate) well_formed_goals: fn(&InferenceContext<'db>,ParamEnv<'db>,Term<'db>) -> Option<Vec<Goal<DbInterner<'db>,Predicate<'db>>>>,
     pub(crate) transmutable: fn(&InferenceContext<'db>,Ty<'db>,Ty<'db>,Const<'db>) -> Result<Certainty,NoSolution>,
 }
 
@@ -108,7 +107,8 @@ impl<'db> SolverDelegate for SolverContext<'db> {
         }
     }
     fn well_formed_goals(&self,env:ParamEnv<'db>,term:Term<'db>) -> Option<Vec<Goal<Self::Interner,Predicate<'db>>>> {
-        (self.interner.services().solver_clients().well_formed_goals)(&self.0,env,term)
+        super::well_formed::unnormalized_obligations(&self.0,env,term,<Span as ty::inherent::Span<Self::Interner>>::dummy())
+            .map(|obligations| obligations.into_iter().map(|obligation| obligation.as_goal()).collect())
     }
     fn make_deduplicated_region_constraints(&self) -> Vec<(ty::RegionConstraint<Self::Interner>,VisibleForLeakCheck)> {
         self.0.make_deduplicated_region_constraints()
@@ -128,3 +128,4 @@ impl<'db> SolverDelegate for SolverContext<'db> {
 '''
     outputs['delegate.rs'] = rustfmt(header + imports + methods + clients)
     outputs['mod.rs'] += b'\npub(crate) mod delegate;\n'
+    outputs['mod.rs'] += b'\npub(crate) mod well_formed;\n'
