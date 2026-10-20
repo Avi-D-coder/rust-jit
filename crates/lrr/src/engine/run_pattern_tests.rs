@@ -226,7 +226,14 @@ fn nominal_constructor_patterns_share_the_matcher_across_owner_kinds() {
             let r = &E::B(9_i32);
             match r { E::B(n) => { if *n != 9_i32 { let z = 0_i32; let _ = 1_i32 / z; } } _ => {} }
         }";
-    complete(SOURCE);
+    // Actual source name goals require the coordinator's published owning
+    // environment; the bare opcode helper deliberately does not supply one.
+    match crate::cli::run_completed_source_control(
+        "ordinary-pattern-owners", SOURCE, 2024,
+    ) {
+        Ok(report) => assert!(pattern_steps(&report)>0),
+        other => panic!("ordinary pattern owners: {other:?}"),
+    }
     let steps = lowered_pattern_operations(SOURCE);
     assert!(steps.iter().any(|step| matches!(step,
         PatternOperation::Test { tree, .. } if !tree.names().is_empty())));

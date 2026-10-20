@@ -23,7 +23,7 @@ use ra_ap_syntax::{
 };
 use std::{collections::BTreeMap, sync::Arc};
 
-pub(crate) const SOURCE_CONSTRAINT_SCHEMA: u32 = 14;
+pub(crate) const SOURCE_CONSTRAINT_SCHEMA: u32 = 15;
 fn overflow() -> Diagnostic {
     Diagnostic::new(
         "LRR-E-METADATA-LIMIT",
@@ -424,6 +424,7 @@ pub(crate) struct SourceConstraintPlan {
     // The pattern engine's own retained tree for each `let` and match-arm
     // root pattern, and every binding occurrence's position in it.
     trees: BTreeMap<NodeId, Arc<PatternTree>>,
+    pattern_names: BTreeMap<NodeId, (NodeId, u32)>,
     occurrences: BTreeMap<NodeId, PatternOccurrence>,
     type_shapes: BTreeMap<NodeId, TypeShape>,
     path_arguments: BTreeMap<NodeId, SourcePathArguments>,
@@ -497,10 +498,15 @@ impl SourceConstraintPlan {
     pub(crate) fn tree(&self, root: NodeId) -> Option<&PatternTree> {
         self.trees.get(&root).map(Arc::as_ref)
     }
-    /// The written structure of an annotation Type node, if structural.
+    /// Direct handle to the pattern engine's own canonical name row.
+    pub(crate) fn pattern_name(&self, node: NodeId) -> Option<&crate::syntax::pattern_tree::PatternName> {
+        let (root,slot)=self.pattern_names.get(&node)?;
+        self.trees.get(root)?.names().get(*slot as usize)
+    }
     pub(crate) fn path_arguments(&self, node: NodeId) -> Option<&SourcePathArguments> {
         self.path_arguments.get(&node)
     }
+    /// The written structure of an annotation Type node, if structural.
     pub(crate) fn type_shape(&self, node: NodeId) -> Option<&TypeShape> {
         self.type_shapes.get(&node)
     }
@@ -597,7 +603,8 @@ impl SourceConstraintPlan {
                                 position.checked_add(u32::from(list.self_param().is_some()))
                             });
                     }
-                } else if !matches!(node.role, NodeRole::OpaqueItem) {
+                }
+                if !matches!(node.role, NodeRole::OpaqueItem) {
                     classify(
                         body,
                         index,
@@ -782,6 +789,18 @@ impl SourceConstraintPlan {
                 trees.insert(root, Arc::new(tree));
             }
         }
+        let mut pattern_names = BTreeMap::new();
+        for (root,tree) in &trees {
+            for (slot,name) in tree.names().iter().enumerate() {
+                let Some(node)=name.source else {continue};
+                let slot=u32::try_from(slot).map_err(|_| overflow())?;
+                if let Some((prior_root,prior_slot))=pattern_names.insert(node,(*root,slot)) {
+                    if trees.get(&prior_root).and_then(|tree|tree.names().get(prior_slot as usize))!=Some(name) {
+                        return Err(invalid("pattern source name has conflicting retained rows"));
+                    }
+                }
+            }
+        }
         // The member table: every written field name of a field access,
         // record expression or record pattern, sorted.
         let mut members: Vec<String> = written
@@ -831,6 +850,7 @@ impl SourceConstraintPlan {
             uses,
             names,
             trees,
+            pattern_names,
             occurrences,
             type_shapes,
             path_arguments: written.path_arguments,
@@ -1307,6 +1327,22 @@ fn classify(
         }
         return Ok(());
     }
+    let pattern_path = match ast::Pat::cast(syntax.clone()) {
+        Some(ast::Pat::RecordPat(pattern)) => pattern.path(),
+        Some(ast::Pat::TupleStructPat(pattern)) => pattern.path(),
+        Some(ast::Pat::PathPat(pattern)) => pattern.path(),
+        _ => None,
+    };
+    if let Some(path) = pattern_path {
+        let final_segment = path.segment().and_then(|segment|segment.generic_arg_list());
+        let owner_segment = path.qualifier().and_then(|path|path.segment()).and_then(|segment|segment.generic_arg_list());
+        if final_segment.is_some() || owner_segment.is_some() {
+            written.path_arguments.insert(node,SourcePathArguments {
+                final_segment:capture_path_arguments(body,index,final_segment)?,
+                owner_segment:capture_path_arguments(body,index,owner_segment)?,
+            });
+        }
+    }
     let Some(expression) = ast::Expr::cast(syntax) else {
         return Ok(());
     };
@@ -1757,6 +1793,7 @@ impl StableEncode for SourceConstraintPlan {
                 }
             },
         );
+        e.sequence(&self.pattern_names.iter().collect::<Vec<_>>(), |e,(node,(root,slot))| {e.u32(node.0);e.u32(root.0);e.u32(*slot);});
         e.sequence(&self.path_arguments.iter().collect::<Vec<_>>(), |e, (node, args)| {
             e.u32(node.0);
             for list in [&args.final_segment, &args.owner_segment] {

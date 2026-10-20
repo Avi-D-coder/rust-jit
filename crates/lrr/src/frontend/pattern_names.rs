@@ -36,12 +36,14 @@ pub(crate) enum PatternSelection {
     Constructor {
         identity: Digest,
         variant: Option<EnumVariantDefinition>,
+        /// Exact source application when the written name is an applied alias.
+        application: Option<crate::traits::term::TyTerm>,
     },
 }
 
 /// The same source selection for an indexed lexical pattern and a module
 /// pattern. No value/initializer is evaluated, including during capture typing.
-pub(crate) fn select_source_pattern_name(
+fn select_source_pattern_name_inner(
     resolver: &CallResolver<'_>,
     graph: &NameNamespaces,
     sources: &[&PreparedSourceView],
@@ -53,8 +55,8 @@ pub(crate) fn select_source_pattern_name(
         db::{key::QueryKey, provider::SyntaxProvider, value::QueryValue},
         frontend::source_value_goals::CanonicalValueKind,
     };
-    let Some(node) = name.lexical else {
-        return select_pattern_name(resolver, graph, sources, db, at.body.definition, name);
+    let Some(node) = name.lexical.or(name.source) else {
+        return select_module_pattern_name(resolver, graph, sources, db, at.body.definition, name, Some(at));
     };
     let key = crate::ir::pc::PcKey {
         body: at.body.clone(),
@@ -72,7 +74,7 @@ pub(crate) fn select_source_pattern_name(
         )));
     };
     if goal.is_qualified_path() && goal.rooted().is_none() {
-        return select_pattern_name(resolver, graph, sources, db, at.body.definition, name);
+        return select_module_pattern_name(resolver, graph, sources, db, at.body.definition, name, Some(at));
     }
     if let Some(demand) = goal.pending() {
         return QueryPoll::Ready(Err(unsupported(format!(
@@ -129,6 +131,7 @@ pub(crate) fn select_source_pattern_name(
                     enumeration: declaration.identity(),
                     name: member.to_owned(),
                 }),
+                application: None,
             },
         )));
     }
@@ -138,13 +141,12 @@ pub(crate) fn select_source_pattern_name(
             PatternSelection::Constructor {
                 identity: declaration.identity(),
                 variant: Some(variant.clone()),
+                application: None,
             },
         )));
     }
-    QueryPoll::Ready(
-        pattern_declaration(graph, name, declaration.identity(), Some(kind))
-            .map(|selected| (name.clone(), selected)),
-    )
+    finish_pattern_declaration(db, graph, sources, name, declaration.identity(), Some(kind), Some(at))
+        .map(|selected| (name.clone(), selected))
 }
 
 fn unsupported(message: String) -> Diagnostic {
@@ -168,6 +170,7 @@ pub(crate) fn lookup_pattern_name(
                         spelling: spelling.to_owned(),
                         form: NameForm::Tuple,
                         lexical: None,
+                        source: None,
                     };
                     return QueryPoll::Ready(Ok((selected, found)));
                 }
@@ -211,7 +214,7 @@ pub(crate) fn pattern_declaration(
             Ok(PatternSelection::Constant(identity))
         }
         (Some(ItemKind::Struct), _) | (_, Some(_)) => {
-            Ok(PatternSelection::Constructor { identity, variant })
+            Ok(PatternSelection::Constructor { identity, variant, application: None })
         }
         _ => Err(unsupported(format!(
             "pattern name `{}` names a Value item that is not a constant or constructor",
@@ -229,6 +232,12 @@ pub(crate) fn select_pattern_name(
     db: &mut Database,
     caller: Digest,
     name: &PatternName,
+) -> QueryPoll<(PatternName, PatternSelection)> {
+    select_module_pattern_name(resolver, graph, sources, db, caller, name, None)
+}
+fn select_module_pattern_name(
+    resolver: &CallResolver<'_>, graph: &NameNamespaces, sources: &[&PreparedSourceView],
+    db: &mut Database, caller: Digest, name: &PatternName, at: Option<&crate::ir::pc::PcKey>,
 ) -> QueryPoll<(PatternName, PatternSelection)> {
     let (name, found) = match lookup_pattern_name(resolver, db, caller, name) {
         QueryPoll::Ready(Ok(found)) => found,
@@ -269,10 +278,112 @@ pub(crate) fn select_pattern_name(
     };
     let item_kind =
         super::callables::selected_item_kind(db, sources.iter().copied(), definition.identity);
-    QueryPoll::Ready(
-        pattern_declaration(graph, &name, definition.identity, item_kind)
-            .map(|selection| (name, selection)),
-    )
+    finish_pattern_declaration(db, graph, sources, &name, definition.identity, item_kind, at)
+        .map(|selection| (name, selection))
+}
+
+/// One retained ordinary pattern-name answer. No executable/body/parser Arc
+/// is duplicated; the query's existing dependency closure owns currentness.
+#[derive(Debug)]
+pub struct PreparedSourcePatternName {
+    key: crate::ir::pc::PcKey,
+    name: PatternName,
+    selection: PatternSelection,
+}
+impl PreparedSourcePatternName {
+    pub(crate) fn key(&self) -> &crate::ir::pc::PcKey { &self.key }
+    pub(crate) fn name(&self) -> &PatternName { &self.name }
+    pub(crate) fn selection(&self) -> &PatternSelection { &self.selection }
+}
+impl crate::core::digest::StableEncode for PreparedSourcePatternName {
+    const DOMAIN: &'static str = "lrr/v1/source-pattern-name";
+    fn encode_fields(&self,e: &mut crate::core::digest::StableEncoder) {
+        e.record(&self.key); self.name.encode(e);
+        match &self.selection {
+            PatternSelection::Binding => e.u8(0),
+            PatternSelection::Constant(id) => {e.u8(1);e.digest(*id);},
+            PatternSelection::Constructor {identity,variant,application} => {
+                e.u8(2);e.digest(*identity);
+                e.option(variant,|e,v|{e.digest(v.enumeration);e.string(&v.name);});
+                e.option(application,|e,ty|e.record(ty));
+            }
+        }
+    }
+}
+macro_rules! ready_name {
+    ($value:expr) => {match $value {QueryPoll::Ready(Ok(value))=>value,QueryPoll::Ready(Err(error))=>return QueryPoll::Ready(Err(error)),QueryPoll::NeedInput(input)=>return QueryPoll::NeedInput(input)}};
+}
+/// Canonical actual-node preparation. Query callbacks never run guest code or
+/// expand a producer. Source metadata and selected Type arguments are ordinary.
+pub(crate) fn prepare_source_name(db: &mut Database,key: &crate::ir::pc::PcKey)
+    -> QueryPoll<PreparedSourcePatternName> {
+    use crate::db::{key::QueryKey,provider::SyntaxProvider,value::QueryValue};
+    if key.phase!=0 {return QueryPoll::Ready(Err(unsupported("source pattern name requires entry key".into())));}
+    let owner=ready_name!(db.fetch(&SyntaxProvider,QueryKey::SourceLocalPlan(key.body.clone())));
+    let QueryValue::SourceLocalPlan(owner)=owner.value.as_ref() else {return QueryPoll::Ready(Err(unsupported("source pattern owner differs".into())));};
+    ready_name!(owner.require_current(db));
+    let facts=ready_name!(db.fetch(&SyntaxProvider,QueryKey::SourceConstraints(key.body.clone())));
+    let QueryValue::SourceConstraints(facts)=facts.value.as_ref() else {return QueryPoll::Ready(Err(unsupported("source pattern index differs".into())));};
+    let Some(name)=facts.pattern_name(crate::ir::pc::NodeId(key.node)) else {return QueryPoll::Ready(Err(unsupported("actual source pattern name absent".into())));};
+    if facts.body()!=&key.body || name.source!=Some(crate::ir::pc::NodeId(key.node)) {
+        return QueryPoll::Ready(Err(unsupported("source pattern indexed owner differs".into())));
+    }
+    let Some(environment)=owner.environment() else {return QueryPoll::Ready(Err(unsupported("source pattern environment absent".into())));};
+    let completed=environment.macros().source_environment();let sources=completed.sources().iter().collect::<Vec<_>>();
+    let resolver=match CallResolver::new(completed.names(),&sources) {Ok(resolver)=>resolver,Err(error)=>return QueryPoll::Ready(Err(error))};
+    let (name,selection)=ready_name!(select_source_pattern_name_inner(&resolver,completed.names(),&sources,db,key,name));
+    // The retained name answer also depends on the actual constructor schema;
+    // installed target reuse must not outlive a field/variant declaration edit.
+    if let PatternSelection::Constructor {identity,variant,..}=&selection {
+        let owner=variant.as_ref().map_or(*identity,|v|v.enumeration);
+        ready_name!(db.fetch(&SyntaxProvider,QueryKey::TypeSchema(owner)));
+    }
+    QueryPoll::Ready(Ok(PreparedSourcePatternName {key:key.clone(),name,selection}))
+}
+/// One service for the matcher, capture typing and source constraints.
+pub(crate) fn select_source_pattern_name(
+    resolver: &CallResolver<'_>, graph: &NameNamespaces, sources: &[&PreparedSourceView],
+    db: &mut Database, at: &crate::ir::pc::PcKey, name: &PatternName,
+) -> QueryPoll<(PatternName,PatternSelection)> {
+    use crate::db::{key::QueryKey,provider::SyntaxProvider,value::QueryValue};
+    let Some(node)=name.source else {return select_source_pattern_name_inner(resolver,graph,sources,db,at,name);};
+    let key=crate::ir::pc::PcKey {body:at.body.clone(),node:node.0,phase:0};
+    let selected=ready_name!(db.fetch(&SyntaxProvider,QueryKey::SourcePatternName(key.clone())));
+    let QueryValue::SourcePatternName(selected)=selected.value.as_ref() else {return QueryPoll::Ready(Err(unsupported("source pattern name result differs".into())));};
+    if selected.key()!=&key || selected.name()!=name {return QueryPoll::Ready(Err(unsupported("source pattern canonical name differs".into())));}
+    QueryPoll::Ready(Ok((selected.name.clone(),selected.selection.clone())))
+}
+fn finish_pattern_declaration(
+    db: &mut Database,graph: &NameNamespaces,sources: &[&PreparedSourceView],name: &PatternName,
+    identity: Digest,kind: Option<ItemKind>,at: Option<&crate::ir::pc::PcKey>,
+) -> QueryPoll<PatternSelection> {
+    use crate::{db::{key::QueryKey,provider::SyntaxProvider,value::QueryValue},
+        frontend::{source_types::NamedTypePreparation,type_aliases::AliasTarget},traits::term::{GenericArg,TyTerm}};
+    if kind!=Some(ItemKind::TypeAlias) {return QueryPoll::Ready(pattern_declaration(graph,name,identity,kind));}
+    let (Some(at),Some(node))=(at,name.source) else {return QueryPoll::Ready(Err(unsupported("pattern alias requires its actual source occurrence".into())));};
+    let site=crate::ir::pc::PcKey {body:at.body.clone(),node:node.0,phase:0};
+    let owner=ready_name!(db.fetch(&SyntaxProvider,QueryKey::SourceLocalPlan(at.body.clone())));
+    let QueryValue::SourceLocalPlan(owner)=owner.value.as_ref() else {return QueryPoll::Ready(Err(unsupported("pattern alias owner differs".into())));};
+    let selected=ready_name!(super::explicit_type_arguments::select_path_arguments(db,owner,&site,
+        super::explicit_type_arguments::PathArgumentPosition::Constructor));
+    let mut arguments=Vec::new();
+    if let Some(selected)=selected {
+        for guard in &selected.guards {if let Err(error)=guard.require_current(db) {return QueryPoll::Ready(Err(error));}}
+        for argument in selected.arguments {
+            let Some(argument)=argument else {return QueryPoll::Ready(Err(unsupported("pattern alias argument requires inference".into())));};
+            arguments.push(GenericArg::Type(argument.source().clone()));
+        }
+    }
+    let source=ready_name!(super::source_types::prepare_selected_definition_with_arguments(db,graph,sources,identity,&arguments));
+    let application=match source {
+        NamedTypePreparation::Ready(source)=>source.source().clone(),
+        NamedTypePreparation::Alias(AliasTarget::Type(term))=>term,
+        _=>return QueryPoll::Ready(Err(unsupported("pattern alias requires its source target application".into()))),
+    };
+    let TyTerm::Nominal(target,_)=&application else {return QueryPoll::Ready(Err(unsupported("pattern alias target is not nominal".into())));};
+    let definition=match super::source_types::nominal_definition(db,sources,*target) {Ok(definition)=>definition,Err(error)=>return QueryPoll::Ready(Err(error))};
+    if definition.item_kind!=ItemKind::Struct {return QueryPoll::Ready(Err(unsupported("pattern alias target requires variant selection".into())));}
+    QueryPoll::Ready(Ok(PatternSelection::Constructor {identity:*target,variant:None,application:Some(application)}))
 }
 
 /// Shared source field-name -> declaration-ordinal selection.

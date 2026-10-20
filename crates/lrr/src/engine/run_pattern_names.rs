@@ -63,23 +63,36 @@ impl RunMachine {
             return QueryPoll::Ready(Err(error));
         }
         let pc = self.frame.pc().clone();
-        let mut targets = match self.pattern_names.get(&pc) {
-            Some((identity, targets)) if *identity == tree.identity() => Arc::clone(targets),
+        let (mut targets, source_guards, retain_targets) = match self.pattern_names.get(&pc) {
+            Some((identity, targets, guards)) if *identity == tree.identity() => {
+                for guard in guards {if let Err(error)=guard.require_current(db) {return QueryPoll::Ready(Err(error));}}
+                (Arc::clone(targets),guards.clone(),true)
+            },
             _ => {
                 let mut targets = Vec::with_capacity(tree.names().len());
+                let mut guards = Vec::new();
+                let mut retain_targets = true;
                 for name in tree.names() {
                     match self.resolve_pattern_name(db, name) {
-                        QueryPoll::Ready(Ok(target)) => targets.push(target),
+                        QueryPoll::Ready(Ok((target,guard))) => {targets.push(target);guards.extend(guard);},
                         // A refused name faults only when the matcher reaches
                         // it, so an unselected alternative stays cold.
-                        QueryPoll::Ready(Err(error)) => targets.push(PatternTarget::Refused(error)),
+                        QueryPoll::Ready(Err(error)) => {
+                            // Errors have no successful memo from which a
+                            // dependency guard can be minted. Keep this cold
+                            // refusal for this attempt only; never retain a
+                            // negative answer across source publication.
+                            retain_targets = false;
+                            targets.push(PatternTarget::Refused(error));
+                        },
                         QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
                     }
                 }
                 let targets: Arc<[PatternTarget]> = targets.into();
-                self.pattern_names
-                    .insert(pc.clone(), (tree.identity(), Arc::clone(&targets)));
-                targets
+                if retain_targets {
+                    self.pattern_names.insert(pc.clone(), (tree.identity(), Arc::clone(&targets), guards.clone()));
+                }
+                (targets,guards,retain_targets)
             }
         };
         // Only hydrate values already produced by the ordinary initializer
@@ -112,8 +125,9 @@ impl RunMachine {
             for (slot, target) in ready {
                 writable[slot] = target;
             }
-            self.pattern_names
-                .insert(pc.clone(), (tree.identity(), Arc::clone(&targets)));
+            if retain_targets {
+                self.pattern_names.insert(pc.clone(), (tree.identity(), Arc::clone(&targets), source_guards));
+            }
         }
         self.frame.set_pattern_names(pc, targets);
         QueryPoll::Ready(Ok(()))
@@ -185,8 +199,21 @@ impl RunMachine {
         &mut self,
         db: &mut Database,
         name: &PatternName,
-    ) -> QueryPoll<PatternTarget> {
-        self.resolve_written_pattern_name(db, name)
+    ) -> QueryPoll<(PatternTarget, Option<Arc<crate::db::memo::PreparedInputGuard>>)> {
+        let Some(node)=name.source else {return self.resolve_written_pattern_name(db,name).map(|target|(target,None));};
+        let key=QueryKey::SourcePatternName(PcKey {body:self.frame.pc().body.clone(),node:node.0,phase:0});
+        let prepared=match db.fetch(&SyntaxProvider,key.clone()) {
+            QueryPoll::Ready(Ok(value))=>value,QueryPoll::Ready(Err(error))=>return QueryPoll::Ready(Err(error)),QueryPoll::NeedInput(input)=>return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::SourcePatternName(selected)=prepared.value.as_ref() else {return QueryPoll::Ready(Err(call_fault("pattern name query variant differs")));};
+        if !prepared.cacheable || selected.name()!=name {return QueryPoll::Ready(Err(call_fault("pattern name canonical source differs")));}
+        let guard=match db.prepare_input_guard(&SyntaxProvider,&key,prepared.fingerprint) {
+            QueryPoll::Ready(Ok(guard))=>Arc::new(guard),QueryPoll::Ready(Err(error))=>return QueryPoll::Ready(Err(error)),QueryPoll::NeedInput(input)=>return QueryPoll::NeedInput(input),
+        };
+        match self.pattern_selection_target(db,selected.name(),selected.selection().clone()) {
+            QueryPoll::Ready(Ok(target))=>match guard.require_current(db) {Ok(())=>QueryPoll::Ready(Ok((target,Some(guard)))),Err(error)=>QueryPoll::Ready(Err(error))},
+            QueryPoll::Ready(Err(error))=>QueryPoll::Ready(Err(error)),QueryPoll::NeedInput(input)=>QueryPoll::NeedInput(input),
+        }
     }
     fn resolve_written_pattern_name(
         &mut self,
@@ -224,7 +251,7 @@ impl RunMachine {
             PatternSelection::Constant(identity) => {
                 QueryPoll::Ready(Ok(PatternTarget::Initializer(identity)))
             }
-            PatternSelection::Constructor { identity, variant } => {
+            PatternSelection::Constructor { identity, variant, .. } => {
                 self.pattern_constructor(db, name, identity, variant)
             }
         }

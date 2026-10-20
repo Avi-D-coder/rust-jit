@@ -70,6 +70,7 @@ pub(super) fn unclassified_binding(
                 spelling: row.name().to_owned(),
                 form: NameForm::Identifier,
                 lexical: None,
+                source: None,
             };
             match select_pattern_name(
                 &resolver,

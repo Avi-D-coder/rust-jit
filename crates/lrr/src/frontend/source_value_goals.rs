@@ -1409,7 +1409,7 @@ fn canonical_value_kind(
     context: &DeclarationContext,
 ) -> QueryPoll<CanonicalValueKind> {
     use crate::frontend::callables::entered_module::{
-        CanonicalModulePreparation, canonical_module_declaration,
+        CanonicalModulePreparation, canonical_module_declaration_in_namespace,
     };
     let id = selected.identity;
     // A nested function/initializer retains the actual lexical parent plans.
@@ -1454,8 +1454,9 @@ fn canonical_value_kind(
             ValueGoalDemand::DeclarationOwner(id),
         )));
     }
-    match polled!(canonical_module_declaration(
-        db, &goal.plan, selected, source, header, context
+    let namespace = if goal.type_namespace { Namespace::Type } else { Namespace::Value };
+    match polled!(canonical_module_declaration_in_namespace(
+        db, &goal.plan, selected, namespace, source, header, context
     )) {
         CanonicalModulePreparation::Ready(actual) => {
             QueryPoll::Ready(Ok(CanonicalValueKind::Ready(actual.definition().item_kind)))

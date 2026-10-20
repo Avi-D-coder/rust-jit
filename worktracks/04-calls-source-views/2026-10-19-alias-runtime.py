@@ -1,0 +1,12 @@
+import sys,json,hashlib,subprocess,os,time
+from pathlib import Path
+sys.path.insert(0,'tools/validation')
+from source_manifest import capture,sha,ROOT
+out=Path(sys.argv[1]);b=json.loads((out/'after-build.json').read_text());cli=Path(b['binaries']['cli']['path']);expected=b['binaries']['cli']['sha256'];m=json.loads(Path('fixtures/upstream/rustc-checkout/manifest.json').read_text());files={r['path']:r for r in m['files']}
+assert not(out/'alias-stock-results.json').exists();rows=[]
+def guard():
+ c=capture();return c['files']==b['files']and c['head']==b['head']and sha(cli)==expected
+cases=[(p,ed,[])for p in ['tests/ui/type-alias/static-method-type-alias-11047.rs','tests/ui/structs-enums/struct-aliases.rs']for ed in [2015,2018,2021,2024]]
+for i,(p,edition,stdout)in enumerate(cases):
+ fixture=ROOT/'fixtures/upstream/rustc-checkout'/p;assert sha(fixture)==files[p]['sha256']==sha(ROOT/'rustc/rust'/p);assert[l.strip()for l in fixture.read_text().splitlines()if l.startswith('//@')]==['//@ run-pass'];assert guard();context=hashlib.sha256((b['source_sha256']+p+str(edition)).encode()).hexdigest();argv=[str(cli),'--edition',str(edition),'run',str(fixture),'--runtime-capture','--capture-context',context];started=time.monotonic();r=subprocess.run(argv,capture_output=True,cwd=ROOT,env=dict(os.environ,LRR_EMBEDDED_FACADE='1'));a=out/f'alias-stock-{i}.stdout';e=out/f'alias-stock-{i}.stderr';a.write_bytes(r.stdout);e.write_bytes(r.stderr);unchanged=guard();d=json.loads(r.stdout);c=d['capture'];facts=c.get('facts',{});guest=c.get('guest',{});passed=r.returncode==0 and not r.stderr and unchanged and c.get('complete')is True and guest.get('stdout')==stdout and guest.get('stderr')==[]and facts.get('terminal')=={'kind':'completed','unit':True}and facts.get('cleanup_observed')is True
+ row={'path':p,'edition':edition,'sha256':files[p]['sha256'],'upstream_commit':m['commit'],'directives':['//@ run-pass'],'argv':argv,'environment':{'LRR_EMBEDDED_FACADE':'1'},'exit':r.returncode,'seconds':round(time.monotonic()-started,3),'inputs_unchanged':unchanged,'stdout':a.name,'stderr':e.name,'host_stderr':r.stderr.decode(),'expected_stdout_bytes':stdout,'expected_stderr_bytes':[],'capture':c,'terminal':d['terminal'],'runtime_contract_pass':passed};rows.append(row);(out/'alias-stock-results.json').write_text(json.dumps(rows,indent=2)+'\n');print(json.dumps({k:row[k]for k in ['path','edition','exit','seconds','inputs_unchanged','runtime_contract_pass']}),flush=True);assert unchanged

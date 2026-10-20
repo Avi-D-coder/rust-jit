@@ -301,7 +301,7 @@ impl FieldType {
     }
 }
 /// A selected struct or enum-variant constructor and its declared fields.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct Constructed {
     definition: Digest,
     enumeration: bool,
@@ -313,6 +313,7 @@ pub(super) struct Constructed {
     /// Actual declaration keys in Type-argument order. Region/const ordinal
     /// positions are not fabricated into Type parameter identities.
     type_parameters: Vec<crate::traits::term::ParamKey>,
+    application: Option<TyTerm>,
 }
 impl Constructed {
     pub(super) fn arity(&self) -> usize {
@@ -460,6 +461,7 @@ impl<'a> Component<'a> {
         }
         let fields = bound.fields().iter().map(FieldType::of).collect();
         QueryPoll::Ready(Ok(Some(Arc::new(Constructed {
+            application: None,
             definition: bound.identity(),
             enumeration: bound.definition().item_kind == ItemKind::Enum,
             variant: bound.variant(),
@@ -751,6 +753,7 @@ impl<'a> Component<'a> {
             fields.push(field);
         }
         QueryPoll::Ready(Ok(Some(Arc::new(Constructed {
+            application: None,
             definition: schema.definition,
             enumeration: variant.name.is_some(),
             variant: selected,
@@ -844,24 +847,6 @@ impl<'a> Component<'a> {
         else {
             return QueryPoll::Ready(Ok(None));
         };
-        if let Some(node) = name.lexical {
-            let selected = ready!(db.fetch(
-                &SyntaxProvider,
-                QueryKey::EnteredValue(entry(self.key, node))
-            ));
-            let QueryValue::EnteredValue(selected) = selected.value.as_ref() else {
-                return QueryPoll::Ready(Err(fault("constraint pattern goal variant differs")));
-            };
-            // A fresh binding, or a goal still awaiting its context.
-            let (Some(declaration), None) = (selected.declaration(), selected.pending()) else {
-                return QueryPoll::Ready(Ok(None));
-            };
-            if let Some(member) = selected.rooted() {
-                let (identity, local) = (declaration.identity(), declaration.owner().is_some());
-                return self.rooted_constructor(db, identity, member, local);
-            }
-            return self.constructor_definition(db, declaration.identity());
-        }
         let Some(environment) = ready!(self.environment_parts(db)) else {
             return QueryPoll::Ready(Ok(None));
         };
@@ -871,12 +856,12 @@ impl<'a> Component<'a> {
                 Ok(resolver) => resolver,
                 Err(error) => return QueryPoll::Ready(Err(error)),
             };
-        let selected = match crate::frontend::pattern_names::select_pattern_name(
+        let selected = match crate::frontend::pattern_names::select_source_pattern_name(
             &resolver,
             environment.names(),
             &sources,
             db,
-            self.key.body.definition,
+            self.key,
             name,
         ) {
             QueryPoll::Ready(Ok((_, selected))) => selected,
@@ -888,8 +873,16 @@ impl<'a> Component<'a> {
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
         match selected {
-            crate::frontend::pattern_names::PatternSelection::Constructor { identity, .. } => {
-                self.constructor_definition(db, identity)
+            crate::frontend::pattern_names::PatternSelection::Constructor { identity, variant, application } => {
+                let selected=if let Some(variant)=variant {
+                    let local=db.input(&InputKey::LocalDeclarationOwner(variant.enumeration)).is_some();
+                    self.rooted_constructor(db,variant.enumeration,&variant.name,local)
+                } else {self.constructor_definition(db,identity)};
+                let result=ready!(selected);
+                QueryPoll::Ready(Ok(result.map(|mut constructed| {
+                    if application.is_some() {Arc::make_mut(&mut constructed).application=application;}
+                    constructed
+                })))
             }
             _ => QueryPoll::Ready(Ok(None)),
         }
@@ -1509,6 +1502,9 @@ impl<'a> Component<'a> {
             self.defer(root, ConstraintDemand::Binding);
             return QueryPoll::Ready(Ok(()));
         };
+        if let Some(application)=&constructed.application {
+            ready!(self.constrain_term(db,root,application,ConstraintDemand::SelectedDeclaration));
+        }
         // The variable is one of the matched Type's own type arguments: every
         // field pattern whose declared Type names that parameter matches it.
         if let Step::TypeArgument(parameter) = first {

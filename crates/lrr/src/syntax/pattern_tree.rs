@@ -140,6 +140,20 @@ pub(crate) struct PatternName {
     /// indexed pattern node (block items shadow module items), never by a
     /// module-level lookup of its spelling.
     pub(crate) lexical: Option<NodeId>,
+    /// Actual path-pattern owner; arguments stay at indexed source locations.
+    pub(crate) source: Option<NodeId>,
+}
+
+impl PatternName {
+    pub(crate) fn encode(&self, e: &mut StableEncoder) {
+        e.string(&self.spelling);
+        match &self.form {
+            NameForm::Identifier => e.u8(0), NameForm::Path => e.u8(1), NameForm::Tuple => e.u8(2),
+            NameForm::Record(names) => { e.u8(3); e.sequence(names, |e,name| e.string(name)); }
+        }
+        e.option(&self.lexical, |e,node| e.u32(node.0));
+        e.option(&self.source, |e,node| e.u32(node.0));
+    }
 }
 
 /// The written shape of a nominal pattern.
@@ -658,6 +672,7 @@ impl Builder<'_> {
             spelling: spelling.to_string(),
             form,
             lexical: None,
+            source: None,
         });
         Ok(slot)
     }
@@ -679,6 +694,7 @@ impl Builder<'_> {
         match self.parsed.written_pattern_path(path, self.index.cfg())? {
             super::value_paths::WrittenValuePath::Spelled(spelling) => {
                 let slot = self.slot(&spelling, form)?;
+                self.names[slot as usize].source = Some(self.indexed(owner)?);
                 if lexical {
                     let occurrence = self.indexed(owner)?;
                     self.names[slot as usize].lexical = Some(occurrence);
@@ -971,10 +987,11 @@ impl PatternTree {
         };
         let id = builder.indexed(pattern)?;
         let root = builder.build(pattern, 0)?;
-        let mut encoder = StableEncoder::new("lrr/v6/pattern-tree");
+        let mut encoder = StableEncoder::new("lrr/v7/pattern-tree");
         encoder.record(index.body());
         encoder.u32(id.0);
         root.encode(&mut encoder);
+        encoder.sequence(&builder.names, |e, name| name.encode(e));
         let bytes = std::mem::size_of::<Self>()
             .saturating_add(root.heap_bytes())
             .saturating_add(builder.names.iter().fold(0usize, |bytes, name| {
@@ -1019,10 +1036,11 @@ impl PatternTree {
                 rest: None,
             },
         };
-        let mut encoder = StableEncoder::new("lrr/v2/for-pattern-tree");
+        let mut encoder = StableEncoder::new("lrr/v3/for-pattern-tree");
         encoder.record(index.body());
         encoder.u32(id.0);
         root.encode(&mut encoder);
+        encoder.sequence(&builder.names, |e, name| name.encode(e));
         let bytes = std::mem::size_of::<Self>()
             .saturating_add(root.heap_bytes())
             .saturating_add(builder.names.iter().fold(0usize, |bytes, name| {
@@ -1050,7 +1068,7 @@ impl PartialEq for PatternTree {
 }
 impl Eq for PatternTree {}
 impl StableEncode for PatternTree {
-    const DOMAIN: &'static str = "lrr/v7/pattern-tree-identity";
+    const DOMAIN: &'static str = "lrr/v8/pattern-tree-identity";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.identity);
     }

@@ -413,6 +413,7 @@ pub struct RunMachine {
         (
             crate::core::digest::Digest,
             Arc<[crate::vm::pattern::matcher::PatternTarget]>,
+            Vec<Arc<crate::db::memo::PreparedInputGuard>>,
         ),
     >,
     /// The entered lexical selection of each single-name `ValuePath` PC a

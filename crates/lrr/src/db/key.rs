@@ -158,6 +158,7 @@ pub enum QueryKey {
     NominalMember(Box<crate::frontend::nominal_member_goals::NominalMemberKey>),
     PreparedExplicitTypeArguments(crate::source::manifest::PcKey),
     EnteredCall(crate::source::manifest::PcKey),
+    SourcePatternName(crate::source::manifest::PcKey),
     DeclaredReturnGoal(Digest),
     PreparedReturnPlan(Digest),
     EnteredType(crate::source::manifest::PcKey),
@@ -237,6 +238,7 @@ impl QueryKey {
             | Self::InitializerOwnerTemplate(_)
             | Self::AssociatedItemQualifier(_)
             | Self::PreparedExplicitTypeArguments(_)
+            | Self::SourcePatternName(_)
             | Self::EnteredCall(_)
             | Self::PreparedReturnPlan(_)
             | Self::DeclaredReturnGoal(_)
@@ -289,6 +291,7 @@ impl QueryKey {
             Self::PreparedBodySyntax(_) => "PreparedBodySyntax",
             Self::PreparedExplicitTypeArguments(_) => "PreparedExplicitTypeArguments",
             Self::EnteredCall(_) => "EnteredCall",
+            Self::SourcePatternName(_) => "SourcePatternName",
             Self::DeclaredReturnGoal(_) => "DeclaredReturnGoal",
             Self::PreparedReturnPlan(_) => "PreparedReturnPlan",
             Self::EnteredType(_) => "EnteredType",
@@ -340,6 +343,7 @@ impl StableEncode for QueryKey {
             Self::ImplTraitIdentity(key) => { e.u32(65); e.record(key.as_ref()); }
             Self::SolverConfiguration(key) => { e.u32(67); e.record(key.as_ref()); }
             Self::ImplSourceTypes(key) => { e.u32(68); e.record(key.as_ref()); }
+            Self::SourcePatternName(key) => { e.u32(72); e.record(key); }
             Self::ImplSourcePredicates(key) => { e.u32(71); e.record(key.as_ref()); }
             Self::ImplTraitCatalog(key) => { e.u32(66); e.record(key); }
             Self::ImplPredicates(key) => { e.u32(59); e.record(key.as_ref()); }

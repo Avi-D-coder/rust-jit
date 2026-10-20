@@ -375,7 +375,7 @@ impl Packet {
                 | QueryKey::AssociatedItemQualifier(_)
                 | QueryKey::AssociatedEquations(_)
                 | QueryKey::NominalMember(_)
-                | QueryKey::BoundRecordConstructor(_)
+                | QueryKey::BoundRecordConstructor(_) | QueryKey::SourcePatternName(_)
                 | QueryKey::QualifiedBodyType(_)
                 | QueryKey::Constant(_) => {
                     return Err(fault(

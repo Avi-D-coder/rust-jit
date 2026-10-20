@@ -200,9 +200,26 @@ pub(crate) fn canonical_module_declaration(
     header: &HeaderRecipe,
     context: &DeclarationContext,
 ) -> QueryPoll<CanonicalModulePreparation> {
+    canonical_module_declaration_in_namespace(
+        db, parent, selected, Namespace::Value, source, header, context,
+    )
+}
+
+/// Canonical metadata for the namespace selected by the ordinary source goal.
+/// Callable admission uses the Value-only wrapper above. Type occurrences
+/// use the same source/header/name receipts without acquiring call authority.
+pub(crate) fn canonical_module_declaration_in_namespace(
+    db: &mut Database,
+    parent: &PreparedSourceLocalPlan,
+    selected: &NameDefinition,
+    namespace: Namespace,
+    source: &ParseKey,
+    header: &HeaderRecipe,
+    context: &DeclarationContext,
+) -> QueryPoll<CanonicalModulePreparation> {
     ready!(parent.require_current(db));
     let id = selected.identity;
-    if selected.namespace != Namespace::Value
+    if selected.namespace != namespace
         || context.scope.owner.is_some()
         || selected.defining_unit != context.scope.crate_key
         || header.profile != source.profile
@@ -272,7 +289,7 @@ pub(crate) fn canonical_module_declaration(
             .macros()
             .source_environment()
             .names()
-            .declared_item_name(Namespace::Value, id)
+            .declared_item_name(namespace, id)
         else {
             return pending(ValueGoalDemand::DeclarationOccurrence(id));
         };
@@ -348,17 +365,18 @@ pub(crate) fn canonical_module_declaration(
             return pending(ValueGoalDemand::DeclarationOccurrence(id));
         };
         checked!(definition_bytes(&item.def_key));
-        let value_member = outline.scopes.get(&context.scope).is_some_and(|scope| {
+        let namespace_member = outline.scopes.get(&context.scope).is_some_and(|scope| {
             scope
                 .candidates
-                .get(&(Namespace::Value, item.def_key.declared_name.clone()))
+                .get(&(namespace, item.def_key.declared_name.clone()))
                 .is_some_and(|candidates| candidates.contains(&id))
         });
         if rows.next().is_some()
             || item.scope != context.scope
             || item.header.profile.edition != selected.definition_edition
-            || !(item.def_key.namespace == Namespace::Value
-                || item.def_key.item_kind == ItemKind::Struct && value_member)
+            || !(item.def_key.namespace == namespace
+                || namespace == Namespace::Value
+                    && item.def_key.item_kind == ItemKind::Struct && namespace_member)
         {
             return QueryPoll::Ready(Err(fault("selected module canonical scope differs")));
         }

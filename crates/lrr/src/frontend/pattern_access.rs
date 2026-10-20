@@ -437,7 +437,7 @@ impl Walker<'_> {
                     return QueryPoll::Ready(Ok(()));
                 }
                 let selected = ready!(self.select(db, tree, *slot));
-                let PatternSelection::Constructor { identity, variant } = selected else {
+                let PatternSelection::Constructor { identity, variant, .. } = selected else {
                     return QueryPoll::Ready(Err(fault("binding constructor source absent")));
                 };
                 let definition = variant

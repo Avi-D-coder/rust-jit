@@ -1694,7 +1694,7 @@
       "owner": "/root",
       "kind": "local_agent",
       "status": "active",
-      "scope": "V398-V401 HELD M018/T040 ordinary record alias applications. AliasContext now enters the same selected-definition finalizer with actual supplied source arguments; retained target AST plus existing mixed Substitution maps alias slots to nominal target slots. Required argument binding precedes target walking. Record binding returns normalized target arguments, retained in existing ExplicitType forms; source record constraints and unchanged ordinary VM consume that same vector. No name rewriting, new inference algorithm or macro-specific semantics. V3981compile error preserved; V399 real source bindings reached but host trace assumption fails. V4005/7controls pass; existing Pair<T> source constraint regression exposes treating empty args as a self equation. V401 preserves absent-argument behavior and allows only cached owning BodyStructure metadata reads in the source control. Final both macOS1.99.0 builds and7/7selected controls pass with exact source/HEAD/test/CLI guards:24actual record bindings/12edition-origin worlds,12explicit inferred-alias holds, ordinary installation/revocation, nominal numeric constraints, explicit constructor contexts, retained alias lifetimes and unchanged local-record main in4editions. All8targeted stock alias runtime rows still fail: struct-aliases advances from constructor refusal after2VMdispatches at parent to shared S2 pattern-name refusal after21dispatches in4editions; static-method alias retains lexical-callee guard9dispatches/1call. Failed captures incomplete/no observed cleanup. No new distinct stock pass/refreshed suite total. Generic/partial alias inference, actual pattern argument/source identity and applications, rooted call recipe/Self context, solver/member/VM migration and other legacy routes remain open. No task/milestone/interpreter/JIT/Linux/full-fixture/diagnostic/tooling/performance closure.",
+      "scope": "V402-V405 HELD M018/T043 common source pattern-name/alias applications. Actual path-pattern nodes and generic Type sites join SourceConstraints and memoized SourcePatternName(tag72); matching, capture typing and source constraints share the same lexical/module selection and alias finalizer. The duplicate constraint lexical branch is removed. Canonical module metadata now validates the actual selected Type/Value namespace; callable admission keeps its Value-only wrapper. Runtime successful name targets retain relevant query guards; unguarded errors stay attempt-local. No macro-specific matcher, parser, type guess or new solving algorithm. V4024compile errors, V4039/14controls and V40414/15controls are retained failures, not accepted regressions. V405 both macOS1.99.0 builds and15/15selected controls pass under exact source/HEAD/binary guards. The new upstream-driven source control verifies24actual alias pattern target applications in12edition-origin worlds,12explicit inference holds, memo reuse and source-withdrawal guard revocation; related ordinary constructor/constraint/cold/guard/exact-once controls pass. Unchanged struct-aliases.rs now runs its first S2 construction/match/assertions and reaches247VMdispatches in all4editions(parent21), then fails at inferred S4 constructor arguments. Static-method aliases remain at9dispatches/1call and lexical-callee hold. All8targeted runtime rows still fail with incomplete captures/no observed cleanup; no new distinct stock pass or refreshed suite total. Inferred/partial aliases, enum-alias variants, pending-name result caching, rooted call context, upstream solver source clients/root/member/VM integration and other legacy routes remain open. No task/milestone/interpreter/JIT/Linux/full-fixture/diagnostic/tooling/performance closure.",
       "paths": [
         "vendor/rustc-trait-solver/",
         "vendor/rustc-trait-solver.files.json",
@@ -1929,12 +1929,18 @@
         "worktracks/04-calls-source-views/2026-10-19-record-alias-applications.md",
         "worktracks/04-calls-source-views/2026-10-19-record-alias-review.md",
         "worktracks/04-calls-source-views/2026-10-19-record-alias-controls.json",
-        "worktracks/04-calls-source-views/2026-10-19-record-alias-final-controls.json"
+        "worktracks/04-calls-source-views/2026-10-19-record-alias-final-controls.json",
+        "crates/lrr/src/frontend/entered_module_callables.rs",
+        "worktracks/evidence/2026-10-19-v402-v405-pattern-alias-applications.json",
+        "worktracks/04-calls-source-views/2026-10-19-pattern-alias-applications.md",
+        "worktracks/04-calls-source-views/2026-10-19-pattern-alias-review.md",
+        "worktracks/04-calls-source-views/2026-10-19-pattern-alias-controls.json",
+        "worktracks/04-calls-source-views/2026-10-19-alias-runtime.py"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-20T00:56:11.446746+00:00",
-      "review_after": "2026-10-20T08:56:11.540125+00:00",
+      "updated_at": "2026-10-20T01:20:42.766884+00:00",
+      "review_after": "2026-10-20T09:20:42.766884+00:00",
       "shared_interfaces": [
         {
           "claim": "LOCAL-037",
@@ -1950,7 +1956,10 @@
             "crates/lrr/src/syntax/signatures.rs",
             "crates/lrr/src/frontend/signature_subst.rs",
             "crates/lrr/src/cli/generic_boundary_tests.rs",
-            "crates/lrr/src/frontend/declaration_field_types.rs"
+            "crates/lrr/src/frontend/declaration_field_types.rs",
+            "crates/lrr/src/frontend/binding_constraint_patterns.rs",
+            "crates/lrr/src/frontend/pattern_access.rs",
+            "crates/lrr/src/syntax/source_constraints.rs"
           ],
           "scope": "Same solo owner extends shared declaration/const-Type source capture and actual parameter transport; no concurrent owner or transfer."
         },
@@ -1966,7 +1975,12 @@
             "crates/lrr/src/db/product_retention.rs",
             "crates/lrr/src/db/provider.rs",
             "crates/lrr/src/syntax/thunks.rs",
-            "crates/lrr/src/vm/frame.rs"
+            "crates/lrr/src/vm/frame.rs",
+            "crates/lrr/src/engine/run.rs",
+            "crates/lrr/src/engine/run_pattern_names.rs",
+            "crates/lrr/src/engine/run_pattern_tests.rs",
+            "crates/lrr/src/frontend/source_value_goals.rs",
+            "crates/lrr/src/syntax/pattern_tree.rs"
           ],
           "scope": "Same implementing owner uses the existing reservation for the V281 catalog/header Type transport slice; no parallel owner or transfer."
         },
@@ -1985,7 +1999,8 @@
             "crates/lrr/src/frontend/types.rs",
             "crates/lrr/src/frontend/constructors.rs",
             "crates/lrr/src/frontend/prepared_constructors.rs",
-            "crates/lrr/src/frontend/binding_constraint_nominal.rs"
+            "crates/lrr/src/frontend/binding_constraint_nominal.rs",
+            "crates/lrr/src/cli/mod.rs"
           ],
           "scope": "Same solo /root uses the existing reservation for actual source generic metadata and common trait default arguments; one path owner, no concurrent agent or transfer."
         },
@@ -2032,9 +2047,17 @@
             "Cargo.lock"
           ],
           "scope": "Same solo root records existing locked ena/indexmap/rustc-hash direct inference-client dependencies; no new dependency versions or concurrent owner."
+        },
+        {
+          "claim": "LOCAL-045",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/frontend/pattern_names.rs"
+          ],
+          "scope": "Same solo root extends the common source-pattern declaration/constraint receipt; no parallel owner or transfer."
         }
       ]
     }
   ],
-  "updated_at": "2026-10-20T00:56:11.446746+00:00"
+  "updated_at": "2026-10-20T01:20:42.766884+00:00"
 }

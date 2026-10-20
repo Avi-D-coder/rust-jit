@@ -49,6 +49,17 @@ enum StandaloneOutcome {
     Captured(Box<runtime_capture::Packet>),
 }
 #[cfg(test)]
+pub(crate) fn run_completed_source_control(
+    label: &str,
+    source: &str,
+    edition: u16,
+) -> Result<crate::engine::run::RunReport, Diagnostic> {
+    match crate_graph::format_trait_facade_tests::run(label, source, edition)? {
+        StandaloneOutcome::Completed(report) => Ok(report),
+        _ => Err(Diagnostic::new("LRR-E-TEST-CONTROL", "source control did not complete".into())),
+    }
+}
+#[cfg(test)]
 fn capture_standalone(
     path: &std::path::Path,
     test_mode: bool,

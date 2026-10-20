@@ -3138,3 +3138,51 @@ fn unchanged_record_aliases_retain_actual_target_arguments_all_editions_and_orig
     }
     assert_eq!(records,24);
 }
+
+#[test]
+fn unchanged_pattern_aliases_share_actual_source_selection_all_editions_and_origins() {
+    use crate::{
+        db::{dependency::{InputKey,InputValue},key::QueryKey,poll::QueryPoll,provider::SyntaxProvider,value::QueryValue},
+        frontend::pattern_names::PatternSelection,
+        ir::pc::Phase,source::manifest::Namespace,syntax::imports::ImportSegment,
+        traits::term::{GenericArg,TyTerm},
+    };
+    use ra_ap_syntax::{AstNode,ast};
+    fn ready<T:std::fmt::Debug>(value:QueryPoll<T>)->T {match value {QueryPoll::Ready(Ok(value))=>value,other=>panic!("actual pattern source: {other:?}")}}
+    let original=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout/tests/ui/structs-enums/struct-aliases.rs");
+    let text=std::fs::read_to_string(&original).unwrap();let at=text.find("\nuse std::mem").unwrap();let (prefix,items)=text.split_at(at);
+    let mut selected_count=0;
+    for edition in [2015,2018,2021,2024] {
+        let mut paths=vec![original.clone()];
+        for wrapper in [false,true] {let setup=if wrapper{"macro_rules! outer {($($t:tt)*)=>{emit!{$($t)*}}}"}else{""};let invoke=if wrapper{"outer"}else{"emit"};paths.push(temporary_source(&format!("pattern-alias-{edition}-{wrapper}"),&format!("{prefix}\nmacro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} {setup} {invoke}!{{{items}}}")));}
+        for (origin,path) in paths.iter().enumerate() {
+            let (mut db,discovery,scope)=configured_impl_catalog_discovery(path,edition).unwrap();discovery.publish(&mut db).unwrap();
+            let header=ready(db.fetch(&SyntaxProvider,QueryKey::PreparedScopeImplHeaders(discovery.key().clone()))).value;let QueryValue::PreparedScopeImplHeaders(header)=header.as_ref()else{panic!()};
+            let environment=header.inventory_root().environment().unwrap();let sources=environment.sources().iter().collect::<Vec<_>>();
+            let lookup=|namespace,name:&str| {let found=environment.names().lookup_source_path(namespace,&[ImportSegment::Name(name.into())],false,&scope,edition).unwrap();let crate::frontend::names::NameLookup::Defined(found)=found else {panic!("actual source lookup {name}: {found:?}")};found.identity};
+            let main=lookup(Namespace::Value,"main");let target=[lookup(Namespace::Type,"S"),lookup(Namespace::Type,"S3")];
+            let body=db.input(&InputKey::DefinitionBody(main)).unwrap();let InputValue::DefinitionBody(body)=body.as_ref()else{panic!()};let plan=ready(db.prepare_source_local_plan(&discovery,&sources,&body.key()));
+            let owner=plan.context().source();let nodes=owner.index().nodes().iter().filter(|node|node.role==crate::syntax::body_index::NodeRole::Pattern)
+                .filter(|node|owner.parsed().entered_node_syntax(owner.body(),owner.index(),node.id).unwrap().and_then(ast::RecordPat::cast).is_some()).map(|node|node.id).collect::<Vec<_>>();
+            assert_eq!(nodes.len(),3);db.trace.detailed=true;let start=db.trace.events.len();let mut guards=Vec::new();
+            for (ordinal,node) in nodes.iter().enumerate() {
+                let key=QueryKey::SourcePatternName(owner.index().pc(*node,Phase::Entry).unwrap());let result=db.fetch(&SyntaxProvider,key.clone());
+                if ordinal==2 {assert!(matches!(result,QueryPoll::Ready(Err(ref error))if error.code=="LRR-E-UNSUPPORTED"&&error.message.contains("source target application")),"unsupplied alias U retains its explicit inference hold: {result:?}");continue;}
+                let fetched=ready(result);assert!(fetched.cacheable);let value=&fetched.value;let QueryValue::SourcePatternName(selected)=value.as_ref()else{panic!()};
+                assert_eq!(selected.name().source,Some(*node));let PatternSelection::Constructor {identity,variant,application:Some(application)}=selected.selection()else{panic!("actual constructor selection: {selected:?}")};
+                assert_eq!(*identity,target[ordinal]);assert!(variant.is_none());let arguments=if ordinal==0 {vec![]}else{vec![GenericArg::Type(TyTerm::Primitive(crate::ir::op::PrimitiveType::U8)),GenericArg::Type(TyTerm::Primitive(crate::ir::op::PrimitiveType::Char))]};assert_eq!(*application,TyTerm::Nominal(target[ordinal],arguments));
+                let guard=ready(db.prepare_input_guard(&SyntaxProvider,&key,fetched.fingerprint));guard.require_current(&db).unwrap();guards.push(guard);
+                let second=ready(db.fetch(&SyntaxProvider,key));assert!(std::sync::Arc::ptr_eq(value,&second.value));selected_count+=1;
+            }
+            let unwanted=db.trace.events[start..].iter().filter(|event|match &event.key {
+                QueryKey::BodyStructure(body)=>body!=owner.index().body() || event.action==crate::db::trace::Action::ProviderRun,
+                QueryKey::FunctionSignature(_)|QueryKey::Thunk(_)|QueryKey::PatternPlan(_)|QueryKey::BindingConstraints(_)=>true,
+                _=>false,
+            }).collect::<Vec<_>>();assert!(unwanted.is_empty(),"pattern name selection must stay metadata-only: {unwanted:?}");
+            db.publish_inputs(std::collections::BTreeMap::new()).unwrap();for guard in guards {assert!(guard.require_current(&db).is_err());}
+            assert!(!matches!(db.fetch(&SyntaxProvider,QueryKey::SourcePatternName(owner.index().pc(nodes[0],Phase::Entry).unwrap())),QueryPoll::Ready(Ok(_))));
+            eprintln!("actual pattern alias targets edition{edition},origin{origin}:2shared selections;1inference hold;memo reused;source withdrawal revokes guards");
+        }
+    }
+    assert_eq!(selected_count,24);
+}
