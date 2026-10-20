@@ -1,0 +1,8 @@
+{
+  "controls": [
+    "cli::crate_graph::mem_layout_tests::upstream_union_memory_uses_shared_views_all_editions_and_origins",
+    "cli::crate_graph::pointer_tests::pointer_casts_in_user_macros_and_assert_arguments",
+    "runtime::cell::layouts::image_storage_tests::image_windows_fail_closed_and_transmute_consumes_its_owning_graph",
+    "cli::crate_graph::box_tests::box_unsizes_and_deref_coerces_at_coercion_sites_and_formats_by_borrow"
+  ]
+}

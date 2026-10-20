@@ -239,11 +239,11 @@ impl GuestStore {
         }
     }
 
-    fn layouts_of(&self, members: &[TypeId]) -> Result<Vec<Layout>, Diagnostic> {
+    pub(super) fn layouts_of(&self, members: &[TypeId]) -> Result<Vec<Layout>, Diagnostic> {
         members.iter().map(|member| self.layout_of(*member)).collect()
     }
 
-    fn declaration_of(&self, ty: TypeId) -> Result<(Arc<DeclarationFacts>, Option<Arc<Vec<Vec<TypeId>>>>), Diagnostic> {
+    pub(super) fn declaration_of(&self, ty: TypeId) -> Result<(Arc<DeclarationFacts>, Option<Arc<Vec<Vec<TypeId>>>>), Diagnostic> {
         let TypeKey::Nominal { identity, .. } = self.types.descriptor(ty)?.key.as_ref() else {
             return Err(invalid());
         };
@@ -434,7 +434,7 @@ impl GuestStore {
 
     /// The value a cell holds, without moving or copying it.
     pub(crate) fn live_value(&self, cell: CellId) -> Result<ValueRepr, Diagnostic> {
-        match self.cells.get(cell)?.state {
+        match self.state(cell)? {
             CellState::Live(value) => Ok(value),
             _ => Err(lease_fault()),
         }
@@ -610,7 +610,7 @@ impl GuestStore {
     }
 
     /// Whether `ty` has a byte image (see the section comment).
-    fn plain_type(&self, ty: TypeId) -> bool {
+    pub(super) fn plain_type(&self, ty: TypeId) -> bool {
         if let Ok(scalar) = primitive(ty) {
             return scalar != Primitive::Str;
         }
@@ -636,7 +636,7 @@ impl GuestStore {
 
     /// Field contracts and placement from the same prepared declaration used
     /// by size/alignment queries. This grants no source constructor or Copy fact.
-    fn nominal_image_fields(&self, ty: TypeId) -> Result<Option<(Vec<TypeId>, Vec<u64>)>, Diagnostic> {
+    pub(super) fn nominal_image_fields(&self, ty: TypeId) -> Result<Option<(Vec<TypeId>, Vec<u64>)>, Diagnostic> {
         let (declaration, instance) = self.declaration_of(ty)?;
         if declaration.kind != NominalKind::Struct
             || matches!(declaration.library.map(|library| library.shape),
@@ -652,7 +652,7 @@ impl GuestStore {
         Ok(Some((members.clone(), placement.offsets)))
     }
 
-    fn image_range(offset: u64, length: usize) -> Result<std::ops::Range<usize>, Diagnostic> {
+    pub(super) fn image_range(offset: u64, length: usize) -> Result<std::ops::Range<usize>, Diagnostic> {
         let start = usize::try_from(offset).map_err(|_| invalid())?;
         let end = start.checked_add(length).ok_or_else(invalid)?;
         Ok(start..end)
@@ -664,7 +664,7 @@ impl GuestStore {
     }
 
     /// Write the byte image of `value` (of plain type `ty`) at `offset`.
-    fn write_plain_image(
+    pub(super) fn write_plain_image(
         &mut self,
         value: ValueRepr,
         ty: TypeId,
@@ -738,29 +738,16 @@ impl GuestStore {
         Ok(())
     }
 
-    /// The value of plain type `ty` whose byte image starts at `offset`.
-    fn read_plain_image(
-        &mut self,
-        ty: TypeId,
-        offset: u64,
-        image: &[u8],
-    ) -> Result<TicketId, Diagnostic> {
-        let length = usize::try_from(self.layout_of(ty)?.size).map_err(|_| invalid())?;
-        image.get(Self::image_range(offset, length)?).ok_or_else(invalid)?;
-        let take = |count: usize| -> Result<[u8; 8], Diagnostic> {
-            let mut bytes = [0u8; 8];
-            let source = image.get(Self::image_range(offset, count)?).ok_or_else(invalid)?;
-            bytes.get_mut(..count).ok_or_else(invalid)?.copy_from_slice(source);
-            Ok(bytes)
-        };
-        if matches!(ty.0, 17 | 18) {
-            let start = usize::try_from(offset).map_err(|_| invalid())?;
-            let end = start.checked_add(16).ok_or_else(invalid)?;
-            let bytes: [u8; 16] = image.get(start..end).ok_or_else(invalid)?
-                .try_into().map_err(|_| invalid())?;
-            let value = self.wide_integer_value(ty, u128::from_le_bytes(bytes))?;
-            return self.ticket(value);
-        }
+    fn image_word(image: &[u8], offset: u64, count: usize) -> Result<[u8; 8], Diagnostic> {
+        let mut bytes = [0u8; 8];
+        let source = image.get(Self::image_range(offset, count)?).ok_or_else(invalid)?;
+        bytes.get_mut(..count).ok_or_else(invalid)?.copy_from_slice(source);
+        Ok(bytes)
+    }
+    /// Pure scalar decoding shared by owning reconstruction and live memory views.
+    pub(super) fn image_scalar(&self, ty: TypeId, offset: u64, image: &[u8]) -> Result<Option<ValueRepr>, Diagnostic> {
+        if matches!(ty.0, 17 | 18) { return Ok(None); }
+        let take = |count| Self::image_word(image, offset, count);
         if let Ok(scalar) = primitive(ty) {
             let value = match scalar {
                 Primitive::Unit => ValueRepr::unit(),
@@ -795,12 +782,35 @@ impl GuestStore {
                 }
                 Primitive::Str => return Err(invalid()),
             };
+            return Ok(Some(value));
+        }
+        Ok(None)
+    }
+
+    /// The value of plain type `ty` whose byte image starts at `offset`.
+    pub(super) fn read_plain_image(
+        &mut self,
+        ty: TypeId,
+        offset: u64,
+        image: &[u8],
+    ) -> Result<TicketId, Diagnostic> {
+        let length = usize::try_from(self.layout_of(ty)?.size).map_err(|_| invalid())?;
+        image.get(Self::image_range(offset, length)?).ok_or_else(invalid)?;
+        if let Some(value) = self.image_scalar(ty, offset, image)? {
+            return self.ticket(value);
+        }
+        if matches!(ty.0, 17 | 18) {
+            let start = usize::try_from(offset).map_err(|_| invalid())?;
+            let end = start.checked_add(16).ok_or_else(invalid)?;
+            let bytes: [u8; 16] = image.get(start..end).ok_or_else(invalid)?
+                .try_into().map_err(|_| invalid())?;
+            let value = self.wide_integer_value(ty, u128::from_le_bytes(bytes))?;
             return self.ticket(value);
         }
         let key = Arc::clone(&self.types.descriptor(ty)?.key);
         match key.as_ref() {
             TypeKey::RawPtr { .. } => {
-                let address = u64::from_le_bytes(take(8)?);
+                let address = u64::from_le_bytes(Self::image_word(image, offset, 8)?);
                 let integer = ValueRepr::unsigned(TypeId(13), address)?;
                 let pointer = self.pointer_cast(integer, ty)?;
                 self.ticket(pointer)
@@ -888,6 +898,10 @@ impl GuestStore {
         let result = self.read_plain_image(destination, 0, &image)?;
         // Transmute consumes bits without calling the source's Drop. Reuse the
         // physical owning-field transfer kernel, never leak an input ticket.
+        self.consume_image_source(source_ticket)?;
+        Ok(result)
+    }
+    pub(super) fn consume_image_source(&mut self, source_ticket: TicketId) -> Result<(), Diagnostic> {
         let mut sources = vec![source_ticket];
         while let Some(ticket) = sources.last().copied() {
             if self.peek_ticket(ticket)?.kind == 8 {
@@ -900,8 +914,9 @@ impl GuestStore {
             self.discard(ticket)?;
             sources.pop();
         }
-        Ok(result)
+        Ok(())
     }
+
 }
 
 #[cfg(test)]

@@ -372,7 +372,10 @@ impl GuestStore {
         let Ok(record) = self.cells.get(cell) else {
             return (8, 8);
         };
-        let CellState::Live(value) = record.state else {
+        if let CellState::View(view) = record.state {
+            return self.layout_of(view.ty).map(|layout|(layout.size,layout.align)).unwrap_or((0,1));
+        }
+        let Ok(CellState::Live(value)) = self.state(cell) else {
             return match record.declared {
                 StorageContract::Exact(ty) => self.type_layout(ty),
                 _ => (8, 8),
@@ -441,7 +444,7 @@ impl GuestStore {
         let Ok(record) = self.cells.get(cell) else {
             return Vec::new();
         };
-        let CellState::Live(value) = record.state else {
+        let Ok(CellState::Live(value)) = self.state(cell) else {
             return Vec::new();
         };
         if value.kind != 8 {
@@ -472,12 +475,15 @@ impl GuestStore {
                     .map(|(index, cell)| (*cell, (index as u64).saturating_mul(stride)))
                     .collect()
             }
+            Ok(TypeKey::Nominal { definition, .. }) if definition.item_kind == crate::source::manifest::ItemKind::Union => {
+                storage.fields.iter().copied().map(|cell|(cell,0)).collect()
+            }
             _ => {
                 // The same placement the layout module gives a struct, tuple
                 // or enum variant (a one-byte tag prefix for the latter).
                 let fields =
                     plain_layouts(storage.fields.iter().map(|f| self.cell_layout(*f)));
-                let kind = if storage.variant.is_some() {
+                let kind = if matches!(self.types.descriptor(TypeId(value.type_id)).map(|d|d.key.as_ref()), Ok(TypeKey::Nominal {definition,..}) if definition.item_kind==crate::source::manifest::ItemKind::Enum) {
                     algorithm::StructKind::Prefixed { size: 1, align: 1 }
                 } else {
                     algorithm::StructKind::Sized

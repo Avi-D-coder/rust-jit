@@ -217,7 +217,7 @@ pub(crate) fn prepare(
             }
         }
         NominalMemberSelection::Named => {
-            if names.definition().item_kind != ItemKind::Struct {
+            if !matches!(names.definition().item_kind, ItemKind::Struct | ItemKind::Union) {
                 return QueryPoll::Ready(Err(pending()));
             }
             let source = owner.context().source();

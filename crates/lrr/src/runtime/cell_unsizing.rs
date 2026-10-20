@@ -13,11 +13,13 @@ use super::*;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) struct UnsizeCoercion {
     access: Access,
-    slice: TypeId,
+    target: TypeId,
     len: u32,
     /// A pointer coercion (`&T` to `*const T`, fn item to fn pointer;
     /// E-R5-008) rather than an unsizing of an array.
     pointer: bool,
+    /// A formed reference projected through builtin Box contents.
+    box_reference: bool,
 }
 
 impl GuestStore {
@@ -32,9 +34,10 @@ impl GuestStore {
         if (value.kind == 9 || value.kind == 8) && self.pointer_coercion(value, expected)? {
             return Ok(Some(UnsizeCoercion {
                 access: Access::Shared,
-                slice: expected,
+                target: expected,
                 len: 0,
                 pointer: true,
+                box_reference: false,
             }));
         }
         // `Box<[T; N]>` -> `Box<[T]>` (see `cell_boxes.rs`).
@@ -43,9 +46,10 @@ impl GuestStore {
                 .box_unsizing(value, expected)?
                 .map(|(slice, len)| UnsizeCoercion {
                     access: Access::Shared,
-                    slice,
+                    target: slice,
                     len,
                     pointer: false,
+                    box_reference: false,
                 }));
         }
         if value.kind != 9 {
@@ -67,6 +71,17 @@ impl GuestStore {
         };
         if *to_mutable && !*from_mutable {
             return Ok(None);
+        }
+        let access = if *to_mutable { Access::Mutable } else { Access::Shared };
+        if self.box_contents_type(*array)?.is_some()
+            && self.box_reference_place(value, *slice, access)?.is_some() {
+            return Ok(Some(UnsizeCoercion {
+                access,
+                target: *slice,
+                len: 0,
+                pointer: false,
+                box_reference: true,
+            }));
         }
         let TypeKey::Slice { element } = self.types.descriptor(*slice)?.key.as_ref() else {
             return Ok(None);
@@ -97,9 +112,10 @@ impl GuestStore {
             } else {
                 Access::Shared
             },
-            slice: *slice,
+            target: *slice,
             len,
             pointer: false,
+            box_reference: false,
         }))
     }
     /// Consume an owned reference value and publish its coerced `[T]` view.
@@ -122,7 +138,13 @@ impl GuestStore {
         let id = RefId::from_bits(value.payload);
         let record = self.references.get(id)?;
         let consumed = record.access == Access::Mutable;
-        let coerced = record.unsized_array(coercion.access, coercion.slice, coercion.len)?;
+        let coerced = if coercion.box_reference {
+            let place = self.box_reference_place(value, coercion.target, coercion.access)?
+                .ok_or_else(ownership)?;
+            ReferenceRecord::from_place(place, coercion.access)
+        } else {
+            record.unsized_array(coercion.access, coercion.target, coercion.len)?
+        };
         let bytes = coerced.owned_bytes()?;
         self.references.reserve(1, &mut self.budget)?;
         let reference: RefId = self

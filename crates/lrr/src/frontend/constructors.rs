@@ -130,7 +130,7 @@ fn bind_prepared_record_inner(
                 let definition = match super::source_types::nominal_definition(db, sources, target) {
                     Ok(value) => value, Err(error) => return QueryPoll::Ready(Err(error)),
                 };
-                if definition.item_kind != ItemKind::Struct {
+                if !matches!(definition.item_kind, ItemKind::Struct | ItemKind::Union) {
                     return deferred(RecordConstructorDemand::TypeContext);
                 }
                 let mut applied = Vec::new();
@@ -188,7 +188,7 @@ fn bind_prepared_record_inner(
                     Ok(declaration) => declaration,
                     Err(error) => return QueryPoll::Ready(Err(error)),
                 };
-                if declaration.item_kind == ItemKind::Struct {
+                if matches!(declaration.item_kind, ItemKind::Struct | ItemKind::Union) {
                     return bind_variant_record_constructor_with_arguments(
                         db, graph, sources, plan, identity, None,
                         locals.context().source().scope(), arguments, members,
@@ -233,7 +233,7 @@ fn bind_prepared_record_inner(
         QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
     };
     let declaration = selected.declaration();
-    if declaration.definition().item_kind != ItemKind::Struct {
+    if !matches!(declaration.definition().item_kind, ItemKind::Struct | ItemKind::Union) {
         return deferred(RecordConstructorDemand::TypeContext);
     }
     let schema = match db.fetch(

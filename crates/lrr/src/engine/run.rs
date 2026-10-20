@@ -2925,6 +2925,17 @@ impl RunMachine {
                     QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
                 }
             }
+            let image_finish = match self.installed.get_current(db, id) {
+                Ok(recipe) => recipe.recipe().operations.iter().skip(self.frame.resume_operation_index()).find_map(|op|match op {Op::ConstructFinish {guard,..}=>Some(*guard),_=>None}),
+                Err(error) => { self.terminal=true; return RunPoll::Fault(error); }
+            };
+            if let Some(guard)=image_finish {
+                match self.prepare_constructor_image_layout(db,guard) {
+                    QueryPoll::Ready(Ok(()))=>{},
+                    QueryPoll::Ready(Err(error))=>{self.terminal=true;return RunPoll::Fault(error)},
+                    QueryPoll::NeedInput(input)=>return RunPoll::NeedInput(input),
+                }
+            }
             // A place operation whose base needs an overloaded `Deref` step
             // first demands it before the operation is prepared.
             match self.prepare_place_deref(db, id) {

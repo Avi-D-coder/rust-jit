@@ -10,6 +10,7 @@ pub(crate) fn requires_activation() -> Diagnostic {
     )
 }
 struct CopyDestination {
+    image_source: Option<CellId>,
     guard: ConstructionId,
     ty: TypeId,
     count: usize,
@@ -94,6 +95,7 @@ impl GuestStore {
             let ObjectStorage::Aggregate(storage) = &self.objects.get(object)?.storage else {
                 return Err(ownership());
             };
+            if self.is_union_type(TypeId(value.type_id)) { continue; }
             for (index, field) in storage.fields.iter().enumerate() {
                 if self.cells.get(*field)?.owner
                     != (CellOwner::Field {
@@ -257,7 +259,7 @@ impl GuestStore {
             if storage.variant.is_none() || !storage.initialized.complete_value() {
                 return Err(ownership());
             }
-            return Ok((ty, storage.fields.len(), storage.variant));
+            return Ok((ty, if self.is_union_type(ty) { 0 } else { storage.fields.len() }, storage.variant));
         }
         let count = match descriptor.key.as_ref() {
             TypeKey::Tuple(fields)
@@ -281,6 +283,12 @@ impl GuestStore {
         template: bool,
     ) -> Result<CopyDestination, Diagnostic> {
         let (ty, count, variant) = self.copy_layout(source, template)?;
+        if self.is_union_type(ty) {
+            let guard=self.begin_construction(&[])?;
+            self.constructions.get_mut(guard)?.nominal=variant.map(|variant|(ty,variant));
+            return Ok(CopyDestination {image_source:Some(source),guard,ty,count:0,variant});
+        }
+
         // The source is already an owning, fully initialized value admitted by
         // the same Copy rule above. Its real field contracts, rather than an
         // invented source constructor, determine this physical replica guard.
@@ -308,6 +316,7 @@ impl GuestStore {
             self.constructions.get_mut(guard)?.nominal = Some((ty, variant));
         }
         Ok(CopyDestination {
+            image_source: None,
             guard,
             ty,
             count,
@@ -359,6 +368,12 @@ impl GuestStore {
         destination: &CopyDestination,
     ) -> Result<TicketId, Diagnostic> {
         self.copy_destination(destination)?;
+        if let Some(source)=destination.image_source {
+            let ticket=self.copy_union_memory(source)?;
+            self.constructions.take(destination.guard,&mut self.budget)?;
+            return Ok(ticket);
+        }
+
         // The common commit validates every field/owner and reserves all
         // destination storage before consuming the actual construction guard.
         self.commit_construction(destination.guard, destination.ty)

@@ -675,3 +675,30 @@ fn main() {
 }
 "#, "make\nvalue 7\ndestination 0\ndestination 7\n");
 }
+
+#[test]
+fn upstream_union_memory_uses_shared_views_all_editions_and_origins() {
+    use crate::cli::StandaloneOutcome;
+    use super::format_trait_facade_tests::run;
+    let original=include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/union/union-transmute.rs");
+    let emitted=format!("macro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} emit!{{{original}}}");
+    let wrapped=format!("macro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} macro_rules! wrap {{($($t:tt)*)=>{{emit!{{$($t)*}}}}}} wrap!{{{original}}}");
+    let nested=original.replace("u.b = (2 << 8) + 2;", "assert!({ u.b = (2 << 8) + 2; true });");
+    let aliased=original.replace("u.b = (2 << 8) + 2;", "let retained = &u.a.0 as *const u8; u.b = (2 << 8) + 2; assert_eq!(*retained, 2u8);");
+    let patterned=original.replace("assert_eq!(u.a, (2, 2));", "let U { a: (left, right) } = u; assert_eq!(left, 2); assert_eq!(right, 2);");
+    assert_ne!(nested,original);
+    assert_ne!(aliased,original);
+    assert_ne!(patterned,original);
+    for edition in [2015,2018,2021,2024] {
+        for(origin,text)in [original,&emitted,&wrapped,&nested,&aliased,&patterned].into_iter().enumerate(){
+            let report=match run("upstream-union-memory",text,edition){
+                Ok(StandaloneOutcome::Completed(report))=>report,
+                Err(error)=>panic!("edition={edition} origin={origin}: {error:?}"),
+                Ok(_)=>panic!("edition={edition} origin={origin}: not complete"),
+            };
+            assert!(report.output.is_empty());
+            assert!(report.opcode_counters.started_by_opcode[29]>=3);
+            eprintln!("union memory edition={edition} origin={origin}: ordinary construction finishes={}",report.opcode_counters.started_by_opcode[29]);
+        }
+    }
+}

@@ -1,0 +1,5 @@
+{
+  "controls": [
+    "cli::crate_graph::box_tests::box_unsizes_and_deref_coerces_at_coercion_sites_and_formats_by_borrow"
+  ]
+}

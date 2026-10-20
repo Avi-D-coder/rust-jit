@@ -99,6 +99,8 @@ pub(super) enum ObjectStorage {
     Aggregate(AggregateStorage),
 }
 pub(super) struct AggregateStorage {
+    /// Canonical shared union bytes; its field cells are nonowning typed views.
+    pub memory: Option<MemoryRegion>,
     pub fields: Vec<CellId>,
     pub initialized: InitializedFields,
     /// Ordinary aggregate cleanup follows declaration order, not completion order.
@@ -107,6 +109,11 @@ pub(super) struct AggregateStorage {
     /// cannot overtake its exact owner/ticket completion.
     pub pending_cleanup: Option<(CellId, super::cell::TicketId)>,
     pub variant: Option<u32>,
+}
+#[derive(Clone)]
+pub(super) struct MemoryRegion {
+    pub bytes: Vec<u8>,
+    pub initialized: Vec<bool>,
 }
 /// Run-local field state; never serialized as a host layout or native pointer.
 /// A set bit means the entire owning child value is initialized, including its

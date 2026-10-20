@@ -22,6 +22,33 @@ impl GuestStore {
     pub(crate) fn owned_box(&self) -> Option<crate::core::digest::Digest> {
         self.owned_box
     }
+    /// A formed `&Box<T>` (including nested boxes) at an ordinary `&T`
+    /// coercion site. Resolve the existing builtin place chain, retaining its
+    /// real heap cells and provenance; no value is moved or source consulted.
+    pub(super) fn box_reference_place(
+        &self,
+        value: ValueRepr,
+        expected: TypeId,
+        access: Access,
+    ) -> Result<Option<super::super::place::ResolvedPlace>, Diagnostic> {
+        let fault = |failure| match failure {
+            PlaceFailure::RuntimeFault(error) => error,
+            PlaceFailure::GuestPanic(_) => invalid(),
+        };
+        if value.kind != 9 { return Ok(None); }
+        let mut place = Place::deref(RefId::from_bits(value.payload));
+        let mut ty = self.place_type_id(&place).map_err(fault)?;
+        while self.box_contents_type(ty)?.is_some() {
+            place = self.dereference_place(&place).map_err(fault)?;
+            ty = self.place_type_id(&place).map_err(fault)?;
+            if ty == expected {
+                let resolved = self.resolve_place_windowed(&place, PlaceUse::Value).map_err(fault)?;
+                if access == Access::Mutable && !resolved.writable { return Err(access_fault()); }
+                return Ok(Some(resolved));
+            }
+        }
+        Ok(None)
+    }
     /// `Some(T)` when `ty` is a `Box<T>` descriptor.
     pub(crate) fn box_contents_type(&self, ty: TypeId) -> Result<Option<TypeId>, Diagnostic> {
         Ok(match self.types.descriptor(ty)?.key.as_ref() {

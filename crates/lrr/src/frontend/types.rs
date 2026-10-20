@@ -1252,7 +1252,7 @@ impl<'a> SchemaNames<'a> {
             .try_reserve_exact(fields.len())
             .map_err(|_| schema_limit())?;
         written.extend(fields.iter().map(|field| field.name.as_str()));
-        let slots = selected.named_initializer_slots_with_base(&written, rest.is_some())?;
+        let slots = selected.named_initializer_slots_with_base(&written, rest.is_some() || self.definition.item_kind == crate::source::manifest::ItemKind::Union)?;
         let selected_fields: std::collections::BTreeSet<_> = slots.iter().copied().collect();
         let base_fields = if rest.is_some() {
             (0..selected.fields.len())

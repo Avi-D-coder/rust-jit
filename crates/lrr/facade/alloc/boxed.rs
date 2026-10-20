@@ -57,6 +57,13 @@ impl<T: ?Sized> DerefMut for Box<T> {
     }
 }
 
+// Pinned alloc/src/boxed.rs:2407-2411. Ordinary deref coercion supplies &T.
+impl<T: ?Sized> core::convert::AsRef<T> for Box<T> {
+    fn as_ref(&self) -> &T {
+        self
+    }
+}
+
 impl<T: Clone> Clone for Box<T> {
     fn clone(&self) -> Box<T> {
         Box::new((**self).clone())

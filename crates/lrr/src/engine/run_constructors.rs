@@ -8,6 +8,16 @@ fn unsupported(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-UNSUPPORTED", message.into())
 }
 impl RunMachine {
+    pub(super) fn prepare_constructor_image_layout(&mut self,db:&mut Database,guard:SlotId)->QueryPoll<()> {
+        match self.frame.constructor_image_source(guard) {
+            Ok(Some(source))=>if let Err(error)=source.require_current(db){return QueryPoll::Ready(Err(error))},
+            Ok(None)=>{},Err(error)=>return QueryPoll::Ready(Err(error)),
+        }
+        match self.frame.constructor_image_type(guard,&mut self.store) {
+            Ok(Some(ty))=>self.ensure_layout_facts(db,ty),Ok(None)=>QueryPoll::Ready(Ok(())),
+            Err(error)=>QueryPoll::Ready(Err(error)),
+        }
+    }
     pub(super) fn prepare_installed_constructor(
         &mut self,
         db: &mut Database,

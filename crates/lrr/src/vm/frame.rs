@@ -3804,7 +3804,8 @@ impl Frame {
         if bound.mapping().constructor() != plan_identity
             || !matches!(plan.kind(), crate::syntax::constructors::ConstructorKind::Record { fields, rest, .. }
                 if fields.len() == bound.mapping().written_to_declaration().len()
-                    && fields.len().checked_add(bound.mapping().base_fields().len()) == Some(bound.variant().fields().len())
+                    && (bound.variant().definition().item_kind == crate::source::manifest::ItemKind::Union
+                        || fields.len().checked_add(bound.mapping().base_fields().len()) == Some(bound.variant().fields().len()))
                     && (rest.is_some() || bound.mapping().base_fields().is_empty()))
         {
             return Err(invalid("nominal constructor source shape mismatch"));
@@ -4209,6 +4210,14 @@ impl Frame {
             active.storage_field(field)?,
             self.cell(source)?,
         )
+    }
+    pub(crate) fn constructor_image_source(&self, id: SlotId) -> Result<Option<crate::frontend::prepared_constructors::PreparedRecordConstructorHandle>, Diagnostic> {
+        let Some(active) = self.constructor_slot(id)?.construction.as_ref() else { return Ok(None); };
+        Ok(match &active.mapping { Some(ConstructionMapping::Prepared(source)) => Some(source.clone()), _ => None })
+    }
+    pub(crate) fn constructor_image_type(&self, id: SlotId, store: &mut GuestStore) -> Result<Option<TypeId>, Diagnostic> {
+        let Some(active) = self.constructor_slot(id)?.construction.as_ref() else { return Ok(None); };
+        store.construction_union_type(active.guard)
     }
     pub fn finish_constructor(
         &mut self,

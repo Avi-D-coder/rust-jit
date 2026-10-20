@@ -483,7 +483,7 @@ impl<'a> Component<'a> {
                 .collect(),
         }))))
     }
-    /// A selected Value/Type definition that constructs: a struct or an
+    /// A selected Value/Type definition that constructs: a struct, union or
     /// enum variant, bound with the binder constructor expressions use.
     fn constructor_definition(
         &mut self,
@@ -507,7 +507,7 @@ impl<'a> Component<'a> {
                 sources.iter().copied(),
                 identity,
             ) {
-                Some(ItemKind::Struct)
+                Some(ItemKind::Struct | ItemKind::Union)
                     if db
                         .input(&InputKey::LocalDeclarationOwner(identity))
                         .is_none() =>
@@ -520,7 +520,7 @@ impl<'a> Component<'a> {
                         Err(error) => return QueryPoll::Ready(Err(error)),
                     }
                 }
-                // A struct declared in the executing body is no module
+                // A record declared in the executing body is no module
                 // outline item: its published local declaration owns it.
                 _ if db
                     .input(&InputKey::LocalDeclarationOwner(identity))
@@ -528,7 +528,7 @@ impl<'a> Component<'a> {
                     && matches!(
                         db.input(&InputKey::DefinitionHeader(identity)).as_deref(),
                         Some(InputValue::DefinitionHeader(header))
-                            if header.tokens.iter().any(|token| token.text == "struct")
+                            if header.tokens.iter().any(|token| matches!(token.text.as_str(), "struct" | "union"))
                     ) =>
                 {
                     match ready!(NominalConstructorTarget::local(db, identity, None)) {

@@ -20,6 +20,9 @@ mod wide_integer;
 mod promoted;
 #[path = "cell_pointers.rs"]
 mod pointers;
+#[path = "cell_memory.rs"]
+mod memory;
+pub use memory::MemoryView;
 #[path = "cell_layout.rs"]
 pub(crate) mod layouts;
 #[path = "cell_constant_instantiation.rs"]
@@ -202,6 +205,7 @@ pub enum StorageContract {
 pub enum CellState {
     Uninit,
     Live(ValueRepr),
+    View(MemoryView),
     Moved,
     Dropping,
     Dropped,
@@ -699,7 +703,7 @@ impl GuestStore {
         if cell.retired {
             return Err(stale());
         }
-        let CellState::Live(value) = cell.state else {
+        let CellState::Live(value) = self.state(id)? else {
             return Ok(None);
         };
         if value.kind != 8 {
@@ -798,9 +802,11 @@ impl GuestStore {
         guard: ConstructionId,
     ) -> Result<TypeId, Diagnostic> {
         let record = self.constructions.get(guard)?;
+        if record.state != ConstructionState::Building { return Err(ownership()); }
+        if let Some((ty, _)) = record.nominal { return Ok(ty); }
         let bound = record.pending_nominal.as_deref().ok_or_else(ownership)?;
         if record.state != ConstructionState::Building
-            || record.completed.len() != record.fields.len()
+            || (bound.definition().item_kind != crate::source::manifest::ItemKind::Union && record.completed.len() != record.fields.len())
         {
             return Err(ownership());
         }
@@ -1198,6 +1204,7 @@ impl GuestStore {
         ty: TypeId,
         reserved: Option<constant_instantiation::ReservedArrayStorage>,
     ) -> Result<TicketId, Diagnostic> {
+        if self.is_union_type(ty) { return self.commit_union_memory(guard, ty); }
         let record = self.constructions.get(guard)?;
         if record.state != ConstructionState::Building
             || record.completed.len() != record.fields.len()
@@ -1305,6 +1312,7 @@ impl GuestStore {
         }
         let object = self.objects.get_mut(object)?;
         object.storage = ObjectStorage::Aggregate(AggregateStorage {
+            memory: None,
             fields,
             initialized,
             next_cleanup: 0,
@@ -1316,7 +1324,7 @@ impl GuestStore {
     }
     fn place_stamp(&self, id: CellId) -> Result<CellStamp, Diagnostic> {
         let cell = self.cells.get(id)?;
-        if cell.retired || !matches!(cell.state, CellState::Live(_)) {
+        if cell.retired || !matches!(cell.state, CellState::Live(_) | CellState::View(_)) {
             return Err(lease_fault());
         }
         Ok(CellStamp {
@@ -1329,7 +1337,7 @@ impl GuestStore {
         if cell.retired
             || !matches!(
                 cell.state,
-                CellState::Live(_) | CellState::Moved | CellState::Uninit
+                CellState::Live(_) | CellState::View(_) | CellState::Moved | CellState::Uninit
             )
         {
             return Err(lease_fault());
@@ -1343,6 +1351,7 @@ impl GuestStore {
         let cell = self.cells.get(id)?;
         self.address_stamp(id)?;
         match cell.state {
+            CellState::View(view) => Ok(view.ty),
             CellState::Live(_) => self.place_type(id),
             CellState::Moved | CellState::Uninit => match cell.declared {
                 StorageContract::Exact(ty) => {
@@ -1359,6 +1368,7 @@ impl GuestStore {
     }
     fn place_type(&self, id: CellId) -> Result<TypeId, Diagnostic> {
         let cell = self.cells.get(id)?;
+        if let CellState::View(view) = cell.state { return Ok(view.ty); }
         let CellState::Live(value) = cell.state else {
             return Err(lease_fault());
         };
@@ -1372,7 +1382,7 @@ impl GuestStore {
     }
     fn place_object(&self, id: CellId) -> Result<(ObjectId, &AggregateStorage), Diagnostic> {
         self.place_stamp(id)?;
-        let CellState::Live(value) = self.cells.get(id)?.state else {
+        let CellState::Live(value) = self.state(id)? else {
             return Err(lease_fault());
         };
         self.object_owner(value, ValueOwner::Cell(id))?;
@@ -2214,7 +2224,17 @@ impl GuestStore {
                 .into());
             }
         };
-        let plan = match self.state(resolved.target.cell)? {
+        let plan = match self.cells.get(resolved.target.cell)?.state {
+            CellState::View(view) => {
+                if view.union_field || !self.needs_drop_type(resolved.ty)? {
+                    self.validate_initialization_value(resolved.target.cell, value)?;
+                    IntrinsicAssignment::Initialize { ty: resolved.ty, target: resolved.target.cell }
+                } else {
+                    self.admit_replacement(resolved.target.cell, value)?;
+                    self.admit_cleanup_cell(resolved.target.cell)?;
+                    IntrinsicAssignment::ReplaceOwned { ty: resolved.ty, target: resolved.target.cell }
+                }
+            }
             CellState::Uninit | CellState::Moved => {
                 self.validate_initialization_value(resolved.target.cell, value)?;
                 IntrinsicAssignment::Initialize {
@@ -2543,6 +2563,7 @@ impl GuestStore {
         else {
             return Err(invalid());
         };
+        if storage.memory.is_some() { return Ok(CleanupFieldAdmission::Complete); }
         if storage.pending_cleanup.is_some() {
             return Err(ownership());
         }
@@ -2554,7 +2575,7 @@ impl GuestStore {
             CellState::Uninit | CellState::Moved | CellState::Dropped => {
                 Ok(CleanupFieldAdmission::Skip)
             }
-            CellState::Dropping => Err(ownership()),
+            CellState::Dropping | CellState::View(_) => Err(ownership()),
         }
     }
     pub fn aggregate_cleanup_transfer(
@@ -2577,6 +2598,7 @@ impl GuestStore {
         let ObjectStorage::Aggregate(storage) = &self.objects.get(id)?.storage else {
             return Err(invalid());
         };
+        if storage.memory.is_some() { return Ok(AggregateCleanupTransfer::Complete); }
         if storage.pending_cleanup.is_some() {
             return Err(ownership());
         }
@@ -2601,7 +2623,7 @@ impl GuestStore {
                 }
                 AggregateCleanupTransfer::Skipped
             }
-            CellState::Dropping => return Err(ownership()),
+            CellState::Dropping | CellState::View(_) => return Err(ownership()),
         };
         let ObjectStorage::Aggregate(storage) = &mut self.objects.get_mut(id)?.storage else {
             return Err(invalid());
@@ -2822,7 +2844,10 @@ impl GuestStore {
         Ok(())
     }
     pub fn state(&self, id: CellId) -> Result<CellState, Diagnostic> {
-        Ok(self.cells.get(id)?.state)
+        match self.cells.get(id)?.state {
+            CellState::View(view) => self.memory_view_value(view).map(CellState::Live),
+            state => Ok(state),
+        }
     }
     pub fn location_epoch(&self, id: CellId) -> Result<u32, Diagnostic> {
         let cell = self.cells.get(id)?;
@@ -3037,6 +3062,11 @@ impl GuestStore {
         self.validate_value(value)?;
         self.require_initialized_value(value)?;
         let cell = self.cells.get(id)?;
+        if matches!(cell.state, CellState::View(_)) {
+            if cell.retired || !cell.writable { return Err(ownership()); }
+            self.contract(cell, value)?;
+            return Ok(());
+        }
         if cell.retired
             || !matches!(cell.state, CellState::Uninit | CellState::Moved)
             || matches!(cell.state, CellState::Moved) && !cell.writable
@@ -3137,6 +3167,10 @@ impl GuestStore {
         self.commit_initialization_change(id, false)
     }
     pub fn initialize(&mut self, id: CellId, ticket: TicketId) -> Result<(), Diagnostic> {
+        if let CellState::View(view) = self.cells.get(id)?.state {
+            self.validate_initialization_value(id, self.peek_ticket(ticket)?)?;
+            return self.write_memory_view(view, ticket);
+        }
         let value = self.peek_ticket(ticket)?;
         self.object_owner(value, ValueOwner::Ticket(ticket))?;
         self.validate_initialization_value(id, value)?;
@@ -3170,7 +3204,7 @@ impl GuestStore {
         if cell.retired {
             return Err(stale());
         }
-        let CellState::Live(value) = cell.state else {
+        let CellState::Live(value) = self.state(id)? else {
             return Err(ownership());
         };
         self.object_owner(value, ValueOwner::Cell(id))?;
@@ -3193,7 +3227,7 @@ impl GuestStore {
         if cell.retired {
             return Err(stale());
         }
-        let CellState::Live(value) = cell.state else {
+        let CellState::Live(value) = self.state(id)? else {
             return Err(ownership());
         };
         self.object_owner(value, ValueOwner::Cell(id))?;
@@ -3216,7 +3250,7 @@ impl GuestStore {
         if cell.retired {
             return Err(stale());
         }
-        let CellState::Live(value) = cell.state else {
+        let CellState::Live(value) = self.state(id)? else {
             return Err(ownership());
         };
         self.validate_value(value)?;
@@ -3258,6 +3292,7 @@ impl GuestStore {
             return Ok(false);
         }
         match cell.state {
+            CellState::View(_) => Ok(true),
             CellState::Live(value) => self.value_is_initialized(value),
             _ => Ok(false),
         }
@@ -3425,7 +3460,7 @@ impl GuestStore {
         if cell.retired || (checked && !cell.writable) {
             return Err(ownership());
         }
-        let CellState::Live(old) = cell.state else {
+        let CellState::Live(old) = self.state(id)? else {
             return Err(ownership());
         };
         self.object_owner(old, ValueOwner::Cell(id))?;
@@ -3719,6 +3754,10 @@ impl GuestStore {
         self.extract_from(id, false)
     }
     fn extract_from(&mut self, id: CellId, cleanup: bool) -> Result<TicketId, Diagnostic> {
+        if let CellState::View(view) = self.cells.get(id)?.state {
+            if cleanup { return Err(Diagnostic::new("LRR-E-UNSUPPORTED", "in-place destruction of a shared memory view requires its cleanup continuation".into())); }
+            return self.read_memory_view(view);
+        }
         let value = if cleanup {
             self.admit_live_value(id)?
         } else {
@@ -3927,6 +3966,12 @@ impl GuestStore {
         incoming: TicketId,
         checked: bool,
     ) -> Result<TicketId, Diagnostic> {
+        if let CellState::View(view) = self.cells.get(id)?.state {
+            if checked && !self.cells.get(id)?.writable { return Err(ownership()); }
+            let old = self.read_memory_view(view)?;
+            self.write_memory_view(view, incoming)?;
+            return Ok(old);
+        }
         let value = self.peek_ticket(incoming)?;
         self.object_owner(value, ValueOwner::Ticket(incoming))?;
         self.admit_replacement_with(id, value, checked)?;
@@ -4113,7 +4158,7 @@ impl GuestStore {
     /// fallback type (`i32` / `f64`); a bound literal or non-literal is
     /// unchanged. Used where inference leaves a literal with no context.
     pub(crate) fn bind_literal_fallback(&mut self, id: CellId) -> Result<(), Diagnostic> {
-        let CellState::Live(value) = self.cells.get(id)?.state else {
+        let CellState::Live(value) = self.state(id)? else {
             return Ok(());
         };
         if value.kind != 11 && value.kind != 12 {
@@ -4169,10 +4214,17 @@ impl GuestStore {
         if value.kind == 8 {
             let object = self.objects.get(ObjectId::from_bits(value.payload))?;
             if let ObjectStorage::Aggregate(storage) = &object.storage
+                && storage.memory.is_none()
                 && (storage.next_cleanup != storage.fields.len()
                     || storage.pending_cleanup.is_some())
             {
                 return Err(ownership());
+            }
+        }
+        if value.kind == 8 {
+            if let ObjectStorage::Aggregate(storage) = &self.objects.get(ObjectId::from_bits(value.payload))?.storage
+                && storage.memory.is_some() {
+                self.retire_memory_views(storage.fields.clone())?;
             }
         }
         self.tickets.take(ticket, &mut self.budget)?;

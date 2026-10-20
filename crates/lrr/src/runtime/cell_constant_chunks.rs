@@ -258,6 +258,7 @@ impl GuestStore {
         };
         let c = slot.take().ok_or_else(ownership)?;
         object.storage = ObjectStorage::Aggregate(AggregateStorage {
+            memory: None,
             fields: c.fields,
             initialized: c.initialized,
             next_cleanup: 0,

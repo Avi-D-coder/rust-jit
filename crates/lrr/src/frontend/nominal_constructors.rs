@@ -40,9 +40,9 @@ impl NominalConstructorTarget {
         identity: Digest,
     ) -> Result<Self, Diagnostic> {
         let owner = super::source_types::nominal_definition(db, sources, identity)?;
-        if owner.item_kind != ItemKind::Struct {
+        if !matches!(owner.item_kind, ItemKind::Struct | ItemKind::Union) {
             return Err(fault(
-                "struct constructor owner declaration is not a struct",
+                "record constructor owner is not a struct or union",
             ));
         }
         Ok(Self {
@@ -79,7 +79,7 @@ impl NominalConstructorTarget {
             QueryPoll::Ready(Ok(Some(owner))) => {
                 if !matches!(
                     owner.definition.item_kind,
-                    ItemKind::Struct | ItemKind::Enum
+                    ItemKind::Struct | ItemKind::Enum | ItemKind::Union
                 ) || (owner.definition.item_kind == ItemKind::Enum) != variant.is_some()
                 {
                     return QueryPoll::Ready(Ok(None));
@@ -204,7 +204,7 @@ pub(crate) fn prepare_constructor(
     sources: &[&PreparedSourceView],
     target: &NominalConstructorTarget,
 ) -> QueryPoll<ConstructorPreparation> {
-    if !matches!(target.owner.item_kind, ItemKind::Struct | ItemKind::Enum)
+    if !target.owner.item_kind.is_nominal_type()
         || (target.owner.item_kind == ItemKind::Enum) != target.variant.is_some()
     {
         return QueryPoll::Ready(Err(fault("constructor owner/variant selection differs")));

@@ -213,7 +213,7 @@ pub(crate) fn pattern_declaration(
         (Some(ItemKind::Constant), _) if !matches!(name.form, NameForm::Record(_)) => {
             Ok(PatternSelection::Constant(identity))
         }
-        (Some(ItemKind::Struct), _) | (_, Some(_)) => {
+        (Some(ItemKind::Struct | ItemKind::Union), _) | (_, Some(_)) => {
             Ok(PatternSelection::Constructor { identity, variant, application: None })
         }
         _ => Err(unsupported(format!(
@@ -376,7 +376,7 @@ fn finish_pattern_declaration(
     };
     let TyTerm::Nominal(target,_)=&application.term else {return QueryPoll::Ready(Err(unsupported("pattern alias target is not nominal".into())));};
     let definition=match super::source_types::nominal_definition(db,sources,*target) {Ok(definition)=>definition,Err(error)=>return QueryPoll::Ready(Err(error))};
-    if definition.item_kind!=ItemKind::Struct {return QueryPoll::Ready(Err(unsupported("pattern alias target requires variant selection".into())));}
+    if !matches!(definition.item_kind,ItemKind::Struct|ItemKind::Union) {return QueryPoll::Ready(Err(unsupported("pattern alias target requires variant selection".into())));}
     QueryPoll::Ready(Ok(PatternSelection::Constructor {identity:*target,variant:None,application:Some(application)}))
 }
 
