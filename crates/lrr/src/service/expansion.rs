@@ -181,7 +181,7 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
             bytes = add(bytes, key.bucket.name.capacity())?;
         }
         QueryKey::DiscoverySeal(_) | QueryKey::ScopeDeclarationInventory(_)
-        | QueryKey::PreparedScopeImplHeaders(_) | QueryKey::ImplHeaderSyntax(_) | QueryKey::ImplHeadTypes(_) | QueryKey::ImplTraitIdentity(_) | QueryKey::ImplTraitCatalog(_) | QueryKey::SolverConfiguration(_) | QueryKey::ImplSourceTypes(_) | QueryKey::ImplSourcePredicates(_)
+        | QueryKey::PreparedScopeImplHeaders(_) | QueryKey::ImplHeaderSyntax(_) | QueryKey::ImplHeadTypes(_) | QueryKey::ImplTraitIdentity(_) | QueryKey::ImplTraitCatalog(_) | QueryKey::SolverConfiguration(_) | QueryKey::AdtSourceFields(_) | QueryKey::ImplSourceTypes(_) | QueryKey::ImplSourcePredicates(_)
                 | QueryKey::ImplPredicates(_) | QueryKey::TraitDeclaration(_) | QueryKey::DeclarationGenerics(_) | QueryKey::DeclarationGenericTypes(_) => {}
         QueryKey::ConstructorPlan(_)
         | QueryKey::BoundRecordConstructor(_) | QueryKey::SourcePatternName(_) | QueryKey::PreparedBodyTypeApplication(_)

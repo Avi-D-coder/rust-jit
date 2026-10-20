@@ -82,6 +82,9 @@ pub(crate) struct StateRef<'cx, F: SourceFacts<'cx>> {
     external: &'cx InternPool<'cx, ty::solve::ExternalConstraintsData<Context<'cx, F>>>,
     canonical_inputs: &'cx InternPool<'cx, ty::solve::CanonicalInputData<Context<'cx, F>>>,
     generic_parameters: &'cx InternPool<'cx, Vec<GenericParameter<'cx, F>>>,
+    adt_field_lists: &'cx InternPool<'cx, Vec<super::model::AdtField<'cx,F>>>,
+    adt_variant_lists: &'cx InternPool<'cx, Vec<super::model::AdtVariant<'cx,F>>>,
+    symbol_strings: &'cx InternPool<'cx, String>,
 }
 impl<'cx, F: SourceFacts<'cx>> StateRef<'cx, F> {
     pub(crate) fn context(&'cx self) -> Context<'cx, F> {
@@ -119,6 +122,9 @@ pub(crate) struct State<'cx, F: SourceFacts<'cx>> {
     external: InternPool<'cx, ty::solve::ExternalConstraintsData<Context<'cx, F>>>,
     canonical_inputs: InternPool<'cx, ty::solve::CanonicalInputData<Context<'cx, F>>>,
     generic_parameters: InternPool<'cx, Vec<GenericParameter<'cx, F>>>,
+    adt_field_lists: InternPool<'cx, Vec<super::model::AdtField<'cx,F>>>,
+    adt_variant_lists: InternPool<'cx, Vec<super::model::AdtVariant<'cx,F>>>,
+    symbol_strings: InternPool<'cx, String>,
 }
 impl<'cx, F: SourceFacts<'cx>> State<'cx, F> {
     pub(crate) fn new(services: F) -> Self {
@@ -149,6 +155,9 @@ impl<'cx, F: SourceFacts<'cx>> State<'cx, F> {
             external: InternPool::default(),
             canonical_inputs: InternPool::default(),
             generic_parameters: InternPool::default(),
+            adt_field_lists: InternPool::default(),
+            adt_variant_lists: InternPool::default(),
+            symbol_strings: InternPool::default(),
         }
     }
     /// The guard must be declared after the context view and before running
@@ -186,6 +195,9 @@ impl<'cx, F: SourceFacts<'cx>> State<'cx, F> {
             external: &self.external,
             canonical_inputs: &self.canonical_inputs,
             generic_parameters: &self.generic_parameters,
+            adt_field_lists: &self.adt_field_lists,
+            adt_variant_lists: &self.adt_variant_lists,
+            symbol_strings: &self.symbol_strings,
         }
     }
 }
@@ -988,3 +1000,20 @@ use super::model::{
     ValueConst,
 };
 use rustc_type_ir::inherent::{Clause as _, Predicate as _, Ty as _};
+
+impl<'cx,F:SourceFacts<'cx>> Context<'cx,F> {
+    pub(super) fn retain_adt_fields(self, fields:Vec<super::model::AdtField<'cx,F>>)->&'cx [super::model::AdtField<'cx,F>] {
+        self.state.adt_field_lists.intern(fields).value().as_slice()
+    }
+    pub(super) fn retain_adt_variants(self, variants:Vec<super::model::AdtVariant<'cx,F>>)->&'cx [super::model::AdtVariant<'cx,F>] {
+        self.state.adt_variant_lists.intern(variants).value().as_slice()
+    }
+    pub(super) fn retain_adt_symbol(self, text:&str)->super::model::Symbol<'cx> {
+        super::model::Symbol(self.state.symbol_strings.intern(text.to_owned()).value().as_str())
+    }
+    pub(super) fn intern_integer_symbol(self, ordinal:usize)->super::model::Symbol<'cx> {
+        // rustc_span::sym::integer's decimal symbol, in this context's owned
+        // string representation. No leak, tuple-width cap or borrowed temporary.
+        super::model::Symbol(self.state.symbol_strings.intern(ordinal.to_string()).value().as_str())
+    }
+}

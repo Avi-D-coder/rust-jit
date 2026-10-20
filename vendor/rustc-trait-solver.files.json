@@ -530,6 +530,13 @@
       "upstream_sha256": "a93e513ae058def7ec200af342b23a1f3088417ffdd335bbbf6345fd8953d4c0"
     },
     {
+      "path": "compiler/rustc_middle/src/mir/interpret/queries.rs",
+      "bytes": 12150,
+      "sha256": "a56f205b0cdef592e53936b1d912af058231c04f81f4f89761247b39167c98f4",
+      "upstream": "compiler/rustc_middle/src/mir/interpret/queries.rs",
+      "upstream_sha256": "a56f205b0cdef592e53936b1d912af058231c04f81f4f89761247b39167c98f4"
+    },
+    {
       "path": "compiler/rustc_middle/src/mir/syntax.rs",
       "bytes": 84423,
       "sha256": "b2f38c58405cfb5999cbdf50770e151910c796a7f20c82456d37a3f39481f4e1",
@@ -542,6 +549,13 @@
       "sha256": "18f9e57b4a92096a90b12d73a42f0f5c8ed67b83b0a0e5b73b27788c5ab55b44",
       "upstream": "compiler/rustc_middle/src/ty/abstract_const.rs",
       "upstream_sha256": "18f9e57b4a92096a90b12d73a42f0f5c8ed67b83b0a0e5b73b27788c5ab55b44"
+    },
+    {
+      "path": "compiler/rustc_middle/src/ty/adt.rs",
+      "bytes": 26594,
+      "sha256": "f4f1b017d032c9276fdb32545f3168c64c4b664859da5b8b0ea17332b28f0c34",
+      "upstream": "compiler/rustc_middle/src/ty/adt.rs",
+      "upstream_sha256": "f4f1b017d032c9276fdb32545f3168c64c4b664859da5b8b0ea17332b28f0c34"
     },
     {
       "path": "compiler/rustc_middle/src/ty/consts.rs",
@@ -831,11 +845,25 @@
       "upstream_sha256": "30b279f3b182ad08a00889b98525219f7db9b7f99ad04170d648b5d317d537f4"
     },
     {
+      "path": "compiler/rustc_span/src/symbol.rs",
+      "bytes": 88266,
+      "sha256": "75b077bf393efddd9436fbf3d907b55595415a66320e504d649ff05576206358",
+      "upstream": "compiler/rustc_span/src/symbol.rs",
+      "upstream_sha256": "75b077bf393efddd9436fbf3d907b55595415a66320e504d649ff05576206358"
+    },
+    {
       "path": "compiler/rustc_trait_selection/src/solve/delegate.rs",
       "bytes": 24761,
       "sha256": "ad43375618c2e3a7c5ff6f69abfc8a4af33ae1d003cb003d350aea0bb0d17095",
       "upstream": "compiler/rustc_trait_selection/src/solve/delegate.rs",
       "upstream_sha256": "ad43375618c2e3a7c5ff6f69abfc8a4af33ae1d003cb003d350aea0bb0d17095"
+    },
+    {
+      "path": "compiler/rustc_trait_selection/src/traits/mod.rs",
+      "bytes": 45728,
+      "sha256": "49a807c38f798fd55fbe908399114f6707ff480d66bfacc1416ddecc313d5cc8",
+      "upstream": "compiler/rustc_trait_selection/src/traits/mod.rs",
+      "upstream_sha256": "49a807c38f798fd55fbe908399114f6707ff480d66bfacc1416ddecc313d5cc8"
     },
     {
       "path": "compiler/rustc_trait_selection/src/traits/project.rs",
@@ -857,6 +885,13 @@
       "sha256": "435c6263bce04bc57eda37461de1d65be70aad19c2dbb038d9b967d15708b151",
       "upstream": "compiler/rustc_trait_selection/src/traits/wf.rs",
       "upstream_sha256": "435c6263bce04bc57eda37461de1d65be70aad19c2dbb038d9b967d15708b151"
+    },
+    {
+      "path": "compiler/rustc_ty_utils/src/ty.rs",
+      "bytes": 15698,
+      "sha256": "0d1edae3ada2b3186448a44c151a6d07916461b781f1803edb9f1e5f6bd5afee",
+      "upstream": "compiler/rustc_ty_utils/src/ty.rs",
+      "upstream_sha256": "0d1edae3ada2b3186448a44c151a6d07916461b781f1803edb9f1e5f6bd5afee"
     },
     {
       "path": "compiler/rustc_type_ir/Cargo.toml",
@@ -1390,8 +1425,10 @@
     "compiler/rustc_infer/src/infer/solver_region_constraints/tests.rs",
     "compiler/rustc_infer/src/infer/type_variable.rs",
     "compiler/rustc_middle/src/infer/canonical.rs",
+    "compiler/rustc_middle/src/mir/interpret/queries.rs",
     "compiler/rustc_middle/src/mir/syntax.rs",
     "compiler/rustc_middle/src/ty/abstract_const.rs",
+    "compiler/rustc_middle/src/ty/adt.rs",
     "compiler/rustc_middle/src/ty/consts.rs",
     "compiler/rustc_middle/src/ty/consts/int.rs",
     "compiler/rustc_middle/src/ty/consts/kind.rs",
@@ -1406,10 +1443,13 @@
     "compiler/rustc_middle/src/ty/structural_impls.rs",
     "compiler/rustc_middle/src/ty/sty.rs",
     "compiler/rustc_middle/src/ty/trait_def.rs",
+    "compiler/rustc_span/src/symbol.rs",
     "compiler/rustc_trait_selection/src/solve/delegate.rs",
+    "compiler/rustc_trait_selection/src/traits/mod.rs",
     "compiler/rustc_trait_selection/src/traits/project.rs",
     "compiler/rustc_trait_selection/src/traits/util.rs",
     "compiler/rustc_trait_selection/src/traits/wf.rs",
+    "compiler/rustc_ty_utils/src/ty.rs",
     "src/tools/rust-analyzer/crates/hir-ty/src/lib.rs",
     "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/mod.rs",
     "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/opaque_types/mod.rs",

@@ -62,10 +62,6 @@ type CanonicalVarKind<'db> = ty::CanonicalVarKind<DbInterner<'db>>;
 /// No Default, test stub, guest-loaded function or implicit incomplete answer.
 /// Implementing/installing these clients remains a separate root-entry gate.
 pub(crate) struct SolverClients<'db> {
-    /// Err(()) means only the supplied normalization callback failed. Other
-    /// evaluation errors are represented as the actual error Const, as upstream.
-    pub(crate) evaluate_const: fn(&InferenceContext<'db>, ParamEnv<'db>, ty::AliasConst<DbInterner<'db>>,
-        &mut dyn FnMut(ty::Unnormalized<DbInterner<'db>,Ty<'db>>) -> Option<Ty<'db>>) -> Result<Option<Const<'db>>,()>,
     pub(crate) transmutable: fn(&InferenceContext<'db>,Ty<'db>,Ty<'db>,Const<'db>) -> Result<Certainty,NoSolution>,
 }
 
@@ -94,18 +90,10 @@ impl<'db> SolverDelegate for SolverContext<'db> {
 '''
     clients = '''
     fn evaluate_const<E:Debug>(&self,env:ParamEnv<'db>,alias:ty::AliasConst<Self::Interner>,normalize:impl FnOnce(ty::Unnormalized<Self::Interner,Ty<'db>>) -> Result<Ty<'db>,E>) -> Result<Option<Const<'db>>,E> {
-        let mut normalize = Some(normalize);
-        let mut failure = None;
-        let mut callback = |value| match normalize.take().expect("upstream const normalization is FnOnce")(value) {
-            Ok(value) => Some(value),
-            Err(error) => { failure = Some(error); None }
-        };
-        let result = (self.interner.services().solver_clients().evaluate_const)(&self.0,env,alias,&mut callback);
-        match result {
-            Ok(value) => { assert!(failure.is_none(), "const client discarded normalization failure"); Ok(value) }
-            Err(()) => Err(failure.expect("const client failed without normalization error")),
-        }
+        super::const_eval::evaluate_const(&self.0,env,alias,normalize)
+            .unwrap_or_else(|dependency| panic!("const client entered before required immutable input admission: {dependency:?}"))
     }
+
     fn well_formed_goals(&self,env:ParamEnv<'db>,term:Term<'db>) -> Option<Vec<Goal<Self::Interner,Predicate<'db>>>> {
         super::well_formed::unnormalized_obligations(&self.0,env,term,<Span as ty::inherent::Span<Self::Interner>>::dummy())
             .map(|obligations| obligations.into_iter().map(|obligation| obligation.as_goal()).collect())
@@ -128,4 +116,4 @@ impl<'db> SolverDelegate for SolverContext<'db> {
 '''
     outputs['delegate.rs'] = rustfmt(header + imports + methods + clients)
     outputs['mod.rs'] += b'\npub(crate) mod delegate;\n'
-    outputs['mod.rs'] += b'\npub(crate) mod well_formed;\n'
+    outputs['mod.rs'] += b'\npub(crate) mod well_formed;\npub(crate) mod const_eval;\n'

@@ -3515,3 +3515,45 @@ fn unchanged_enum_repr_uses_shared_source_integer_metadata_all_editions_and_orig
     assert_eq!((worlds,enums),(60,180));
     assert_eq!((bound_variants,scalar_values),(456,396));
 }
+
+#[test]
+fn unchanged_nominal_fields_encode_through_shared_source_types_all_editions_and_origins() {
+    use crate::{db::{key::QueryKey,poll::QueryPoll,provider::SyntaxProvider,value::QueryValue},
+        frontend::names::NameLookup,
+        traits::upstream::source_adt_fields::{check_actual_source_fields,SourceFieldControl as C}};
+    fn ready<T:std::fmt::Debug>(p:QueryPoll<T>)->T {match p {QueryPoll::Ready(Ok(v))=>v,other=>panic!("actual source fields: {other:?}")}}
+    let root=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");
+    let mut fields=0;let mut pending=0;
+    for edition in [2015,2018,2021,2024] {
+        for (case,start,selected) in [
+            ("tests/ui/generics/generic-derived-type.rs","fn g<",&[("Pair",C::GenericPair)][..]),
+            ("tests/ui/const-generics/array-wrapper-struct-ctor.rs","struct ArrayStruct",&[("ArrayStruct",C::ArrayRecord),("ArrayTuple",C::ArrayTuple)][..]),
+            ("tests/ui/union/union-generic-rpass.rs","use std::mem",&[("U",C::GenericUnion),("MaybeItem",C::ProjectionPending)][..]),
+        ] {
+            let text=std::fs::read_to_string(root.join(case)).unwrap();let offset=text.find(start).unwrap();
+            for origin in 0..3 {
+                let path=if origin==0 {root.join(case)} else {
+                    let wrappers=if origin==1 {"macro_rules! emit {($($t:tt)*)=>{$($t)*}} emit!"}else{"macro_rules! emit {($($t:tt)*)=>{$($t)*}} macro_rules! wrap {($($t:tt)*)=>{emit!{$($t)*}}} wrap!"};
+                    temporary_source(&format!("source-field-{edition}-{origin}"),&format!("{}{}{{{}}}",&text[..offset],wrappers,&text[offset..]))
+                };
+                let (mut db,seal,scope)=configured_impl_catalog_world(&path,edition).unwrap();
+                let headers=ready(db.fetch(&SyntaxProvider,QueryKey::PreparedScopeImplHeaders(seal.clone()))).value;
+                let QueryValue::PreparedScopeImplHeaders(headers)=headers.as_ref()else{panic!()};
+                let env=headers.inventory_root().environment().unwrap();let mut definitions=Vec::new();
+                for &(name,control) in selected {
+                    let found=env.names().lookup_source_path(crate::source::manifest::Namespace::Type,&[crate::syntax::imports::ImportSegment::Name(name.into())],false,&scope,edition).unwrap();
+                    let NameLookup::Defined(definition)=found else{panic!("actual nominal {name}: {found:?}")};
+                    definitions.push((definition.identity,control));
+                }
+                db.trace.detailed=true;let before=db.trace.events.len();
+                let (held,f,p)=check_actual_source_fields(&mut db,&seal,&definitions).unwrap_or_else(|e|panic!("actual fields {case},edition{edition},origin{origin}: {e:?}"));
+                fields+=f;pending+=p;
+                assert!(db.trace.events[before..].iter().all(|e|!matches!(e.key,QueryKey::FunctionSignature(_)|QueryKey::BodyStructure(_)|QueryKey::Thunk(_)|QueryKey::PatternPlan(_))));
+                db.publish_inputs(std::collections::BTreeMap::new()).unwrap();
+                assert!(held.iter().all(|h|h.require_current(&db).is_err()));
+                eprintln!("actual source fields {case},edition{edition},origin{origin}: {f}encoded fields,{p}explicit pending declarations; root/main unexecuted");
+            }
+        }
+    }
+    assert_eq!((fields,pending),(72,12));
+}

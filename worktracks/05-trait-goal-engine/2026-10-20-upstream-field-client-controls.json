@@ -1,0 +1,9 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Actual source/context inference and ordinary declaration field plans; pinned WF plus nonalias constant behavior and raw typed missing-owner dependency. No reflective Some/terminal constant/Alias/GCA/upstream-root/interpreter/full-fixture acceptance.",
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_nominal_fields_encode_through_shared_source_types_all_editions_and_origins",
+    "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+    "cli::preentry_loader_tests::unchanged_const_region_declarations_supply_actual_typed_generic_facts_all_editions"
+  ]
+}

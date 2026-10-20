@@ -20396,7 +20396,12 @@
         "worktracks/05-trait-goal-engine/2026-10-20-upstream-well-formed-controls.json",
         "worktracks/05-trait-goal-engine/2026-10-20-upstream-wf-values.md",
         "worktracks/05-trait-goal-engine/2026-10-20-upstream-adt-variants.md",
-        "worktracks/evidence/2026-10-20-v488-v492-upstream-well-formed-goals.json"
+        "worktracks/evidence/2026-10-20-v488-v492-upstream-well-formed-goals.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-field-clients.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-field-client-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-field-client-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-const-eval.md",
+        "worktracks/evidence/2026-10-20-v493-v494-upstream-field-clients.json"
       ],
       "title": "Pinned upstream solver bridge and transactions",
       "acceptance_contract": "TR007/TR008, source/type/binder round trips, genuine upstream invocation, failed-candidate isolation and cold-body/unused-bound controls. Depends: M019.",
@@ -20404,7 +20409,7 @@
       "implementation_contract": "Files: traits/upstream/, traits/term.rs, frontend/source_view.rs, Cargo.toml and provenance manifests. Build the pinned shared solver on macOS Rust1.99.0; adapt actual source Types/ParamEnv/headers, upstream inference transactions and canonical responses to LRR queries. Migrate custom inference/canonicalization consumers and remove superseded algorithms with explicit holds until verified.",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
-      "latest_component_scope": "V492 HELD M020 pinned compiler well-formed goal client. SolverContext now directly runs the complete rustc unnormalized WF visitor; the required well_formed_goals callback is removed. Mechanically registered next-solver inherent projection, Term/feature/field binder, typed value-tree and scalar helpers retain original source hashes. Immutable ADT variant/field metadata and captured source-schema shape checks are added, while actual field-Type translation, complete parent clauses, value admission and currentness remain real producer obligations. Both macOS1.99 builds, digest helper and port audits pass;2/2actual source/context controls execute scalar, unresolved Type/Const, reference and nested-pointer WF behavior with ready still rejected. Nominal/aggregate/dyn/inherent/GCA/publication branches remain unexecuted. Unchanged generic-derived-type retains its199matched VM operations/output/cleanup; repr128 retains LRR-E-OP-TYPE at28attempts/27outcomes. These runtimes still use the existing interpreter resolver, not an upstream root. Closing source/HEAD/binary guards match. Zero new stock gains, refreshed totals or task/milestone/interpreter/JIT closure. Const evaluation/transmutation/reflection clients, actual source/ADT/ParamEnv/leaf producers, full root/member/VM joins and remaining negative/origin/currentness matrices stay held.",
+      "latest_component_scope": "V494 HELD M020 ordinary source-field plans and pinned const/reflection clients. AdtSourceFields(tag74) uses the existing TypeSchema/SchemaNames/source-bindings/generic-layout/TypeIR route with memo reuse and mandatory captured dependency guard. Context-owned immutable slices and Symbols retain actual field metadata without leaks or caps. Full pinned reflective-field and const-normalization algorithms replace Clients.reflective_field and SolverClients.evaluate_const function pointers; immutable terminal const-query data distinguish missing admission from semantic None. Actual lang-item/terminal-query result production, complete ADT/source/ParamEnv/leaf factory, root admission/suspension/member/VM joins and transmutation client remain held. Both macOS1.99 builds, digest helper and all three port audits pass.3/3exact controls pass; new field matrix covers36worlds,72encoded fields,12explicit pending declarations, actual symbolic array constants, missing-owner data boundary and withdrawal guards. Exact pending enum is unmeasured; reflectionSome, alias/terminal/GCA, full provenance/currentness/origin/root matrices remain unexecuted. Unchanged generic-derived-type retains199matched VM operations/output/cleanup; repr128 retains LRR-E-OP-TYPE28attempts/27outcomes. Source/HEAD/test/CLI closing guards match. Zero new distinct stock gains/refreshed totals or task/milestone/interpreter/JIT closure.",
       "artifacts": [
         "worktracks/evidence/2026-10-19-v230-v231-pinned-binder-client.json",
         "worktracks/evidence/2026-10-19-v234-v235-pinned-client-relations.json",
@@ -20455,7 +20460,12 @@
         "worktracks/05-trait-goal-engine/2026-10-20-upstream-well-formed-controls.json",
         "worktracks/05-trait-goal-engine/2026-10-20-upstream-wf-values.md",
         "worktracks/05-trait-goal-engine/2026-10-20-upstream-adt-variants.md",
-        "worktracks/evidence/2026-10-20-v488-v492-upstream-well-formed-goals.json"
+        "worktracks/evidence/2026-10-20-v488-v492-upstream-well-formed-goals.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-field-clients.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-field-client-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-field-client-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-const-eval.md",
+        "worktracks/evidence/2026-10-20-v493-v494-upstream-field-clients.json"
       ],
       "evidence": [
         "worktracks/evidence/2026-10-19-v268-original-group-coordinator.json",
@@ -20562,7 +20572,12 @@
         "worktracks/05-trait-goal-engine/2026-10-20-upstream-well-formed-controls.json",
         "worktracks/05-trait-goal-engine/2026-10-20-upstream-wf-values.md",
         "worktracks/05-trait-goal-engine/2026-10-20-upstream-adt-variants.md",
-        "worktracks/evidence/2026-10-20-v488-v492-upstream-well-formed-goals.json"
+        "worktracks/evidence/2026-10-20-v488-v492-upstream-well-formed-goals.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-field-clients.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-field-client-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-field-client-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-const-eval.md",
+        "worktracks/evidence/2026-10-20-v493-v494-upstream-field-clients.json"
       ]
     },
     {

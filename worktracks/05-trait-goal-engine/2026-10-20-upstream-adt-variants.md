@@ -169,3 +169,105 @@ collects nominal children, tuples, arrays, slices, references and function
 children; richer aliases/projections require their actual dependency join.
 These holds and the genuine full producer/root/member/VM joins remain open
 even if V490's separate build/source controls pass.
+
+## Bounded actual field-plan implementation after a3e36397f8
+
+Before-code record: M020/WT05-02, baseline
+`a3e36397f8dd26c0bc5797d7e42908bce0726a26`. `/root/wf_adt_metadata` owns only
+new `traits/upstream/source_adt_fields.rs` and this record. Lead owns query
+registration, existing model storage and all shared API changes; the
+validation agent owns Cargo and actual controls. No tests, build commands,
+commits or subagents are authorized for this slice.
+
+Invariant/minimal witness: the pinned WF constant visitor must obtain each
+field's declared uninstantiated Type from the actual owning source variant.
+A shape-validated `AdtInfo.fields` payload alone is not source Type evidence.
+Unchanged official `enum-discriminant/repr128.rs` remains the broader runtime
+witness. The selected source controls are actual generic-derived-type
+`Pair<T>`, `const-generics/array-wrapper-struct-ctor.rs`, and
+`union/union-generic-rpass.rs` (the latter retains explicit projection pending;
+fixture path/provenance is to be confirmed by validation). These are source
+field observations, not promised full runtime passes.
+
+Shared route: the declaration/catalog-keyed `AdtSourceFieldsKey` demands
+`TypeSchema`, actual `DefinitionReceipt` and `PreparedScopeImplHeaders`' real
+completed environment. It joins `SchemaNames::from_current_database` ->
+`source_variant_fields` -> `actual_field_type`/`resolve_actual_type` ->
+`SourceBindings` -> `SourceGenericLayouts` -> `source_terms::encode_declared`
+-> upstream `EarlyBinder`. Both original and expanded declarations use that
+same owning-source path. No parser, const evaluator, solver, body lowering,
+runtime descriptor or context-only field policy is introduced. Existing
+constructor/member consumers are not replaced by this component; complete
+ADT/provider/root/member/VM integration remains held until its own evidence.
+
+Cold work retains the actual schema/environment query handles and one ordered
+field-term plan. Missing environment/source/field/representation facts are
+typed pending states, never omitted fields or complete empty success.
+`CurrentAdtSourceFields` captures the completed field memo's transitive input
+guard outside provider computation; currentness checks published stamps only.
+Encoding inside the matching generic/configuration context performs no DB
+fetch or guest effect. The current ordinary field helper's O(F^2) cold
+schema-membership validation is inherited; no performance claim follows.
+Immutable typed field/variant storage uses the lead-owned context retention
+API, never leaked allocations or BodyIndex clones. No runtime dispatch source
+walk or global namespace comparison is added.
+
+Required closure evidence: query memo reuse, schema/name/generic/config/epoch
+withdrawal, cold body unchanged, handwritten/user macro/wrapper origin and
+all-edition source controls; exact encoded owner/field ordering and binder
+substitution; explicit function/dyn/opaque/projection pending where actual
+metadata is not yet represented. The matrix and genuine upstream root and
+VM integration remain open until measured. Review the eight recurring modes
+again against the final source fingerprint before integration.
+
+Source-only candidate implemented in `source_adt_fields.rs`:
+`AdtSourceFieldsKey`, `PreparedAdtSourceFields`,
+`SourceAdtFieldsPending`, `EncodedAdtVariant` and
+`CurrentAdtSourceFields`. `prepare` retains actual schema, receipt and
+header-environment handles, resolves source variant fields, seeds the owner
+and required nominal dependencies, and checks the resulting owner generic
+query against the same receipt. `encode` delegates each real field term to
+`encode_declared`; `materialize` uses lead-owned `retain_adt_fields` and
+`retain_adt_variants`. `CurrentAdtSourceFields::capture` obtains the complete
+field memo guard, with explicit `require_current` for the owner before
+publication. It does not make an incomplete provider ready. Missing source
+receipts/catalog/schema identity violations are preparation diagnostics;
+missing environment/field terms/bindings or shared-IR representation are
+explicit pending results, with `NeedInput` propagated unchanged.
+
+Exact fixture paths confirmed from the pinned checkout:
+`tests/ui/generics/generic-derived-type.rs`,
+`tests/ui/const-generics/array-wrapper-struct-ctor.rs`, and
+`tests/ui/union/union-generic-rpass.rs`. They remain unchanged and unexecuted
+by this subagent. `Pair<T>` and `ArrayStruct<T,const N>`/`ArrayTuple<T,const N>`
+exercise owner parameters and field order; `MaybeItem<T>` retains its real
+associated projection as an explicit missing-source/representation hold.
+
+Separate source-review pass against SHA256
+`source_adt_fields.rs=b9974023cbbea386fb9930eaedbee7358d676f998dab24899b741da9b4a71bbd`:
+
+1. Only the existing `SchemaNames`/`resolve_actual_type` source service and
+   `source_terms::encode_declared` are called; no expression/assertion evaluator.
+2. Every variant's actual source field occurrences are used, without literal
+   or break-only payload handling.
+3. Field names come from schema/ordinal identity and Types from ordinary
+   resolution; no method-name or numeric-constraint policy is introduced.
+4. The same actual header environment and nominal service serve ordinary and
+   generated declarations. Complete origin acceptance remains unexecuted.
+5. `prepare` asks only for source/schema/generic/field facts; no executable
+   branch, pattern, initializer or function body is lowered or executed.
+6. Retained source terms are encoded once per requested materialization;
+   installed field access uses `EarlyBinder`. No parse/query call exists in
+   `encode` or `materialize`; full producer installation/reuse remains held.
+7. Preparation uses the existing relevant lookup dependencies; the current
+   wrapper captures the memo closure. No full-world namespace comparison is
+   introduced into callback or dispatch execution.
+8. Source/schema/environment query handles use `Arc`; typed fields and
+   variants use the context retention API. No BodyIndex deep copy or whole
+   file syntax search is added. Existing ordinary field schema checks remain
+   their recorded cold O(F^2) route.
+
+`git diff --check` passed. Query registration, receipt visibility and storage
+APIs are lead-owned integration dependencies, not established by this file.
+No build/test command or runtime acceptance was performed by this subagent;
+later source changes must receive a new fingerprint/review and actual terminals.

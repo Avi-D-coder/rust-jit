@@ -5,6 +5,7 @@
 //! Source/header/ParamEnv transport, demand suspension and selected-impl witness
 //! mapping must join before any runtime acceptance.
 pub(crate) mod source_generics;
+pub(crate) mod source_adt_fields;
 mod source_bindings;
 use rustc_next_trait_solver::{
     delegate::SolverDelegate,
@@ -31,6 +32,7 @@ pub(crate) mod expression_operators;
 pub(crate) mod identity;
 pub(crate) mod model;
 pub(crate) mod wf_values;
+mod reflection;
 pub(crate) mod parameters;
 #[cfg(test)]
 pub(crate) use prepared::{check_scope_receipts, check_completed_source_catalog, check_opaque_return_receipt};

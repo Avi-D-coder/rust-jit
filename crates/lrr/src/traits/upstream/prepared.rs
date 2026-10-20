@@ -84,7 +84,7 @@ impl DefinitionReceipt {
         let QueryValue::ParseFile(parsed) = self.parsed.as_ref() else { unreachable!("captured source parse") };
         parsed.syntax_at(context.range, |node| ast::Enum::can_cast(node.kind())).map(|node| node.is_some())
     }
-    fn nominal_kind_and_name(&self) -> Result<(AdtKind, String), Diagnostic> {
+    pub(super) fn nominal_kind_and_name(&self) -> Result<(AdtKind, String), Diagnostic> {
         use ra_ap_syntax::ast::HasName;
         let InputValue::DeclarationContext(context) = self.context.as_ref() else { unreachable!("captured source context") };
         let QueryValue::ParseFile(parsed) = self.parsed.as_ref() else { unreachable!("captured source parse") };
@@ -196,7 +196,6 @@ pub(super) struct Settings<'cx> {
 /// a separate integration requirement, not established by this record type.
 pub(super) struct Clients<'cx> {
     pub(super) solver: super::infer::delegate::SolverClients<'cx>,
-    pub(super) reflective_field: fn(Cx<'cx>, DefinitionId, A<'cx>) -> Option<FieldInfo<Cx<'cx>>>,
 }
 
 pub(super) struct PredicateFacts<'cx> {
@@ -381,6 +380,7 @@ impl PreparedAdtVariants {
 pub(super) struct LangItems {
     /// Compiler WF helper lang item outside the shared solver's smaller enum.
     pub(super) const_param_ty: Option<DefinitionId>,
+    pub(super) field_representing_type: Option<DefinitionId>,
     pub(super) traits: ty::data_structures::HashMap<SolverTraitLangItem, DefinitionId>,
     pub(super) projections: ty::data_structures::HashMap<SolverProjectionLangItem, DefinitionId>,
     pub(super) adts: ty::data_structures::HashMap<SolverAdtLangItem, DefinitionId>,
@@ -391,6 +391,7 @@ pub(super) struct LangItems {
 impl LangItems {
     pub(super) fn new(
         const_param_ty: Option<DefinitionId>,
+        field_representing_type: Option<DefinitionId>,
         traits: ty::data_structures::HashMap<SolverTraitLangItem, DefinitionId>,
         projections: ty::data_structures::HashMap<SolverProjectionLangItem, DefinitionId>,
         adts: ty::data_structures::HashMap<SolverAdtLangItem, DefinitionId>,
@@ -408,6 +409,7 @@ impl LangItems {
         }
         Ok(Self {
             const_param_ty,
+            field_representing_type,
             projection_by_definition: reverse(&projections)?,
             trait_by_definition: reverse(&traits)?,
             adt_by_definition: reverse(&adts)?,
@@ -429,6 +431,7 @@ pub(super) struct PreparedFacts<'cx> {
     pub(super) adts: BTreeMap<DefinitionId, AdtFacts<'cx>>,
     pub(super) parameters: BTreeMap<(ParamKey, BoundKind), DefinitionId>,
     pub(super) lang: LangItems,
+    pub(super) const_evaluation: super::infer::const_eval::PreparedConstEvalInputs<'cx>,
     pub(super) clients: Clients<'cx>,
     /// Optional diagnostic-print attachments, not semantic region inference.
     pub(super) anonymous_bounds: BTreeMap<(usize, usize), Region<Cx<'cx>>>,
@@ -467,6 +470,7 @@ impl<'cx> PreparedFacts<'cx> {
         adts: BTreeMap<DefinitionId, AdtFacts<'cx>>,
         parameters: BTreeMap<(ParamKey, BoundKind), DefinitionId>,
         lang: LangItems,
+        const_evaluation: super::infer::const_eval::PreparedConstEvalInputs<'cx>,
         clients: Clients<'cx>,
         anonymous_bounds: BTreeMap<(usize, usize), Region<Cx<'cx>>>,
         anonymous_canonical: BTreeMap<usize, Region<Cx<'cx>>>,
@@ -482,6 +486,7 @@ impl<'cx> PreparedFacts<'cx> {
             adts,
             parameters,
             lang,
+            const_evaluation,
             clients,
             anonymous_bounds,
             anonymous_canonical,
@@ -589,6 +594,7 @@ impl<'cx> PreparedProvider<'cx> {
     pub(super) fn solver_clients(self) -> &'cx super::infer::delegate::SolverClients<'cx> {
         &self.data().clients.solver
     }
+    pub(super) fn const_eval_inputs(self)->&'cx super::infer::const_eval::PreparedConstEvalInputs<'cx> { &self.data().const_evaluation }
     pub(super) fn const_param_ty_trait(self) -> Option<DefinitionId> {
         self.data().lang.const_param_ty
     }
@@ -759,6 +765,11 @@ impl<'cx> PreparedProvider<'cx> {
                     return Err(fault("candidate belongs to a different actual trait"));
                 }
             }
+        }
+        if let Some(id) = facts.lang.field_representing_type
+            && (id.world()!=world || !facts.adts.contains_key(&id))
+        {
+            return Err(fault("reflection lang item lacks actual nominal source metadata"));
         }
         if let Some(id) = facts.lang.const_param_ty
             && (id.world() != world || !facts.traits.contains_key(&id)
@@ -1495,13 +1506,14 @@ impl<'cx> SourceFacts<'cx> for PreparedProvider<'cx> {
             .expect("ADT metadata was not prepared")
             .info
     }
+    fn field_representing_type_definition(self, _:Cx<'cx>)->Option<DefinitionId> { self.data().lang.field_representing_type }
     fn field_representing_type_info(
         self,
         cx: Cx<'cx>,
         id: DefinitionId,
         args: A<'cx>,
     ) -> Option<FieldInfo<Cx<'cx>>> {
-        (self.data().clients.reflective_field)(cx, id, args)
+        AdtDefinition { context:cx, definition:id }.pinned_field_representing_type_info(cx,args)
     }
     fn discriminant_type(self, cx: Cx<'cx>, ty: T<'cx>) -> T<'cx> {
         ty.pinned_discriminant_ty(cx)

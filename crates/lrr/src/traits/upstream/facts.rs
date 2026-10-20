@@ -339,6 +339,7 @@ pub(crate) trait SourceFacts<'cx>:
         parameter: SourceParameter,
     ) -> DefinitionId;
     fn adt_info(self, cx: Context<'cx, Self>, definition: DefinitionId) -> &'cx AdtInfo<'cx, Self>;
+    fn field_representing_type_definition(self, cx:Context<'cx,Self>)->Option<DefinitionId>;
     fn field_representing_type_info(
         self,
         cx: Context<'cx, Self>,

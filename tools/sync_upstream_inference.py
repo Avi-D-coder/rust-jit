@@ -20,6 +20,7 @@ from upstream_goal_fast_path import extend_goal_fast_path
 from upstream_solver_delegate import extend_solver_delegate
 from upstream_hidden_type_bounds import extend_hidden_type_bounds
 from upstream_wellformed import expected as expected_well_formed
+from upstream_const_eval import expected as expected_const_eval
 
 ROOT = Path(__file__).resolve().parents[1]
 PIN = 'ae0fe511b15ab760d7e963b13389d1bc2ab42b18'
@@ -151,6 +152,7 @@ impl Span {
     extend_solver_delegate(outputs, header, rustfmt)
     extend_hidden_type_bounds(outputs, header, rustfmt)
     outputs['well_formed.rs'] = expected_well_formed()
+    outputs['const_eval.rs'] = expected_const_eval()
     return outputs
 
 

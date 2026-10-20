@@ -715,10 +715,12 @@ pub(crate) enum AdtKind {
 /// Declaration-order metadata shared by ordinary source and expanded source.
 /// Variant and field identity is its position in the retained owner schema;
 /// neither needs a fabricated standalone source DefinitionId.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub(crate) struct AdtVariant<'cx, F: SourceFacts<'cx>> {
     pub(crate) name: Symbol<'cx>,
     pub(crate) fields: &'cx [AdtField<'cx, F>],
 }
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub(crate) struct AdtField<'cx, F: SourceFacts<'cx>> {
     pub(crate) name: Symbol<'cx>,
     pub(crate) ty: EarlyBinder<Context<'cx, F>, Ty<'cx, F>>,
