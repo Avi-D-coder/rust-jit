@@ -759,3 +759,175 @@ LRR_EMBEDDED_FACADE=1, --lrr target/debug/lrr,
 --timeout 240, and only --case tests/ui/enum-discriminant/repr128.rs and
 --case tests/ui/associated-types/assoc-type-in-struct-constructor.rs. Raw terminals,
 actual command receipts and guards remain in artifacts/validation-current-v521.
+
+## Common transient emission review after checkpoint 7ea94b8
+
+Source baseline `7ea94b8f6b3ff5b9a0793a414e2040aa2828d0ff`. The lead owns
+ordinary Q80/impl/Q88 consumer integration; the metadata worker owns the new
+predicate_emission.rs policy. This reviewer owns only the existing
+upstream_projection_types.rs control edits and these review/selection documents.
+No Cargo, control or runtime command ran while this source was mutable. The
+final integrated fingerprint remains pending global freeze.
+
+The exact pinned policy is hir_ty_lowering/mod.rs:983-1002: positive authentic
+PointeeSized selects a temporary output vector, normal lowering continues, and
+the completed vector is discarded. This is separate from source retention and
+implicit/default-bound policy. It grants no permission to remove unavailable
+arguments, negative/qualified bounds or written Pending rows.
+
+PreparedClauseEmission was independently read. prepare() checks its actual
+catalog/current Arc, gathers distinct genuine positive trait IDs and retains
+their exact Q76 query values. Actual pointee_sized identity is transient;
+another role or authentic Known(None) emits; missing/unsupported identity stays
+typed Pending. apply_encoded verifies real positive clause identity/world and
+filters only an already encoded output, preserving its span when emitted.
+Stable encoding includes catalog/Q76 fingerprints and explicit outcome/detail
+tags; the enclosing ordinary memo retains dependency/currentness ownership.
+No new complete-world language registry or missing-map false answer is added.
+
+The lead's common encode_recipe performs require/binding and full actual
+source_terms::encode_predicate before the emission decision. Q80, ordinary
+impl predicates, Q88 and the Q84 observation use that boundary. Q88 retains
+raw source/default rows while removing only authenticated transient positive
+dependency edges; unknown classification preserves Pending and conservative
+dependencies. Q89 follows that semantic graph. The sidecar is prepared after
+SourceBindings, which does not recursively read it, avoiding a Q76/Q75 binding
+cycle. No source lookup occurs inside the pure encoder or solver callbacks.
+The existing Q88 observer and new Q80 observer were read: they call production
+encode, validate actual IDs/Self/arguments/spans/order and return owned counts
+or IDs. Their expected-row filtering is observation, not another encoder.
+
+The wrong implied_traits >= 2 assertion was removed from the existing single
+control. Its appended private helper uses unchanged repr128 worlds to check
+Q78's two actual Self/Rhs PointeeSized source rows, the retained Q75 colon span,
+Q84 actual sizedness identity and authentic default_inputs. Applying that real
+default view still suppresses implicit sizedness. Q80 emits no clauses; both
+Q88 filters preserve the written row but emit none and retain no semantic edge.
+The unchanged core-marker-name-shadowing-issue-2284.rs supplies the actual user
+Send and its free f<T:Send>, independently distinguished from Send::f. Q76 must
+report Known(None), and production Q80 must retain/emit the user trait bound.
+No fixture source or miniature language substitute is introduced.
+
+The same one exact selector now contains the prior 36 elaboration/domain
+worlds plus 24 emission/shadow worlds. These are intended 60 configured worlds,
+not measured outcomes. The new helper's expected counters are 24 written rows,
+24 filtered transient rows and 12 ordinary shadow rows. Core PartialEq remains
+ordinary facade source in every root-origin world; the Send source/emission is
+directly original/emit/wrapper. Generated transient-language declarations and
+dyn runtime lowering remain unexecuted requirements. Guards cover memo reuse,
+cold executable preparation and epoch revocation followed by withdrawal, not
+independent fresh-source withdrawal.
+
+The new tracked selection is 2026-10-20-predicate-emission-controls.json;
+historical V521 selection remains unchanged. Only unchanged repr128 is planned
+for runtime replay. The common CallSeal packet remains inactive and constructor
+execution is unchanged. Explicit/implicit Sized-order controls contain no
+authentic PointeeSized; the new filter preserves every Emit row's order, so no
+automatic eleven-control or unrelated ordering replay is selected.
+
+All eight modes were separately reviewed for these changes: (1) no assertion
+compiler, (2) no macro scalar executor, (3) no contextual method/numeric rule,
+(4) actual source/header/Q76 joins remain common across origins, (5) no body
+lowering or pattern machinery, (6) one immutable policy per ordinary memo and
+pure encoding rather than hot re-planning, (7) relevant per-ID Q76 dependencies
+rather than namespace census or independent revision gate, and (8) retained
+Arcs without body clones/whole-file installed searches. No performance claim or
+full origin/runtime acceptance follows from source review.
+
+The new caller_application was also read independently: actual complete zero
+parameters, both real private GenericEnv binding tables empty, source/header/
+context/layout and full signature equality plus retained guards/Arc handles
+support its narrow source-application receipt. Pure descriptor matching is not
+currentness or activation. The final consumer still needs actual active handles,
+attempt/run identity and current result authority; inherited broad callable
+revalidation remains named legacy debt. Caller, root, response-export and
+guarded commit execution remain unmeasured by this selected control.
+
+This review is bound to the V522 freeze: HEAD
+`7ea94b8f6b3ff5b9a0793a414e2040aa2828d0ff`, fingerprint
+`7ebcb20b8dc073e1dc76ce077af5d965022bda3555b8e97bb5a397a58d4b53f9`,
+8,734 inputs. The actual before guard matches. The owned test source is
+`5c79b7267e24d04b65357d747f059285c895fccf977a38da032b9d9de98b6b56`.
+All-eight conclusions above apply to this exact candidate; execution remains
+separately pending until its actual terminals. The only selected runtime
+witness is unchanged repr128; no constructor or eleven-control replay is planned.
+
+V522 library compilation terminated 101 on this reviewer's new control,
+upstream_projection_types.rs:187: E0308, ast_adapter::range expects TextRange
+rather than &SyntaxNode. No CLI/digester build, test body or runtime ran. Both
+closing guards terminated 0 against its exact fingerprint/HEAD with zero changed
+inputs; old V521 test/CLI/digester stayed unchanged, explicitly fresh=false.
+All processes were terminal and ownership returned before the authorized repair.
+The failed receipt was originally captured in artifacts/validation-current-v522.
+That disposable raw output is no longer available; the retained V522/V523
+capsule linked below records the observed failure and its limitations.
+
+V523 changes only that test call to syntax().text_range(), with no other source
+change. The new before fingerprint is
+`da7fc5fbb7d486505d275fd78f9b2da67e91bf1d0c52c081f1ae25690488cbab`,
+8,734 inputs, same HEAD. The owned test file SHA256 is
+`846f4d99143e3cc13948ae9234d8168bede22d57d1729cde02d8f3054ac0f8cf`.
+The all-eight source review is unchanged by this span API correction and binds
+to V523 as well. Its builds/control/runtime remain separately pending; the
+V522 failure establishes no component or runtime acceptance.
+
+### V523 actual component and runtime terminals
+
+All three builds terminated 0: library no-run 41.50s, CLI 33.74s, digester
+0.80s (Cargo). Actual selected test SHA256 is
+`635ada623231b7466b4b30b3cf5c62b763492785cb59347bd4bca4d3980132c2`;
+CLI `6993314f8e20a59e2c98c7114b321b8f5f2f1c9b2cdfaa342f210ccfd28d152b`;
+fresh digester
+`b3dbd46725dae700f93f3c24a0ac1a90b014f0389ff266eb92d33f46241e6ff5`.
+
+Only the one exact selector in predicate-emission-controls.json executed. It
+terminated 0 in 158.760s, one test body, unchanged input/HEAD/test guards.
+Actual parsed observations record 60 configured source worlds, separately:
+
+| Observation | Actual completed evidence |
+| --- | --- |
+| Retained elaborator/domain cases | 36 worlds; 36 pinned elaborations, 12 outlives rows, 12 typed inherent-domain holds. |
+| Ordinary core transient source in repr128 worlds | 12 worlds; 24 retained written rows, 24 filtered transient rows, zero emitted transient clauses; Q75/Q78/Q84 and production Q80/Q88 assertions passed. |
+| Actual user Send source/emission | 12 worlds; 12 ordinary bounds retained and emitted under genuine Q76 Known(None), across four editions and original/emit/wrapper. |
+
+Actual per-world rows and grouped counters were captured during the run in
+artifacts/validation-current-v523/observed-control-counts.json. That raw file
+was subsequently removed after terminal closure. The table above preserves
+the observed grouped counts; it is not a fresh parse of currently available
+raw rows. The removed
+implied-graph cardinality assumption is not part of this pass. These are actual
+component observations, not the earlier intended counts. Core transient bounds
+themselves remain ordinary facade source; a generated authentic transient bound
+and dyn runtime behavior are not directly exercised. Changed ordinary impl and
+Q84 item-output encoding call sites have source review but no separate execution
+observation here. Epoch-then-withdrawal scope remains as stated above.
+
+Only unchanged repr128 was replayed in owning Rust 2015 with embedded facade.
+The batch terminated 1, CLI exit 2, executor LRR-E-OP-TYPE:
+`operator requires supported concrete primitive operand descriptors`. It has no
+runtime-check acceptance and zero new runtime gain. Imported originals, manifest
+and binary stayed unchanged; native_execution=false. Exact argv/capture/source
+hash and compact fault were captured in runtime-summary.json; the original
+report was /private/tmp/lrr-v523-predicate-emission-runtime/report.json. Both
+disposable outputs were subsequently removed after terminal closure. Constructor, broad
+control, native/compiler-reference and full-suite replays were not run.
+
+After-build and closing after-runtime guards terminated 0 at exact V523
+fingerprint/HEAD, 8,734 inputs and zero changed source files. Actual test/CLI
+hashes match after-build and the separate fresh digester closing guard matches.
+All Cargo/control/runtime processes are terminal; source/target ownership was
+returned before further work. Reproduction uses the maintained build commands,
+run_controls.py with 2026-10-20-predicate-emission-controls.json, and the runtime
+command above with only --case tests/ui/enum-discriminant/repr128.rs and a new
+report directory. The original raw receipts were captured in
+artifacts/validation-current-v523 and removed after terminal closure. Current
+durable evidence is
+[the V522/V523 capsule](../evidence/2026-10-20-v522-v523-predicate-emission.json),
+reconstructed from the lead's actual prior terminal/tool observations. It
+preserves source/binary identities, observed terminals and grouped counts;
+it does not reproduce unavailable raw rows, invent removed-log hashes or
+claim a new execution. Exact historical command details that were not retained
+remain unknown; maintained commands above are reproduction instructions.
+Caller/application/export/Q90 runtime use, source-factory/root admission,
+guarded result commit, obsolete fallback removal and interpreter/JIT gates
+remain held or unmeasured. This checkpoint is not feature completion.

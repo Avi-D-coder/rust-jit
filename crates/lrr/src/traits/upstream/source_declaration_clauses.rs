@@ -5,6 +5,7 @@ use super::{
     generic_clauses::{ClauseParents, ExplicitOwnClauses, GenericClauses},
     identity::DefinitionId,
     model::{Clause, Span},
+    predicate_emission::PreparedClauseEmission,
     prepared::{self, Cx},
     source_bindings::{DefinitionKind, SourceBindings, SourceRequirements},
     source_generics::SourceGenericLayouts,
@@ -46,6 +47,7 @@ pub struct PreparedSourceDeclarationClauses {
     key: SourceDeclarationClausesKey,
     source: Arc<QueryValue>,
     bindings: SourceBindings,
+    emission: Option<PreparedClauseEmission>,
     pending: Option<SourceDeclarationClausesPending>,
 }
 macro_rules! ready {
@@ -92,6 +94,7 @@ impl PreparedSourceDeclarationClauses {
             key: key.clone(),
             source,
             bindings: SourceBindings::empty(Arc::clone(&input)),
+            emission: None,
             pending: None,
         };
         if result.source().key() != key {
@@ -130,6 +133,15 @@ impl PreparedSourceDeclarationClauses {
             ));
             return QueryPoll::Ready(Ok(result));
         }
+        let emission = ready!(PreparedClauseEmission::prepare(
+            db,
+            Arc::clone(&result.bindings.catalog),
+            result.source().recipes().expect("ready source rows")
+        ));
+        result.pending = emission.pending().map(|why| {
+            SourceDeclarationClausesPending::Recipe(SourcePredicatePending::Emission(why))
+        });
+        result.emission = Some(emission);
         QueryPoll::Ready(Ok(result))
     }
     /// Run only during context construction. No source query, execution,
@@ -186,6 +198,9 @@ impl PreparedSourceDeclarationClauses {
                 cx,
                 configuration,
                 self.bindings.type_bindings(),
+                self.emission
+                    .as_ref()
+                    .expect("ready source plan retains emission inputs"),
                 recipe,
                 parse.content,
                 |parameter| source.parameter_range(parameter),
@@ -392,6 +407,7 @@ impl StableEncode for PreparedSourceDeclarationClauses {
         e.record(&self.key);
         e.record(self.source());
         e.record(&self.bindings);
+        e.option(&self.emission, |e, value| e.record(value));
         // Exact pending source/recipe reason is retained in Q78/bindings.
         e.option(&self.pending, |e, pending| {
             e.u32(match pending {
@@ -557,4 +573,135 @@ impl CurrentSourceDeclarationClauseHierarchy {
     pub(crate) fn require_current(&self, db: &Database) -> Result<(), Diagnostic> {
         self.guard.require_current(db)
     }
+}
+
+/// Observe the ordinary production encoder with actual source-selected trait
+/// identities. This does not supply clauses or create a solver root.
+#[cfg(test)]
+pub(crate) fn check_actual_declaration_clause_emission(
+    db: &mut Database,
+    key: &SourceDeclarationClausesKey,
+) -> Result<Vec<Digest>, Diagnostic> {
+    use super::configuration::SolverConfigurationKey;
+    use rustc_type_ir::{self as ty, inherent::*};
+    fn poll<T>(value: QueryPoll<T>) -> Result<T, Diagnostic> {
+        match value {
+            QueryPoll::Ready(result) => result,
+            QueryPoll::NeedInput(_) => Err(fault("actual clause emission requires input")),
+        }
+    }
+    let current = poll(CurrentSourceDeclarationClauses::capture(db, key))?;
+    current.require_current(db)?;
+    let plan = current.plan();
+    let layouts = plan.generic_layouts()?;
+    let input = Arc::clone(&plan.bindings.catalog);
+    let InputValue::DiscoverySeal(catalog) = input.as_ref() else {
+        unreachable!()
+    };
+    let configuration = poll(
+        db.fetch(
+            &SyntaxProvider,
+            QueryKey::SolverConfiguration(Box::new(SolverConfigurationKey::from_source(
+                catalog
+                    .impl_catalog
+                    .as_ref()
+                    .expect("actual catalog")
+                    .root(),
+            ))),
+        ),
+    )?
+    .value;
+    let QueryValue::SolverConfiguration(configuration) = configuration.as_ref() else {
+        unreachable!()
+    };
+    let source = plan.source();
+    let recipes = source
+        .recipes()
+        .map_err(|why| fault(&format!("actual source clauses pending: {why:?}")))?;
+    let origin = source
+        .declaration()
+        .source_parts()
+        .expect("actual source parts")
+        .0
+        .content;
+    let before = db.trace.events.len();
+    let observed = configuration.with_source_context(db, input, Some(&layouts), |cx, _| {
+        let clauses = plan
+            .encode(cx, configuration)
+            .map_err(|why| fault(&format!("actual compiler clause encoding pending: {why:?}")))?;
+        let emission = plan.emission.as_ref().expect("ready source emitter");
+        let mut expected = Vec::new();
+        for recipe in recipes {
+            let (reference, span) = match recipe {
+                crate::traits::predicate::SourcePredicateRecipe::Explicit {
+                    source,
+                    result: crate::traits::predicate::PredicateResult::Implemented(reference),
+                } => (reference, *source),
+                crate::traits::predicate::SourcePredicateRecipe::ResolvedSizedDefault(
+                    reference,
+                ) => {
+                    let crate::traits::term::TyTerm::Param(parameter) = reference.self_ty else {
+                        panic!("actual default subject")
+                    };
+                    (
+                        reference,
+                        source
+                            .parameter_range(parameter)
+                            .expect("actual default parameter"),
+                    )
+                }
+                crate::traits::predicate::SourcePredicateRecipe::Explicit {
+                    result: crate::traits::predicate::PredicateResult::Relaxed { .. },
+                    ..
+                } => continue,
+                other => {
+                    panic!("selected actual emission control needs positive trait rows: {other:?}")
+                }
+            };
+            if matches!(
+                emission
+                    .require(reference.trait_key)
+                    .expect("actual role input"),
+                super::predicate_emission::ClauseEmission::Emit
+            ) {
+                expected.push((reference, span));
+            }
+        }
+        assert_eq!(clauses.len(), expected.len());
+        let mut observed = Vec::new();
+        for ((clause, span), (reference, source)) in clauses.iter().zip(expected) {
+            let ty::ClauseKind::Trait(encoded) = clause.kind().skip_binder() else {
+                panic!("actual emitted trait clause")
+            };
+            assert_eq!(encoded.polarity, ty::ClausePolarity::Positive);
+            assert_eq!(
+                encoded.trait_ref.def_id,
+                plan.bindings.definitions[&reference.trait_key]
+            );
+            assert_eq!(
+                (span.origin, span.start, span.end),
+                (origin, source.start, source.end)
+            );
+            let expected = super::source_terms::encode_predicate(
+                cx,
+                configuration,
+                plan.bindings.type_bindings(),
+                &crate::traits::predicate::PredicateResult::Implemented(reference.clone()),
+            )
+            .expect("actual source predicate encoding");
+            assert_eq!(
+                *clause, expected,
+                "same source Self/arguments/binder as ordinary common encoder"
+            );
+            observed.push(encoded.trait_ref.def_id.source());
+        }
+        Ok::<_, Diagnostic>(observed)
+    })??;
+    assert_eq!(
+        db.trace.events.len(),
+        before,
+        "clause encoding must not query source"
+    );
+    current.require_current(db)?;
+    Ok(observed)
 }

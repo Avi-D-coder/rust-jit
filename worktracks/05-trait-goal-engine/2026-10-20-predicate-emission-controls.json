@@ -1,0 +1,10 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "One exact actual-source component control extended from V521 after common transient PointeeSized clause emission changed. Actual Q78 PartialEq Self/Rhs rows and Q75 colon/Q84 default inputs remain; Q80 and Q88 production encoders discard authentic positive PointeeSized, and Q88 dependency edges omit it. Unchanged user Send shadow remains an ordinary emitted Q80 bound under genuine Q76 Known(None). Existing nonempty Foo elaboration and inherent NotApplicable checks remain. Four editions and original/emit/wrapper configured worlds; transient core facet itself remains ordinary source. No solver root, caller/application/export execution, full fixture or runtime gain claim. No broad replay; unaffected explicit/implicit Sized-order controls are not selected.",
+  "controls": [
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_impl_super_outlives_uses_pinned_elaborator_all_editions_and_origins"
+  ],
+  "runtime_cases": [
+    "tests/ui/enum-discriminant/repr128.rs"
+  ]
+}

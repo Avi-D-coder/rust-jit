@@ -4,6 +4,7 @@ use super::{
     configuration::PreparedSolverConfiguration,
     model::{Clause, Span},
     parameters::{DeclarationParameters, DeclaredParameterPreparation},
+    predicate_emission::{ClauseEmission, PreparedClauseEmission},
     prepared::{self, Cx},
     source_bindings::{DefinitionKind, SourceBindings, SourceRequirements},
     source_default_bounds::{DefaultBoundsContext, DefaultBoundsPending},
@@ -106,6 +107,7 @@ pub struct PreparedSourceTraitClauses {
     dependencies: Vec<TraitClauseDependency>,
     pending_dependencies: Vec<PendingTraitClauseDependency>,
     bindings: SourceBindings,
+    emission: Option<PreparedClauseEmission>,
     source_pending: Option<SourceTraitClausesPending>,
     default_pending: Option<DefaultBoundsPending>,
     recipe_pending: Option<SourcePredicatePending>,
@@ -203,6 +205,7 @@ impl PreparedSourceTraitClauses {
             dependencies: Vec::new(),
             pending_dependencies: Vec::new(),
             bindings: SourceBindings::empty(Arc::clone(&input)),
+            emission: None,
             source_pending: None,
             default_pending: None,
             recipe_pending: None,
@@ -396,6 +399,26 @@ impl PreparedSourceTraitClauses {
                 .recipe_pending
                 .get_or_insert(SourcePredicatePending::Source(why));
         }
+        let emission = ready!(PreparedClauseEmission::prepare(
+            db,
+            Arc::clone(&input),
+            &result.recipes
+        ));
+        if let Some(why) = emission.pending() {
+            result
+                .recipe_pending
+                .get_or_insert(SourcePredicatePending::Emission(why));
+        }
+        // Keep raw rows/default provenance. Only authenticated transient
+        // positives leave the semantic query-demand graph; unknown roles stay
+        // conservative and keep the explicit pending result above.
+        result.dependencies.retain(|dependency| {
+            !matches!(
+                emission.require(dependency.definition),
+                Ok(ClauseEmission::TransientPositivePointeeSized)
+            )
+        });
+        result.emission = Some(emission);
         QueryPoll::Ready(Ok(result))
     }
     /// Immediate rows only. No recursive query forcing or elaboration is
@@ -446,6 +469,9 @@ impl PreparedSourceTraitClauses {
                 cx,
                 configuration,
                 self.bindings.type_bindings(),
+                self.emission
+                    .as_ref()
+                    .expect("ready source plan retains emission inputs"),
                 recipe,
                 parse.content,
                 |_| None,
@@ -486,6 +512,7 @@ impl StableEncode for PreparedSourceTraitClauses {
             encode_bound_pending(e, dependency.pending);
         });
         e.record(&self.bindings);
+        e.option(&self.emission, |e, value| e.record(value));
         e.option(&self.source_pending, |e, why| encode_pending(e, *why));
         e.option(&self.default_pending, |e, why| e.u32(*why as u32));
         e.option(&self.recipe_pending, |e, why| {
@@ -497,6 +524,10 @@ fn encode_recipe_pending(e: &mut StableEncoder, why: SourcePredicatePending) {
     match why {
         SourcePredicatePending::Head => e.u32(0),
         SourcePredicatePending::Sized => e.u32(1),
+        SourcePredicatePending::Emission(why) => {
+            e.u32(4);
+            super::predicate_emission::encode_pending(e, why);
+        }
         SourcePredicatePending::Source(why) => {
             e.u32(2);
             e.u32(why as u32);
@@ -644,7 +675,19 @@ pub(crate) fn check_actual_filtered_trait_encoding(
                 SourcePredicateRecipe::Explicit {
                     source,
                     result: PredicateResult::Implemented(reference),
-                } => Some((source, reference)),
+                } => match plan
+                    .emission
+                    .as_ref()
+                    .expect("ready source emission inputs")
+                    .require(reference.trait_key)
+                    .expect("ready actual language role")
+                {
+                    ClauseEmission::Emit => Some((source, reference)),
+                    ClauseEmission::TransientPositivePointeeSized => None,
+                    ClauseEmission::Pending(_) => {
+                        unreachable!("pending source emission cannot encode")
+                    }
+                },
                 other => panic!("actual positive Self-clause control shape differs: {other:?}"),
             })
             .collect::<Vec<_>>();

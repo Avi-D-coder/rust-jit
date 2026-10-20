@@ -888,6 +888,7 @@ pub(crate) fn check_actual_item_default_encoding(
         )));
     }
     let layouts = SourceGenericLayouts::from_bindings(Arc::clone(&input), [&bindings])?;
+    let emission = poll(super::predicate_emission::PreparedClauseEmission::prepare(db, Arc::clone(&input), recipes))?;
     let configuration = poll(
         db.fetch(
             &SyntaxProvider,
@@ -927,6 +928,7 @@ pub(crate) fn check_actual_item_default_encoding(
                     cx,
                     configuration,
                     bindings.type_bindings(),
+                    &emission,
                     recipe,
                     origin,
                     |_| None,

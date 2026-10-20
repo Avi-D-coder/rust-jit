@@ -58,7 +58,7 @@ Exact scoped evidence covers580 Rust test bodies in5 unfiltered binaries plus3 P
 
 MAIN now retains208 official rustc cases/349 unchanged original files with both original licenses. Full stock fixture/compiletest passes remain **0**. The required new MAIN milestone is pending; the last accepted earlier-source macOS milestone remains **2,464 project bodies/185 summaries**. T030/T025/T031 and full M017/TR001/TR002/source-view/trait integration remain incomplete. All subagents are stopped; root owns background tests. Guest JIT, release and Linux acceptance remain deferred/unestablished.
 
-Evidence: [scoped review](artifacts/macos-first/t030-wildcard-milestone-rebase-v6/root-scoped-review-v1.json). Earlier sections below are historical checkpoints.
+Evidence: [scoped review](docs/historical-local-evidence.md). Earlier sections below are historical checkpoints.
 
 # Current status — M017 integration milestone accepted; interpreter work continues
 
@@ -70,7 +70,7 @@ MAIN retains **206 official rustc cases/347 unchanged original files** with pinn
 
 All subagents are stopped; root owns implementation and asynchronous tests. The separate wildcard draft preserves current M017 and numeric fallback while adding an unexecuted stock float-literal control. Its208 copied cases/349 originals are draft inputs, not MAIN acceptance. The inspected reference-operand case exposes later numeric-use and reference-operator work; no execution pass is claimed.
 
-Evidence: [accepted root milestone review](artifacts/macos-first/m017-unicode-declaration-world-v8/integrated-main-milestone-v1/root-terminal-review-v1.json). Earlier sections below are historical checkpoints.
+Evidence: [accepted root milestone review](docs/historical-local-evidence.md). Earlier sections below are historical checkpoints.
 
 # Current status — M017 components integrated; MAIN milestone pending
 
@@ -82,7 +82,7 @@ MAIN now retains **206 official rustc cases/347 unchanged original files** with 
 
 The required fresh integrated MAIN milestone is pending. The last accepted earlier-source macOS milestone remains **2,421 project bodies/181 executable summaries**. Release and Linux acceptance remain unestablished.
 
-Evidence: [scoped collection](artifacts/macos-first/m017-unicode-declaration-world-v8/scoped-validation-v1/independent-collection-v1.json) and [integration receipt](artifacts/macos-first/m017-unicode-declaration-world-v8/integration-v1.json). Earlier sections below are historical checkpoints.
+Evidence: [scoped collection](docs/historical-local-evidence.md) and [integration receipt](docs/historical-local-evidence.md). Earlier sections below are historical checkpoints.
 
 # Current status — macOS milestone accepted; interpreter convergence continues
 
@@ -94,7 +94,7 @@ MAIN retains189 official rustc cases/316 unchanged original files and both licen
 
 Subagents are stopped. The separate frozen M017 successor adds owned dyn/opaque terms, source-header arrays/elision/NFC lifetime handling and checked immutable frame tables, with206 copied cases/347 unchanged originals. Its60 registered M017 controls remain semantically unexecuted and it is unintegrated. Wildcard initialization work also remains unexecuted/unintegrated. Release and Linux acceptance are unestablished.
 
-Evidence: [current root milestone review](artifacts/macos-first/m013-prepared-tool-target-coherence-v1/owned-main-milestone-v2/root-terminal-review-v1.json). Earlier sections below are historical checkpoints.
+Evidence: [current root milestone review](docs/historical-local-evidence.md). Earlier sections below are historical checkpoints.
 
 # Current status — assignment macOS milestone accepted; interpreter work continues
 
@@ -108,7 +108,7 @@ The fresh integrated MAIN macOS milestone passed 2,378 project test bodies acros
 
 MAIN retains169 official cases/289 unchanged original files with both upstream licenses. Stock whole-program observations total14 programs/66 original assertions across tested snapshots; full rustc compiletest passes remain0. UserDrop, general traits/patterns, full T044 and release/native/Linux acceptance remain unfinished. The private T045 panic cleanup and later-argument hint drafts remain unaccepted; asynchronous validation is separate. Guest JIT is deferred until interpreter convergence.
 
-Evidence: [integration receipt](artifacts/macos-first/t044-assignment-integration-v19/integration.json) and [independent validation collection](artifacts/macos-first/t044-owner-admission-successor-v19/validation-v1/final-collection-v1/final-collection-v1.json). Current milestone: [root evidence review](artifacts/macos-first/t044-assignment-integration-v19/current-main-milestone-v1/root-independent-review-v1.json). Earlier headings below are historical checkpoints.
+Evidence: [integration receipt](docs/historical-local-evidence.md) and [independent validation collection](docs/historical-local-evidence.md). Current milestone: [root evidence review](docs/historical-local-evidence.md). Earlier headings below are historical checkpoints.
 
 # Current status — observed construction, discard and exact return admission integrated; macOS milestone pending
 
@@ -118,7 +118,7 @@ The frozen candidate passed473/473 library bodies, all17 selected call/scope/sou
 
 The fresh integrated MAIN macOS milestone is pending. The last accepted prior-source milestone remains2362 project test bodies. MAIN retains167 official rustc cases/287 unchanged original files with pinned upstream provenance and both original licenses. Stock observations remain13 programs/54 original assertions across tested snapshots; full rustc compiletest passes remain0. The separately corrected local replacement draft has four unexecuted stock-derived controls and is excluded from this integration. Full traits, user Drop, guest JIT, native/release and Linux acceptance remain unfinished.
 
-Evidence: [integration receipt](artifacts/macos-first/t044-call-continuation-integration-v13/integration.json) and artifacts/macos-first/t044-call-continuation-draft-v13/validation-v1/combined-collection-v1.json. Earlier headings below are historical checkpoints.
+Evidence: [integration receipt](docs/historical-local-evidence.md) and artifacts/macos-first/t044-call-continuation-draft-v13/validation-v1/combined-collection-v1.json. Earlier headings below are historical checkpoints.
 
 # Current status — bounded return and constructor cleanup milestone accepted
 
@@ -130,7 +130,7 @@ The first runner exited 1 solely on a stale wrapper predicate expecting seven T0
 
 MAIN retains 164 official cases / 283 unchanged original files. Recorded stock-program observations remain 13 / 54 original assertions across tested snapshots; today's seven probes repeat existing observations and add no unique passes. Full rustc compiletest passes remain 0. The separate V7 candidate failed four library controls (465 passed / 4 failed); its formatting and Clippy passed, while dependent checks stayed unexecuted. The failures are retained. V9 fixed those setups and passed 471 of 472 library bodies; one unit-pair control assumed a single-step scope scan and failed. V11 passed that repaired control, then failed macro predicate integration (six passed/one failed): return preflight rejected its verified temporary destination with LRR-E-INTERNAL-IR instead of the expected typed LRR-E-OWNERSHIP. Its 22 untouched suffix checks remain unexecuted and the failure is preserved. V13 fixes the exact Call-exit continuation binding and is separately frozen for fresh full-library and integration validation; it is not integrated. V12 was never tested because independent preflight caught its missing fixture registration; V13 corrects only that metadata relative to V12. Bounded structural Discard and the mutable V10 local-replacement draft remain excluded from MAIN. User Drop, replacement, panic/unwind, general traits, guest JIT, release and Linux acceptance remain incomplete.
 
-Evidence: [independent milestone collection](artifacts/macos-first/t044-return-guard-integration-v5/validation-v1/milestone-collection-v1.json), with terminal and source release sidecars.
+Evidence: [independent milestone collection](docs/historical-local-evidence.md), with terminal and source release sidecars.
 
 # Current status — integrated macOS ScopeLeave milestone accepted
 
@@ -228,7 +228,7 @@ MAIN retains153 official cases/270 unchanged original files with both licenses,
 source/type/Drop integration, production guest JIT, release and Linux are unfinished.
 Private cast/borrow-context/original-frontier successors remain unvalidated.
 
-[Collected milestone](artifacts/macos-first/t043-reference-components-integration-v9/current-main-reference-milestone-v2/suffix-independent-collection.json).
+[Collected milestone](docs/historical-local-evidence.md).
 
 # Current status — reference components integrated; macOS milestone pending
 
@@ -276,7 +276,7 @@ patterns, source/type/Drop integration, production guest JIT, release and Linux
 remain incomplete. The runner's stale unexecuted-check list is retained as a
 metadata anomaly; independent logs/status/terminal prove all16 commands ran.
 
-[Collected milestone](artifacts/macos-first/t031-t034-t040-t041-t042-t043-current-main-milestone-v1/independent-collection.json).
+[Collected milestone](docs/historical-local-evidence.md).
 
 ## Earlier source snapshot
 
@@ -359,7 +359,7 @@ T042 remains in_progress. Source-selected nominal Copy/Drop, complete cleanup an
 source/type integration are pending. Production guest JIT, full release, security
 and performance acceptance and Linux validation remain incomplete.
 
-[Integration evidence](artifacts/macos-first/t042-aggregate-copy-components-integration-v3/integration.json).
+[Integration evidence](docs/historical-local-evidence.md).
 
 ## Earlier snapshots
 
@@ -386,7 +386,7 @@ fresh integrated CLI execution remains required. Full compiletest fixture passes
 General aggregate Copy, trait/source Drop integration, production JIT, complete
 service/native/security/performance acceptance, release and Linux remain pending.
 
-[Integration evidence](artifacts/macos-first/t042-field-structural-components-integration-v1/integration.json).
+[Integration evidence](docs/historical-local-evidence.md).
 
 ## Earlier snapshots
 
@@ -409,7 +409,7 @@ General aggregate Copy, source-selected nominal Drop, guest projected moved-fiel
 reinitialization, production JIT, release and Linux remain incomplete. T042 stays
 in_progress. A separate original Unit program candidate is unvalidated/unintegrated.
 
-[Initialization integration](artifacts/macos-first/t042-initialization-components-integration-v1/integration.json).
+[Initialization integration](docs/historical-local-evidence.md).
 
 ## Earlier snapshots
 
@@ -429,7 +429,7 @@ under explicit Rust2024 execution adaptation. Full rustc compiletest acceptance
 remains0. Cached field summaries are a separate draft; general aggregate Copy,
 projected reinitialization, guest Drop/JIT, release and Linux remain incomplete.
 
-[Assignment integration](artifacts/macos-first/t042-assignment-components-integration-v3/integration.json).
+[Assignment integration](docs/historical-local-evidence.md).
 
 ## Earlier snapshots
 
@@ -451,7 +451,7 @@ Full rustc compiletest acceptance remains0. T041 has component acceptance; the l
 collected MAIN milestone passed2235 project tests before this new integration.
 Guest JIT, full trait/Drop execution, release and Linux remain incomplete.
 
-[Ownership integration](artifacts/macos-first/t042-owning-partial-components-integration-v7/integration.json).
+[Ownership integration](docs/historical-local-evidence.md).
 
 ## Earlier snapshots
 
@@ -470,7 +470,7 @@ MAIN retains 127 official cases / 221 original files. Full rustc compiletest
 acceptance remains zero. General traits/inference, complete Copy/move/Drop,
 guest JIT, release and Linux acceptance remain incomplete.
 
-[Collected milestone](artifacts/macos-first/t031-t034-t040-t041-combined-main-milestone-v1/independent-collection.json) ·
+[Collected milestone](docs/historical-local-evidence.md) ·
 [Reference component acceptance](docs/t041-component-acceptance.md).
 
 ## Earlier snapshots
@@ -494,15 +494,15 @@ regression. Seven controls check source type/length, ownership, stale leases,
 fuel refusal and complete source-memory accounting. General source/trait inference,
 ownership/Drop, guest JIT, release and Linux remain incomplete.
 
-[Collected MAIN milestone](artifacts/macos-first/t041-t034-integrated-main-milestone-v1/independent-collection.json) ·
-[Additional stock observations](artifacts/macos-first/t031-stock-div-float-u32-v1-scoped-observations/index.json) ·
-[Six-original integration](artifacts/macos-first/t031-stock-six-additional-originals-integration-v1/integration.json).
+[Collected MAIN milestone](docs/historical-local-evidence.md) ·
+[Additional stock observations](docs/historical-local-evidence.md) ·
+[Six-original integration](docs/historical-local-evidence.md).
 
 ## Earlier snapshots
 
 # Current status — source-bound fields and temporary references integrated
 
-The interpreter now has tested components for named fields, temporary owning places, computed references and nominal dereferences. Frozen v8 passed 482 host test bodies, including all 56 T040 and 55 T041 controls and the unchanged 2000-frame/256KiB stack regression. Both outer validation wrappers failed after successful childcommands because of collection-code defects; independent collectors reconciled those outcomes without rerunning. Full T041 and a fresh MAIN milestone remain pending. [Integration receipt](artifacts/macos-first/t041-fields-temporaries-components-integration-v8/integration.json).
+The interpreter now has tested components for named fields, temporary owning places, computed references and nominal dereferences. Frozen v8 passed 482 host test bodies, including all 56 T040 and 55 T041 controls and the unchanged 2000-frame/256KiB stack regression. Both outer validation wrappers failed after successful childcommands because of collection-code defects; independent collectors reconciled those outcomes without rerunning. Full T041 and a fresh MAIN milestone remain pending. [Integration receipt](docs/historical-local-evidence.md).
 
 MAIN now retains 116 official rustc cases / 210 unchanged files; full stock fixture passes remain zero. The unchanged arithmetic programs previously failed at assertion operand integration. A separate scalar assertion implementation is frozen and awaiting validation. General trait/type inference, Drop, guest JIT, release and Linux acceptance remain incomplete. The last full MAIN run failed on AddImpl preparation becoming stale; its isolated pass does not resolve that failure under the full run.
 
@@ -512,13 +512,13 @@ MAIN now retains 116 official rustc cases / 210 unchanged files; full stock fixt
 
 The latest integrated macOS milestone failed during the original AddImpl procedural-macro test with LRR-E-TOOL-PREPARE-STALE. The same test subsequently passed in isolation; that does not resolve the failure under the full run. The previously integrated stack repair passed its scoped unchanged 256KiB/2000-frame regression. The earlier stack-abort milestone remains historical failure evidence.
 
-MAIN retains 111 official rustc cases / 204 unchanged files, with zero full fixture passes. Unchanged i32-sub.rs fails at assert_eq! operand integration; an independently imported borrowck-fixed-length-vecs.rs fails at missing array element context. Four further numeric programs remain unexecuted. The latest private reference candidate v7 passed 327 of 330 library tests with three failures; corrected v8 validation is running separately. No private successor is integrated on this evidence. Guest JIT, broad trait/type inference, release and Linux acceptance remain unfinished. [Retained observations](artifacts/macos-first/t041-current-observations-20261011/index.json).
+MAIN retains 111 official rustc cases / 204 unchanged files, with zero full fixture passes. Unchanged i32-sub.rs fails at assert_eq! operand integration; an independently imported borrowck-fixed-length-vecs.rs fails at missing array element context. Four further numeric programs remain unexecuted. The latest private reference candidate v7 passed 327 of 330 library tests with three failures; corrected v8 validation is running separately. No private successor is integrated on this evidence. Guest JIT, broad trait/type inference, release and Linux acceptance remain unfinished. [Retained observations](docs/historical-local-evidence.md).
 
 ## Previous snapshots
 
-The fixed-stack lowering repair is integrated after12 independently collected scopedchecks/448 actualhost bodies, including fullsource_run67 and all77 construction/reference controls exactly once. The original256KiB/2000-frame regression passes; its earlier failures are retained. A fresh MAIN macOS milestone is pending. [Integration](artifacts/macos-first/t041-stack-repair-components-integration-v3.json).
+The fixed-stack lowering repair is integrated after12 independently collected scopedchecks/448 actualhost bodies, including fullsource_run67 and all77 construction/reference controls exactly once. The original256KiB/2000-frame regression passes; its earlier failures are retained. A fresh MAIN macOS milestone is pending. [Integration](docs/historical-local-evidence.md).
 
-The latest macOS milestone failed on a stack overflow in the unchanged256KiB/2000-frame guest-recursion check. Earlier binaries reported2000 passing bodies and source_run emitted62 additional pass events before abort; all77 current construction/reference controls passed exactly once. The aborted and unobserved tests, interpreter suffix and whole milestone remain unaccepted. [Collected failure](artifacts/macos-first/t041-projections-components-main-milestone-v3-retained-failure/host-outcome-supplement.json).
+The latest macOS milestone failed on a stack overflow in the unchanged256KiB/2000-frame guest-recursion check. Earlier binaries reported2000 passing bodies and source_run emitted62 additional pass events before abort; all77 current construction/reference controls passed exactly once. The aborted and unobserved tests, interpreter suffix and whole milestone remain unaccepted. [Collected failure](docs/historical-local-evidence.md).
 
 MAIN retains111 official rustc cases/204 unchanged files; full stock fixture passes0. T041 remains in progress. A bounded-stack repair and field/temporary-receiver successors are frozen, unvalidated drafts. The earlier2180-test successful milestone is historical.
 
@@ -599,7 +599,7 @@ under E-57-001; full constructor integration remains pending with later tasks.
 Full stock fixture passes remain 0. The exact post-transition ledger test passed; its external filtered-count reporting
 error remains recorded separately. One unchanged empty-derive case passes a real CLI
 interpreter run and explicit native metadata reference, recorded separately in the
-[current macOS checkpoint](artifacts/macos-first/t040-constructor-source-context-components-main-milestone-v1/independent-collection.json).
+[current macOS checkpoint](docs/historical-local-evidence.md).
 The original printing derive auxiliary exposes a recorded
 [server/protocol gap](docs/errata/m013-procedural-stdout.md); the installed-server
 execution remains failed. A separately prepared matched-source server now completes

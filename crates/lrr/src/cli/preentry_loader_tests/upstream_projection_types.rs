@@ -15,6 +15,311 @@ use crate::{
 use std::sync::Arc;
 use std::{collections::BTreeMap, path::PathBuf};
 
+fn check_actual_clause_emission_all_editions_and_origins() {
+    use crate::{
+        frontend::declaration_source_predicates::DeclarationSourcePredicatesKey,
+        traits::{
+            predicate::{PredicateResult, SourcePredicateRecipe},
+            term::{ParamKey, TyTerm},
+            upstream::{
+                source_declaration_clauses::{
+                    CurrentSourceDeclarationClauses, check_actual_declaration_clause_emission,
+                },
+                source_default_bounds::DefaultBoundsContext,
+                source_definition_headers::DefinitionHeaderKey,
+                source_lang_identity::CurrentSourceLangIdentity,
+                source_trait_clauses::{
+                    SourceTraitClauseFilter, SourceTraitClausesKey,
+                    check_actual_filtered_trait_encoding,
+                },
+            },
+        },
+    };
+    use ra_ap_syntax::{
+        AstNode,
+        ast::{self, HasTypeBounds},
+    };
+    let mut worlds = 0;
+    let mut written_rows = 0;
+    let mut transient_rows = 0;
+    let mut shadow_rows = 0;
+    for edition in [2015, 2018, 2021, 2024] {
+        for origin in 0..3 {
+            let (mut db, seal, _, temporary) = fixture_world(
+                "tests/ui/enum-discriminant/repr128.rs",
+                "use std::intrinsics",
+                edition,
+                origin,
+            );
+            let rows = actual_rows(&mut db, &seal);
+            let core = crate::facade::unit(
+                &ProfileIdentity {
+                    edition,
+                    ..ProfileIdentity::current()
+                },
+                "core",
+            );
+            let partial_eq = actual_named(&rows, core, &["cmp"], "PartialEq", ItemKind::Trait);
+            let pointee = actual_named(&rows, core, &["marker"], "PointeeSized", ItemKind::Trait);
+            db.trace.detailed = true;
+            let before = db.trace.events.len();
+            let language = ready(CurrentSourceLangIdentity::capture(
+                &mut db,
+                &DefinitionHeaderKey {
+                    inventory: seal.clone(),
+                    definition: pointee,
+                },
+            ));
+            assert!(matches!(
+                language.plan().classification(),
+                Ok(Some(("pointee_sized", _)))
+            ));
+            let key = DeclarationSourcePredicatesKey {
+                inventory: seal.clone(),
+                definition: partial_eq,
+            };
+            let own_query = QueryKey::DeclarationSourcePredicates(Box::new(key.clone()));
+            let own = ready(db.fetch(&SyntaxProvider, own_query.clone()));
+            let QueryValue::DeclarationSourcePredicates(own_plan) = own.value.as_ref() else {
+                unreachable!()
+            };
+            assert_eq!(own_plan.pending(), None);
+            let declaration = own_plan.declaration();
+            assert!(declaration.has_trait_self());
+            assert_eq!(declaration.parameters().len(), 1);
+            assert_eq!(declaration.parameters()[0].name, "Rhs");
+            let self_key = ParamKey {
+                definition: partial_eq,
+                ordinal: u32::try_from(declaration.parameters().len()).unwrap(),
+            };
+            let rhs_key = ParamKey {
+                definition: partial_eq,
+                ordinal: declaration.parameters()[0].ordinal,
+            };
+            let raw = own_plan.recipes().unwrap();
+            assert_eq!(
+                raw.len(),
+                2,
+                "actual PartialEq Self and Rhs source bounds stay retained"
+            );
+            let mut subjects = Vec::new();
+            for recipe in raw {
+                let SourcePredicateRecipe::Explicit {
+                    result: PredicateResult::Implemented(reference),
+                    ..
+                } = recipe
+                else {
+                    panic!("actual written PointeeSized row changed: {recipe:?}")
+                };
+                assert_eq!(reference.trait_key, pointee);
+                let TyTerm::Param(subject) = reference.self_ty else {
+                    panic!("actual source parameter")
+                };
+                assert!(reference.args.is_empty());
+                subjects.push(subject);
+            }
+            subjects.sort();
+            let mut expected = vec![self_key, rhs_key];
+            expected.sort();
+            assert_eq!(subjects, expected);
+            let own_guard =
+                ready(db.prepare_input_guard(&SyntaxProvider, &own_query, own.fingerprint));
+            let default_query = QueryKey::SourceDefaultBounds(Box::new(key.clone()));
+            let defaults = ready(db.fetch(&SyntaxProvider, default_query.clone()));
+            let QueryValue::SourceDefaultBounds(policy) = defaults.value.as_ref() else {
+                unreachable!()
+            };
+            assert_eq!(policy.sizedness_identity("pointee_sized"), Some(pointee));
+            let default_guard = ready(db.prepare_input_guard(
+                &SyntaxProvider,
+                &default_query,
+                defaults.fingerprint,
+            ));
+            let q80 = ready(CurrentSourceDeclarationClauses::capture(&mut db, &key));
+            assert!(
+                check_actual_declaration_clause_emission(&mut db, &key)
+                    .unwrap()
+                    .is_empty(),
+                "ordinary declaration emission also discards both actual transient bounds"
+            );
+            let mut filtered = Vec::new();
+            for filter in [
+                SourceTraitClauseFilter::Super,
+                SourceTraitClauseFilter::Implied,
+            ] {
+                let (current, encoded) = check_actual_filtered_trait_encoding(
+                    &mut db,
+                    &SourceTraitClausesKey {
+                        inventory: seal.clone(),
+                        definition: partial_eq,
+                        filter,
+                    },
+                )
+                .unwrap();
+                assert_eq!(encoded, Ok(0));
+                let plan = current.plan();
+                assert_eq!(plan.pending(), None);
+                assert!(
+                    plan.positive_dependencies().is_empty(),
+                    "discarded clauses are not semantic graph edges"
+                );
+                let [
+                    SourcePredicateRecipe::Explicit {
+                        source,
+                        result: PredicateResult::Implemented(reference),
+                    },
+                ] = plan.recipes()
+                else {
+                    panic!("actual filtered written Self bound stays present")
+                };
+                assert_eq!(reference.trait_key, pointee);
+                assert_eq!(reference.self_ty, TyTerm::Param(self_key));
+                let header = plan.header();
+                let (parse, _, context, parsed) = header.declaration().source_parts().unwrap();
+                let syntax = ast::Trait::cast(
+                    parsed
+                        .syntax_at(context.range, |node| ast::Trait::can_cast(node.kind()))
+                        .unwrap()
+                        .unwrap(),
+                )
+                .unwrap();
+                let bound = syntax.type_bound_list().unwrap().bounds().next().unwrap();
+                assert_eq!(*source, crate::syntax::ast_adapter::range(bound.syntax().text_range()));
+                let inputs = plan
+                    .written()
+                    .unwrap()
+                    .default_inputs(DefaultBoundsContext::TraitSelf);
+                assert_eq!(
+                    inputs.recipes().collect::<Vec<_>>(),
+                    plan.recipes().iter().collect::<Vec<_>>(),
+                    "default policy still sees the real colon bound"
+                );
+                assert!(
+                    policy
+                        .apply(
+                            &TyTerm::Param(self_key),
+                            (parse.content, context.range),
+                            DefaultBoundsContext::TraitSelf,
+                            inputs
+                        )
+                        .unwrap()
+                        .is_empty(),
+                    "actual PointeeSized still suppresses implicit sizedness"
+                );
+                current.require_current(&db).unwrap();
+                transient_rows += plan.recipes().len();
+                filtered.push(current);
+            }
+            let again = ready(db.fetch(&SyntaxProvider, own_query));
+            assert!(own.cacheable && Arc::ptr_eq(&own.value, &again.value));
+            assert_eq!(own.fingerprint, again.fingerprint);
+            assert_cold(&db, before);
+            own_guard.require_current(&db).unwrap();
+            default_guard.require_current(&db).unwrap();
+            q80.require_current(&db).unwrap();
+            db.begin_expansion_epoch(2).unwrap();
+            assert!(
+                filtered
+                    .iter()
+                    .all(|query| query.require_current(&db).is_err())
+            );
+            assert!(own_guard.require_current(&db).is_err());
+            assert!(default_guard.require_current(&db).is_err());
+            assert!(language.require_current(&db).is_err());
+            assert!(q80.require_current(&db).is_err());
+            db.publish_inputs(BTreeMap::new()).unwrap();
+            assert!(
+                filtered
+                    .iter()
+                    .all(|query| query.require_current(&db).is_err())
+            );
+            worlds += 1;
+            written_rows += raw.len();
+            eprintln!(
+                "actual transient emission edition{edition},origin{origin}: 2written rows,2filtered transient rows,0emitted clauses; actual role/header/defaults retained, Q80/Q88 consumers, no semantic edge, memo/epoch revocation, bodies cold; root/runtime held"
+            );
+            if let Some(path) = temporary {
+                std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+            }
+
+            let (mut db, seal, root, temporary) = fixture_world(
+                "tests/ui/traits/core-marker-name-shadowing-issue-2284.rs",
+                "trait Send",
+                edition,
+                origin,
+            );
+            let rows = actual_rows(&mut db, &seal);
+            let send = actual_named(&rows, root.crate_key, &[], "Send", ItemKind::Trait);
+            let functions = rows
+                .iter()
+                .filter(|(_, item)| {
+                    item.scope == root
+                        && item.def_key.declared_name == "f"
+                        && item.def_key.item_kind == ItemKind::Function
+                })
+                .map(|(id, _)| *id)
+                .collect::<Vec<_>>();
+            assert_eq!(functions.len(), 1, "actual free f is distinct from Send::f");
+            let function = functions[0];
+            db.trace.detailed = true;
+            let before = db.trace.events.len();
+            let language = ready(CurrentSourceLangIdentity::capture(
+                &mut db,
+                &DefinitionHeaderKey {
+                    inventory: seal.clone(),
+                    definition: send,
+                },
+            ));
+            assert_eq!(
+                language.plan().classification(),
+                Ok(None),
+                "ordinary Send has genuine non-language identity"
+            );
+            let key = DeclarationSourcePredicatesKey {
+                inventory: seal.clone(),
+                definition: function,
+            };
+            let current = ready(CurrentSourceDeclarationClauses::capture(&mut db, &key));
+            assert_eq!(current.plan().pending(), None);
+            let raw = current.plan().source().recipes().unwrap();
+            assert_eq!(raw.iter().filter(|recipe| matches!(recipe,
+                SourcePredicateRecipe::Explicit { result: PredicateResult::Implemented(reference), .. }
+                    if reference.trait_key == send)).count(), 1);
+            let emitted = check_actual_declaration_clause_emission(&mut db, &key).unwrap();
+            assert_eq!(
+                emitted.iter().filter(|&&trait_id| trait_id == send).count(),
+                1,
+                "ordinary user trait remains emitted through the same encoder"
+            );
+            let query = QueryKey::SourceDeclarationClauses(Box::new(key));
+            let first = ready(db.fetch(&SyntaxProvider, query.clone()));
+            let again = ready(db.fetch(&SyntaxProvider, query));
+            assert!(first.cacheable && Arc::ptr_eq(&first.value, &again.value));
+            assert_eq!(first.fingerprint, again.fingerprint);
+            assert_cold(&db, before);
+            current.require_current(&db).unwrap();
+            language.require_current(&db).unwrap();
+            db.begin_expansion_epoch(2).unwrap();
+            assert!(current.require_current(&db).is_err());
+            assert!(language.require_current(&db).is_err());
+            db.publish_inputs(BTreeMap::new()).unwrap();
+            assert!(current.require_current(&db).is_err());
+            worlds += 1;
+            shadow_rows += 1;
+            eprintln!(
+                "actual Send shadow emission edition{edition},origin{origin}: 1ordinary bound retained and emitted; actual Q76 non-language identity, Q80 consumer, memo/epoch revocation, bodies cold; root/runtime held"
+            );
+            if let Some(path) = temporary {
+                std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+            }
+        }
+    }
+    assert_eq!(
+        (worlds, written_rows, transient_rows, shadow_rows),
+        (24, 24, 24, 12)
+    );
+}
+
 fn ready<T>(poll: QueryPoll<T>) -> T {
     match poll {
         QueryPoll::Ready(Ok(value)) => value,
@@ -685,10 +990,6 @@ fn unchanged_impl_super_outlives_uses_pinned_elaborator_all_editions_and_origins
                         assert_eq!(observed.implementation, canonical);
                         assert_eq!(observed.trait_definition, expected_trait);
                         assert_eq!(observed.source, plan.fingerprint());
-                        assert!(
-                            observed.implied_traits >= 2,
-                            "genuine trait graph includes PointeeSized"
-                        );
                         if kind == 0 {
                             assert_eq!(
                                 observed.outlives, 0,
@@ -754,4 +1055,5 @@ fn unchanged_impl_super_outlives_uses_pinned_elaborator_all_editions_and_origins
         (worlds, elaborations, outlives, typed_holds),
         (36, 36, 12, 12)
     );
+    check_actual_clause_emission_all_editions_and_origins();
 }

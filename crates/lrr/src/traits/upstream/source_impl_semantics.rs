@@ -265,8 +265,10 @@ impl PreparedSourceImplSemantics {
             _ => unreachable!("impl trait outlives domain"),
         }
     }
-    /// item_bounds.rs::impl_super_outlives elaborates then filters the actual
-    /// head. No closure certificate exists yet, so no algorithm entry is exposed.
+    /// Q86 records only the demanded query family. Q89 retains its actual
+    /// callback inputs; PreparedProvider::prepare_impl_super_outlives runs the
+    /// pinned elaborator and filter in their admitted preparation context.
+    /// This source-only descriptor does not contain that derived query value.
     pub(crate) fn impl_super_outlives(&self) -> ImplSemantic<&[SourcePredicateRecipe]> {
         match self.super_outlives_demand() {
             ImplSemantic::Known(_) => {

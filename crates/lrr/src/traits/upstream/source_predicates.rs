@@ -4,6 +4,7 @@ use super::{
     configuration::PreparedSolverConfiguration,
     identity::DefinitionId,
     model::Clause,
+    predicate_emission::{PredicateEmissionPending, PreparedClauseEmission},
     prepared::{self, Cx},
     source_bindings::{DefinitionKind, SourceBindings, SourceRequirements, require_type},
     source_terms::SourceTypePending,
@@ -36,12 +37,14 @@ pub enum SourcePredicatePending {
     Bound(PredicatePending),
     Sized,
     Source(SourceTypePending),
+    Emission(PredicateEmissionPending),
 }
 #[derive(Debug)]
 pub struct PreparedImplSourcePredicates {
     key: ImplHeaderSyntaxKey,
     requirements: Arc<QueryValue>,
     bindings: SourceBindings,
+    emission: Option<PreparedClauseEmission>,
     pending: Option<SourcePredicatePending>,
 }
 macro_rules! ready {
@@ -68,15 +71,24 @@ fn require_trait(required: &mut SourceRequirements, reference: &TraitRef) {
 /// Shared source requirement closure for declaration and impl recipes.
 /// Pending source never becomes an absent or empty semantic bound.
 pub(super) fn require_recipe(
-    required: &mut SourceRequirements, recipe: &SourcePredicateRecipe,
+    required: &mut SourceRequirements,
+    recipe: &SourcePredicateRecipe,
 ) -> Result<(), SourcePredicatePending> {
     match recipe {
-        SourcePredicateRecipe::ImplicitSizedDefault(_) => return Err(SourcePredicatePending::Sized),
-        SourcePredicateRecipe::ResolvedSizedDefault(reference) => require_trait(required, reference),
+        SourcePredicateRecipe::ImplicitSizedDefault(_) => {
+            return Err(SourcePredicatePending::Sized);
+        }
+        SourcePredicateRecipe::ResolvedSizedDefault(reference) => {
+            require_trait(required, reference)
+        }
         SourcePredicateRecipe::Explicit { result, .. } => match result {
-            PredicateResult::Implemented(reference) | PredicateResult::Relaxed { trait_ref: reference, .. } => require_trait(required, reference),
+            PredicateResult::Implemented(reference)
+            | PredicateResult::Relaxed {
+                trait_ref: reference,
+                ..
+            } => require_trait(required, reference),
             PredicateResult::TypeOutlives { ty, .. } => require_type(required, ty),
-            PredicateResult::RegionOutlives { .. } => {},
+            PredicateResult::RegionOutlives { .. } => {}
             PredicateResult::Pending(why) => return Err(SourcePredicatePending::Bound(*why)),
         },
     }
@@ -86,29 +98,67 @@ pub(super) fn require_recipe(
 /// One source-recipe -> upstream-clause transport, including source spans.
 /// A relaxed bound contributes no clause; its source metadata stays retained.
 pub(super) fn encode_recipe<'cx>(
-    cx: Cx<'cx>, configuration: &PreparedSolverConfiguration,
+    cx: Cx<'cx>,
+    configuration: &PreparedSolverConfiguration,
     bindings: super::source_bindings::SourceTypeBindings<'_>,
-    recipe: &SourcePredicateRecipe, origin: Digest,
-    parameter_range: impl FnOnce(crate::traits::term::ParamKey) -> Option<crate::syntax::spans::SourceRange>,
-) -> Result<Option<(Clause<'cx, prepared::PreparedProvider<'cx>>, super::model::Span)>, SourcePredicatePending> {
+    emission: &PreparedClauseEmission,
+    recipe: &SourcePredicateRecipe,
+    origin: Digest,
+    parameter_range: impl FnOnce(
+        crate::traits::term::ParamKey,
+    ) -> Option<crate::syntax::spans::SourceRange>,
+) -> Result<
+    Option<(
+        Clause<'cx, prepared::PreparedProvider<'cx>>,
+        super::model::Span,
+    )>,
+    SourcePredicatePending,
+> {
     let implicit;
     let (predicate, source) = match recipe {
         SourcePredicateRecipe::ResolvedSizedDefault(reference) => {
             let crate::traits::term::TyTerm::Param(parameter) = reference.self_ty else {
-                return Err(SourcePredicatePending::Source(SourceTypePending::ParameterLayout));
+                return Err(SourcePredicatePending::Source(
+                    SourceTypePending::ParameterLayout,
+                ));
             };
-            let source = parameter_range(parameter).ok_or(SourcePredicatePending::Source(SourceTypePending::ParameterLayout))?;
+            let source = parameter_range(parameter).ok_or(SourcePredicatePending::Source(
+                SourceTypePending::ParameterLayout,
+            ))?;
             implicit = PredicateResult::Implemented(reference.clone());
             (&implicit, source)
         }
-        SourcePredicateRecipe::Explicit { result: PredicateResult::Relaxed { .. }, .. } => return Ok(None),
-        SourcePredicateRecipe::Explicit { result: PredicateResult::Pending(why), .. } => return Err(SourcePredicatePending::Bound(*why)),
+        SourcePredicateRecipe::Explicit {
+            result: PredicateResult::Relaxed { .. },
+            ..
+        } => return Ok(None),
+        SourcePredicateRecipe::Explicit {
+            result: PredicateResult::Pending(why),
+            ..
+        } => return Err(SourcePredicatePending::Bound(*why)),
         SourcePredicateRecipe::Explicit { source, result } => (result, *source),
-        SourcePredicateRecipe::ImplicitSizedDefault(_) => return Err(SourcePredicatePending::Sized),
+        SourcePredicateRecipe::ImplicitSizedDefault(_) => {
+            return Err(SourcePredicatePending::Sized);
+        }
     };
     let clause = super::source_terms::encode_predicate(cx, configuration, bindings, predicate)
         .map_err(SourcePredicatePending::Source)?;
-    Ok(Some((clause, super::model::Span { origin, start: source.start, end: source.end })))
+    let output = (
+        clause,
+        super::model::Span {
+            origin,
+            start: source.start,
+            end: source.end,
+        },
+    );
+    // Pinned hir_ty_lowering/mod.rs:983-1002 completes the normal lowering
+    // before discarding transient bounds. Preserve unavailable argument facts.
+    match predicate {
+        PredicateResult::Implemented(reference) => emission
+            .apply_encoded(reference.trait_key, output)
+            .map_err(SourcePredicatePending::Emission),
+        _ => Ok(Some(output)),
+    }
 }
 
 impl PreparedImplSourcePredicates {
@@ -146,6 +196,7 @@ impl PreparedImplSourcePredicates {
             key: key.clone(),
             requirements,
             bindings: SourceBindings::empty(Arc::clone(&input)),
+            emission: None,
             pending: None,
         };
         let ImplPredicateResult::Requirements(recipes) = plan.requirements().result() else {
@@ -157,7 +208,8 @@ impl PreparedImplSourcePredicates {
             return QueryPoll::Ready(Err(fault("source predicate canonical owner absent")));
         };
         let definition = owner.identity();
-        let mut required = SourceRequirements::from(BTreeMap::from([(definition, DefinitionKind::Impl)]));
+        let mut required =
+            SourceRequirements::from(BTreeMap::from([(definition, DefinitionKind::Impl)]));
         for recipe in recipes {
             if let Err(pending) = require_recipe(&mut required, recipe) {
                 plan.pending = Some(pending);
@@ -166,6 +218,18 @@ impl PreparedImplSourcePredicates {
         }
         plan.bindings = ready!(SourceBindings::prepare(db, input, required));
         plan.pending = plan.bindings.pending.map(SourcePredicatePending::Source);
+        if plan.pending.is_none() {
+            let ImplPredicateResult::Requirements(recipes) = plan.requirements().result() else {
+                unreachable!()
+            };
+            let emission = ready!(PreparedClauseEmission::prepare(
+                db,
+                Arc::clone(&plan.bindings.catalog),
+                recipes
+            ));
+            plan.pending = emission.pending().map(SourcePredicatePending::Emission);
+            plan.emission = Some(emission);
+        }
         QueryPoll::Ready(Ok(plan))
     }
     /// Construct own (not inherited/elaborated/proven) clauses inside the exact
@@ -205,8 +269,17 @@ impl PreparedImplSourcePredicates {
         let syntax = self.requirements().head().syntax();
         let mut clauses = Vec::new();
         for recipe in recipes {
-            if let Some(clause) = encode_recipe(cx, configuration, self.bindings.type_bindings(),
-                recipe, syntax.source().content, |parameter| self.requirements().parameter_range(parameter))? {
+            if let Some(clause) = encode_recipe(
+                cx,
+                configuration,
+                self.bindings.type_bindings(),
+                self.emission
+                    .as_ref()
+                    .expect("ready source plan retains emission inputs"),
+                recipe,
+                syntax.source().content,
+                |parameter| self.requirements().parameter_range(parameter),
+            )? {
                 clauses.push(clause);
             }
         }
@@ -219,11 +292,16 @@ impl StableEncode for PreparedImplSourcePredicates {
         e.record(&self.key);
         e.record(self.requirements());
         e.record(&self.bindings);
+        e.option(&self.emission, |e, value| e.record(value));
         // Exact bound/head pending reason is already encoded in retained Q59.
         e.option(&self.pending, |e, why| match why {
             SourcePredicatePending::Head => e.u32(0),
             SourcePredicatePending::Bound(_) => e.u32(1),
             SourcePredicatePending::Sized => e.u32(2),
+            SourcePredicatePending::Emission(why) => {
+                e.u32(4);
+                super::predicate_emission::encode_pending(e, *why);
+            }
             SourcePredicatePending::Source(why) => {
                 e.u32(3);
                 e.u32(*why as u32);

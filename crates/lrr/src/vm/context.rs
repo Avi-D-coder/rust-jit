@@ -53,6 +53,12 @@ fn own_table<K: Copy + Ord, V: Clone>(
     Ok(entries.into_boxed_slice())
 }
 impl GenericEnv {
+    /// Exact emptiness of the retained source/runtime application tables.
+    /// A missing application digest alone is not evidence of no bindings.
+    pub(crate) fn has_empty_bindings(&self) -> bool {
+        self.symbolic.is_empty() && self.runtime.is_empty()
+    }
+
     /// Check identity and retained sizes before allocating the owning copy.
     pub fn checked_bytes(
         signature: &FunctionSignature,

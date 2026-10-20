@@ -1,0 +1,113 @@
+{
+  "schema": "lrr/source-checkpoint-evidence/v1",
+  "recorded_at": "2026-10-20T23:44:21.524038+00:00",
+  "source_baseline": "7ea94b8f6b3ff5b9a0793a414e2040aa2828d0ff",
+  "source_sha256": "da7fc5fbb7d486505d275fd78f9b2da67e91bf1d0c52c081f1ae25690488cbab",
+  "input_count": 8734,
+  "scope": "V522/V523 HELD M019/M020 common transient-bound emission. Authentic Q76 identities feed shared encode_recipe across impl/Q80/Q88 and Q84 observer; fully encode then discard positive PointeeSized, preserve raw/default rows, exclude transient semantic edges. No name/macro filter or new solver. Caller application source token/common empty ParamEnv compiles but remains unexecuted/uninstalled. V522 lib101 test TextRange API error retained as observed; V523 one-line repair, all3builds0 and one60worldcontrol0/158.760s. Actual36elaborationworlds/36executions/12static outlives/12inherent domain holds;12ordinary-facade transientworlds retain24writtenrows/filter24rows/emit0;12user Send original/emit/wrapperworlds emit12ordinarybounds. Closing source/HEAD/test/CLI/DG guards pass at da7fc5fbb7d486505d275fd78f9b2da67e91bf1d0c52c081f1ae25690488cbab /8734inputs. repr128 owning2015 still executor OP-TYPE/CLI2/no runtimechecks; zero new gains/no suite refresh. Raw artifacts/tmp reports externally removed after terminal closure; compact capsule preserves actual prior tool observations and independently reverified source/binary hashes, not invented missing raw data. Complete fact factory/root/caller/response/activation/commit/runtime migration remain held; no task/milestone/interpreter/JIT/fullfixture/Linux/performance gate closed.",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-20-predicate-emission-review.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-20-predicate-emission-controls.json",
+  "provenance": "Actual prior validator terminal/tool observations, with independent postcleanup source/binary verification. Raw directories disappeared externally after all terminals and closing guards. No tests rerun and no missing raw hashes, capture IDs or per-world rows invented.",
+  "V522": {
+    "source_sha256": "7ebcb20b8dc073e1dc76ce077af5d965022bda3555b8e97bb5a397a58d4b53f9",
+    "lib_session": 76737,
+    "lib_exit": 101,
+    "error": {
+      "code": "E0308",
+      "file": "crates/lrr/src/cli/preentry_loader_tests/upstream_projection_types.rs",
+      "line": 187,
+      "message": "ast_adapter::range expects TextRange, got &SyntaxNode",
+      "repair": ".syntax().text_range()"
+    },
+    "dependent_stages": "unexecuted",
+    "closing_source_head_guards": 0,
+    "old_V521_binaries_unchanged": true,
+    "fresh_binaries": false
+  },
+  "V523": {
+    "lib": {
+      "exit": 0,
+      "session": 46435,
+      "cargo_seconds": 41.5
+    },
+    "cli": {
+      "exit": 0,
+      "session": 7617,
+      "cargo_seconds": 33.74
+    },
+    "digester": {
+      "exit": 0,
+      "cargo_seconds": 0.8
+    },
+    "control": {
+      "exit": 0,
+      "session": 78189,
+      "seconds": 158.76,
+      "bodies": 1,
+      "inputs_unchanged": true,
+      "worlds": 60,
+      "elaboration_worlds": 36,
+      "elaborations": 36,
+      "static_outlives_rows": 12,
+      "typed_inherent_domain_holds": 12,
+      "ordinary_facade_transient_worlds": 12,
+      "retained_written_rows": 24,
+      "filtered_transient_rows": 24,
+      "emitted_transient_clauses": 0,
+      "user_Send_original_emit_wrapper_worlds": 12,
+      "ordinary_user_bounds_emitted": 12
+    },
+    "runtime": {
+      "harness_exit": 1,
+      "session": 70123,
+      "case": "tests/ui/enum-discriminant/repr128.rs",
+      "edition": 2015,
+      "cli_exit": 2,
+      "status": "interpreter_failure",
+      "code": "LRR-E-OP-TYPE",
+      "phase": "executor",
+      "message": "operator requires supported concrete primitive operand descriptors",
+      "runtime_checks": 0,
+      "new_distinct_runtime_gains": 0,
+      "native_execution": false,
+      "input_guard": "imported originals/manifest/binary unchanged"
+    },
+    "closing_source_head_test_cli_guards": 0,
+    "separate_digester_guard": "matched after-build",
+    "changed_sources": [],
+    "all_terminal": true
+  },
+  "postcleanup_verification": {
+    "source_sha256": "da7fc5fbb7d486505d275fd78f9b2da67e91bf1d0c52c081f1ae25690488cbab",
+    "input_count": 8734,
+    "head": "7ea94b8f6b3ff5b9a0793a414e2040aa2828d0ff",
+    "test_sha256": "635ada623231b7466b4b30b3cf5c62b763492785cb59347bd4bca4d3980132c2",
+    "cli_sha256": "6993314f8e20a59e2c98c7114b321b8f5f2f1c9b2cdfaa342f210ccfd28d152b",
+    "digester_sha256": "b3dbd46725dae700f93f3c24a0ac1a90b014f0389ff266eb92d33f46241e6ff5",
+    "scope": "Source/test/CLI match full previously observed digests; digester matches previously observed prefix. Historical full digester receipt cannot be reloaded."
+  },
+  "reproduction": {
+    "scope": "Maintained equivalent reproduction commands, not reconstruction of unavailable original shell invocation/capture ID/timeout. Use fresh directories and guards per tools/validation/README.md.",
+    "commands": [
+      "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+      "cargo +1.99.0 build --offline --locked -p lrr --bin lrr",
+      "cargo +1.99.0 build --offline --locked -p xtask --example lrr_source_digests",
+      "/opt/homebrew/bin/python3.12 tools/validation/run_controls.py NEW_RUN_DIR worktracks/05-trait-goal-engine/2026-10-20-predicate-emission-controls.json",
+      "LRR_EMBEDDED_FACADE=1 /opt/homebrew/bin/python3.12 tools/rustc_checkout_runtime.py --lrr target/debug/lrr --source-digester target/debug/examples/lrr_source_digests --report-dir NEW_REPORT_DIR --case tests/ui/enum-discriminant/repr128.rs"
+    ],
+    "unavailable": [
+      "raw stdout/stderr and complete per-world rows",
+      "original runtime report/capture ID",
+      "full V522 old binary hashes",
+      "fresh clean-machine bootstrap evidence"
+    ]
+  },
+  "acceptance": {
+    "new_runtime_passes": 0,
+    "suite_refresh": false,
+    "root_activation": "held",
+    "caller_application": "compiled_unexecuted",
+    "interpreter": "incomplete",
+    "guest_jit_allowed": false
+  }
+}

@@ -834,3 +834,46 @@ receipts. Root main with no call stack/environment keeps the independent
 source-proven missing-env path. The lead will integrate token consumption into
 caller encoding only after source ownership returns; frozen caller/run/packet
 modules are unchanged by this design note. Builds/tests remain validator-owned.
+
+Caller-application source release is now authorized after checkpoint
+`7ea94b8f6b`. Before-code scope remains only new `upstream/caller_application.rs`
+and this record. The source-only token will join retained caller-clause plan,
+actual entered environment/callable Arcs, guarded FunctionSignature query and
+direct empty binding-table inspector. Preparation/mismatch are typed outcomes,
+not a guest static refusal. The lead owns shared inspector, registration and
+caller encoder integration. Generic/nonempty/lexical cases and actual consumer
+activation remain held; no Cargo/tests are assigned to this worker.
+
+Implemented only `upstream/caller_application.rs` after that release. API:
+`VerifiedCallerApplication::prepare(db,Arc<PreparedSourceCallerClauses>,
+Arc<GenericEnv>,Arc<SourceCallable>,&CallerSourceContext)` returns a guarded
+private token or typed CallerApplicationPending through QueryPoll. The lead's
+`GenericEnv::has_empty_bindings()` reads both actual retained arrays. Preparation
+also checks actual complete count0, full current FunctionSignature equality with
+environment and callable, Q75 actual header/context/layout and the exact DTO.
+No signature is synthesized, and no app digest or custom Unifier certifies data.
+FunctionSignature query input guard, exact source plan/environment/callable Arcs
+are retained. `matches_caller` accepts only the same retained source plan and
+descriptor. `require_current` receives current actual environment/callable Arcs,
+compares their identities, and revalidates all retained query/source/callable/
+environment evidence. SourceCallable's inherited broad revision refusal remains
+existing debt; no new global guard is introduced. Source mismatch, unsupported
+lexical/nonempty namespace, bindings and currentness remain typed pending.
+
+Separate all-eight source pass against SHA256
+`9b0b39f1c6849322988a2010be6253b24f4f84aa3febde8f20344a159c5a97a2`:
+(1–2) no evaluator or special generated/assertion execution
+(MA001/MA004/MA005); (3) no method/numeric selection or inference
+(MA003/MA006); (4) actual Q75/signature receipts and common SourceCallable, no
+origin predicate; (5) no body lowering, static checker, patterns or cold-arm
+preparation (MA002); (6) retained memo guard and Arc owners, no parser/phase
+reconstruction at consumption; (7) current exact handles and input guards, no
+namespace/world census; (8) Arc retention and actual source metadata, no body
+clone/search (MA008); no macro identity dispatch (MA007). Prepare executes only
+on a consumer request, at source preparation before solver entry. No legacy
+call allocations or execution semantics change without the lead's integration.
+The token authorizes only source application: the actual run/attempt/activation,
+caller ParamEnv domain, inference owner, root readiness and commit remain
+separate. Source-caller encoder, run/packet and registrations were not edited.
+Formatting/diff checks only; actual application controls, origin/edition matrix,
+suspension and runtime behavior are unexecuted. No Cargo/tests by this worker.

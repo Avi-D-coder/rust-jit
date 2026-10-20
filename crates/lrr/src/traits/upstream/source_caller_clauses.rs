@@ -334,6 +334,33 @@ impl PreparedSourceCallerClauses {
         {
             return Err(SourceCallerClausesPending::CallerApplication);
         }
+        self.encode_empty(cx, configuration)
+    }
+    /// The entered caller's real source application is checked separately from
+    /// this pure encoding. Its root owner must retain/revalidate the proof and
+    /// exact active handles before entry and again before committing a result.
+    pub(super) fn encode_applied<'cx>(
+        &self,
+        cx: Cx<'cx>,
+        configuration: &PreparedSolverConfiguration,
+        caller: &CallerSourceContext,
+        application: &super::caller_application::VerifiedCallerApplication,
+    ) -> Result<model::ParamEnv<'cx, prepared::PreparedProvider<'cx>>, SourceCallerClausesPending>
+    {
+        if let Some(why) = self.pending {
+            return Err(why);
+        }
+        application
+            .matches_caller(self, caller)
+            .map_err(|_| SourceCallerClausesPending::CallerApplication)?;
+        self.encode_empty(cx, configuration)
+    }
+    fn encode_empty<'cx>(
+        &self,
+        cx: Cx<'cx>,
+        configuration: &PreparedSolverConfiguration,
+    ) -> Result<model::ParamEnv<'cx, prepared::PreparedProvider<'cx>>, SourceCallerClausesPending>
+    {
         let InputValue::DiscoverySeal(catalog) = self.catalog.as_ref() else {
             unreachable!("actual source catalog")
         };
