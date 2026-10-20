@@ -3436,3 +3436,58 @@ fn unchanged_union_declarations_use_shared_metadata_all_editions_and_origins() {
     }
     assert_eq!(worlds,12);assert!(uses>=24);
 }
+
+#[test]
+fn unchanged_enum_repr_uses_shared_source_integer_metadata_all_editions_and_origins() {
+    use crate::{db::{key::QueryKey,poll::QueryPoll,provider::SyntaxProvider,value::QueryValue},
+        frontend::{names::NameLookup,types::NominalSchema},ir::op::PrimitiveType as P,
+        traits::upstream::enum_repr::PreparedEnumDiscriminant};
+    fn ready<T:std::fmt::Debug>(p:QueryPoll<T>)->T {match p {QueryPoll::Ready(Ok(v))=>v,other=>panic!("actual enum repr: {other:?}")}}
+    let root=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");
+    let mut worlds=0;let mut enums=0;
+    for edition in [2015,2018,2021,2024] {
+        for (case,start,expected,override_repr) in [
+            ("tests/ui/enum-discriminant/discriminant_size.rs","use std::intrinsics",&[("E1",P::Isize),("E2",P::I8),("E3",P::Isize),("UnsignedIntEnum",P::Isize),("E4",P::I128)][..],None),
+            ("tests/ui/enum-discriminant/repr128.rs","use std::intrinsics",&[("Signed",P::I128),("Unsigned",P::U128)][..],None),
+            ("tests/ui/enum-discriminant/discriminant_size.rs","use std::intrinsics",&[("E1",P::Usize)][..],Some("usize")),
+            ("tests/ui/enum-discriminant/discriminant_size.rs","use std::intrinsics",&[("E1",P::U64)][..],Some("u64")),
+            ("tests/ui/enum-discriminant/discriminant_value.rs","extern crate core",&[("CLike1",P::Isize),("CLike2",P::Isize),("CLike3",P::I8),("ADT",P::Isize),("NullablePointer",P::Isize),("Mixed",P::Isize)][..],None),
+        ] {
+            let mut original=std::fs::read_to_string(root.join(case)).unwrap();
+            // Adapted header controls are not upstream main/runtime receipts.
+            if let Some(repr)=override_repr { original=original.replacen("enum E1",&format!("#[repr({repr})]\nenum E1"),1); }
+            let offset=original.find(start).unwrap();
+            for origin in 0..3 {
+                let source=match origin {0=>original.clone(),1=>format!("{}macro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} emit!{{{}}}",&original[..offset],&original[offset..]),
+                    _=>format!("{}macro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} macro_rules! wrap {{($($t:tt)*)=>{{emit!{{$($t)*}}}}}} wrap!{{{}}}",&original[..offset],&original[offset..])};
+                let path=temporary_source(&format!("enum-source-{edition}-{origin}"),&source);
+                let (mut db,seal,scope)=configured_impl_catalog_world(&path,edition).unwrap();
+                let headers=ready(db.fetch(&SyntaxProvider,QueryKey::PreparedScopeImplHeaders(seal.clone()))).value;
+                let QueryValue::PreparedScopeImplHeaders(headers)=headers.as_ref()else{panic!()};
+                let names=headers.inventory_root().environment().unwrap().names();let mut definitions=Vec::new();
+                for &(name,integer) in expected {
+                    let selected=names.lookup_source_path(crate::source::manifest::Namespace::Type,&[crate::syntax::imports::ImportSegment::Name(name.into())],false,&scope,edition).unwrap();
+                    let NameLookup::Defined(definition)=selected else {panic!("actual enum {name}: {selected:?}")};
+                    definitions.push((definition.identity,integer));
+                }
+                db.trace.detailed=true;let before=db.trace.events.len();let mut held=Vec::new();
+                for (definition,integer) in definitions {
+                    let plan=ready(PreparedEnumDiscriminant::prepare(&mut db,definition)).expect("actual enum metadata");
+                    assert_eq!(plan.integer(),integer);plan.require_current(&db).unwrap();
+                    let first=ready(db.fetch(&SyntaxProvider,QueryKey::TypeSchema(definition))).value;
+                    let second=ready(db.fetch(&SyntaxProvider,QueryKey::TypeSchema(definition))).value;
+                    assert!(std::sync::Arc::ptr_eq(&first,&second));
+                    let QueryValue::TypeSchema(schema)=first.as_ref()else{panic!()};let _: &NominalSchema=schema;
+                    // Layout consumes the same result; C/layout width never substitutes for source Type.
+                    assert_eq!(crate::frontend::declaration_repr::declared_repr(schema,"enum").unwrap().integer.unwrap_or(P::Isize),integer);
+                    held.push(plan);enums+=1;
+                }
+                assert!(db.trace.events[before..].iter().all(|e|!matches!(e.key,QueryKey::FunctionSignature(_)|QueryKey::BodyStructure(_)|QueryKey::Thunk(_)|QueryKey::PatternPlan(_))));
+                crate::traits::upstream::enum_repr::check_source_context(&mut db,&seal,&held).unwrap();
+                db.publish_inputs(std::collections::BTreeMap::new()).unwrap();
+                assert!(held.iter().all(|p|p.require_current(&db).is_err()));worlds+=1;
+            }
+        }
+    }
+    assert_eq!((worlds,enums),(60,180));
+}

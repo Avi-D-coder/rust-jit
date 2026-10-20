@@ -54,3 +54,6 @@ fn evaluate<D: SolverDelegate>(
 ) -> Result<GoalEvaluation<D::Interner>, NoSolution> {
     delegate.evaluate_root_goal(goal, span, None)
 }
+
+mod discriminant;
+pub(crate) mod enum_repr;

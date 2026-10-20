@@ -15,7 +15,7 @@ use crate::{
     frontend::types::{NominalBinding, NominalBindingDemand, NominalSchema, SchemaNames},
     runtime::{
         cell::layouts::{DeclarationFacts, LayoutDemand, NominalKind},
-        layout::{IntRepr, Repr},
+        layout::Repr,
         shape::TypeId,
     },
     source::manifest::ItemKind,
@@ -35,75 +35,9 @@ macro_rules! ready {
     };
 }
 
-/// The `#[repr(..)]` hints of a declaration.
+/// Physical layout uses the same source representation plan as the solver.
 fn declared_repr(schema: &NominalSchema, name: &str) -> Result<Repr, Diagnostic> {
-    let mut repr = Repr::default();
-    for attribute in schema
-        .header
-        .attributes
-        .iter()
-        .filter(|attribute| attribute.name == "repr")
-    {
-        let tokens: Vec<&str> = attribute
-            .tokens
-            .iter()
-            .map(|token| token.text.trim())
-            .filter(|text| !text.is_empty())
-            .collect();
-        // `repr ( C , packed ( 2 ) )`
-        let mut index = tokens.iter().position(|text| *text == "(").map_or(tokens.len(), |at| at + 1);
-        while index < tokens.len() {
-            let hint = tokens[index];
-            index += 1;
-            let mut argument = None;
-            if tokens.get(index) == Some(&"(") {
-                argument = tokens.get(index + 1).copied();
-                index += 3;
-            }
-            let number = |argument: Option<&str>| -> Result<Option<u64>, Diagnostic> {
-                argument
-                    .map(|text| {
-                        let text = text.replace('_', "");
-                        let parsed = match text.strip_prefix("0x") {
-                            Some(hex) => u64::from_str_radix(hex, 16),
-                            None => text.parse::<u64>(),
-                        };
-                        parsed.map_err(|_| {
-                            layout_unsupported(format!(
-                                "the repr argument `{text}` of `{name}` is not an integer literal"
-                            ))
-                        })
-                    })
-                    .transpose()
-            };
-            let int = |bytes, signed| Some(IntRepr { bytes, signed });
-            match hint {
-                "C" => repr.c = true,
-                "transparent" => repr.transparent = true,
-                "packed" => {
-                    let pack = number(argument)?.unwrap_or(1);
-                    repr.packed = Some(repr.packed.map_or(pack, |prior| prior.min(pack)));
-                }
-                "align" => repr.align = repr.align.max(number(argument)?),
-                "u8" => repr.int = int(1, false),
-                "i8" => repr.int = int(1, true),
-                "u16" => repr.int = int(2, false),
-                "i16" => repr.int = int(2, true),
-                "u32" => repr.int = int(4, false),
-                "i32" => repr.int = int(4, true),
-                "u64" | "usize" => repr.int = int(8, false),
-                "i64" | "isize" => repr.int = int(8, true),
-                "u128" => repr.int = int(16, false),
-                "i128" => repr.int = int(16, true),
-                _ => {}
-            }
-            // The separating comma.
-            if tokens.get(index) == Some(&",") {
-                index += 1;
-            }
-        }
-    }
-    Ok(repr)
+    Ok(crate::frontend::declaration_repr::declared_repr(schema, name)?.layout)
 }
 
 impl RunMachine {

@@ -80,7 +80,14 @@ def expected():
     methods = '\n'.join(method(fold, name) for name in (
         'replace_escaping_bound_vars_uncached', 'replace_bound_vars_uncached',
         'shift_bound_var_indices', 'anonymize_bound_vars',
+        'instantiate_bound_regions', 'instantiate_bound_regions_uncached', 'instantiate_bound_regions_with_erased',
     ))
+    # The concrete source-fact family is named F; rename only the closure parameter.
+    for name in ('instantiate_bound_regions','instantiate_bound_regions_uncached'):
+        methods=methods.replace(name+'<T, F>',name+'<T, MakeRegion>')
+    methods=methods.replace('mut fld_r: F','mut fld_r: MakeRegion').replace('mut replace_regions: F','mut replace_regions: MakeRegion')
+    methods=methods.replace('F: FnMut(ty::BoundRegion', 'MakeRegion: FnMut(ty::BoundRegion')
+    methods=methods.replace('self.lifetimes.re_erased','self.intern_region(ty::RegionKind::ReErased)').replace('bug!(', 'panic!(')
     binder_impl = "impl<'tcx> TyCtxt<'tcx> {\n" + methods + '}\n'
     supertrait = method(predicate, 'instantiate_supertrait')
     # Match the real shared Interner's predicate-construction API. The compiler

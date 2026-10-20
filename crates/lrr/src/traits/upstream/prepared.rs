@@ -79,6 +79,22 @@ impl DefinitionReceipt {
         let QueryValue::DeclarationGenerics(generics) = self.generic_declaration.as_ref() else { unreachable!("captured generic declaration query") };
         generics.opaque_returns()
     }
+    pub(super) fn is_enum(&self) -> Result<bool, Diagnostic> {
+        let InputValue::DeclarationContext(context) = self.context.as_ref() else { unreachable!("captured source context") };
+        let QueryValue::ParseFile(parsed) = self.parsed.as_ref() else { unreachable!("captured source parse") };
+        parsed.syntax_at(context.range, |node| ast::Enum::can_cast(node.kind())).map(|node| node.is_some())
+    }
+    pub(super) fn same_source_metadata(&self, other: &Self) -> bool {
+        self.definition == other.definition && matches!(
+            (self.source.as_ref(),other.source.as_ref(),self.header.as_ref(),other.header.as_ref(),self.context.as_ref(),other.context.as_ref()),
+            (InputValue::DefinitionSource(a),InputValue::DefinitionSource(b),InputValue::DefinitionHeader(ha),InputValue::DefinitionHeader(hb),InputValue::DeclarationContext(ca),InputValue::DeclarationContext(cb))
+            if a == b && ha == hb && ca == cb)
+    }
+    pub(super) fn matches_enum_schema(&self, schema: &crate::frontend::types::NominalSchema) -> bool {
+        matches!((self.header.as_ref(),self.context.as_ref()),
+            (InputValue::DefinitionHeader(header),InputValue::DeclarationContext(context))
+            if schema.definition == self.definition && schema.header == *header && schema.scope == context.scope)
+    }
     pub(super) fn is_trait(&self) -> bool { self.trait_declaration }
     pub(super) fn is_impl(&self) -> bool { self.implementation.is_some() }
     pub(super) fn matches_generics(&self, generics: &crate::frontend::declaration_generics::DeclarationGenerics) -> bool {
@@ -166,7 +182,6 @@ pub(super) struct Settings<'cx> {
 /// a separate integration requirement, not established by this record type.
 pub(super) struct Clients<'cx> {
     pub(super) solver: super::infer::delegate::SolverClients<'cx>,
-    pub(super) discriminant: fn(Cx<'cx>, T<'cx>) -> T<'cx>,
     pub(super) reflective_field: fn(Cx<'cx>, DefinitionId, A<'cx>) -> Option<FieldInfo<Cx<'cx>>>,
 }
 
@@ -554,6 +569,14 @@ impl<'cx> PreparedProvider<'cx> {
                 || recipe.tokens != header.header || context.range != header.range || context.scope != header.scope
                 || definition.receipt.implementation != Some(implementation.trait_ref.is_some()) {
                 return Err(fault("translated impl does not match its actual retained source"));
+            }
+        }
+        for (id, row) in &facts.adts {
+            let definition = facts.definitions.get(id).ok_or_else(|| fault("ADT definition is absent"))?;
+            match (&row.info.discriminant, definition.receipt.is_enum()?) {
+                (Some(plan), true) if row.info.kind == AdtKind::Enum && plan.matches(&definition.receipt) => {},
+                (None, false) if row.info.kind != AdtKind::Enum => {},
+                _ => return Err(fault("enum discriminant metadata lacks its actual source schema")),
             }
         }
         for id in facts
@@ -1294,7 +1317,7 @@ impl<'cx> SourceFacts<'cx> for PreparedProvider<'cx> {
         (self.data().clients.reflective_field)(cx, id, args)
     }
     fn discriminant_type(self, cx: Cx<'cx>, ty: T<'cx>) -> T<'cx> {
-        (self.data().clients.discriminant)(cx, ty)
+        ty.pinned_discriminant_ty(cx)
     }
 }
 

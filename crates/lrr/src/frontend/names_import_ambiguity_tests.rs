@@ -180,3 +180,35 @@ fn glob_imported_crate_root_alias_retains_its_target_and_frontier() {
         );
     }
 }
+
+#[test]
+fn disclosed_nonroot_module_alias_requires_no_synthetic_item_and_keeps_frontiers() {
+    for edition in [2015,2018,2021,2024] {
+        let (outline,mut names)=graph("use bridge::inner as chosen; fn main(){}",edition);
+        let unit=outline.root_scope.crate_key;
+        names.declare_module(unit,&["bridge"],edition,VisibilityScope::Public).unwrap();
+        names.declare_module(unit,&["bridge","inner"],edition,VisibilityScope::Public).unwrap();
+        let item=NameDefinition {namespace:Namespace::Value,identity:Digest([231;32]),defining_unit:unit,definition_edition:edition};
+        names.define(NameNamespaces::path(unit,&["bridge","inner","known"],edition).unwrap(),item.clone(),VisibilityScope::Public).unwrap();
+        let resolved=names.resolve_imports().unwrap();
+        assert!(resolved.missing.is_empty() && resolved.pending.is_empty() && resolved.ambiguous.is_empty());
+        assert_eq!(resolved.resolved.len(),1);
+        let selected=NameNamespaces::path(unit,&["chosen","known"],edition).unwrap();
+        assert_eq!(names.lookup(Namespace::Value,&selected,&outline.root_scope).unwrap(),NameLookup::Defined(item.clone()));
+        // No item with the module's name was fabricated in the Type namespace.
+        let module=NameNamespaces::path(unit,&["bridge","inner"],edition).unwrap();
+        assert_eq!(names.types.lookup_from(&module,&outline.root_scope).unwrap(),PathLookup::Absent);
+        let producer=Digest([232;32]);
+        names.reserve_generated_frontier(outline.root_scope.clone(),producer).unwrap();
+        let pending=names.resolve_imports().unwrap();
+        assert_eq!(pending.pending.len(),1);
+        let NameLookup::NeedInput(waiting)=names.lookup(Namespace::Value,&selected,&outline.root_scope).unwrap() else {
+            panic!("an unresolved source/import frontier cannot authorize the old value");
+        };
+        // Either actual prerequisite may be first in the deterministic worklist.
+        assert!(waiting==producer || pending.pending.contains(&waiting));
+        names.release_generated_frontier(&outline.root_scope,producer);
+        let resolved=names.resolve_imports().unwrap();assert!(resolved.pending.is_empty() && resolved.missing.is_empty());
+        assert_eq!(names.lookup(Namespace::Value,&selected,&outline.root_scope).unwrap(),NameLookup::Defined(item));
+    }
+}

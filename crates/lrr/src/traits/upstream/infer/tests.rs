@@ -18,6 +18,7 @@ pub(crate) fn check_actual_storage<'cx>(cx: DbInterner<'cx>, actual: Ty<'cx>, sp
     check_goal_fast_path(cx, actual, span);
     check_solver_delegate(cx, actual, span);
     check_pinned_bottom_up_folder(cx, actual, span);
+    check_pinned_discriminant_type(cx, actual, span);
     let storage = InferenceStorage::new();
     let root = ty::UniverseIndex::ROOT;
     let (a, b, integer, float, constant, first_region, second_region) = {
@@ -1038,4 +1039,25 @@ fn check_pinned_bottom_up_folder<'cx>(cx:DbInterner<'cx>,actual:Ty<'cx>,span:Spa
         ty_op:|t|{types.push(t);t},lt_op:|r|r,ct_op:|c|{constants.push(c);c}});
     assert_eq!(result,constant);assert_eq!(types,vec![boolean]);assert_eq!(constants,vec![constant]);
     assert!(cx.services().ready(cx).is_err(),"folder transport grants no missing opaque source/bounds readiness");
+}
+
+// Exact pinned Type client over actual retained source IR. ADT/alias/parameter
+// branches still require complete real facts; this constructs no fake lang item.
+fn check_pinned_discriminant_type<'cx>(cx:DbInterner<'cx>,actual:Ty<'cx>,span:Span) {
+    use ty::{inherent::Ty as _, BoundVariableKind, RegionKind, TyKind};
+    use crate::traits::upstream::model::AllocateList;
+    if !matches!(actual.kind(),TyKind::Adt(..)|TyKind::Param(_)|TyKind::Alias(..)
+        |TyKind::Infer(ty::InferTy::TyVar(_))|TyKind::Bound(..)|TyKind::Placeholder(_)) {
+        assert_eq!(actual.pinned_discriminant_ty(cx),Ty::new_u8(cx));
+    }
+    let bound=Region::new_bound(cx,ty::INNERMOST,ty::BoundRegion {var:ty::BoundVar::from_u32(0),kind:ty::BoundRegionKind::Anon});
+    let reference=Ty::new_ref(cx,bound,actual,ty::Mutability::Not);
+    let binder=ty::Binder::bind_with_vars(reference,cx.list(vec![BoundVariableKind::Region(ty::BoundRegionKind::Anon)]));
+    let erased=cx.instantiate_bound_regions_with_erased(binder);
+    assert!(matches!(erased.kind(),TyKind::Ref(region,inner,ty::Mutability::Not) if region.kind()==RegionKind::ReErased && inner==actual));
+    assert!(matches!(reference.kind(),TyKind::Ref(region,_,_) if region==bound));
+    let unsafe_binder=Ty::new_unsafe_binder(cx,binder);
+    assert_eq!(unsafe_binder.pinned_discriminant_ty(cx),Ty::new_u8(cx));
+    assert!(!span.is_dummy());
+    assert!(cx.services().ready(cx).is_err(),"Type client cannot mint missing source facts or root readiness");
 }

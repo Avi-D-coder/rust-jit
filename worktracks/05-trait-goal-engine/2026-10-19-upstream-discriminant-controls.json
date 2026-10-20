@@ -1,0 +1,8 @@
+{
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_enum_repr_uses_shared_source_integer_metadata_all_editions_and_origins",
+    "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+    "cli::crate_graph::mem_layout_tests::structs_follow_repr_rust_c_packed_and_align",
+    "cli::crate_graph::mem_layout_tests::enums_use_the_smallest_tag_explicit_repr_and_variant_packing"
+  ]
+}

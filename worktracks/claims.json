@@ -2019,11 +2019,19 @@
         "worktracks/06-storage-ownership/2026-10-19-replacement-cleanup-review.md",
         "worktracks/06-storage-ownership/2026-10-19-replacement-cleanup-controls.json",
         "worktracks/04-calls-source-views/2026-10-19-rigid-open-results.md",
-        "crates/lrr/src/vm/frame_source_types_tests.rs"
+        "crates/lrr/src/vm/frame_source_types_tests.rs",
+        "crates/lrr/src/traits/upstream/discriminant.rs",
+        "crates/lrr/src/traits/upstream/enum_repr.rs",
+        "crates/lrr/src/frontend/declaration_repr.rs",
+        "tools/upstream_discriminant.py",
+        "crates/lrr/facade/std/lib.rs",
+        "crates/lrr/src/source/embedded_crates.rs",
+        "crates/lrr/facade/core/lib.rs",
+        "crates/lrr/facade/core/intrinsics.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-20T06:29:33.785168+00:00",
+      "updated_at": "2026-10-20T07:26:42.186925+00:00",
       "review_after": "2026-10-20T10:52:01.627878+00:00",
       "shared_interfaces": [
         {
@@ -2045,7 +2053,8 @@
             "crates/lrr/src/frontend/pattern_access.rs",
             "crates/lrr/src/syntax/source_constraints.rs",
             "crates/lrr/src/frontend/call_contracts.rs",
-            "crates/lrr/src/frontend/macro_names.rs"
+            "crates/lrr/src/frontend/macro_names.rs",
+            "crates/lrr/src/frontend/names_import_ambiguity_tests.rs"
           ],
           "scope": "Same solo owner extends shared declaration/const-Type source capture and actual parameter transport; no concurrent owner or transfer."
         },
@@ -2164,7 +2173,8 @@
           "claim": "LOCAL-045",
           "owner": "/root",
           "paths": [
-            "crates/lrr/src/frontend/pattern_names.rs"
+            "crates/lrr/src/frontend/pattern_names.rs",
+            "crates/lrr/src/frontend/names.rs"
           ],
           "scope": "Same solo root extends the common source-pattern declaration/constraint receipt; no parallel owner or transfer."
         },
@@ -2224,7 +2234,7 @@
           "scope": "Same solo owner extends nominal source region metadata admission and exact physical argument membership; no concurrent owner or transfer."
         }
       ],
-      "latest_component_scope": "V462-V470 HELD M018/T040/T053/E006 common rigid source answers and nominal region metadata. Actual same-body rigid answers use the existing source application finalizer and retained WrittenType::Frame; body result parameters feed existing source relations. Common call closedness, runtime region projection and frame descriptor membership preserve source regions separately from physical Type slots. Source-view heap measurement/counters/transient preflights and cleanup bookkeeping are removed under E006 rather than extending a false resource refusal. Final V470 both macOS1.99.0 builds and9/9scoped controls pass; actual view publication, source identity/arity/foreign-Type/placeholder refusals, call-slot alias checks, tuple transfer, return/scope cleanup and reference certificate guards exercised. Unchanged owning2015 union-generic-rpass advances18->265matched VM operations/16source calls, through generic union transmute, iterator creation and first next; still fails at nested explicit Type inference hole std::slice::Iter<_>. Maintained struct-aliases/generic-derived-type/union-drop-assign pass961/199/317operations with complete captures. V467/V468 lifetime/frame-owner controls retain their own exact source evidence. V469 false resource failure and earlier diagnostic probes remain recorded. No newly complete distinct upstream runtime case or refreshed suite/morning total. Full nested inference/projections, upstream solver root/member/VM migration, origin matrix, source/currentness/cleanup and all task/milestone/interpreter/JIT gates remain incomplete. No Linux/performance/full-fixture/diagnostic/tooling closure."
+      "latest_component_scope": "V471-V478 HELD M019/M020/T060 source/client and M007 namespace repair. The complete pinned rustc Ty::discriminant_ty/coroutine rule plus three bound-region instantiation methods replace the discriminant function-pointer requirement; exact original hashes/mechanical generators pass. One extracted declaration repr parser serves existing runtime layout and retained source enum metadata, preserving usize/u64 source identity separately from physical width. Enum facts retain exact source/header/context/schema guards; full ADT/source/root readiness is not minted. V475 source-IR/client control passes164encoded source-head observations across60world rows, plus both existing layout controls; source matrix fails a real std intrinsic import. V476 attempted ordinary std re-export regresses all4selected runtimes at missing core module readiness; retained as failed evidence. Common named imports now accept already checked/installed non-root module aliases without synthetic item definitions, preserving frontiers/ambiguities. An ordinary embedded core::intrinsics public wrapper uses the exact pinned generic/reference/projected-result signature and existing closed helper; no new builtin ID or runtime Type guess. V477 source matrix passes60edition/origin worlds/180enum metadata encodings, including156unchanged-fixture source observations and24external usize/u64 header controls, cold-body/memo/withdrawal checks. Existing upstream ambiguity control passes; new host control fails an overly specific pending-ID oracle. Final V478 changes only that oracle, both builds and2/2affected controls pass; CLI/production byte-identical toV477. Unchanged discriminant_size/repr128 advance from imports to1188/1187 and28/27dispatch attempts/outcomes, then fail ownership/type and primitive operator boundaries. Generic union remains265failed at nested Iter<_> inference; union-align restored1462matched dispatches/25source calls/unit/empty streams/cleanup. Zero new complete distinct stock runtime gains or refreshed suite total. Remaining five semantic clients, real source/ADT facts/root/member/projection/VM joins, fixed-isize runtime intrinsic result, complete origin/currentness/cleanup and interpreter/JIT gates stay open. No full-fixture/diagnostic/tooling/Linux/performance closure."
     }
   ],
   "updated_at": "2026-10-20T05:53:09.895207+00:00"

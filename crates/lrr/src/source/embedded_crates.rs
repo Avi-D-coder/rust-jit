@@ -82,6 +82,7 @@ pub fn standard_facade_crates(profile: &ProfileIdentity) -> Vec<EmbeddedCrate> {
                 facade_file!(["future"], "core/future.rs"),
                 facade_file!(["hash"], "core/hash.rs"),
                 facade_file!(["hint"], "core/hint.rs"),
+                facade_file!(["intrinsics"], "core/intrinsics.rs"),
                 facade_file!(["int_convert"], "core/int_convert.rs"),
                 facade_file!(["int_impls"], "core/int_impls.rs"),
                 facade_file!(["iter"], "core/iter.rs"),

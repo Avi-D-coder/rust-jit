@@ -285,6 +285,60 @@ impl<'cx, F: SourceFacts<'cx>> Context<'cx, F> {
         let bound_vars = self.mk_bound_variable_kinds_from_iter(map.into_values());
         Binder::bind_with_vars(inner, bound_vars)
     }
+
+    pub(crate) fn instantiate_bound_regions<T, MakeRegion>(
+        self,
+        value: Binder<Context<'cx, F>, T>,
+        mut fld_r: MakeRegion,
+    ) -> (
+        T,
+        FxIndexMap<ty::BoundRegion<Context<'cx, F>>, ty::Region<Context<'cx, F>>>,
+    )
+    where
+        MakeRegion: FnMut(ty::BoundRegion<Context<'cx, F>>) -> ty::Region<Context<'cx, F>>,
+        T: TypeFoldable<Context<'cx, F>>,
+    {
+        let mut region_map = FxIndexMap::default();
+        let real_fld_r = |br: ty::BoundRegion<Context<'cx, F>>| {
+            *region_map.entry(br).or_insert_with(|| fld_r(br))
+        };
+        let value = self.instantiate_bound_regions_uncached(value, real_fld_r);
+        (value, region_map)
+    }
+
+    pub(crate) fn instantiate_bound_regions_uncached<T, MakeRegion>(
+        self,
+        value: Binder<Context<'cx, F>, T>,
+        mut replace_regions: MakeRegion,
+    ) -> T
+    where
+        MakeRegion: FnMut(ty::BoundRegion<Context<'cx, F>>) -> ty::Region<Context<'cx, F>>,
+        T: TypeFoldable<Context<'cx, F>>,
+    {
+        let value = value.skip_binder();
+        if !value.has_escaping_bound_vars() {
+            value
+        } else {
+            let delegate = FnMutDelegate {
+                regions: &mut replace_regions,
+                types: &mut |b| panic!("unexpected bound ty in binder: {b:?}"),
+                consts: &mut |b| panic!("unexpected bound ct in binder: {b:?}"),
+            };
+            let mut replacer = BoundVarReplacer::new(self, delegate);
+            value.fold_with(&mut replacer)
+        }
+    }
+
+    pub(crate) fn instantiate_bound_regions_with_erased<T>(
+        self,
+        value: Binder<Context<'cx, F>, T>,
+    ) -> T
+    where
+        T: TypeFoldable<Context<'cx, F>>,
+    {
+        self.instantiate_bound_regions(value, |_| self.intern_region(ty::RegionKind::ReErased))
+            .0
+    }
 }
 impl<'cx, F: SourceFacts<'cx>> Clause<'cx, F> {
     pub(crate) fn instantiate_supertrait_upstream(

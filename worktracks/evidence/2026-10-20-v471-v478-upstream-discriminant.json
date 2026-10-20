@@ -1,0 +1,867 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-20T07:26:42.186925+00:00",
+  "date_local": "2026-10-20",
+  "started_local": "2026-10-19",
+  "baseline": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+  "status": "held_component_checkpoint",
+  "solo": true,
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "source_sha256": "cb42ddcc83d9ae3175fef1ca29f032607dd6b19621a80d7121fedff46d8c7f2b",
+  "summary": "V471-V478 HELD M019/M020/T060 source/client and M007 namespace repair. The complete pinned rustc Ty::discriminant_ty/coroutine rule plus three bound-region instantiation methods replace the discriminant function-pointer requirement; exact original hashes/mechanical generators pass. One extracted declaration repr parser serves existing runtime layout and retained source enum metadata, preserving usize/u64 source identity separately from physical width. Enum facts retain exact source/header/context/schema guards; full ADT/source/root readiness is not minted. V475 source-IR/client control passes164encoded source-head observations across60world rows, plus both existing layout controls; source matrix fails a real std intrinsic import. V476 attempted ordinary std re-export regresses all4selected runtimes at missing core module readiness; retained as failed evidence. Common named imports now accept already checked/installed non-root module aliases without synthetic item definitions, preserving frontiers/ambiguities. An ordinary embedded core::intrinsics public wrapper uses the exact pinned generic/reference/projected-result signature and existing closed helper; no new builtin ID or runtime Type guess. V477 source matrix passes60edition/origin worlds/180enum metadata encodings, including156unchanged-fixture source observations and24external usize/u64 header controls, cold-body/memo/withdrawal checks. Existing upstream ambiguity control passes; new host control fails an overly specific pending-ID oracle. Final V478 changes only that oracle, both builds and2/2affected controls pass; CLI/production byte-identical toV477. Unchanged discriminant_size/repr128 advance from imports to1188/1187 and28/27dispatch attempts/outcomes, then fail ownership/type and primitive operator boundaries. Generic union remains265failed at nested Iter<_> inference; union-align restored1462matched dispatches/25source calls/unit/empty streams/cleanup. Zero new complete distinct stock runtime gains or refreshed suite total. Remaining five semantic clients, real source/ADT facts/root/member/projection/VM joins, fixed-isize runtime intrinsic result, complete origin/currentness/cleanup and interpreter/JIT gates stay open. No full-fixture/diagnostic/tooling/Linux/performance closure.",
+  "task_ids": [
+    "M019",
+    "M020",
+    "T060"
+  ],
+  "repair_debt_task": "M007",
+  "claims": [
+    "LOCAL-049"
+  ],
+  "architecture_record": "worktracks/05-trait-goal-engine/2026-10-19-upstream-discriminant-client.md",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-19-upstream-discriminant-review.md",
+  "cohorts": {
+    "471": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:44:38.527888+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8615,
+          "source_sha256": "6fc14b32c5b6538ecf44c3d9f65c68fd595123a718f1e0029677ae6070d0a6d8",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:45:42.117486+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8615,
+          "source_sha256": "6fc14b32c5b6538ecf44c3d9f65c68fd595123a718f1e0029677ae6070d0a6d8",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build_success": false,
+      "lib_build_terminal_exit": 101,
+      "lib_errors": [
+        "error[E0599]: no associated function or constant named `new_erased` found for struct `rustc_type_ir::Region<I>` in the current scope\n   --> crates/lrr/src/traits/upstream/binders.rs:339:63\n    |\n339 |         self.instantiate_bound_regions(value, |_| ty::Region::new_erased(self))\n    |                                                               ^^^^^^^^^^ associated function or constant not found in `rustc_type_ir::Region<_>`\n    |\nnote: if you're trying to build a new `rustc_type_ir::Region<_>` consider using one of the following associated functions:\n      rustc_type_ir::Region::<I>::new_var\n      rustc_type_ir::Region::<I>::new_error_misc\n      rustc_type_ir::Region::<I>::new_error_with_message\n      rustc_type_ir::Region::<I>::new_late_param\n      and 7 others\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/sty/mod.rs:31:5\n    |\n 31 |     pub fn new_var(interner: I, v: RegionVid) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n...\n 82 |     pub fn new_error_misc(interner: I) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n...\n 93 |     pub fn new_error_with_message(interner: I, span: I::Span, msg: impl ToString) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n...\n 99 |     pub fn new_late_param(interner: I, scope: I::DefId, kind: I::LateParamRegionKind) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: there is a method `is_erased` with a similar name, but with different arguments\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/sty/mod.rs:155:5\n    |\n155 |     pub fn is_erased(self) -> bool {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n",
+        "error[E0599]: no associated function or constant named `new_projection_from_args` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/discriminant.rs:27:21\n    |\n 27 |                 Ty::new_projection_from_args(\n    |                     ^^^^^^^^^^^^^^^^^^^^^^^^ associated function or constant not found in `model::Ty<'_, _>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_projection_from_args` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, _>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    = help: items from traits can only be used if the trait is in scope\nhelp: trait `Ty` which provides `new_projection_from_args` is implemented but not in scope; perhaps you want to import it\n    |\n  4 + use rustc_type_ir::inherent::Ty;\n    |\nhelp: there is an associated function `new_projection` with a similar name\n    |\n 27 -                 Ty::new_projection_from_args(\n 27 +                 Ty::new_projection(\n    |\n\n",
+        "error[E0599]: no associated function or constant named `new_u8` found for struct `model::Ty<'cx, F>` in the current scope\n   --> crates/lrr/src/traits/upstream/discriminant.rs:64:65\n    |\n 64 |             | ty::TyKind::Infer(IntVar(_) | FloatVar(_)) => Ty::new_u8(tcx),\n    |                                                                 ^^^^^^ associated function or constant not found in `model::Ty<'_, _>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:232:1\n    |\n232 | pub(crate) struct Ty<'cx, F: SourceFacts<'cx>>(\n    | ---------------------------------------------- associated function or constant `new_u8` not found for this struct\n    |\nnote: if you're trying to build a new `model::Ty<'_, _>`, consider using `model::Ty::<'cx, F>::new` which returns `model::Ty<'_, _>`\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    = help: items from traits can only be used if the trait is in scope\nhelp: there is an associated function `new` with a similar name\n   --> crates/lrr/src/traits/upstream/model.rs:236:5\n    |\n236 |     pub(crate) fn new(cx: Context<'cx, F>, kind: TyKind<Context<'cx, F>>) -> Self {\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nhelp: trait `Ty` which provides `new_u8` is implemented but not in scope; perhaps you want to import it\n    |\n  4 + use rustc_type_ir::inherent::Ty;\n    |\n\n"
+      ],
+      "scope": "failed build; no guest/control execution or matching CLI build"
+    },
+    "472": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:47:02.985561+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8615,
+          "source_sha256": "8b2c7acbb9fc9941216304782fa017a7f955db5bf511c9b9522c148c9658926c",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:48:05.297230+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8615,
+          "source_sha256": "8b2c7acbb9fc9941216304782fa017a7f955db5bf511c9b9522c148c9658926c",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build_success": false,
+      "lib_build_terminal_exit": 101,
+      "lib_errors": [
+        "error[E0599]: no method named `list` found for struct `upstream::context::Context<'cx, F>` in the current scope\n    --> crates/lrr/src/traits/upstream/infer/tests.rs:1054:56\n     |\n1054 |     let binder=ty::Binder::bind_with_vars(reference,cx.list(vec![BoundVariableKind::Region(ty::BoundRegionKind::Anon)]));\n     |                                                        ^^^^ method not found in `upstream::context::Context<'cx, PreparedProvider<'cx>>`\n     |\n    ::: crates/lrr/src/traits/upstream/model.rs:67:8\n     |\n  67 |     fn list(self, values: Vec<T>) -> List<'cx, T>;\n     |        ---- the method is available for `upstream::context::Context<'cx, PreparedProvider<'cx>>` here\n     |\n    ::: crates/lrr/src/traits/upstream/context.rs:31:1\n     |\n  31 | pub(crate) struct Context<'cx, F: SourceFacts<'cx>> {\n     | --------------------------------------------------- method `list` not found for this struct\n     |\n     = help: items from traits can only be used if the trait is in scope\nhelp: trait `AllocateList` which provides `list` is implemented but not in scope; perhaps you want to import it\n     |\n   3 + use crate::traits::upstream::model::AllocateList;\n     |\n\n"
+      ],
+      "scope": "failed build; no guest/control execution or matching CLI build"
+    },
+    "473": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:48:05.769263+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8615,
+          "source_sha256": "a8b93b0519e1b8a2167b76aad7e0f60da349cb3a29e90cc084762e32bbb2dc72",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:49:59.360766+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8615,
+          "source_sha256": "a8b93b0519e1b8a2167b76aad7e0f60da349cb3a29e90cc084762e32bbb2dc72",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "85d8bb11049789186c257e1723161cd37870d432570c0463316a4f1aad31b1f5"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "57dd7fe8bb4066457edf2795515331d77e8b667d749501813cab7c12d829454d"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:52:14.730255+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8615,
+          "source_sha256": "a8b93b0519e1b8a2167b76aad7e0f60da349cb3a29e90cc084762e32bbb2dc72",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "85d8bb11049789186c257e1723161cd37870d432570c0463316a4f1aad31b1f5"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "57dd7fe8bb4066457edf2795515331d77e8b667d749501813cab7c12d829454d"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build_success": true,
+      "lib_build_terminal_exit": 0,
+      "cli_build_success": true,
+      "cli_build_terminal_exit": 0,
+      "scope": "both builds pass; source attachment review strengthened receipt before any control/runtime acceptance"
+    },
+    "474": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:52:15.399737+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8615,
+          "source_sha256": "cc493303afc69ac4878e898df0ee1c5b733aa95348f55532589de9b31be36fb0",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:53:03.953068+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8615,
+          "source_sha256": "cc493303afc69ac4878e898df0ee1c5b733aa95348f55532589de9b31be36fb0",
+          "binaries": {},
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        }
+      },
+      "lib_build_success": false,
+      "lib_build_terminal_exit": 101,
+      "lib_errors": [
+        "error[E0432]: unresolved import `crate::db::key::SolverConfigurationKey`\n   --> crates/lrr/src/traits/upstream/enum_repr.rs:119:9\n    |\n119 |         key::SolverConfigurationKey,\n    |         ^^^^^----------------------\n    |              |\n    |              no `SolverConfigurationKey` in `db::key`\n    |\n    = help: consider importing this struct instead:\n            crate::traits::upstream::configuration::SolverConfigurationKey\n\n",
+        "error[E0599]: no method named `fingerprint` found for struct `seals::Seal` in the current scope\n   --> crates/lrr/src/traits/upstream/enum_repr.rs:150:45\n    |\n150 |                 .definition_id(catalog.seal.fingerprint(), local);\n    |                                             ^^^^^^^^^^^ method not found in `seals::Seal`\n    |\n   ::: crates/lrr/src/core/digest.rs:180:8\n    |\n180 |     fn fingerprint(&self) -> Digest {\n    |        ----------- the method is available for `seals::Seal` here\n    |\n   ::: crates/lrr/src/db/seals.rs:651:1\n    |\n651 | pub struct Seal {\n    | --------------- method `fingerprint` not found for this struct\n    |\n    = help: items from traits can only be used if the trait is in scope\nhelp: trait `StableEncode` which provides `fingerprint` is implemented but not in scope; perhaps you want to import it\n    |\n  2 + use crate::core::digest::StableEncode;\n    |\n\n"
+      ],
+      "scope": "failed build; no guest/control execution or matching CLI build"
+    },
+    "475": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:53:04.445253+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8615,
+          "source_sha256": "efab295a5f3a3299ca7de931bdee6123177f5e05b324b7bae4cddc1c14364531",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T06:55:04.815551+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8615,
+          "source_sha256": "efab295a5f3a3299ca7de931bdee6123177f5e05b324b7bae4cddc1c14364531",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "4313c3b7f6211f7ce101d8e07b4fc0ca97b85dfc58d4002e6d8b3e5c45cff746"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "69e46a9ed2e40f8a15ef9cc54ec4776c8f8759e57decd8a04201e7d526571877"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T07:00:51.393060+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8615,
+          "source_sha256": "efab295a5f3a3299ca7de931bdee6123177f5e05b324b7bae4cddc1c14364531",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "4313c3b7f6211f7ce101d8e07b4fc0ca97b85dfc58d4002e6d8b3e5c45cff746"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "69e46a9ed2e40f8a15ef9cc54ec4776c8f8759e57decd8a04201e7d526571877"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build_success": true,
+      "lib_build_terminal_exit": 0,
+      "cli_build_success": true,
+      "cli_build_terminal_exit": 0,
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_enum_repr_uses_shared_source_integer_metadata_all_editions_and_origins",
+          "exit": 101,
+          "pass": false,
+          "inputs_unchanged": true,
+          "seconds": 2.708
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_impl_source_terms_construct_actual_shared_ir_in_source_contexts_all_editions",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 145.005
+        },
+        {
+          "selector": "cli::crate_graph::mem_layout_tests::structs_follow_repr_rust_c_packed_and_align",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 34.582
+        },
+        {
+          "selector": "cli::crate_graph::mem_layout_tests::enums_use_the_smallest_tag_explicit_repr_and_variant_packing",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 43.601
+        }
+      ],
+      "controls_terminal_exit": 1,
+      "runtime_report_local": "/private/tmp/lrr-v475-discriminant-runtime/report.json",
+      "runtime_terminal_exit": 1,
+      "runtime_cases": [
+        {
+          "case": "tests/ui/enum-discriminant/discriminant_size.rs",
+          "status": "interpreter_failure",
+          "mode": "run-pass",
+          "edition": 2015,
+          "source_sha256": "3188f517b24186d08376bd2eac494b4041ddcbb1d11c6de50186be1a1f4d1871",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "before_observation_or_finish_fault",
+            "code": "LRR-E-CATALOG-INCOMPLETE",
+            "message": "fixed point retains unresolved import or macro producers; blocked import `{use std::intrinsics::discriminant_value}`; value=Absent, type=Absent, macro=Absent"
+          },
+          "capture_complete": false,
+          "facts": null
+        },
+        {
+          "case": "tests/ui/enum-discriminant/repr128.rs",
+          "status": "interpreter_failure",
+          "mode": "run-pass",
+          "edition": 2015,
+          "source_sha256": "66af2eb56be2026a744d2169f8467d11df4c75e8ea21d204f0948db2c8e445bc",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "before_observation_or_finish_fault",
+            "code": "LRR-E-CATALOG-INCOMPLETE",
+            "message": "fixed point retains unresolved import or macro producers; blocked import `{use std::intrinsics::discriminant_value}`; value=Absent, type=Absent, macro=Absent"
+          },
+          "capture_complete": false,
+          "facts": null
+        },
+        {
+          "case": "tests/ui/union/union-generic-rpass.rs",
+          "status": "interpreter_failure",
+          "mode": "run-pass",
+          "edition": 2015,
+          "source_sha256": "f59d90d6dad771e639a8ff498e0475e10e126c1b81342c3a14c08263458356b8",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "executor",
+            "code": "LRR-E-UNSUPPORTED",
+            "message": "explicit Type argument with an inference hole requires inference"
+          },
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 404,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 16,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 265,
+            "vm_outcomes": 265
+          }
+        },
+        {
+          "case": "tests/ui/union/union-align.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "source_sha256": "20a81a6381d98eebfc1fd742ee35c4ee09c49a1f164ad9e4be23b26b49a34729",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 2799,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 25,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1462,
+            "vm_outcomes": 1462
+          }
+        }
+      ]
+    },
+    "476": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T07:00:51.982769+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8615,
+          "source_sha256": "39d0f29f869279724a54544a03afdff800f187b2ffc4b773bedee2e920e3c952",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T07:02:31.076075+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8615,
+          "source_sha256": "39d0f29f869279724a54544a03afdff800f187b2ffc4b773bedee2e920e3c952",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "83ab8092be824462631372ab5bc91651e613a683302d53925db18fb2813c0316"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "2a188fcd287d8cd808853622bf7242f298bb89558640c76b1bc20a96b479c9c7"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T07:05:58.437051+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8615,
+          "source_sha256": "39d0f29f869279724a54544a03afdff800f187b2ffc4b773bedee2e920e3c952",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "83ab8092be824462631372ab5bc91651e613a683302d53925db18fb2813c0316"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "2a188fcd287d8cd808853622bf7242f298bb89558640c76b1bc20a96b479c9c7"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build_success": true,
+      "lib_build_terminal_exit": 0,
+      "cli_build_success": true,
+      "cli_build_terminal_exit": 0,
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_enum_repr_uses_shared_source_integer_metadata_all_editions_and_origins",
+          "exit": 101,
+          "pass": false,
+          "inputs_unchanged": true,
+          "seconds": 2.758
+        }
+      ],
+      "controls_terminal_exit": 1,
+      "runtime_report_local": "/private/tmp/lrr-v476-discriminant-runtime/report.json",
+      "runtime_terminal_exit": 1,
+      "runtime_cases": [
+        {
+          "case": "tests/ui/enum-discriminant/discriminant_size.rs",
+          "status": "interpreter_failure",
+          "mode": "run-pass",
+          "edition": 2015,
+          "source_sha256": "3188f517b24186d08376bd2eac494b4041ddcbb1d11c6de50186be1a1f4d1871",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "before_observation_or_finish_fault",
+            "code": "LRR-E-CATALOG-INCOMPLETE",
+            "message": "fixed point retains unresolved import or macro producers; blocked import `{use core::intrinsics}`; value=Absent, type=Absent, macro=Absent"
+          },
+          "capture_complete": false,
+          "facts": null
+        },
+        {
+          "case": "tests/ui/enum-discriminant/repr128.rs",
+          "status": "interpreter_failure",
+          "mode": "run-pass",
+          "edition": 2015,
+          "source_sha256": "66af2eb56be2026a744d2169f8467d11df4c75e8ea21d204f0948db2c8e445bc",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "before_observation_or_finish_fault",
+            "code": "LRR-E-CATALOG-INCOMPLETE",
+            "message": "fixed point retains unresolved import or macro producers; blocked import `{use core::intrinsics}`; value=Absent, type=Absent, macro=Absent"
+          },
+          "capture_complete": false,
+          "facts": null
+        },
+        {
+          "case": "tests/ui/union/union-generic-rpass.rs",
+          "status": "interpreter_failure",
+          "mode": "run-pass",
+          "edition": 2015,
+          "source_sha256": "f59d90d6dad771e639a8ff498e0475e10e126c1b81342c3a14c08263458356b8",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "before_observation_or_finish_fault",
+            "code": "LRR-E-CATALOG-INCOMPLETE",
+            "message": "fixed point retains unresolved import or macro producers; blocked import `{use core::intrinsics}`; value=Absent, type=Absent, macro=Absent"
+          },
+          "capture_complete": false,
+          "facts": null
+        },
+        {
+          "case": "tests/ui/union/union-align.rs",
+          "status": "interpreter_failure",
+          "mode": "run-pass",
+          "edition": 2015,
+          "source_sha256": "20a81a6381d98eebfc1fd742ee35c4ee09c49a1f164ad9e4be23b26b49a34729",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "before_observation_or_finish_fault",
+            "code": "LRR-E-CATALOG-INCOMPLETE",
+            "message": "fixed point retains unresolved import or macro producers; blocked import `{use core::intrinsics}`; value=Absent, type=Absent, macro=Absent"
+          },
+          "capture_complete": false,
+          "facts": null
+        }
+      ],
+      "scope": "stdlib re-export exposes unresolved non-root module import; all4 runtime cases fail, regression preserved"
+    },
+    "477": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T07:11:45.977166+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8616,
+          "source_sha256": "f629719ee81890875beab182230d358878aca2f31f48d392ab6290a651bd923b",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T07:13:38.618164+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8616,
+          "source_sha256": "f629719ee81890875beab182230d358878aca2f31f48d392ab6290a651bd923b",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "3fc2142a3b5c44af8a4d100d5d309a4617d5ad14d1682b563ab9763a20559a80"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "13534b381bc54dc757e4912d6f7bd964b8f38adb89e52e9d9f23714dd97a63a9"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T07:19:32.837925+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8616,
+          "source_sha256": "f629719ee81890875beab182230d358878aca2f31f48d392ab6290a651bd923b",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "3fc2142a3b5c44af8a4d100d5d309a4617d5ad14d1682b563ab9763a20559a80"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "13534b381bc54dc757e4912d6f7bd964b8f38adb89e52e9d9f23714dd97a63a9"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build_success": true,
+      "lib_build_terminal_exit": 0,
+      "cli_build_success": true,
+      "cli_build_terminal_exit": 0,
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_enum_repr_uses_shared_source_integer_metadata_all_editions_and_origins",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 150.44
+        },
+        {
+          "selector": "frontend::names::names_import_ambiguity_tests::disclosed_nonroot_module_alias_requires_no_synthetic_item_and_keeps_frontiers",
+          "exit": 101,
+          "pass": false,
+          "inputs_unchanged": true,
+          "seconds": 0.373
+        },
+        {
+          "selector": "frontend::names::names_import_ambiguity_tests::unchanged_distinct_module_imports_preserve_value_and_type_ambiguities_all_editions",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.4
+        }
+      ],
+      "controls_terminal_exit": 1,
+      "runtime_report_local": "/private/tmp/lrr-v477-discriminant-runtime/report.json",
+      "runtime_terminal_exit": 1,
+      "runtime_cases": [
+        {
+          "case": "tests/ui/enum-discriminant/discriminant_size.rs",
+          "status": "interpreter_failure",
+          "mode": "run-pass",
+          "edition": 2015,
+          "source_sha256": "3188f517b24186d08376bd2eac494b4041ddcbb1d11c6de50186be1a1f4d1871",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "executor",
+            "code": "LRR-E-OWNERSHIP",
+            "message": "guest ownership, cell state, or storage contract mismatch"
+          },
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 2283,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 26,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1188,
+            "vm_outcomes": 1187
+          }
+        },
+        {
+          "case": "tests/ui/enum-discriminant/repr128.rs",
+          "status": "interpreter_failure",
+          "mode": "run-pass",
+          "edition": 2015,
+          "source_sha256": "66af2eb56be2026a744d2169f8467d11df4c75e8ea21d204f0948db2c8e445bc",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "executor",
+            "code": "LRR-E-OP-TYPE",
+            "message": "operator requires supported concrete primitive operand descriptors"
+          },
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 39,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 3,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 28,
+            "vm_outcomes": 27
+          }
+        },
+        {
+          "case": "tests/ui/union/union-generic-rpass.rs",
+          "status": "interpreter_failure",
+          "mode": "run-pass",
+          "edition": 2015,
+          "source_sha256": "f59d90d6dad771e639a8ff498e0475e10e126c1b81342c3a14c08263458356b8",
+          "blockers": [],
+          "terminal": {
+            "status": "fault",
+            "phase": "executor",
+            "code": "LRR-E-UNSUPPORTED",
+            "message": "explicit Type argument with an inference hole requires inference"
+          },
+          "capture_complete": false,
+          "facts": {
+            "classified_operation_candidates": 404,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 16,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 265,
+            "vm_outcomes": 265
+          }
+        },
+        {
+          "case": "tests/ui/union/union-align.rs",
+          "status": "runtime_contract_pass",
+          "mode": "run-pass",
+          "edition": 2015,
+          "source_sha256": "20a81a6381d98eebfc1fd742ee35c4ee09c49a1f164ad9e4be23b26b49a34729",
+          "blockers": [],
+          "terminal": {
+            "status": null,
+            "phase": null,
+            "code": null,
+            "message": null
+          },
+          "capture_complete": true,
+          "facts": {
+            "classified_operation_candidates": 2799,
+            "cleanup_observed": true,
+            "closed_no_external_effects": true,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": false,
+            "observed_suspension": false,
+            "source_call_boundaries": 25,
+            "terminal": {
+              "kind": "completed",
+              "unit": true
+            },
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 1462,
+            "vm_outcomes": 1462
+          }
+        }
+      ]
+    },
+    "478": {
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T07:20:19.320724+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8616,
+          "source_sha256": "cb42ddcc83d9ae3175fef1ca29f032607dd6b19621a80d7121fedff46d8c7f2b",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T07:22:04.219712+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8616,
+          "source_sha256": "cb42ddcc83d9ae3175fef1ca29f032607dd6b19621a80d7121fedff46d8c7f2b",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "04461da80932fc6aebba2606425523a5848a0a99d0b7a54d703c7dca2d6717ac"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "13534b381bc54dc757e4912d6f7bd964b8f38adb89e52e9d9f23714dd97a63a9"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T07:23:45.582394+00:00",
+          "head": "b7b5245a59dfd3d3ea4c903c38d125b87b35507a",
+          "file_count": 8616,
+          "source_sha256": "cb42ddcc83d9ae3175fef1ca29f032607dd6b19621a80d7121fedff46d8c7f2b",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+              "sha256": "04461da80932fc6aebba2606425523a5848a0a99d0b7a54d703c7dca2d6717ac"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "13534b381bc54dc757e4912d6f7bd964b8f38adb89e52e9d9f23714dd97a63a9"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "lib_build_success": true,
+      "lib_build_terminal_exit": 0,
+      "cli_build_success": true,
+      "cli_build_terminal_exit": 0,
+      "controls": [
+        {
+          "selector": "frontend::names::names_import_ambiguity_tests::disclosed_nonroot_module_alias_requires_no_synthetic_item_and_keeps_frontiers",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.403
+        },
+        {
+          "selector": "frontend::names::names_import_ambiguity_tests::unchanged_distinct_module_imports_preserve_value_and_type_ambiguities_all_editions",
+          "exit": 0,
+          "pass": true,
+          "inputs_unchanged": true,
+          "seconds": 0.387
+        }
+      ],
+      "controls_terminal_exit": 0,
+      "scope": "host-only pending-input oracle correction; no production change from V477; only affected2controls rerun"
+    }
+  },
+  "originals": {
+    "tests/ui/enum-discriminant/discriminant_size.rs": {
+      "sha256": "3188f517b24186d08376bd2eac494b4041ddcbb1d11c6de50186be1a1f4d1871",
+      "matches_upstream_bytes": true
+    },
+    "tests/ui/enum-discriminant/repr128.rs": {
+      "sha256": "66af2eb56be2026a744d2169f8467d11df4c75e8ea21d204f0948db2c8e445bc",
+      "matches_upstream_bytes": true
+    },
+    "tests/ui/enum-discriminant/discriminant_value.rs": {
+      "sha256": "2bd9fa7d77e4818c60a1493ee03a550c8d1f1ad0b251edf2aa9d9b18a01440a9",
+      "matches_upstream_bytes": true
+    },
+    "tests/ui/union/union-generic-rpass.rs": {
+      "sha256": "f59d90d6dad771e639a8ff498e0475e10e126c1b81342c3a14c08263458356b8",
+      "matches_upstream_bytes": true
+    },
+    "tests/ui/union/union-align.rs": {
+      "sha256": "20a81a6381d98eebfc1fd742ee35c4ee09c49a1f164ad9e4be23b26b49a34729",
+      "matches_upstream_bytes": true
+    },
+    "tests/ui/imports/issue-25396.rs": {
+      "sha256": "0429a2c3afd8cf693c62637560c460b3c6581b1a6df3f868e3d9c9e40dcf21eb",
+      "matches_upstream_bytes": true
+    }
+  },
+  "source_context_evidence": {
+    "v475_world_rows": 60,
+    "v475_encoded_source_head_observations": 164,
+    "not_unique_types_or_guest_runs": true,
+    "v477_total_worlds": 60,
+    "v477_enum_metadata_observations": 180,
+    "v477_unchanged_source_observations": 156,
+    "v477_adapted_header_observations": 24,
+    "guest_execution_in_source_controls": false
+  },
+  "final_changed_sources_since_v477": [
+    "crates/lrr/src/frontend/names_import_ambiguity_tests.rs"
+  ],
+  "final_cli_byte_identical_to_v477": true,
+  "unaffected_evidence_note": "V475 pinned-client/layout controls remain attached to their source; V477 source matrix/runtime remain attached to their source. V478 only host oracle changes, production and CLI unchanged; neither large matrix nor runtimes rerun. No blanket final-fingerprint pass claim.",
+  "new_distinct_upstream_runtime_passes": 0,
+  "refreshed_suite_total": null,
+  "completed_spec_cards": [],
+  "upstream_runtime_acceptance": "incomplete",
+  "diagnostic_compatibility": "unassessed",
+  "compiler_tooling_compatibility": "unassessed",
+  "full_suite_compatibility": "incomplete",
+  "guest_jit_allowed": false,
+  "remaining_semantic_clients": [
+    "well-formed goals",
+    "eligible associated item selection",
+    "constant evaluation",
+    "transmutability",
+    "reflective field metadata"
+  ],
+  "remaining": [
+    "actual complete relevant source/ADT/language-item facts and source enum record memo/producer integration",
+    "genuine upstream root/ParamEnv/member/dictionary/currentness/VM entry",
+    "nested explicit Type inference and associated projections",
+    "legacy runtime DiscriminantValue helper returns fixed isize; no context/enum-specific workaround admitted",
+    "unexecuted enum/coroutine/alias/parameter Type-client runtime branches",
+    "remaining legacy structural/member/macro routes and full common-engine/interpreter/JIT gates"
+  ],
+  "audits": [
+    {
+      "command": "python3.12 tools/upstream_discriminant.py",
+      "exit": 0
+    },
+    {
+      "command": "python3.12 tools/sync_upstream_binders.py",
+      "exit": 0
+    },
+    {
+      "command": "python3.12 tools/sync_upstream_inference.py",
+      "exit": 0
+    }
+  ],
+  "reproduction": {
+    "lib": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+    "cli": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json",
+    "v475_controls": "python3.12 tools/validation/run_controls.py artifacts/validation-current-v475 worktracks/05-trait-goal-engine/2026-10-19-upstream-discriminant-controls.json",
+    "v477_controls": "python3.12 tools/validation/run_controls.py artifacts/validation-current-v477 worktracks/05-trait-goal-engine/2026-10-19-upstream-discriminant-source-controls.json",
+    "v478_controls": "python3.12 tools/validation/run_controls.py artifacts/validation-current-v478 worktracks/05-trait-goal-engine/2026-10-19-upstream-discriminant-final-controls.json",
+    "v477_runtime": "LRR_EMBEDDED_FACADE=1 python3.12 tools/rustc_checkout_runtime.py --lrr target/debug/lrr --source-digester target/debug/examples/lrr_source_digests --report-dir /private/tmp/lrr-v477-discriminant-runtime --case tests/ui/enum-discriminant/discriminant_size.rs --case tests/ui/enum-discriminant/repr128.rs --case tests/ui/union/union-generic-rpass.rs --case tests/ui/union/union-align.rs"
+  }
+}

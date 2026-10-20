@@ -132,3 +132,5 @@ pub(crate) mod impl_trait_identity;
 
 pub(crate) mod source_predicates;
 pub(crate) mod impl_predicates;
+
+pub(crate) mod declaration_repr;

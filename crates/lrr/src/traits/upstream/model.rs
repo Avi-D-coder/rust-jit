@@ -714,6 +714,8 @@ pub(crate) enum AdtKind {
 }
 pub(crate) struct AdtInfo<'cx, F: SourceFacts<'cx>> {
     pub(crate) kind: AdtKind,
+    /// Actual enum source repr, not a caller-supplied integer Type.
+    pub(crate) discriminant: Option<super::enum_repr::PreparedEnumDiscriminant>,
     pub(crate) packed: bool,
     pub(crate) phantom_data: bool,
     pub(crate) manually_drop: bool,
@@ -726,6 +728,11 @@ pub(crate) struct AdtInfo<'cx, F: SourceFacts<'cx>> {
     pub(crate) destructor: Option<bool>,
 }
 impl<'cx, F: SourceFacts<'cx>> AdtDefinition<'cx, F> {
+    pub(super) fn is_enum(self) -> bool { self.info().kind == AdtKind::Enum }
+    pub(super) fn enum_discriminant_type(self, cx: Context<'cx,F>) -> Ty<'cx,F> {
+        assert_eq!(cx, self.context, "ADT discriminant belongs to another context");
+        self.info().discriminant.as_ref().expect("actual enum repr was not prepared").ty(cx,self.definition)
+    }
     fn info(self) -> &'cx AdtInfo<'cx, F> {
         self.context
             .services()

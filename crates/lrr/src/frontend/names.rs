@@ -1592,7 +1592,6 @@ impl NameNamespaces {
         self.deferred_imports.clear();
         let mut installed = std::collections::BTreeSet::new();
         let mut module_denied = std::collections::BTreeSet::new();
-        let mut root_aliases = std::collections::BTreeSet::new();
         let mut steps = 0usize;
         loop {
             let before = installed.len();
@@ -1626,12 +1625,9 @@ impl NameNamespaces {
                 let permitted = match module {
                     super::module_paths::ModuleResolution::Known {
                         visibility: access,
-                        path: selected,
+                        ..
                     } => {
                         if access.permits_reexport_as(visibility) {
-                            if selected.names.is_empty() {
-                                root_aliases.insert(*identity);
-                            }
                             true
                         } else {
                             module_denied.insert(*identity);
@@ -1715,7 +1711,9 @@ impl NameNamespaces {
                 result.ambiguous.push(identity);
                 continue;
             }
-            let mut ready = root_aliases.contains(&identity);
+            // A checked, installed module alias needs no synthetic item
+            // definition. Namespace frontiers/ambiguities below still apply.
+            let mut ready = installed.contains(&identity);
             let mut pending = false;
             let mut denied = module_denied.contains(&identity);
             let mut ambiguous = false;

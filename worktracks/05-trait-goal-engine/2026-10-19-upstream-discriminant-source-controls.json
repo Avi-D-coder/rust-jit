@@ -1,0 +1,7 @@
+{
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_enum_repr_uses_shared_source_integer_metadata_all_editions_and_origins",
+    "frontend::names::names_import_ambiguity_tests::disclosed_nonroot_module_alias_requires_no_synthetic_item_and_keeps_frontiers",
+    "frontend::names::names_import_ambiguity_tests::unchanged_distinct_module_imports_preserve_value_and_type_ambiguities_all_editions"
+  ]
+}

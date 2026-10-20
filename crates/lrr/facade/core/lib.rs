@@ -31,6 +31,7 @@ mod float_impls;
 pub mod future;
 pub mod hash;
 pub mod hint;
+pub mod intrinsics;
 mod int_convert;
 mod int_impls;
 pub mod iter;
