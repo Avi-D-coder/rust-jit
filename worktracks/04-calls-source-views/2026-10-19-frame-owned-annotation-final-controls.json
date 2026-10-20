@@ -1,0 +1,7 @@
+{
+  "controls": [
+    "cli::callable_value_tests::upstream_generic_annotation_and_explicit_application_share_all_origins",
+    "cli::crate_graph::pointer_tests::function_pointers_coerce_compare_and_call",
+    "cli::crate_graph::pointer_tests::pointer_casts_in_user_macros_and_assert_arguments"
+  ]
+}

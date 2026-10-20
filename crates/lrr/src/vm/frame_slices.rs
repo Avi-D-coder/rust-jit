@@ -103,11 +103,11 @@ impl Frame {
         // runtime/cell_boxes.rs).
         if value.kind == 8 {
             let actual = TypeId(value.type_id);
-            if written.admits(actual, store)? {
+            if self.admits_written_hint(written, actual, store)? {
                 return Ok(None);
             }
             return Ok(match store.unsized_box_view(actual)? {
-                Some(view) if written.admits(view, store)? => Some(view),
+                Some(view) if self.admits_written_hint(written, view, store)? => Some(view),
                 _ => None,
             });
         }
@@ -115,7 +115,7 @@ impl Frame {
             return Ok(None);
         }
         let actual = TypeId(value.type_id);
-        if written.admits(actual, store)? {
+        if self.admits_written_hint(written, actual, store)? {
             return Ok(None);
         }
         let TypeKey::Ref { mutable, target } = store.type_descriptor(actual)?.key.as_ref() else {
@@ -136,7 +136,7 @@ impl Frame {
             if let Some(reference) = store.find_type(&TypeKey::Ref {
                 mutable: to_mutable,
                 target: slice,
-            }) && written.admits(reference, store)?
+            }) && self.admits_written_hint(written, reference, store)?
             {
                 return Ok(Some(reference));
             }

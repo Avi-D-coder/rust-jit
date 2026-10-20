@@ -67,13 +67,27 @@ pub enum WrittenType {
         params: Vec<WrittenType>,
         result: Box<WrittenType>,
     },
+    /// A body annotation's template. Its ordinal parameters belong to this
+    /// actual declaration, never to a constructor's type argument list.
+    Frame {
+        definition: crate::core::digest::Digest,
+        template: std::sync::Arc<WrittenType>,
+    },
 }
 impl WrittenType {
+    pub(crate) fn in_frame(self, definition: crate::core::digest::Digest) -> Self {
+        if self.has_parameters() {
+            Self::Frame { definition, template: std::sync::Arc::new(self) }
+        } else {
+            self
+        }
+    }
     /// Whether this annotation names one exact runtime descriptor. An
     /// inference hole names only a structure; a slice or trait-object pointee
     /// is reached from a sized value through a coercion.
     pub(crate) fn exact(&self) -> bool {
         match self {
+            Self::Frame { template, .. } => template.coercion_free(),
             Self::Primitive(_) | Self::Nominal(_) | Self::Str | Self::Dyn(_) => true,
             Self::Tuple(members) => members.iter().all(Self::exact),
             Self::Array(element, _) => element.exact(),
@@ -89,13 +103,17 @@ impl WrittenType {
     /// Whether this is a raw pointer or fn pointer annotation, whose values
     /// arrive by pointer coercion or cast (E-R5-008).
     pub(crate) fn is_pointer(&self) -> bool {
-        matches!(self, Self::Ptr { .. } | Self::FnPtr { .. })
+        match self {
+            Self::Frame { template, .. } => template.is_pointer(),
+            _ => matches!(self, Self::Ptr { .. } | Self::FnPtr { .. }),
+        }
     }
     /// Whether no part of this Type is left to inference or reached through a
     /// coercion (an inference hole, a slice or a trait object); declaration
     /// parameters are allowed.
     pub(crate) fn coercion_free(&self) -> bool {
         match self {
+            Self::Frame { template, .. } => template.coercion_free(),
             Self::Primitive(_) | Self::Nominal(_) | Self::Str | Self::Parameter(_) => true,
             Self::Tuple(members) => members.iter().all(Self::coercion_free),
             Self::Array(element, _) => element.coercion_free(),
@@ -109,6 +127,7 @@ impl WrittenType {
     /// Whether a declaration type parameter occurs in this Type.
     pub(crate) fn has_parameters(&self) -> bool {
         match self {
+            Self::Frame { template, .. } => template.has_parameters(),
             Self::Parameter(_) => true,
             Self::Primitive(_) | Self::Nominal(_) | Self::Str | Self::Infer | Self::Dyn(_) => false,
             Self::Tuple(members) => members.iter().any(Self::has_parameters),
@@ -137,8 +156,11 @@ impl WrittenType {
         self.source_with(&|index| store?.descriptor_source_term(*args.get(index as usize)?))
     }
     /// The same declared Type substitution for pure source consumers.
-    pub(crate) fn source_with(&self, parameter: &impl Fn(u32) -> Option<TyTerm>) -> Option<TyTerm> {
+    pub(crate) fn source_with(&self, parameter: &dyn Fn(u32) -> Option<TyTerm>) -> Option<TyTerm> {
         Some(match self {
+            Self::Frame { definition, template } => template.source_with(&|ordinal| {
+                Some(TyTerm::Param(crate::traits::term::ParamKey { definition: *definition, ordinal }))
+            })?,
             Self::Primitive(primitive) => TyTerm::Primitive(*primitive),
             Self::Nominal(source) => source.source().clone(),
             Self::Tuple(members) if members.is_empty() => {
@@ -197,6 +219,7 @@ impl WrittenType {
     /// Every written region, for recipe verification.
     pub(crate) fn regions_satisfy(&self, check: &mut dyn FnMut(&RegionTerm) -> bool) -> bool {
         match self {
+            Self::Frame { template, .. } => template.regions_satisfy(check),
             Self::Primitive(_)
             | Self::Nominal(_)
             | Self::Str
@@ -245,18 +268,27 @@ impl WrittenType {
         store: &GuestStore,
         args: &[TypeId],
     ) -> Result<Option<TypeId>, Diagnostic> {
+        self.find_with(store, &|ordinal| args.get(ordinal as usize).copied())
+    }
+    pub(crate) fn find_with(
+        &self,
+        store: &GuestStore,
+        args: &dyn Fn(u32) -> Option<TypeId>,
+    ) -> Result<Option<TypeId>, Diagnostic> {
         Ok(match self {
             Self::Primitive(primitive) => Some(PrimitiveIdentity::from_recipe(*primitive)?.id()),
             Self::Nominal(source) => source.find_descriptor(store),
             Self::Str => Some(TypeId(16)),
-            Self::Parameter(index) => args.get(*index as usize).copied(),
+            Self::Parameter(index) => args(*index),
+            // Only the actual frame may provide the owner's runtime bindings.
+            Self::Frame { .. } => None,
             Self::Tuple(members) if members.is_empty() => Some(TypeId(1)),
             Self::Tuple(members) => {
                 let mut ids = Vec::new();
                 ids.try_reserve_exact(members.len())
                     .map_err(|_| crate::runtime::arena::resource())?;
                 for member in members {
-                    let Some(id) = member.find_in(store, args)? else {
+                    let Some(id) = member.find_with(store, args)? else {
                         return Ok(None);
                     };
                     ids.push(id);
@@ -264,13 +296,13 @@ impl WrittenType {
                 store.find_type(&TypeKey::Tuple(ids.into_boxed_slice()))
             }
             Self::Array(element, len) => {
-                let Some(element) = element.find_in(store, args)? else {
+                let Some(element) = element.find_with(store, args)? else {
                     return Ok(None);
                 };
                 store.find_type(&TypeKey::Array { element, len: *len })
             }
             Self::Slice(element) => {
-                let Some(element) = element.find_in(store, args)? else {
+                let Some(element) = element.find_with(store, args)? else {
                     return Ok(None);
                 };
                 store.find_type(&TypeKey::Slice { element })
@@ -278,7 +310,7 @@ impl WrittenType {
             Self::Ref {
                 mutable, target, ..
             } => {
-                let Some(target) = target.find_in(store, args)? else {
+                let Some(target) = target.find_with(store, args)? else {
                     return Ok(None);
                 };
                 store.find_type(&TypeKey::Ref {
@@ -294,7 +326,7 @@ impl WrittenType {
             } => {
                 let mut ids = Vec::new();
                 for arg in written {
-                    let Some(id) = arg.find_in(store, args)? else {
+                    let Some(id) = arg.find_with(store, args)? else {
                         return Ok(None);
                     };
                     ids.push(id);
@@ -302,7 +334,7 @@ impl WrittenType {
                 store.find_type(&Self::generic_key(identity, definition, schema, ids))
             }
             Self::Ptr { mutable, target } => {
-                let Some(target) = target.find_in(store, args)? else {
+                let Some(target) = target.find_with(store, args)? else {
                     return Ok(None);
                 };
                 store.find_type(&TypeKey::RawPtr {
@@ -313,12 +345,12 @@ impl WrittenType {
             Self::FnPtr { params, result } => {
                 let mut ids = Vec::new();
                 for param in params {
-                    let Some(id) = param.find_in(store, args)? else {
+                    let Some(id) = param.find_with(store, args)? else {
                         return Ok(None);
                     };
                     ids.push(id);
                 }
-                let Some(result) = result.find_in(store, args)? else {
+                let Some(result) = result.find_with(store, args)? else {
                     return Ok(None);
                 };
                 store.find_type(&TypeKey::Function {
@@ -364,6 +396,7 @@ impl WrittenType {
                 Some(id) => id,
                 None => return Ok(None),
             },
+            Self::Frame { .. } => return Ok(None),
             Self::Tuple(members) if members.is_empty() => TypeId(1),
             Self::Tuple(members) => {
                 let mut ids = Vec::new();
@@ -449,6 +482,17 @@ impl WrittenType {
     /// pointee admits its concrete value's Type.
     pub(crate) fn admits(&self, ty: TypeId, store: &GuestStore) -> Result<bool, Diagnostic> {
         self.bind(ty, store, &mut [])
+    }
+    /// A frame template's parameters are fixed bindings, not inference slots.
+    pub(crate) fn admits_with(
+        &self,
+        ty: TypeId,
+        store: &GuestStore,
+        args: &dyn Fn(u32) -> Option<TypeId>,
+    ) -> Result<bool, Diagnostic> {
+        self.bind_with(ty, store, &mut |ordinal, actual| {
+            args(ordinal).is_some_and(|expected| store.contract_admits(Some(expected), Some(actual)))
+        })
     }
     /// Match a reached descriptor against this Type, fixing each declaration
     /// type parameter it determines (`args[i]`); an already fixed parameter
@@ -603,6 +647,7 @@ impl WrittenType {
     pub(crate) fn heap_bytes(&self) -> usize {
         let boxed = |inner: &Self| std::mem::size_of::<Self>().saturating_add(inner.heap_bytes());
         match self {
+            Self::Frame { .. } => 0,
             Self::Primitive(_) | Self::Str | Self::Infer | Self::Dyn(_) | Self::Parameter(_) => 0,
             Self::Nominal(source) => source.allocated_bytes().unwrap_or(usize::MAX),
             Self::Tuple(members) => members.iter().fold(
@@ -635,9 +680,14 @@ impl WrittenType {
     }
 }
 impl StableEncode for WrittenType {
-    const DOMAIN: &'static str = "lrr/v1/written-local-type";
+    const DOMAIN: &'static str = "lrr/v2/written-local-type";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
+            Self::Frame { definition, template } => {
+                e.u32(13);
+                e.digest(*definition);
+                e.record(template.as_ref());
+            }
             Self::Primitive(primitive) => {
                 e.u32(0);
                 e.u32(primitive.tag());

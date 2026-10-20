@@ -175,7 +175,7 @@ impl Frame {
         let context = match self.nominal_hint_args(result, bound, store)? {
             Some(args) => Some(args),
             None => match stated {
-                Some(written) => match written.materialize(store)? {
+                Some(written) => match self.materialize_written_hint(written, store)? {
                     Some(descriptor) => Self::nominal_descriptor_args(descriptor, bound, store)?,
                     None => None,
                 },

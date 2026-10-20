@@ -1,0 +1,9 @@
+{
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_generic_annotation_preserves_actual_frame_owner_all_editions_and_origins",
+    "cli::callable_value_tests::upstream_bound_function_pointer_arguments_share_the_ordinary_call_route",
+    "cli::callable_value_tests::closures_cross_the_ordinary_call_boundary_into_generic_callees",
+    "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::official_three_call_plans_keep_nominal_identity_shared_rows_and_guarded_caller",
+    "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::type_argument_plan_keeps_real_unsupported_body_and_field_cold_and_resolves_caller_alias"
+  ]
+}

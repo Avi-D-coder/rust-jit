@@ -708,6 +708,11 @@ fn verify_inner(
         if let Some(super::op::HintRecipe::Written(written)) = annotation {
             use crate::traits::term::RegionTerm;
             let definition = draft.key.body.definition;
+            if let super::written_type::WrittenType::Frame { definition: owner, .. } = written.as_ref()
+                && *owner != definition
+            {
+                return Err(invalid("written annotation frame owner mismatch"));
+            }
             if !written.regions_satisfy(&mut |region| match region {
                 RegionTerm::Static => true,
                 RegionTerm::Local {
@@ -1316,6 +1321,11 @@ fn verify_inner(
                     return Err(invalid("pointer cast aliases its operand"));
                 }
                 let definition = draft.key.body.definition;
+                if let super::written_type::WrittenType::Frame { definition: owner, .. } = target.as_ref()
+                    && *owner != definition
+                {
+                    return Err(invalid("pointer cast template frame owner mismatch"));
+                }
                 if !target.is_pointer()
                     || !target.regions_satisfy(&mut |region| match region {
                         RegionTerm::Static => true,

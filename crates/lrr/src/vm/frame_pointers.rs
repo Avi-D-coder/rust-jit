@@ -29,7 +29,7 @@ impl Frame {
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
         let value = store.admit_move(self.cell(source)?)?;
-        let descriptor = match target.materialize(store)? {
+        let descriptor = match self.materialize_written_hint(target, store)? {
             Some(descriptor) => descriptor,
             None => Self::inferred_pointer(target, value, store)?,
         };

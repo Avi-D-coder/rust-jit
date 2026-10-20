@@ -85,7 +85,7 @@ fn coercion_cast(
     written: &ast::Type,
 ) -> QueryPoll<Option<Provided>> {
     let mut guards = Vec::new();
-    let selected = ready!(super::let_annotation_thunk::select(db, pc, shape, &mut guards));
+    let selected = ready!(super::let_annotation_thunk::select(db, pc, shape, &mut guards)).in_frame(pc.body.definition);
     let guard = {
         let borrowed: Vec<&PreparedInputGuard> = guards.iter().map(Arc::as_ref).collect();
         match PreparedInputGuard::join(&borrowed) {

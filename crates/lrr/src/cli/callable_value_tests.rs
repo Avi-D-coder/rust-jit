@@ -86,6 +86,42 @@ fn upstream_bound_function_pointer_arguments_share_the_ordinary_call_route() {
 }
 
 #[test]
+fn upstream_generic_annotation_and_explicit_application_share_all_origins() {
+    let original = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/generics/generic-derived-type.rs"
+    );
+    let (prefix, items) = original.split_at(original.find("\nfn g").unwrap());
+    let emitted = format!("{prefix}\nmacro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} emit!{{{items}}}");
+    let wrapped = format!("{prefix}\nmacro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} macro_rules! wrap {{($($t:tt)*)=>{{emit!{{$($t)*}}}}}} wrap!{{{items}}}");
+    // An LRR origin adapter outside the unchanged original: the same open
+    // annotation and explicit application occur inside a standard macro.
+    // Clone the inputs so this additional probe preserves the original work.
+    let nested = original.replacen(
+        "    let x: Pair<T> =",
+        "    assert!({ let probe: Pair<T> = Pair { a: t.clone(), b: t.clone() }; let _ = g::<Pair<T>>(probe); true });\n    let x: Pair<T> =",
+        1,
+    );
+    assert_ne!(nested, original);
+    for edition in [2015, 2018, 2021, 2024] {
+        for (origin, text) in [original, &emitted, &wrapped, &nested].into_iter().enumerate() {
+            let report = match crate::cli::crate_graph::format_trait_facade_tests::run("generic-annotation", text, edition) {
+                Ok(StandaloneOutcome::Completed(report)) => report,
+                Err(error) => panic!("edition {edition}, origin {origin}: {error:?}"),
+                Ok(_) => panic!("edition {edition}, origin {origin}: unexpected outcome"),
+            };
+            assert_eq!(report.output.stdout, "10\n10\n");
+            assert!(report.output.stderr.is_empty());
+            let calls = if origin == 3 { 8 } else { 5 };
+            let entries = if origin == 3 { 6 } else { 3 };
+            assert_eq!(report.opcode_counters.started_by_opcode[22], calls);
+            assert_eq!(report.opcode_counters.started_by_opcode[19], calls);
+            assert_eq!(report.opcode_counters.started_by_opcode[20], entries);
+            eprintln!("generic annotation edition={edition} origin={origin} ordinary prepare/seal={calls}/{calls} parameter entries={entries}");
+        }
+    }
+}
+
+#[test]
 fn constants_statics_and_function_items_are_ordinary_value_items() {
     const SOURCE: &str = "
         const C: i32 = 3;

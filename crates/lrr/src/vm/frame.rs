@@ -26,6 +26,8 @@ pub(crate) mod item_values_frame;
 pub(crate) mod nominal_values_frame;
 #[path = "frame_partial_hints.rs"]
 mod partial_hints_frame;
+#[path = "frame_written_types.rs"]
+mod written_types_frame;
 #[path = "frame_pointers.rs"]
 mod pointers_frame;
 #[path = "frame_record_update.rs"]

@@ -1,0 +1,5 @@
+{
+  "controls": [
+    "cli::callable_value_tests::upstream_generic_annotation_and_explicit_application_share_all_origins"
+  ]
+}

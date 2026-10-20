@@ -55,7 +55,7 @@ pub(super) fn thunk(
         Err(error) => return QueryPoll::Ready(Err(error)),
     };
     let mut guards = Vec::new();
-    let written = ready!(select(db, pc, &site.shape, &mut guards));
+    let written = ready!(select(db, pc, &site.shape, &mut guards)).in_frame(pc.body.definition);
     let guard = {
         let borrowed: Vec<&PreparedInputGuard> = guards.iter().map(Arc::as_ref).collect();
         match PreparedInputGuard::join(&borrowed) {
@@ -127,7 +127,9 @@ pub(crate) fn select(
                     }else{return QueryPoll::Ready(Err(unsupported("local annotation Type requires further source integration")));}
                 }
                 ExplicitType::Written{written,..}=>written.as_ref().clone(),
-                ExplicitType::Parameter(_)|ExplicitType::FrameTemplate{..}=>return QueryPoll::Ready(Err(unsupported("annotation Type parameter requires its owning frame hint"))),
+                ExplicitType::Parameter(TyTerm::Param(key)) if key.definition==pc.body.definition=>WrittenType::Parameter(key.ordinal),
+                ExplicitType::FrameTemplate{definition,written,..} if *definition==pc.body.definition=>written.as_ref().clone(),
+                ExplicitType::Parameter(_)|ExplicitType::FrameTemplate{..}=>return QueryPoll::Ready(Err(fault("annotation Type parameter belongs to another body"))),
             }
         }
         // `()` is the unit primitive, the one canonical spelling.

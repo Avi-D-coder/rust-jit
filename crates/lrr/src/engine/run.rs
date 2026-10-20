@@ -1463,13 +1463,10 @@ impl RunMachine {
                             "reference source argument slot absent",
                         )));
                     };
-                    // E-R5-006: no byte budget; `usize::MAX` until the
-                    // frontend drops the `capture_budgeted` limit parameter.
-                    match ClosedReferenceArgument::capture_budgeted(
+                    match ClosedReferenceArgument::capture(
                         &self.frame,
                         *slot,
                         &self.store,
-                        usize::MAX,
                     ) {
                         Ok(evidence) => Some(evidence),
                         Err(error) => return QueryPoll::Ready(Err(error)),

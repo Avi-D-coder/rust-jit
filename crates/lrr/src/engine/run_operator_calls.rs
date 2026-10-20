@@ -182,11 +182,10 @@ impl RunMachine {
                                     .frame
                                     .source_view_ref(slot)
                                     .is_ok_and(|view| view.is_some()) =>
-                                ClosedReferenceArgument::capture_budgeted(
+                                ClosedReferenceArgument::capture(
                                     &self.frame,
                                     slot,
                                     &self.store,
-                                    usize::MAX,
                                 ),
                             _ => ClosedReferenceArgument::capture_formed(
                                 &self.store,

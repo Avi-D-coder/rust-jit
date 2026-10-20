@@ -253,26 +253,20 @@ pub(crate) struct ClosedReferenceArgument {
     target: ReferenceTarget,
 }
 impl ClosedReferenceArgument {
-    #[cfg(test)]
     pub(crate) fn capture(
         frame: &Frame,
         slot: SlotId,
         store: &GuestStore,
-    ) -> Result<Self, Diagnostic> {
-        Self::capture_budgeted(frame, slot, store, usize::MAX)
-    }
-    pub(crate) fn capture_budgeted(
-        frame: &Frame,
-        slot: SlotId,
-        store: &GuestStore,
-        max_bytes: usize,
     ) -> Result<Self, Diagnostic> {
         frame.require_store(store)?;
         let cell = frame.cell(slot)?;
         let source = frame
             .source_view_ref(slot)?
             .ok_or_else(|| invalid("reference argument has no retained caller source identity"))?;
-        Self::admit(store, cell, source, max_bytes)
+        // The caller keeps its rigid source parameters. At the call boundary
+        // use their reached bindings, exactly as ordinary ArgumentType does.
+        let source = frame.bound_view(source, store);
+        Self::admit(store, cell, &source, usize::MAX)
     }
     /// Drop glue's receiver: the `&mut` to the value being dropped, formed by
     /// the dropping frame in its own argument location. Its source view is

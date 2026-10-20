@@ -54,25 +54,8 @@ impl Frame {
         else {
             return Ok(());
         };
-        let mut fixed = Vec::new();
-        for parameter in &context.definition().generics {
-            if parameter.kind != crate::syntax::signatures::GenericKind::Type {
-                continue;
-            }
-            let index = usize::try_from(parameter.ordinal)
-                .map_err(|_| invalid("definition parameter ordinal overflow"))?;
-            let length = index
-                .checked_add(1)
-                .ok_or_else(|| invalid("definition parameter ordinal overflow"))?;
-            if fixed.len() < length {
-                fixed.resize(length, None);
-            }
-            fixed[index] = context.runtime_binding(crate::traits::term::ParamKey {
-                definition: context.definition().definition,
-                ordinal: parameter.ordinal,
-            });
-        }
-        self.set_partial_hint_with(slot, written, Some(PartialArguments::Fixed(fixed.into())))
+        let fixed = self.written_frame_arguments(context.definition().definition)?;
+        self.set_partial_hint_with(slot, written, Some(PartialArguments::Fixed(fixed)))
     }
     pub(crate) fn set_partial_hint(
         &mut self,
@@ -92,6 +75,13 @@ impl Frame {
         written: Arc<WrittenType>,
         arguments: Option<PartialArguments>,
     ) -> Result<(), Diagnostic> {
+        let (written, arguments) = match written.as_ref() {
+            WrittenType::Frame { definition, template } => (
+                Arc::clone(template),
+                Some(PartialArguments::Fixed(self.written_frame_arguments(*definition)?)),
+            ),
+            _ => (written, arguments),
+        };
         self.slots
             .get(slot.0 as usize)
             .ok_or_else(|| invalid("partial hint slot absent"))?;

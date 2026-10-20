@@ -3357,3 +3357,41 @@ fn unchanged_explicit_alias_keeps_shared_application_guard_all_editions_and_orig
     }
     assert_eq!(count,12);
 }
+
+#[test]
+fn unchanged_generic_annotation_preserves_actual_frame_owner_all_editions_and_origins() {
+    use crate::{
+        db::{dependency::{InputKey,InputValue},key::QueryKey,memo::PreparedInputGuard,poll::QueryPoll,provider::SyntaxProvider,value::QueryValue},
+        ir::{op::{HintRecipe,Op},pc::Phase,recipe::RecipeDraft,written_type::WrittenType},
+        source::manifest::Namespace,syntax::{imports::ImportSegment,thunks_let_annotations::LetAnnotation},
+        traits::term::{GenericArg,ParamKey,TyTerm},
+    };
+    fn ready<T:std::fmt::Debug>(poll:QueryPoll<T>)->T{match poll{QueryPoll::Ready(Ok(value))=>value,other=>panic!("actual annotation source: {other:?}")}}
+    let original=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout/tests/ui/generics/generic-derived-type.rs");
+    let text=std::fs::read_to_string(&original).unwrap();let(prefix,items)=text.split_at(text.find("\nfn g").unwrap());let mut count=0;
+    for edition in [2015,2018,2021,2024] {
+        let mut paths=vec![original.clone()];
+        for wrapper in [false,true] {let outer=if wrapper{"macro_rules! outer {($($t:tt)*)=>{emit!{$($t)*}}}"}else{""};let invoke=if wrapper{"outer"}else{"emit"};paths.push(temporary_source(&format!("frame-annotation-{edition}-{wrapper}"),&format!("{prefix}\nmacro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} {outer} {invoke}!{{{items}}}")));}
+        for(origin,path)in paths.iter().enumerate() {
+            let(mut db,discovery,scope)=prepared_source_scope_world(path,edition);
+            let headers=ready(db.fetch(&SyntaxProvider,QueryKey::PreparedScopeImplHeaders(discovery.key().clone()))).value;let QueryValue::PreparedScopeImplHeaders(headers)=headers.as_ref()else{panic!()};let environment=headers.inventory_root().environment().unwrap();let views=environment.sources().iter().collect::<Vec<_>>();
+            let found=environment.names().lookup_source_path(Namespace::Value,&[ImportSegment::Name("f".into())],false,&scope,edition).unwrap();let crate::frontend::names::NameLookup::Defined(found)=found else{panic!()};
+            let body=db.input(&InputKey::DefinitionBody(found.identity)).unwrap();let InputValue::DefinitionBody(body)=body.as_ref()else{panic!()};let owner=ready(db.prepare_source_local_plan(&discovery,&views,&body.key()));let source=owner.context().source();let index=source.index();
+            let(pc,site)=index.nodes().iter().find_map(|node|{let pc=index.pc(node.id,Phase::Entry).ok()?;let site=source.parsed().let_annotation_site(source.body(),index,&pc).unwrap()?;Some((pc,site))}).expect("unchanged Pair<T> annotation");
+            db.trace.detailed=true;let start=db.trace.events.len();let mut guards=Vec::new();let written=ready(crate::db::let_annotation_thunk::select(&mut db,&pc,&site.shape,&mut guards)).in_frame(pc.body.definition);
+            let WrittenType::Frame{definition,template}= &written else{panic!("actual source parameter must retain its frame")};assert_eq!(*definition,pc.body.definition);
+            let source_term=written.source().unwrap();let TyTerm::Nominal(_,args)=&source_term else{panic!()};assert_eq!(args.len(),1);assert_eq!(args[0],GenericArg::Type(TyTerm::Param(ParamKey{definition:*definition,ordinal:0})));
+            let mut store=crate::runtime::cell::GuestStore::new(1,u32::MAX,usize::MAX).unwrap();let target=template.materialize_with(&mut store,&|ordinal|(ordinal==0).then_some(crate::runtime::shape::TypeId(7))).unwrap().unwrap();
+            assert!(written.materialize_with(&mut store,&|_|Some(crate::runtime::shape::TypeId(7))).unwrap().is_none(),"a constructor argument list cannot instantiate a frame template");assert!(!written.admits(target,&store).unwrap());
+            let annotation=LetAnnotation{range:site.range,written:std::sync::Arc::new(written)};let recipe=source.parsed().initial_thunk_with_let_annotation(source.body(),index,&pc,&annotation).unwrap();
+            assert!(recipe.recipe().operations.iter().any(|op|matches!(op,Op::SetHint{hint:HintRecipe::Written(written),..}if matches!(written.as_ref(),WrittenType::Frame{definition,..}if *definition==pc.body.definition))));
+            let actual=recipe.recipe();let mut draft=RecipeDraft{key:actual.key.clone(),origin:actual.origin.clone(),operations:actual.operations.to_vec(),exits:vec![actual.exit.clone()],dependencies:actual.dependencies.to_vec()};
+            for op in &mut draft.operations {if let Op::SetHint{hint:HintRecipe::Written(written),..}=op {if let WrittenType::Frame{definition,template}=written.as_ref(){*written=std::sync::Arc::new(WrittenType::Frame{definition:Digest::of_bytes(&definition.0),template:std::sync::Arc::clone(template)});}}}
+            assert!(crate::ir::validate::verify(draft,index).is_err(),"ordinary verifier must reject a foreign frame owner");
+            assert!(!db.trace.events[start..].iter().any(|event|matches!(event.key,QueryKey::Thunk(_))),"source selection must leave executable callees cold");
+            let refs=guards.iter().map(std::sync::Arc::as_ref).collect::<Vec<_>>();let guard=PreparedInputGuard::join(&refs).unwrap();guard.require_current(&db).unwrap();db.publish_inputs(std::collections::BTreeMap::new()).unwrap();assert!(guard.require_current(&db).is_err());count+=1;
+            eprintln!("actual frame annotation edition={edition} origin={origin}: owner/source, ordinary verifier, foreign-owner refusal, no constructor substitution, guard/cold");
+        }
+    }
+    assert_eq!(count,12);
+}

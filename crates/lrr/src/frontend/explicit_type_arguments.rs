@@ -113,14 +113,7 @@ impl ExplicitType {
                 )
             }),
             Self::FrameTemplate { definition, written, .. } => {
-                if frame.pc().body.definition != *definition {
-                    return Err(fault("Type application belongs to another calling frame"));
-                }
-                let context = frame.shared_generic_context()
-                    .ok_or_else(|| fault("Type application calling frame has no generic bindings"))?;
-                if context.definition().definition != *definition {
-                    return Err(fault("Type application generic owner differs from its source"));
-                }
+                let context = frame.type_template_context(*definition)?;
                 written.materialize_with(store, &|ordinal| context.runtime_binding(
                     crate::traits::term::ParamKey { definition: *definition, ordinal }
                 ))?.ok_or_else(|| fault("Type application requires its actual reached parameter bindings"))
@@ -461,16 +454,20 @@ pub(crate) fn select_argument(
                 &shape,
                 &mut selected
             ));
-            let Some(term) = written.source() else {
+            let definition = key.body.definition;
+            let Some(term) = written.source_with(&|ordinal| Some(TyTerm::Param(
+                crate::traits::term::ParamKey { definition, ordinal }
+            ))) else {
                 return QueryPoll::Ready(Err(Diagnostic::new(
                     "LRR-E-UNSUPPORTED",
                     "explicit Type argument with an inference hole requires inference".into(),
                 )));
             };
             return QueryPoll::Ready(Ok(Some(SelectedTypeArgument {
-                source: ExplicitType::Written {
-                    term,
-                    written: Arc::new(written),
+                source: if written.has_parameters() {
+                    ExplicitType::FrameTemplate { definition, term, written: Arc::new(written) }
+                } else {
+                    ExplicitType::Written { term, written: Arc::new(written) }
                 },
                 guards: selected,
                 observation: None,

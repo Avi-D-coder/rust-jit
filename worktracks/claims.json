@@ -1968,7 +1968,15 @@
         "worktracks/04-calls-source-views/2026-10-19-call-argument-coercion-review.md",
         "worktracks/04-calls-source-views/2026-10-19-call-argument-coercion-controls.json",
         "worktracks/evidence/2026-10-19-v422-v424-bound-call-coercions.json",
-        "worktracks/04-calls-source-views/2026-10-19-call-argument-coercion-route-control.json"
+        "worktracks/04-calls-source-views/2026-10-19-call-argument-coercion-route-control.json",
+        "crates/lrr/src/db/entered_type_thunk.rs",
+        "crates/lrr/src/vm/frame_written_types.rs",
+        "worktracks/04-calls-source-views/2026-10-19-frame-owned-annotation-runtime-control.json",
+        "worktracks/04-calls-source-views/2026-10-19-frame-owned-annotation-final-controls.json",
+        "worktracks/evidence/2026-10-19-v425-v430-frame-owned-annotations.json",
+        "worktracks/04-calls-source-views/2026-10-19-frame-owned-annotations.md",
+        "worktracks/04-calls-source-views/2026-10-19-frame-owned-annotation-review.md",
+        "worktracks/04-calls-source-views/2026-10-19-frame-owned-annotation-controls.json"
       ],
       "issue": null,
       "pull_request": null,
@@ -2015,7 +2023,12 @@
             "crates/lrr/src/engine/run_pattern_tests.rs",
             "crates/lrr/src/frontend/source_value_goals.rs",
             "crates/lrr/src/syntax/pattern_tree.rs",
-            "crates/lrr/src/frontend/explicit_type_arguments.rs"
+            "crates/lrr/src/frontend/explicit_type_arguments.rs",
+            "crates/lrr/src/ir/written_type.rs",
+            "crates/lrr/src/vm/frame_partial_hints.rs",
+            "crates/lrr/src/vm/frame_slices.rs",
+            "crates/lrr/src/vm/step.rs",
+            "crates/lrr/src/vm/frame_nominal_values.rs"
           ],
           "scope": "Same implementing owner uses the existing reservation for the V281 catalog/header Type transport slice; no parallel owner or transfer."
         },
@@ -2056,7 +2069,8 @@
             "crates/lrr/src/frontend/source_predicates.rs",
             "crates/lrr/src/traits/index.rs",
             "crates/lrr/src/traits/unify.rs",
-            "crates/lrr/src/frontend/impl_predicates.rs"
+            "crates/lrr/src/frontend/impl_predicates.rs",
+            "crates/lrr/src/engine/run_operator_calls.rs"
           ],
           "scope": "Same solo /root uses the existing reservation for actual source generic metadata and common trait default arguments; one path owner, no concurrent agent or transfer."
         },
@@ -2086,7 +2100,10 @@
             "Cargo.lock",
             "crates/lrr/src/cli/preentry_loader.rs",
             "crates/lrr/src/service/expansion.rs",
-            "crates/lrr/src/frontend/explicit_type_arguments.rs"
+            "crates/lrr/src/frontend/explicit_type_arguments.rs",
+            "crates/lrr/src/engine/run.rs",
+            "crates/lrr/src/frontend/closed_reference_calls.rs",
+            "crates/lrr/src/vm/frame_pointers.rs"
           ],
           "scope": "Same solo root records existing locked ena/indexmap/rustc-hash direct inference-client dependencies; no new dependency versions or concurrent owner."
         },
@@ -2105,10 +2122,28 @@
             "crates/lrr/src/cli/callable_value_tests.rs"
           ],
           "scope": "Same solo owner, no concurrent agent or ownership transfer."
+        },
+        {
+          "claim": "LOCAL-007",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/ir/validate.rs"
+          ],
+          "scope": "Same solo /root joins actual frame-owned annotation templates and reference capture; no concurrent owner or transfer."
+        },
+        {
+          "claim": "LOCAL-005",
+          "owner": "/root",
+          "paths": [
+            "worktracks/04-calls-source-views/2026-10-19-frame-owned-annotations.md",
+            "worktracks/04-calls-source-views/2026-10-19-frame-owned-annotation-review.md",
+            "worktracks/04-calls-source-views/2026-10-19-frame-owned-annotation-controls.json"
+          ],
+          "scope": "Same solo /root joins actual frame-owned annotation templates and reference capture; no concurrent owner or transfer."
         }
       ],
-      "latest_component_scope": "V422-V424 HELD T053/M018/M025 common bound-parameter call coercion. Existing pointer admission is factored into GuestStore::pointer_type_coercion and shared with physical pointer_coercion; an already-bound source/runtime parameter takes that admitted boundary view before existing symbolic/bind checks. Original cells, function identity and exact-once physical packet conversion remain unchanged. No eq/alias/macro-specific rule, new unifier, source parser or static check. V422 fails only a host fixture include path; V423 both builds and7/7 controls pass after correcting two selector paths (initial selector attempt ran zero tests). Unchanged fn-item-type-coerce.rs newly completes all4editions,17matched VM dispatch/outcomes,1source call,unit/empty streams/cleanup; parent V420 fails12dispatch at the eq call. Maintained harness accepts owning2015; supplemental2018/2021/2024 captures pass. V424 changes only the host regression and its lib build/strengthened control pass:16edition/origin worlds each execute ordinary CallPrepare/CallSeal/CheckParameters exactlyonce. V423 runtime receipts remain attached to their own source; production/CLI is byte-identical acrossV423/V424. One new distinct runtime-contract case (four edition rows); no refreshed suite total/full-fixture/card/milestone/upstream-solver/interpreter/JIT/Linux/diagnostic/tooling/performance closure. Generic annotation owner hints, full solver root/member/VM joins and legacy routes remain held."
+      "latest_component_scope": "V425-V430 HELD M018/M025 actual frame-owned written annotations. Q73/nominal shape selection admits actual owner-checked parameters and retains a root WrittenType::Frame over the shared template; annotations/casts and compound explicit arguments use existing source/descriptor materialization, current GenericEnv and ordinary verified hints. IR and runtime check the actual owner; partial hints retain fixed frame bindings separately from construction arguments. Existing find/bind callbacks and frame helpers avoid new parsers/solvers or hot-path source planning. Reference argument capture now uses the same reached Frame::bound_view as ordinary/operator arguments; obsolete public capture_budgeted route is removed. Pointer casts and nominal stated hints share the same frame materialization. V425 monomorphization error, V426 later reference-evidence failure, V428 missing-facade host control and V429 helper-path build failure remain recorded. V427 both builds/5controls pass including12actual owner/source/verifier/guard/cold worlds. Final V430 both builds/3controls pass:16runtime edition/origin worlds with ordinary call counters and retained pointer regressions. Unchanged generic-derived-type.rs newly completes all4editions with199matched dispatch/outcomes,5source calls,expected10/newline/10/newline output and cleanup. Maintained owning2015 harness accepts it; supplemental editions pass. Additional unchanged align-struct.rs fails after7578dispatches/22source calls at generic unit variant type context, so selected batch fails1of2 and that fixture stays outstanding. One new distinct upstream runtime-contract case, not four fixtures; no refreshed suite total/full-fixture/card/milestone/upstream-solver/interpreter/JIT/Linux/diagnostic/tooling/performance closure. Remaining generic/const/region/coercion/currentness matrices, legacy concrete Type routes and complete upstream solver integration stay held."
     }
   ],
-  "updated_at": "2026-10-20T03:08:28.479825+00:00"
+  "updated_at": "2026-10-20T03:32:28.791682+00:00"
 }

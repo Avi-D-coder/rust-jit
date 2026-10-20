@@ -118,7 +118,7 @@ fn frame_hint(
         let element = crate::runtime::shape::PrimitiveIdentity::from_recipe(*element)?.id();
         Ok(store.find_type(&crate::runtime::shape::TypeKey::Array { element, len: *len }))
     } else if let HintRecipe::Written(written) = hint {
-        written.find(store)
+        frame.find_written_hint(written, store)
     } else {
         concrete(hint)
     }
@@ -142,7 +142,7 @@ fn written_binding_admission(
     }
     let value = store.admit_move(frame.cell(source)?)?;
     let admitted = match store.effective_type(value)? {
-        Some(ty) => written.admits(ty, store)?,
+        Some(ty) => frame.admits_written_hint(written, ty, store)?,
         None => matches!(
             written.as_ref(),
             crate::ir::written_type::WrittenType::Infer
@@ -210,7 +210,7 @@ fn materialize_hint(
             .map(Some);
     }
     if let HintRecipe::Written(written) = hint {
-        return written.materialize(store);
+        return frame.materialize_written_hint(written, store);
     }
     frame_hint(frame, hint, required, store)
 }
