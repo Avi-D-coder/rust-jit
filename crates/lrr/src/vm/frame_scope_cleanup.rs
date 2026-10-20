@@ -275,9 +275,8 @@ impl Frame {
                 let incoming = store.move_from(self.cell(*source)?)?;
                 // Commit the new value at the original location before any
                 // cleanup transition or callback. Its epoch stays unchanged.
-                let old_ticket = store.replace(old, incoming)?;
-                store.initialize_replacement_cleanup_root(cleanup_root, old_ticket)?;
-                let prepared = prepared.relocate_replacement_root(cleanup_root, store)?;
+                let receipt = store.replace_for_cleanup(old, incoming, cleanup_root)?;
+                let prepared = prepared.relocate_replacement_root(receipt, store)?;
                 replacement = Some(Replacement {
                     binding: Some(*binding),
                     old: cleanup_root,
@@ -318,16 +317,15 @@ impl Frame {
                 let incoming = store.move_from(self.cell(*source)?)?;
                 // Commit the new value at the place before the old value's
                 // drop glue (and any `Drop` witness) runs from its own root.
-                let old_ticket = store
-                    .replace_place(self.executed_place(*place)?, incoming)
+                let receipt = store
+                    .replace_place_for_cleanup(self.executed_place(*place)?, incoming, cleanup_root)
                     .map_err(|failure| match failure {
                         crate::runtime::place::PlaceFailure::RuntimeFault(error) => error,
                         crate::runtime::place::PlaceFailure::GuestPanic(_) => {
                             invalid("admitted place replacement panicked")
                         }
                     })?;
-                store.initialize_replacement_cleanup_root(cleanup_root, old_ticket)?;
-                let prepared = prepared.relocate_replacement_root(cleanup_root, store)?;
+                let prepared = prepared.relocate_replacement_root(receipt, store)?;
                 self.clear_place(*place)?;
                 replacement = Some(Replacement {
                     binding: None,

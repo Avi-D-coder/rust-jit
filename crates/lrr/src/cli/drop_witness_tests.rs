@@ -35,6 +35,36 @@ impl Drop for D {
 }
 ";
 const EDITIONS: [u16; 2] = [2015, 2021];
+
+#[test]
+fn upstream_union_replacement_uses_common_cleanup_all_editions_and_origins() {
+    let original = include_str!("../../../../fixtures/upstream/rustc-checkout/tests/ui/union/union-drop-assign.rs");
+    // Crate attributes remain outside item-producing macros. Original bodies
+    // and assertions are retained; imported originals themselves are unchanged.
+    let attrs = "#![allow(unused_assignments, static_mut_refs)]\n";
+    let payload = original.replace("#![allow(unused_assignments)]", "")
+        .replace("#![allow(static_mut_refs)]", "");
+    let emitted = format!("{attrs}macro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} emit!{{{payload}}}");
+    let wrapped = format!("{attrs}macro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} macro_rules! wrap {{($($t:tt)*)=>{{emit!{{$($t)*}}}}}} wrap!{{{payload}}}");
+    let nested = original.replace("*u.a = S;", "assert!({ *u.a = S; true });");
+    assert_ne!(nested, original);
+    for edition in [2015, 2018, 2021, 2024] {
+        for (origin, text) in [original, &emitted, &wrapped, &nested].into_iter().enumerate() {
+            let report = match super::crate_graph::format_trait_facade_tests::run(
+                "upstream-union-replacement", text, edition,
+            ) {
+                Ok(StandaloneOutcome::Completed(report)) => report,
+                Err(error) => panic!("edition={edition} origin={origin}: {error:?}"),
+                Ok(_) => panic!("edition={edition} origin={origin}: not completed"),
+            };
+            assert!(report.output.is_empty());
+            assert!(report.opcode_counters.started_by_opcode[16] >= 1);
+            assert!(report.opcode_counters.started_by_opcode[34] >= 1);
+            eprintln!("union cleanup edition={edition} origin={origin}: ordinary local/place assignments");
+        }
+    }
+}
+
 fn completed(body: &str, expected: &str) {
     let text = format!("{D}{body}");
     for edition in EDITIONS {

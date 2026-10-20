@@ -330,6 +330,14 @@ impl GuestStore {
     ) -> Result<(), Diagnostic> {
         let value = self.peek_ticket(incoming)?;
         self.object_owner(value, ValueOwner::Ticket(incoming))?;
+        let bytes = self.prepare_memory_view_write(view, value)?;
+        self.commit_memory_view_write(view, incoming, bytes)
+    }
+    pub(super) fn prepare_memory_view_write(
+        &mut self,
+        view: MemoryView,
+        value: ValueRepr,
+    ) -> Result<Vec<u8>, Diagnostic> {
         self.admit_new_contract(Some(view.ty), value)?;
         if !self.plain_type(view.ty) {
             return Err(Diagnostic::new(
@@ -340,12 +348,24 @@ impl GuestStore {
         let length = usize::try_from(self.layout_of(view.ty)?.size).map_err(|_| invalid())?;
         let mut bytes = vec![0; length];
         self.write_plain_image(value, view.ty, 0, &mut bytes)?;
+        let range = Self::image_range(view.offset, length)?;
+        let memory = self.memory_region(view.root)?;
+        memory.bytes.get(range.clone()).ok_or_else(invalid)?;
+        memory.initialized.get(range).ok_or_else(invalid)?;
+        Ok(bytes)
+    }
+    pub(super) fn commit_memory_view_write(
+        &mut self,
+        view: MemoryView,
+        incoming: TicketId,
+        bytes: Vec<u8>,
+    ) -> Result<(), Diagnostic> {
         let ObjectStorage::Aggregate(storage) = &mut self.objects.get_mut(view.root)?.storage
         else {
             return Err(invalid());
         };
         let memory = storage.memory.as_mut().ok_or_else(invalid)?;
-        let range = Self::image_range(view.offset, length)?;
+        let range = Self::image_range(view.offset, bytes.len())?;
         memory
             .bytes
             .get_mut(range.clone())

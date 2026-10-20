@@ -325,6 +325,7 @@ pub struct CleanupMachine {
 pub(crate) struct PreparedCleanup {
     machine: CleanupMachine,
     cell: CellId,
+    location_epoch: u32,
     expected: crate::runtime::value::ValueRepr,
 }
 impl PreparedCleanup {
@@ -332,17 +333,20 @@ impl PreparedCleanup {
     /// location. The reserved root may follow only that exact owning value.
     pub(crate) fn relocate_replacement_root(
         mut self,
-        cell: CellId,
+        receipt: crate::runtime::cell::ReplacementCleanupRoot,
         store: &GuestStore,
     ) -> Result<Self, Diagnostic> {
-        if self.machine.epoch != store.budget().epoch()
-            || store.admit_cleanup_root(cell)? != self.expected
-        {
+        if self.machine.epoch != store.budget().epoch() {
             return Err(invalid(
                 "replacement cleanup root differs from reserved old owner",
             ));
         }
+        let (cell, location_epoch, expected) = receipt.admit(
+            self.cell, self.location_epoch, self.expected, store,
+        )?;
         self.cell = cell;
+        self.location_epoch = location_epoch;
+        self.expected = expected;
         Ok(self)
     }
 
@@ -354,7 +358,8 @@ impl PreparedCleanup {
         if self.machine.epoch != store.budget().epoch() {
             return Err(invalid("prepared cleanup belongs to another run"));
         }
-        if store.admit_cleanup_root(self.cell)? != self.expected {
+        if store.location_epoch(self.cell)? != self.location_epoch
+            || store.admit_cleanup_root(self.cell)? != self.expected {
             return Err(invalid("prepared cleanup root changed before entry"));
         }
         steps.charge();
@@ -434,6 +439,7 @@ impl CleanupMachine {
         Ok(PreparedCleanup {
             machine,
             cell,
+            location_epoch: store.location_epoch(cell)?,
             expected,
         })
     }

@@ -1,0 +1,12 @@
+{
+  "controls": [
+    "runtime::cell::replacement_receipt_tests::replacement_receipt_accepts_actual_ordinary_detached_owner",
+    "runtime::cell::replacement_receipt_tests::replacement_receipt_rejects_other_sources_epochs_values_and_store_sessions",
+    "vm::frame::replacement_cleanup_tests::rustc_original_local_array_replacement_commits_rhs_before_old_cleanup",
+    "vm::frame::replacement_cleanup_tests::rustc_local_array_replacement_skips_moved_old_field_without_consuming_extracted_owner",
+    "cli::drop_witness_tests::assignment_drops_the_old_value_at_the_assignment",
+    "cli::drop_witness_tests::field_and_dereferenced_assignment_drop_the_old_value_at_the_assignment",
+    "cli::drop_witness_tests::a_panicking_drop_unwinds_through_the_remaining_owners",
+    "cli::drop_witness_tests::upstream_union_replacement_uses_common_cleanup_all_editions_and_origins"
+  ]
+}

@@ -4,6 +4,9 @@
 mod test_owners;
 #[cfg(test)]
 pub(crate) use test_owners::OwnerInventory;
+#[cfg(test)]
+#[path = "cell_replacement_receipt_tests.rs"]
+mod replacement_receipt_tests;
 #[path = "cell_aggregate_copy.rs"]
 pub(crate) mod aggregate_copy;
 #[path = "cell_boxes.rs"]
@@ -209,6 +212,34 @@ pub enum CellState {
     Moved,
     Dropping,
     Dropped,
+}
+/// Linear proof of the old owner installed by one real replacement transaction.
+/// Shared storage may reconstruct an image rather than move its view ObjectId.
+pub(crate) struct ReplacementCleanupRoot {
+    session: StoreSession,
+    source: CellStamp,
+    previous: ValueRepr,
+    destination: CellStamp,
+    detached: ValueRepr,
+}
+impl ReplacementCleanupRoot {
+    pub(crate) fn admit(
+        self,
+        source: CellId,
+        location_epoch: u32,
+        previous: ValueRepr,
+        store: &GuestStore,
+    ) -> Result<(CellId, u32, ValueRepr), Diagnostic> {
+        if self.session != store.pattern_binding_session()
+            || self.source != (CellStamp { cell: source, epoch: location_epoch })
+            || self.previous != previous
+            || store.place_stamp(self.destination.cell)? != self.destination
+            || store.admit_cleanup_root(self.destination.cell)? != self.detached
+        {
+            return Err(ownership());
+        }
+        Ok((self.destination.cell, self.destination.epoch, self.detached))
+    }
 }
 pub struct Cell {
     state: CellState,
@@ -2310,6 +2341,17 @@ impl GuestStore {
         self.replace(resolved.target.cell, incoming)
             .map_err(PlaceFailure::RuntimeFault)
     }
+    pub(crate) fn replace_place_for_cleanup(
+        &mut self,
+        place: &Place,
+        incoming: TicketId,
+        cleanup_root: CellId,
+    ) -> Result<ReplacementCleanupRoot, PlaceFailure> {
+        let resolved = self.resolve_place(place)?;
+        if !resolved.writable { return Err(access_fault().into()); }
+        self.replace_for_cleanup(resolved.target.cell, incoming, cleanup_root)
+            .map_err(PlaceFailure::RuntimeFault)
+    }
     /// `&*r` of a `&str` buffer reference: the `str` referent has no cells, so
     /// its reborrow is the same immutable byte range.
     fn str_reborrow(&self, place: &Place) -> Result<Option<super::reference::BufferLease>, Diagnostic> {
@@ -3958,6 +4000,27 @@ impl GuestStore {
     pub fn replace(&mut self, id: CellId, incoming: TicketId) -> Result<TicketId, Diagnostic> {
         self.replace_with(id, incoming, true)
     }
+    /// Use the common replacement transaction and root installation, then
+    /// attest their exact old source and detached owner without a guest callback.
+    pub(crate) fn replace_for_cleanup(
+        &mut self,
+        source: CellId,
+        incoming: TicketId,
+        cleanup_root: CellId,
+    ) -> Result<ReplacementCleanupRoot, Diagnostic> {
+        let stamp = self.place_stamp(source)?;
+        let previous = self.admit_cleanup_root(source)?;
+        self.validate_replacement_cleanup_root(cleanup_root, previous)?;
+        let old = self.replace(source, incoming)?;
+        self.initialize_replacement_cleanup_root(cleanup_root, old)?;
+        Ok(ReplacementCleanupRoot {
+            session: self.pattern_binding_session(),
+            source: stamp,
+            previous,
+            destination: self.place_stamp(cleanup_root)?,
+            detached: self.admit_cleanup_root(cleanup_root)?,
+        })
+    }
     /// `replace`; `checked` requires a writable cell (interior-mutable storage
     /// is replaced through a shared reference and does not).
     pub(crate) fn replace_with(
@@ -3967,9 +4030,12 @@ impl GuestStore {
         checked: bool,
     ) -> Result<TicketId, Diagnostic> {
         if let CellState::View(view) = self.cells.get(id)?.state {
-            if checked && !self.cells.get(id)?.writable { return Err(ownership()); }
+            let value = self.peek_ticket(incoming)?;
+            self.object_owner(value, ValueOwner::Ticket(incoming))?;
+            self.admit_replacement_with(id, value, checked)?;
+            let bytes = self.prepare_memory_view_write(view, value)?;
             let old = self.read_memory_view(view)?;
-            self.write_memory_view(view, incoming)?;
+            self.commit_memory_view_write(view, incoming, bytes)?;
             return Ok(old);
         }
         let value = self.peek_ticket(incoming)?;
