@@ -274,3 +274,224 @@ Frozen inspected source SHA256 (documentation does not alter V513 source):
 | source_trait_semantics.rs | f7df4dcc558851d60bd167ae81d4ebe2cab51202373cd7cad3a6e78d0631210f |
 | source_impl_semantics.rs | 7ffed5357c46800dcb7362755f8c019ec7fe3e13ed1df4d24e0bbd0ac06e416a |
 | source_alias_layouts.rs | 9ad1b4094a96ba594eb81d9d569cf75129d3d0965ee1719fd34617f8f046d205 |
+
+## V515-frozen read-only actual reached-call join
+
+No production/test/import/build changes were made for this follow-on analysis.
+The factory/readiness code remains the same inspected version above; Q88 now
+exists as an additional genuine immediate source producer. The smallest common
+runtime join is still ahead of the ordinary reached CallSeal fallback, not an
+operator-name/repr128/assertion-specific rule.
+
+engine/run.rs's CallSeal branch currently loops over reached argument cells,
+calls GuestStore::bind_literal_fallback, obtains effective_type, then constructs
+ArgumentType {source,descriptor} and prepare_source_call contracts. The public
+frontend/call_contracts.rs ArgumentType already requires a concrete TypeId, so it
+cannot represent an open integer at that point. engine/run_trait_calls.rs::
+selection_argument_typed already demonstrates the actual data distinction:
+concrete source Type versus Literal {integer,behind_reference} versus Unknown.
+Reuse that authentic reached-cell/literal-family observation as input data;
+do not reuse select_by_arguments' custom candidate/fallback heuristics as the
+new solver. Some deferred trait Self selection also falls back early and is
+the same migration boundary, not permission for a second call engine.
+
+The required common input packet must retain selected SourceCallable/current
+signature identity, actual call identity/arguments, known source/runtime bindings,
+open numeric keys/families and the caller's actual instantiated environment.
+Known T comes from the reached enum descriptor/source view; open U must be the
+same genuine integer variable at each source occurrence. A callee's own declared
+PartialEq<U> requirement is an obligation to discharge, not an assumption to add
+to its caller ParamEnv. Existing SignatureSubstitution/PreparedCallContracts
+source_substitution are structural transport/runtime bindings; they are not an
+upstream ParamEnv or a proof of trait obligations. Preserve their common boundary,
+but do not promote their Unifier/member bool paths into another trait solver.
+
+Available preparation joins, without pretending they are complete facts:
+
+| Existing source plan | Actual use before entry | Still missing |
+| --- | --- | --- |
+| Q75 header + DeclarationParameters/GenericTypes | Actual callee/trait/impl IDs, spans, role, source order/Self and generics transport | Runtime owner/session assembler and per-query typed publication |
+| Q76/Q77/Q87 | Real DiscriminantKind/Discriminant role/member/parent IDs and alias namespaces | Requested role availability and projection value query closure; no name-hash fallback |
+| Q78/Q80/Q81 | Actual declared obligation recipes/shared encoding and separately demanded parent requirements | Full own/all/inferred compiler query families where required; actual caller environment construction |
+| Q79 | Actual applicable variance values/domain and parameter-count proof | No license to fill unrelated queries/opaque domains |
+| Q82/Q84 | Actual output/default rows, language/configuration/site proof | Associated mapping/elaboration/completeness outside supported immediate producer domains |
+| Q83/Q85 | Real scalar/trait flags independently known or pending | No whole-definition/TraitFacts readiness or dyn/opaque guessed defaults |
+| Q86 | Authentic impl typed head/generics/polarity/default/conditional constness; genuine null clauses branch and inferred_outlives [] | True impl_super_outlives and non-null compiler clause branches remain pending |
+| Q88 | Immediate Super/Implied selected clauses, exact ordering/spans and positive/pending dependency descriptors, shared scoped encode | Actual transitive query dependency preparation/callback closure; not a recursive/cycle certificate |
+
+Existing enum_repr::PreparedEnumDiscriminant, SourceAdtFields and source_variants
+proofs must populate the demanded real ADT/discriminant domain for builtin
+DiscriminantKind normalization. prepared.rs::discriminant_type already delegates
+to pinned_discriminant_ty; extending the actual source/fact join is appropriate,
+not replacing it with an enum-size/primitive shortcut. The facade's omitted
+PartialEq Rhs=Self head is already completed by the common source Type route;
+adding another generic-default evaluator is not the missing join.
+
+Concrete next implementation sequence: first publish genuine independent
+metadata/query domains and actual complete source candidate bucket/index data;
+next use Q88's positive dependency rows to prepare their actual requested source
+query inputs with the existing dependency framework. Pending rows remain
+admission dependencies. A visited data-dependency set may prevent repeated
+preparation; it must not decide solver cycles, applicability or normalization.
+Only after that actual query closure exists can the retained pinned elaborate/
+filter algorithm produce Q86 super_outlives. Do not equate that query with
+inferred_outlives [] or Q86's complete null clauses result. Q88 alone therefore
+does not unblock PreparedProvider::publish/ready or the actual root entry.
+
+The actual runtime session must privately own the exact SolverContext,
+RootVariables map, encoded Goal/caller ParamEnv and source/currentness inputs.
+ready currently proves provider/Cx/catalog/index agreement only, and
+evaluate_prepared still accepts an arbitrary goal/delegate sharing that Cx.
+Consume one genuine prepared-root session, without externally replaceable goal
+or inference owner, after actual required callback closure validation. Same Cx
+or a goal hash is insufficient when inference state can change. Missing closure
+must return typed pending before entry under the unchanged abort policy; no
+panic/catch/replay or synthetic assumed goal establishes readiness.
+
+After real upstream evaluation, RootVariables::resolved reads the original
+variables in that same owner; GoalEvaluation.goal is not a substitution answer.
+Only representable resolved inputs may be exported to owned source terms/runtime
+descriptors, with current dependency guards rechecked before an atomic ordinary
+call/literal-binding commit. PreparedCallContracts/inferred_equations and existing
+frame environment capture are natural retention/guard points. No caller cell,
+frame hint or guest store mutation belongs inside a pending solver attempt.
+Only then may ordinary fallback apply to variables the real solver leaves open.
+
+Legacy numeric/member shortcuts in binding_constraint_generics.rs (including its
+NATIVE_PRIMITIVE_TRAITS fallback), select_by_arguments/MemberIndex applicability
+and source SignatureSubstitution Unifier remain named migration debt. They are
+not source-fact certificates and should be removed for a migrated demand only
+when its real common upstream route/response/invalidation evidence exists.
+No new hot source scan, body checker or context-only semantic route is needed.
+
+Inspected frozen source hashes for these new caller observations:
+
+| Path under crates/lrr/src | SHA256 |
+| --- | --- |
+| engine/run.rs | a87de19e1e6098c53d38e8a5ce3acf04b729bee3c04cf17af0e0f8de6f107857 |
+| engine/run_trait_calls.rs | 89770b4bd9c9e56714a45a5addc95a06c91b7f28af48c6300c968b5426dd7735 |
+| frontend/call_contracts.rs | 44f6b4b4c7f957266b2043d90ae3d0f76d50032d23f52e082d722424a806345f |
+| traits/upstream/root_variables.rs | ee3e3b731a8129dd599cacba037cd122e26a39da0a241221e91f089499f3a72a |
+| traits/upstream/source_trait_clauses.rs | 2abfb8c0e90c85f934c0b1ca51dc0d4647fa1028c472436c6f7c5590ecc1f0d7 |
+
+This is a read-only bounded implementation plan. V515 observations belong to the
+validator; no success, source-root execution, runtime gain or gate is inferred.
+
+## Queued bounded pre-fallback packet slice (plan only)
+
+LOCAL-049 / WT05-02 / M020. Current freeze permits reading/reasoning/docs only.
+Implementation ownership proposed after explicit release/interface agreement:
+engine/run.rs plus a new private child module engine/run_call_inputs.rs. Lead
+owns shared upstream root input/admission types and prepared.rs/query tables.
+No standalone replacement language tests, fixture edits, source code, build or
+test run is authorized by this plan. Primary runtime witness remains unchanged
+repr128, with ordinary/user/wrapper routes sharing the same call boundary.
+
+Minimal invariant/witness: at the selected ordinary source CallSeal, the reached
+enum argument determines the actual T shape while the unsuffixed argument remains
+an actual integer-family variable. Capture must preserve those inputs before
+fallback mutates the literal binding; it must not select an i128 overload,
+coerce by fixture name or assume the callee's PartialEq obligation in ParamEnv.
+Capture is not solving and cannot claim to fix the existing runtime fault.
+
+Existing route: selected SourceCallable + current explicit/owner-application
+guards -> ordinary CallStart/CallPrepare argument execution -> CallSeal ->
+concrete ArgumentType/prepare_source_call -> PreparedCallContracts -> GenericEnv
+capture/ordinary argument packet delivery and callee continuation/cleanup.
+Generated syntax reaches that same selected callable/call seal with its actual
+source origin and runtime-call ordinal. The packet extends that route before
+the concrete-only ArgumentType loop; it does not create a macro-specific caller.
+
+Proposed engine-private transport API:
+
+* ReachedCallInputs::capture (implemented as a RunMachine helper so it can reuse
+  existing selected-call/cell/source observations) returns an immutable owned
+  packet or explicit representability/currentness hold. Unsupported input is
+  not a semantic negative, guessed Type variable or proof of no obligations.
+* Retain the actual PcKey, CallIdentity including runtime-call ordinal, selected
+  Arc<SourceCallable>/signature fingerprint, argument slot/cell and validated
+  observed value snapshots, explicit argument proofs/owner-application guard,
+  result-context receipt, actual source site and current source-world handles.
+  Retain Arc handles; do not clone BodyIndex or reconstruct argument syntax.
+* Arguments retain either actual source Type + TypeId or open numeric literal
+  evidence. One source InferVarKey corresponds to each actual validated shared
+  literal record identity, not spelling/slot/argument ordinal. Repeated views of
+  that record share one Integer/Float variable. Unknown nonliteral shapes remain
+  representability holds; they do not become arbitrary Type variables.
+* Generic input tuples are actual callee ParamKey -> TyTerm (including the
+  original source InferVarKey), with a separate exact variable-family map.
+  Known explicit/already-proven bindings retain authentic signature mapping.
+  Unbound declared type parameters remain Type-family keys. The shared upstream
+  session allocates its actual variables and relates them with reached arguments.
+* Retain raw formal/reached source relation tuples and actual source site/kind.
+  Actual argument positions are coercion sites (including existing reference,
+  pointer and unsizing proofs); explicit generic bindings are equality inputs.
+  Preserve result expectation direction from the existing source contract.
+  Do not impose Eq at a coercion site, invoke SignatureSubstitution::Unifier,
+  normalize projections or pick a composite binding in the packet. Repeated or
+  contradictory relations remain relations for the SAME upstream owner.
+* The caller descriptor retains current BodyKey/definition independently of
+  optional Frame::shared_generic_context() (Arc<GenericEnv>, real owner,
+  signature/application identity and its actual substitutions). Closure lexical
+  owner can differ from current body owner; retain both rather than flattening.
+  None is not an empty ParamEnv certificate. Even nongeneric functions may have
+  concrete where clauses. Lead preparation joins actual caller own/parent clause
+  receipts before constructing ParamEnv; callee clauses remain obligations.
+* require_current/revalidate_before_commit checks actual PC/call/callee identity,
+  relevant source guards, slots/cells/value snapshots and literal binding/version
+  state. Reuse the active frame/call lifecycle; no arbitrary global owner token
+  or source-world scan is needed. Packets never escape into facts with CellId,
+  Frame or ValueRepr types: only authenticated source tuples/families/caller
+  descriptor and source sites cross the shared upstream input boundary.
+
+The existing selection_argument_typed observation already distinguishes concrete
+Types from unbound numeric families and admit_move is read-only admission here.
+Reuse/factor its actual observations where ownership permits, rather than create
+a second value classifier. The packet must additionally retain the validated
+shared literal identity and cell snapshot for deduplication and later commit.
+Existing source/input guards are checked after all argument effects and again
+after any preparation suspension. Literal binding, caller hints, tickets and
+guest cell ownership are unchanged during capture/preparation.
+
+Source spans come from retained indexed call/operand data and genuine generated
+call source identity. A missing precise source join is explicit pending;
+never reparse display text, search the whole file per argument or label an outer
+macro span as an authenticated inner call. Source-owned call operands and actual
+runtime-call ordinal remain part of the common owner key.
+
+Integration after release: capture once at the reached selected source call
+before the current CallSeal fallback loop. Retain it across an actual preparation
+NeedInput with the existing call/frame lifecycle, invalidating/refreshing only
+when a real dependency/input changes. Initially the existing fallback behavior
+stays until the actual root session can consume/resolve the packet; capture
+alone is an explicitly held adapter component, not acceptance or a repaired
+repr128 result. Unsupported capture metadata must not newly refuse previously
+supported calls while this transport is held. A later successful upstream
+response is committed through the ordinary existing contracts/literal binding
+path after guard validation; no speculative guest mutation occurs beforehand.
+
+Missing producer dependencies are named: actual caller ParamEnv/clauses (Q80/Q81
+written lists alone are not full compiler queries; Q86 null proof is Impl only),
+true Q86 super-outlives/Q88 transitive closure, builtin projection/ADT source facts,
+and the lead's query-domain factory/owner-bound root session. Capture does not
+remove these holds or invent empty data. The exact callable assumption and
+response transport use the existing source receipts and parent-owned shared
+input types; no engine-private frames/values enter compiler callbacks.
+
+All-eight review obligations for the eventual patch: (1–2) only existing ordinary
+call input transport, no assertion/generated evaluator; (3) no method/numeric
+choice outside genuine upstream inference, no fallback coercion; (4) preserve
+original/generated/wrapper source/hygiene/edition/ordinal joins; (5) no body or
+cold arm checks/pattern machinery; (6) capture once, memo source preparation,
+no installed planning; (7) only relevant input guards, no global hot census;
+(8) Arc-retain immutable bodies/source, direct indexes rather than whole-file
+searches. Cold capture costs O(reached argument count + declared generic inputs
++ actual source term sizes), plus existing demanded source preparation; no timing
+or scaling result is claimed. No resource accounting or new unsafe code.
+
+Evidence required after implementation: actual unchanged repr128 input capture,
+same literal identity/family across repeated occurrences and suspension, exact
+caller versus callee assumption separation, actual owner/currentness checks and
+ordinary/user/wrapper source joins. Root/runtime gain requires real solving and
+guarded response commit; source packet observation alone is insufficient. No
+new standalone controls may substitute for the actual runtime witness.

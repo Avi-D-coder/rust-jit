@@ -1,0 +1,29 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Held M020 common bound-site provenance and immediate filtered trait clauses: authentic where-Self Sized/item-default spans, unrelated generic HRTB cold, selected nested associated equality explicitly pending; explicit Sized-first and implicit MetaSized-first ordering through the shared encoder; four editions and original/emit/wrapper. Six existing affected source/constructor regressions retained. No complete recursive clause query, source-free factory, upstream root, full fixture, runtime gain or milestone closure. Negative parser controls remain held and unexecuted.",
+  "controls": [
+    "cli::preentry_loader_tests::upstream_bound_contexts::unchanged_where_self_sized_retains_item_and_bound_provenance_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_bound_contexts::unchanged_filtered_trait_clauses_leave_unrelated_hrtb_unforced_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_bound_contexts::unchanged_selected_nested_associated_trait_bounds_remain_pending_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_bound_contexts::unchanged_explicit_sized_precedes_other_supertraits_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_bound_contexts::unchanged_implicit_metasized_precedes_copy_supertrait_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_item_bounds::unchanged_associated_output_bound_uses_actual_projection_span_and_typed_default_holds",
+    "cli::preentry_loader_tests::upstream_source_clauses::unchanged_streaming_gat_clauses_use_pinned_parent_instantiation_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_source_clauses::unchanged_hrtb_parent_is_unforced_for_own_bundle_and_pending_for_hierarchy",
+    "cli::crate_graph::builtin_derive_tests::unchanged_associated_constructor_uses_reached_source_arguments_all_origins_and_editions",
+    "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins"
+  ],
+  "held_controls": [
+    {
+      "selector": "cli::preentry_loader_tests::upstream_source_clauses::unchanged_negative_supertrait_bounds_remain_typed_pending_all_editions_and_origins",
+      "status": "held_unexecuted",
+      "reason": "Common conditional impl applicability/member/Copy/Drop availability prerequisite is missing. Negative TypeBound parser activation was withdrawn before build/execution; these unchanged upstream source witnesses are not admitted/passed."
+    },
+    {
+      "selector": "cli::preentry_loader_tests::upstream_source_clauses::unchanged_negative_associated_constraints_keep_signature_transport_pending_all_editions_and_origins",
+      "status": "held_unexecuted",
+      "reason": "Common conditional impl applicability/member/Copy/Drop availability prerequisite is missing. Negative TypeBound parser activation was withdrawn before build/execution; these unchanged upstream source witnesses are not admitted/passed."
+    }
+  ]
+}

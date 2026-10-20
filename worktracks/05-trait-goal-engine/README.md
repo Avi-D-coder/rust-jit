@@ -1,5 +1,7 @@
 # WT05 — Trait headers, goals and dispatch
 
+Latest held M020 component: V516 shared bound-site provenance/default views and immediate Q88 filtered clauses; pinned cmp trait headers corrected. Three fresh builds and11controls pass across actual edition/origin matrices. Runtime remains3/4 selected cases, zero new runtime gains. Recursive clauses/elaboration, actual fact/root/inference session and VM migration remain open; two negative controls and cross-predicate ordering execution remain held. [Evidence](../evidence/2026-10-20-v515-v516-bound-contexts.json).
+
 Integrate the pinned next-generation rustc trait solver with LRR's demand-driven source queries, dictionaries and ordinary runtime dispatch. [E-R5-014](../../docs/errata/revision5-upstream-trait-solver.md) supersedes the former custom-solver plan.
 
 ## Current boundary

@@ -10842,6 +10842,12 @@
       "bytes": 344
     },
     {
+      "path": "tests/ui/higher-ranked/trait-bounds/normalize-under-binder/issue-62529-1.rs",
+      "git_blob": "cca60852efdbe2c00af5e3d3a43a0765580d7624",
+      "sha256": "122a054776fbbba6dcc40c9fb2d9b7e11310ecb740ca3167cceff6576e9dc472",
+      "bytes": 2039
+    },
+    {
       "path": "tests/ui/higher-ranked/trait-bounds/normalize-under-binder/issue-62529-2.rs",
       "git_blob": "af086750840a3fc70094f0ad3ff63c10a74abd61",
       "sha256": "9618767afd3588e7e12708efe55045a2f1fa152bf0499c91e63b0f58b79e6cf9",
@@ -11152,6 +11158,12 @@
       "git_blob": "006923653d045ca7f5bdfead7def7a05fc79e822",
       "sha256": "c16c90a3fd96afb0530cc9a9c7bddd59187a9bb280f11188d34acd17b99e1d2c",
       "bytes": 218
+    },
+    {
+      "path": "tests/ui/implied-bounds/implied-bounds-unconstrained-1.rs",
+      "git_blob": "524f6fa9b3fecc7ffa42065d7821151f2720cfca",
+      "sha256": "f2c036029e0410f97c9a69ba107e5d3747d7ec2584ced9750b4f458b8259c026",
+      "bytes": 630
     },
     {
       "path": "tests/ui/imports/ambiguous-panic-rename-builtin.rs",
@@ -31565,6 +31577,14 @@
       "native_acceptance": "unexecuted"
     },
     {
+      "path": "tests/ui/higher-ranked/trait-bounds/normalize-under-binder/issue-62529-1.rs",
+      "directives": [
+        "//@ check-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
       "path": "tests/ui/higher-ranked/trait-bounds/normalize-under-binder/issue-62529-2.rs",
       "directives": [
         "//@ check-pass"
@@ -31934,6 +31954,14 @@
       "path": "tests/ui/impl-trait/universal_multiple_bounds.rs",
       "directives": [
         "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/implied-bounds/implied-bounds-unconstrained-1.rs",
+      "directives": [
+        "//@ check-pass"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"

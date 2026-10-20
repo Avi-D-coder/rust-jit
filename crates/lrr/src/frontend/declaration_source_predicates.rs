@@ -463,7 +463,7 @@ impl PreparedDeclarationSourcePredicates {
             &syntax,
             self_type.as_ref(),
         );
-        let written = ready!(super::source_predicates::prepare_own(
+        let mut written = ready!(super::source_predicates::prepare_own(
             db,
             environment.names(),
             &sources,
@@ -473,28 +473,44 @@ impl PreparedDeclarationSourcePredicates {
             layout.own,
             self_type.as_ref()
         ));
-        let mut recipes = Vec::new();
-        let own_types = declaration.parameters().iter()
-            .filter(|parameter| parameter.ordinal < layout.own && parameter.kind == GenericKind::Type)
+        let mut defaults_by_context = Vec::new();
+        let own_types = declaration
+            .parameters()
+            .iter()
+            .filter(|parameter| {
+                parameter.ordinal < layout.own && parameter.kind == GenericKind::Type
+            })
             .collect::<Vec<_>>();
         let trait_self = ast::Trait::can_cast(syntax.kind());
-        if !own_types.is_empty() || trait_self {
+        if !own_types.is_empty() || trait_self || !written.recipes().is_empty() {
             let defaults_root = ready!(db.fetch(
                 &SyntaxProvider,
                 QueryKey::SourceDefaultBounds(Box::new(key.clone())),
-            )).value;
+            ))
+            .value;
             result.default_bounds = Some(Arc::clone(&defaults_root));
             let QueryValue::SourceDefaultBounds(defaults) = defaults_root.as_ref() else {
                 return QueryPoll::Ready(Err(fault("actual default-bound query differs")));
             };
+            if let Err(why) = written.order_explicit_sized(defaults) {
+                pending!(DeclarationSourcePredicatesPending::DefaultBounds(why));
+            }
             for parameter in own_types {
-                let parameter = ParamKey { definition: key.definition, ordinal: parameter.ordinal };
+                let parameter = ParamKey {
+                    definition: key.definition,
+                    ordinal: parameter.ordinal,
+                };
                 let Some(site) = result.parameter_range(parameter) else {
                     pending!(DeclarationSourcePredicatesPending::Source);
                 };
-                match defaults.apply(&TyTerm::Param(parameter), (source.content, site),
-                    DefaultBoundsContext::TypeParameter(parameter), &written) {
-                    Ok(implicit) => recipes.extend(implicit),
+                match defaults.apply(
+                    &TyTerm::Param(parameter),
+                    (source.content, site),
+                    DefaultBoundsContext::TypeParameter(parameter),
+                    written.default_inputs(DefaultBoundsContext::TypeParameter(parameter)),
+                ) {
+                    Ok(implicit) => defaults_by_context
+                        .push((DefaultBoundsContext::TypeParameter(parameter), implicit)),
                     Err(why) => pending!(DeclarationSourcePredicatesPending::DefaultBounds(why)),
                 }
             }
@@ -502,16 +518,21 @@ impl PreparedDeclarationSourcePredicates {
                 let Some(subject) = self_type.as_ref() else {
                     pending!(DeclarationSourcePredicatesPending::SelfType);
                 };
-                match defaults.apply(subject, (source.content, range(syntax.text_range())),
-                    DefaultBoundsContext::TraitSelf, &written) {
-                    Ok(implicit) => recipes.extend(implicit),
+                match defaults.apply(
+                    subject,
+                    (source.content, range(syntax.text_range())),
+                    DefaultBoundsContext::TraitSelf,
+                    written.default_inputs(DefaultBoundsContext::TraitSelf),
+                ) {
+                    Ok(implicit) => {
+                        defaults_by_context.push((DefaultBoundsContext::TraitSelf, implicit))
+                    }
                     Err(why) => pending!(DeclarationSourcePredicatesPending::DefaultBounds(why)),
                 }
             }
         }
-        recipes.extend(written);
         result.self_type = self_type;
-        result.recipes = recipes;
+        result.recipes = written.with_default_sets(defaults_by_context);
         QueryPoll::Ready(Ok(result))
     }
 }
@@ -519,7 +540,7 @@ fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-DECLARATION-SOURCE-PREDICATES", message.into())
 }
 impl StableEncode for PreparedDeclarationSourcePredicates {
-    const DOMAIN: &'static str = "lrr/v3/actual-declaration-source-predicates";
+    const DOMAIN: &'static str = "lrr/v4/actual-declaration-source-predicates";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.record(self.generic_types());
@@ -541,7 +562,9 @@ impl StableEncode for PreparedDeclarationSourcePredicates {
             };
             e.record(types.as_ref());
         });
-        e.option(&self.default_bounds, |e, value| e.digest(value.fingerprint()));
+        e.option(&self.default_bounds, |e, value| {
+            e.digest(value.fingerprint())
+        });
         e.option(&self.parent_definition, |e, definition| {
             e.digest(*definition)
         });

@@ -1,0 +1,2132 @@
+{
+  "schema": "lrr/held-component-evidence/v1",
+  "recorded_at": "2026-10-20T22:13:01.641653+00:00",
+  "status": "held_component_checkpoint",
+  "claim": "LOCAL-049",
+  "tasks": [
+    "M019",
+    "M020"
+  ],
+  "source_baseline": "f4a74d3bf0f8ae1b0dc276c5f87cbdd7e708fda4",
+  "source_sha256": "6b06fbc81e9a2d96bbde7d32b6b57e15865a098ec7761de6fca8d1fa11919596",
+  "platform": "aarch64-apple-darwin",
+  "rust": "1.99.0",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "implemented": [
+    "Shared bound collector retains actual site/owner/parameter provenance. Q84 consumes sealed context views instead of flattened recipe slices; Q78 and Q82 use the retained common plan.",
+    "Q88 selects actual relevant bound syntax before Type/binder/name preparation, retains every selected pending row, uses the existing SourceBindings/generic/TypeIR encoder, and records immediate dependency descriptors. It is not transitive compiler query closure.",
+    "Authenticated explicit Sized front insertion follows the actual Declaration versus TraitProbe scratch-vector domain; TraitSelf implicit defaults prefix actual colon rows. No spelling, fixture, macro or evaluator-specific selection.",
+    "Four cmp facade headers/attributes match pinned const trait declarations with PointeeSized bounds. Existing method bodies remain byte-for-byte unchanged under inverse header edits; exact original cmp.rs added as licensed pin input."
+  ],
+  "failed_attempt": {
+    "run": "V515",
+    "source": {
+      "head": "f4a74d3bf0f8ae1b0dc276c5f87cbdd7e708fda4",
+      "file_count": 8725,
+      "source_sha256": "82164809c3bed5f120413b8084e38c84948f911a20b9f22168015b1f9b7bc21a",
+      "binaries": {}
+    },
+    "build_terminal": {
+      "stage": "lib",
+      "exit": 101,
+      "session": 23617,
+      "errors": [
+        {
+          "code": "E0574",
+          "message": "expected struct, variant or union type, found trait `Span`",
+          "locations": [
+            {
+              "file": "crates/lrr/src/traits/upstream/source_trait_clauses.rs",
+              "line": 677
+            }
+          ]
+        }
+      ],
+      "later_stages": "unexecuted"
+    },
+    "terminals": {
+      "lib_exit": 101,
+      "lib_session": 23617,
+      "cli_build": "unexecuted",
+      "digester_build": "unexecuted",
+      "controls": "unexecuted",
+      "runtime": "unexecuted",
+      "bootstrap_audit_exit": 0,
+      "vendor_audit_exit": 0,
+      "default_bounds_audit_exit": 0,
+      "retained_binaries": "existing V514, not V515 acceptance",
+      "all_processes_terminal": true
+    },
+    "after_build": {
+      "head": "f4a74d3bf0f8ae1b0dc276c5f87cbdd7e708fda4",
+      "file_count": 8725,
+      "source_sha256": "82164809c3bed5f120413b8084e38c84948f911a20b9f22168015b1f9b7bc21a",
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": [],
+      "binaries": {
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "57a7153a5225f34e65243eba2846ab0a2d4c43bd9c49785c40c5edb75d358268"
+        }
+      }
+    },
+    "after_runtime": {
+      "head": "f4a74d3bf0f8ae1b0dc276c5f87cbdd7e708fda4",
+      "file_count": 8725,
+      "source_sha256": "82164809c3bed5f120413b8084e38c84948f911a20b9f22168015b1f9b7bc21a",
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": [],
+      "binaries_match_build": true,
+      "binaries": {
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "57a7153a5225f34e65243eba2846ab0a2d4c43bd9c49785c40c5edb75d358268"
+        }
+      }
+    },
+    "scope": "Lib failed E0574 in cfg(test) observer before tests. Existing CLI/digester were unchanged V514 binaries, never V515 acceptance."
+  },
+  "validated_attempt": {
+    "run": "V516",
+    "before": {
+      "head": "f4a74d3bf0f8ae1b0dc276c5f87cbdd7e708fda4",
+      "file_count": 8725,
+      "source_sha256": "6b06fbc81e9a2d96bbde7d32b6b57e15865a098ec7761de6fca8d1fa11919596",
+      "binaries": {}
+    },
+    "after_build": {
+      "head": "f4a74d3bf0f8ae1b0dc276c5f87cbdd7e708fda4",
+      "file_count": 8725,
+      "source_sha256": "6b06fbc81e9a2d96bbde7d32b6b57e15865a098ec7761de6fca8d1fa11919596",
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": [],
+      "binaries": {
+        "test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+          "sha256": "e7e930915f71fceb42e1a2cb1270c3f47d58606d9ced0cfa112347332b51d7f3"
+        },
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "6eeff255fc80382ec39ef978613e2bb759c6b7475bee8e18418073f5e2ad5d7d"
+        }
+      }
+    },
+    "after_runtime": {
+      "head": "f4a74d3bf0f8ae1b0dc276c5f87cbdd7e708fda4",
+      "file_count": 8725,
+      "source_sha256": "6b06fbc81e9a2d96bbde7d32b6b57e15865a098ec7761de6fca8d1fa11919596",
+      "source_matches_before": true,
+      "head_matches_before": true,
+      "changed_sources": [],
+      "binaries_match_build": true,
+      "binaries": {
+        "test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+          "sha256": "e7e930915f71fceb42e1a2cb1270c3f47d58606d9ced0cfa112347332b51d7f3"
+        },
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "6eeff255fc80382ec39ef978613e2bb759c6b7475bee8e18418073f5e2ad5d7d"
+        }
+      }
+    },
+    "build_terminal": {
+      "lib": {
+        "exit": 0,
+        "session": 89822
+      },
+      "cli": {
+        "exit": 0,
+        "session": 85225
+      },
+      "digester": {
+        "exit": 0
+      },
+      "bootstrap_audit_exit": 0,
+      "vendor_audit_exit": 0,
+      "default_bounds_audit_exit": 0
+    },
+    "terminals": {
+      "lib_exit": 0,
+      "cli_exit": 0,
+      "digester_exit": 0,
+      "controls_exit": 0,
+      "controls_session": 40128,
+      "runtime_exit": 1,
+      "runtime_session": 23532,
+      "runtime_report": "/private/tmp/lrr-v516-bound-context-runtime/report.json",
+      "bootstrap_audit_exit": 0,
+      "vendor_audit_exit": 0,
+      "default_bounds_audit_exit": 0,
+      "all_processes_terminal": true
+    },
+    "digester_after_build": {
+      "phase": "after-build",
+      "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+      "sha256": "aa585ff08d146d45daa76e1bf490d649744566fa514157caea4a19d1c7aae1f4",
+      "fresh_build": true,
+      "build_exit": 0
+    },
+    "digester_after_runtime": {
+      "phase": "after-runtime",
+      "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+      "sha256": "aa585ff08d146d45daa76e1bf490d649744566fa514157caea4a19d1c7aae1f4",
+      "fresh_build": true,
+      "build_exit": 0,
+      "matches_after_build": true
+    },
+    "source_delta": {
+      "previous_source_sha256": "82164809c3bed5f120413b8084e38c84948f911a20b9f22168015b1f9b7bc21a",
+      "source_sha256": "6b06fbc81e9a2d96bbde7d32b6b57e15865a098ec7761de6fca8d1fa11919596",
+      "changed_sources": [
+        "crates/lrr/src/traits/upstream/source_trait_clauses.rs"
+      ],
+      "expected_delta": "cfg observer Span type qualification only"
+    }
+  },
+  "controls": [
+    {
+      "selector": "cli::preentry_loader_tests::upstream_bound_contexts::unchanged_where_self_sized_retains_item_and_bound_provenance_all_editions_and_origins",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+        "cli::preentry_loader_tests::upstream_bound_contexts::unchanged_where_self_sized_retains_item_and_bound_provenance_all_editions_and_origins",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 30.937,
+      "log": "control-0.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::upstream_bound_contexts::unchanged_filtered_trait_clauses_leave_unrelated_hrtb_unforced_all_editions_and_origins",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+        "cli::preentry_loader_tests::upstream_bound_contexts::unchanged_filtered_trait_clauses_leave_unrelated_hrtb_unforced_all_editions_and_origins",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 28.54,
+      "log": "control-1.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::upstream_bound_contexts::unchanged_selected_nested_associated_trait_bounds_remain_pending_all_editions_and_origins",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+        "cli::preentry_loader_tests::upstream_bound_contexts::unchanged_selected_nested_associated_trait_bounds_remain_pending_all_editions_and_origins",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 29.828,
+      "log": "control-2.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::upstream_bound_contexts::unchanged_explicit_sized_precedes_other_supertraits_all_editions_and_origins",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+        "cli::preentry_loader_tests::upstream_bound_contexts::unchanged_explicit_sized_precedes_other_supertraits_all_editions_and_origins",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 31.256,
+      "log": "control-3.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::upstream_bound_contexts::unchanged_implicit_metasized_precedes_copy_supertrait_all_editions_and_origins",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+        "cli::preentry_loader_tests::upstream_bound_contexts::unchanged_implicit_metasized_precedes_copy_supertrait_all_editions_and_origins",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 30.117,
+      "log": "control-4.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::upstream_projection_types::unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_editions_and_origins",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+        "cli::preentry_loader_tests::upstream_projection_types::unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_editions_and_origins",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 33.28,
+      "log": "control-5.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::upstream_item_bounds::unchanged_associated_output_bound_uses_actual_projection_span_and_typed_default_holds",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+        "cli::preentry_loader_tests::upstream_item_bounds::unchanged_associated_output_bound_uses_actual_projection_span_and_typed_default_holds",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 29.57,
+      "log": "control-6.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::upstream_source_clauses::unchanged_streaming_gat_clauses_use_pinned_parent_instantiation_all_editions_and_origins",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+        "cli::preentry_loader_tests::upstream_source_clauses::unchanged_streaming_gat_clauses_use_pinned_parent_instantiation_all_editions_and_origins",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 31.516,
+      "log": "control-7.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::upstream_source_clauses::unchanged_hrtb_parent_is_unforced_for_own_bundle_and_pending_for_hierarchy",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+        "cli::preentry_loader_tests::upstream_source_clauses::unchanged_hrtb_parent_is_unforced_for_own_bundle_and_pending_for_hierarchy",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 30.442,
+      "log": "control-8.log"
+    },
+    {
+      "selector": "cli::crate_graph::builtin_derive_tests::unchanged_associated_constructor_uses_reached_source_arguments_all_origins_and_editions",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+        "cli::crate_graph::builtin_derive_tests::unchanged_associated_constructor_uses_reached_source_arguments_all_origins_and_editions",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 51.277,
+      "log": "control-9.log"
+    },
+    {
+      "selector": "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+        "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 27.492,
+      "log": "control-10.log"
+    }
+  ],
+  "observed_control_counts": [
+    {
+      "exit": 0,
+      "seconds": 30.937,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "index": 0,
+      "worlds_observed": 12,
+      "own_recipes_observed": 24,
+      "filtered_recipes_observed": 48,
+      "encoded_clauses_observed": 48
+    },
+    {
+      "exit": 0,
+      "seconds": 28.54,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "index": 1,
+      "worlds_observed": 12,
+      "ready_filtered_queries_observed": 24,
+      "self_defaults_observed": 24,
+      "encoded_clauses_observed": 24
+    },
+    {
+      "exit": 0,
+      "seconds": 29.828,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "index": 2,
+      "worlds_observed": 12,
+      "pending_filtered_queries_observed": 24,
+      "associated_pending_rows_observed": 24,
+      "typed_encoding_refusals_observed": 24
+    },
+    {
+      "exit": 0,
+      "seconds": 31.256,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "index": 3,
+      "worlds_observed": 12,
+      "own_recipes_observed": 24,
+      "filtered_recipes_observed": 48,
+      "encoded_clauses_observed": 48
+    },
+    {
+      "exit": 0,
+      "seconds": 30.117,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "index": 4,
+      "worlds_observed": 12,
+      "own_recipes_observed": 24,
+      "filtered_recipes_observed": 48,
+      "encoded_clauses_observed": 48
+    },
+    {
+      "exit": 0,
+      "seconds": 33.28,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "index": 5,
+      "worlds_observed": 12,
+      "own_clauses_observed": 36,
+      "projected_subjects_observed": 12
+    },
+    {
+      "exit": 0,
+      "seconds": 29.57,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "index": 6,
+      "worlds_observed": 12,
+      "own_recipes_observed": 0,
+      "output_recipes_observed": 12,
+      "default_recipes_observed": 12
+    },
+    {
+      "exit": 0,
+      "seconds": 31.516,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "index": 7,
+      "worlds_observed": 12,
+      "parent_clauses_observed": 24,
+      "own_clauses_observed": 12,
+      "semantic_declarations_observed": 24
+    },
+    {
+      "exit": 0,
+      "seconds": 30.442,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "index": 8,
+      "worlds_observed": 12,
+      "own_ready_clauses_observed": 0,
+      "parent_pending_worlds_observed": 12
+    },
+    {
+      "exit": 0,
+      "seconds": 51.277,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "index": 9,
+      "worlds_observed": 12,
+      "operations_observed": 264,
+      "completed_operations_observed": 264
+    },
+    {
+      "exit": 0,
+      "seconds": 27.492,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "index": 10,
+      "worlds_observed": 4,
+      "operations_observed": 1624,
+      "completed_operations_observed": 1624
+    }
+  ],
+  "fixture_provenance": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "all_match": true,
+    "files": [
+      {
+        "path": "tests/ui/higher-ranked/trait-bounds/normalize-under-binder/issue-62529-1.rs",
+        "bytes": 2039,
+        "sha256": "122a054776fbbba6dcc40c9fb2d9b7e11310ecb740ca3167cceff6576e9dc472",
+        "pinned_git_bytes_equal": true,
+        "manifest_sha256_equal": true
+      },
+      {
+        "path": "tests/ui/implied-bounds/implied-bounds-unconstrained-1.rs",
+        "bytes": 630,
+        "sha256": "f2c036029e0410f97c9a69ba107e5d3747d7ec2584ced9750b4f458b8259c026",
+        "pinned_git_bytes_equal": true,
+        "manifest_sha256_equal": true
+      },
+      {
+        "path": "LICENSE-MIT",
+        "bytes": 1068,
+        "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+        "pinned_git_bytes_equal": true,
+        "manifest_sha256_equal": true
+      },
+      {
+        "path": "LICENSE-APACHE",
+        "bytes": 9723,
+        "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+        "pinned_git_bytes_equal": true,
+        "manifest_sha256_equal": true
+      },
+      {
+        "path": "COPYRIGHT",
+        "bytes": 1571,
+        "sha256": "172020dbfd5b53a226dfde77616190a48dcff519b0bc0e6deb91a8450782c4af",
+        "pinned_git_bytes_equal": true,
+        "manifest_sha256_equal": true
+      }
+    ]
+  },
+  "runtime_cases": [
+    {
+      "case": "tests/ui/associated-types/assoc-type-in-struct-constructor.rs",
+      "status": "runtime_contract_pass",
+      "mode": "run-pass",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "expected_files": [],
+      "reference_rules": [],
+      "diagnostic_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      },
+      "compiler_tooling_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      },
+      "runtime_expected_files": [],
+      "runtime_expected_files_asserted": false,
+      "extern_flags": [],
+      "blockers": [],
+      "source_sha256": "8b7183304d6ee634fb3484db7aa3a00ece816496df723a904754198475de58b3",
+      "capture_context": "02b1b0bf1751052cc42e60e669e8b96de5cc65d3adfd734cf4414175df57a4b2",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/associated-types/assoc-type-in-struct-constructor.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "02b1b0bf1751052cc42e60e669e8b96de5cc65d3adfd734cf4414175df57a4b2"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 0,
+        "pid": 70989,
+        "elapsed_seconds": 4.741431999951601,
+        "stdout_bytes": 2129,
+        "stdout_sha256": "3e7eda7fd6131f5aaf39424600f2317b2bbb3d3dedd38d1f522ed6d5568df6bc",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "guest_output": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "output_contract": "closed_managed_bytes; upstream run-pass has no output comparison without check-run-results"
+    },
+    {
+      "case": "tests/ui/enum-discriminant/repr128.rs",
+      "status": "interpreter_failure",
+      "mode": "run-pass",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "expected_files": [],
+      "reference_rules": [],
+      "diagnostic_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      },
+      "compiler_tooling_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      },
+      "runtime_expected_files": [],
+      "runtime_expected_files_asserted": false,
+      "extern_flags": [],
+      "blockers": [],
+      "source_sha256": "66af2eb56be2026a744d2169f8467d11df4c75e8ea21d204f0948db2c8e445bc",
+      "capture_context": "3dce628645babf6b1fd014945240fec648cce61f6f6afe1327971c553bd8e9c8",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/enum-discriminant/repr128.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "3dce628645babf6b1fd014945240fec648cce61f6f6afe1327971c553bd8e9c8"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 2,
+        "pid": 71002,
+        "elapsed_seconds": 3.9180090830195695,
+        "stdout_bytes": 7361,
+        "stdout_sha256": "8b9b95db6e410cb60ac9775f3e2708afd59aa83e0ae74a8b71000eb1055fd6fe",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "terminal": {
+        "code": "LRR-E-OP-TYPE",
+        "diagnostic": {
+          "code": "LRR-E-OP-TYPE",
+          "generated_origin": null,
+          "guest_stack": {
+            "frames": [
+              {
+                "body": {
+                  "body_key": {
+                    "definition": "33074ac0f1607fe1f4fefb6b006cb8c2dce8acbf6229a947ce59a6cc1b0e364d",
+                    "exact_body_bytes": "ed7db8f8338c976caf36d1c48e185c7c5fc506bd0b995e6c74c143c1011de48c"
+                  },
+                  "relative_end": 34,
+                  "relative_start": 5
+                },
+                "locations": [
+                  {
+                    "range": {
+                      "end": 632,
+                      "start": 614
+                    },
+                    "source": {
+                      "content": [
+                        155,
+                        127,
+                        234,
+                        71,
+                        72,
+                        246,
+                        170,
+                        156,
+                        133,
+                        235,
+                        20,
+                        40,
+                        159,
+                        70,
+                        229,
+                        127,
+                        155,
+                        148,
+                        12,
+                        2,
+                        56,
+                        219,
+                        163,
+                        47,
+                        145,
+                        85,
+                        31,
+                        242,
+                        45,
+                        248,
+                        177,
+                        237
+                      ],
+                      "path": "repr128.rs",
+                      "unit": [
+                        23,
+                        242,
+                        146,
+                        189,
+                        96,
+                        164,
+                        100,
+                        39,
+                        166,
+                        151,
+                        150,
+                        72,
+                        153,
+                        115,
+                        217,
+                        148,
+                        66,
+                        249,
+                        130,
+                        31,
+                        140,
+                        207,
+                        40,
+                        230,
+                        75,
+                        225,
+                        50,
+                        51,
+                        119,
+                        116,
+                        1,
+                        112
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 633,
+                      "start": 632
+                    },
+                    "source": {
+                      "content": [
+                        155,
+                        127,
+                        234,
+                        71,
+                        72,
+                        246,
+                        170,
+                        156,
+                        133,
+                        235,
+                        20,
+                        40,
+                        159,
+                        70,
+                        229,
+                        127,
+                        155,
+                        148,
+                        12,
+                        2,
+                        56,
+                        219,
+                        163,
+                        47,
+                        145,
+                        85,
+                        31,
+                        242,
+                        45,
+                        248,
+                        177,
+                        237
+                      ],
+                      "path": "repr128.rs",
+                      "unit": [
+                        23,
+                        242,
+                        146,
+                        189,
+                        96,
+                        164,
+                        100,
+                        39,
+                        166,
+                        151,
+                        150,
+                        72,
+                        153,
+                        115,
+                        217,
+                        148,
+                        66,
+                        249,
+                        130,
+                        31,
+                        140,
+                        207,
+                        40,
+                        230,
+                        75,
+                        225,
+                        50,
+                        51,
+                        119,
+                        116,
+                        1,
+                        112
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 634,
+                      "start": 633
+                    },
+                    "source": {
+                      "content": [
+                        155,
+                        127,
+                        234,
+                        71,
+                        72,
+                        246,
+                        170,
+                        156,
+                        133,
+                        235,
+                        20,
+                        40,
+                        159,
+                        70,
+                        229,
+                        127,
+                        155,
+                        148,
+                        12,
+                        2,
+                        56,
+                        219,
+                        163,
+                        47,
+                        145,
+                        85,
+                        31,
+                        242,
+                        45,
+                        248,
+                        177,
+                        237
+                      ],
+                      "path": "repr128.rs",
+                      "unit": [
+                        23,
+                        242,
+                        146,
+                        189,
+                        96,
+                        164,
+                        100,
+                        39,
+                        166,
+                        151,
+                        150,
+                        72,
+                        153,
+                        115,
+                        217,
+                        148,
+                        66,
+                        249,
+                        130,
+                        31,
+                        140,
+                        207,
+                        40,
+                        230,
+                        75,
+                        225,
+                        50,
+                        51,
+                        119,
+                        116,
+                        1,
+                        112
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 635,
+                      "start": 634
+                    },
+                    "source": {
+                      "content": [
+                        155,
+                        127,
+                        234,
+                        71,
+                        72,
+                        246,
+                        170,
+                        156,
+                        133,
+                        235,
+                        20,
+                        40,
+                        159,
+                        70,
+                        229,
+                        127,
+                        155,
+                        148,
+                        12,
+                        2,
+                        56,
+                        219,
+                        163,
+                        47,
+                        145,
+                        85,
+                        31,
+                        242,
+                        45,
+                        248,
+                        177,
+                        237
+                      ],
+                      "path": "repr128.rs",
+                      "unit": [
+                        23,
+                        242,
+                        146,
+                        189,
+                        96,
+                        164,
+                        100,
+                        39,
+                        166,
+                        151,
+                        150,
+                        72,
+                        153,
+                        115,
+                        217,
+                        148,
+                        66,
+                        249,
+                        130,
+                        31,
+                        140,
+                        207,
+                        40,
+                        230,
+                        75,
+                        225,
+                        50,
+                        51,
+                        119,
+                        116,
+                        1,
+                        112
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 636,
+                      "start": 635
+                    },
+                    "source": {
+                      "content": [
+                        155,
+                        127,
+                        234,
+                        71,
+                        72,
+                        246,
+                        170,
+                        156,
+                        133,
+                        235,
+                        20,
+                        40,
+                        159,
+                        70,
+                        229,
+                        127,
+                        155,
+                        148,
+                        12,
+                        2,
+                        56,
+                        219,
+                        163,
+                        47,
+                        145,
+                        85,
+                        31,
+                        242,
+                        45,
+                        248,
+                        177,
+                        237
+                      ],
+                      "path": "repr128.rs",
+                      "unit": [
+                        23,
+                        242,
+                        146,
+                        189,
+                        96,
+                        164,
+                        100,
+                        39,
+                        166,
+                        151,
+                        150,
+                        72,
+                        153,
+                        115,
+                        217,
+                        148,
+                        66,
+                        249,
+                        130,
+                        31,
+                        140,
+                        207,
+                        40,
+                        230,
+                        75,
+                        225,
+                        50,
+                        51,
+                        119,
+                        116,
+                        1,
+                        112
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 638,
+                      "start": 637
+                    },
+                    "source": {
+                      "content": [
+                        155,
+                        127,
+                        234,
+                        71,
+                        72,
+                        246,
+                        170,
+                        156,
+                        133,
+                        235,
+                        20,
+                        40,
+                        159,
+                        70,
+                        229,
+                        127,
+                        155,
+                        148,
+                        12,
+                        2,
+                        56,
+                        219,
+                        163,
+                        47,
+                        145,
+                        85,
+                        31,
+                        242,
+                        45,
+                        248,
+                        177,
+                        237
+                      ],
+                      "path": "repr128.rs",
+                      "unit": [
+                        23,
+                        242,
+                        146,
+                        189,
+                        96,
+                        164,
+                        100,
+                        39,
+                        166,
+                        151,
+                        150,
+                        72,
+                        153,
+                        115,
+                        217,
+                        148,
+                        66,
+                        249,
+                        130,
+                        31,
+                        140,
+                        207,
+                        40,
+                        230,
+                        75,
+                        225,
+                        50,
+                        51,
+                        119,
+                        116,
+                        1,
+                        112
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 645,
+                      "start": 640
+                    },
+                    "source": {
+                      "content": [
+                        155,
+                        127,
+                        234,
+                        71,
+                        72,
+                        246,
+                        170,
+                        156,
+                        133,
+                        235,
+                        20,
+                        40,
+                        159,
+                        70,
+                        229,
+                        127,
+                        155,
+                        148,
+                        12,
+                        2,
+                        56,
+                        219,
+                        163,
+                        47,
+                        145,
+                        85,
+                        31,
+                        242,
+                        45,
+                        248,
+                        177,
+                        237
+                      ],
+                      "path": "repr128.rs",
+                      "unit": [
+                        23,
+                        242,
+                        146,
+                        189,
+                        96,
+                        164,
+                        100,
+                        39,
+                        166,
+                        151,
+                        150,
+                        72,
+                        153,
+                        115,
+                        217,
+                        148,
+                        66,
+                        249,
+                        130,
+                        31,
+                        140,
+                        207,
+                        40,
+                        230,
+                        75,
+                        225,
+                        50,
+                        51,
+                        119,
+                        116,
+                        1,
+                        112
+                      ]
+                    }
+                  }
+                ],
+                "pc": "45ff7fbba05a76a39a706560a2131e7d346bbf3633baf154a39e035ed0f54627"
+              },
+              {
+                "body": {
+                  "body_key": {
+                    "definition": "6044d27a5688091034a91f94cb4b25981261249a923a162e8749bdf0433fa561",
+                    "exact_body_bytes": "98bc7e97873813c8be057143b8f709a60340495acea76d0cc2e5e2390a6bf400"
+                  },
+                  "relative_end": 22,
+                  "relative_start": 1
+                },
+                "locations": [
+                  {
+                    "range": {
+                      "end": 672,
+                      "start": 667
+                    },
+                    "source": {
+                      "content": [
+                        155,
+                        127,
+                        234,
+                        71,
+                        72,
+                        246,
+                        170,
+                        156,
+                        133,
+                        235,
+                        20,
+                        40,
+                        159,
+                        70,
+                        229,
+                        127,
+                        155,
+                        148,
+                        12,
+                        2,
+                        56,
+                        219,
+                        163,
+                        47,
+                        145,
+                        85,
+                        31,
+                        242,
+                        45,
+                        248,
+                        177,
+                        237
+                      ],
+                      "path": "repr128.rs",
+                      "unit": [
+                        23,
+                        242,
+                        146,
+                        189,
+                        96,
+                        164,
+                        100,
+                        39,
+                        166,
+                        151,
+                        150,
+                        72,
+                        153,
+                        115,
+                        217,
+                        148,
+                        66,
+                        249,
+                        130,
+                        31,
+                        140,
+                        207,
+                        40,
+                        230,
+                        75,
+                        225,
+                        50,
+                        51,
+                        119,
+                        116,
+                        1,
+                        112
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 673,
+                      "start": 672
+                    },
+                    "source": {
+                      "content": [
+                        155,
+                        127,
+                        234,
+                        71,
+                        72,
+                        246,
+                        170,
+                        156,
+                        133,
+                        235,
+                        20,
+                        40,
+                        159,
+                        70,
+                        229,
+                        127,
+                        155,
+                        148,
+                        12,
+                        2,
+                        56,
+                        219,
+                        163,
+                        47,
+                        145,
+                        85,
+                        31,
+                        242,
+                        45,
+                        248,
+                        177,
+                        237
+                      ],
+                      "path": "repr128.rs",
+                      "unit": [
+                        23,
+                        242,
+                        146,
+                        189,
+                        96,
+                        164,
+                        100,
+                        39,
+                        166,
+                        151,
+                        150,
+                        72,
+                        153,
+                        115,
+                        217,
+                        148,
+                        66,
+                        249,
+                        130,
+                        31,
+                        140,
+                        207,
+                        40,
+                        230,
+                        75,
+                        225,
+                        50,
+                        51,
+                        119,
+                        116,
+                        1,
+                        112
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 679,
+                      "start": 673
+                    },
+                    "source": {
+                      "content": [
+                        155,
+                        127,
+                        234,
+                        71,
+                        72,
+                        246,
+                        170,
+                        156,
+                        133,
+                        235,
+                        20,
+                        40,
+                        159,
+                        70,
+                        229,
+                        127,
+                        155,
+                        148,
+                        12,
+                        2,
+                        56,
+                        219,
+                        163,
+                        47,
+                        145,
+                        85,
+                        31,
+                        242,
+                        45,
+                        248,
+                        177,
+                        237
+                      ],
+                      "path": "repr128.rs",
+                      "unit": [
+                        23,
+                        242,
+                        146,
+                        189,
+                        96,
+                        164,
+                        100,
+                        39,
+                        166,
+                        151,
+                        150,
+                        72,
+                        153,
+                        115,
+                        217,
+                        148,
+                        66,
+                        249,
+                        130,
+                        31,
+                        140,
+                        207,
+                        40,
+                        230,
+                        75,
+                        225,
+                        50,
+                        51,
+                        119,
+                        116,
+                        1,
+                        112
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 680,
+                      "start": 679
+                    },
+                    "source": {
+                      "content": [
+                        155,
+                        127,
+                        234,
+                        71,
+                        72,
+                        246,
+                        170,
+                        156,
+                        133,
+                        235,
+                        20,
+                        40,
+                        159,
+                        70,
+                        229,
+                        127,
+                        155,
+                        148,
+                        12,
+                        2,
+                        56,
+                        219,
+                        163,
+                        47,
+                        145,
+                        85,
+                        31,
+                        242,
+                        45,
+                        248,
+                        177,
+                        237
+                      ],
+                      "path": "repr128.rs",
+                      "unit": [
+                        23,
+                        242,
+                        146,
+                        189,
+                        96,
+                        164,
+                        100,
+                        39,
+                        166,
+                        151,
+                        150,
+                        72,
+                        153,
+                        115,
+                        217,
+                        148,
+                        66,
+                        249,
+                        130,
+                        31,
+                        140,
+                        207,
+                        40,
+                        230,
+                        75,
+                        225,
+                        50,
+                        51,
+                        119,
+                        116,
+                        1,
+                        112
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 685,
+                      "start": 681
+                    },
+                    "source": {
+                      "content": [
+                        155,
+                        127,
+                        234,
+                        71,
+                        72,
+                        246,
+                        170,
+                        156,
+                        133,
+                        235,
+                        20,
+                        40,
+                        159,
+                        70,
+                        229,
+                        127,
+                        155,
+                        148,
+                        12,
+                        2,
+                        56,
+                        219,
+                        163,
+                        47,
+                        145,
+                        85,
+                        31,
+                        242,
+                        45,
+                        248,
+                        177,
+                        237
+                      ],
+                      "path": "repr128.rs",
+                      "unit": [
+                        23,
+                        242,
+                        146,
+                        189,
+                        96,
+                        164,
+                        100,
+                        39,
+                        166,
+                        151,
+                        150,
+                        72,
+                        153,
+                        115,
+                        217,
+                        148,
+                        66,
+                        249,
+                        130,
+                        31,
+                        140,
+                        207,
+                        40,
+                        230,
+                        75,
+                        225,
+                        50,
+                        51,
+                        119,
+                        116,
+                        1,
+                        112
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 686,
+                      "start": 685
+                    },
+                    "source": {
+                      "content": [
+                        155,
+                        127,
+                        234,
+                        71,
+                        72,
+                        246,
+                        170,
+                        156,
+                        133,
+                        235,
+                        20,
+                        40,
+                        159,
+                        70,
+                        229,
+                        127,
+                        155,
+                        148,
+                        12,
+                        2,
+                        56,
+                        219,
+                        163,
+                        47,
+                        145,
+                        85,
+                        31,
+                        242,
+                        45,
+                        248,
+                        177,
+                        237
+                      ],
+                      "path": "repr128.rs",
+                      "unit": [
+                        23,
+                        242,
+                        146,
+                        189,
+                        96,
+                        164,
+                        100,
+                        39,
+                        166,
+                        151,
+                        150,
+                        72,
+                        153,
+                        115,
+                        217,
+                        148,
+                        66,
+                        249,
+                        130,
+                        31,
+                        140,
+                        207,
+                        40,
+                        230,
+                        75,
+                        225,
+                        50,
+                        51,
+                        119,
+                        116,
+                        1,
+                        112
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 688,
+                      "start": 687
+                    },
+                    "source": {
+                      "content": [
+                        155,
+                        127,
+                        234,
+                        71,
+                        72,
+                        246,
+                        170,
+                        156,
+                        133,
+                        235,
+                        20,
+                        40,
+                        159,
+                        70,
+                        229,
+                        127,
+                        155,
+                        148,
+                        12,
+                        2,
+                        56,
+                        219,
+                        163,
+                        47,
+                        145,
+                        85,
+                        31,
+                        242,
+                        45,
+                        248,
+                        177,
+                        237
+                      ],
+                      "path": "repr128.rs",
+                      "unit": [
+                        23,
+                        242,
+                        146,
+                        189,
+                        96,
+                        164,
+                        100,
+                        39,
+                        166,
+                        151,
+                        150,
+                        72,
+                        153,
+                        115,
+                        217,
+                        148,
+                        66,
+                        249,
+                        130,
+                        31,
+                        140,
+                        207,
+                        40,
+                        230,
+                        75,
+                        225,
+                        50,
+                        51,
+                        119,
+                        116,
+                        1,
+                        112
+                      ]
+                    }
+                  },
+                  {
+                    "range": {
+                      "end": 689,
+                      "start": 688
+                    },
+                    "source": {
+                      "content": [
+                        155,
+                        127,
+                        234,
+                        71,
+                        72,
+                        246,
+                        170,
+                        156,
+                        133,
+                        235,
+                        20,
+                        40,
+                        159,
+                        70,
+                        229,
+                        127,
+                        155,
+                        148,
+                        12,
+                        2,
+                        56,
+                        219,
+                        163,
+                        47,
+                        145,
+                        85,
+                        31,
+                        242,
+                        45,
+                        248,
+                        177,
+                        237
+                      ],
+                      "path": "repr128.rs",
+                      "unit": [
+                        23,
+                        242,
+                        146,
+                        189,
+                        96,
+                        164,
+                        100,
+                        39,
+                        166,
+                        151,
+                        150,
+                        72,
+                        153,
+                        115,
+                        217,
+                        148,
+                        66,
+                        249,
+                        130,
+                        31,
+                        140,
+                        207,
+                        40,
+                        230,
+                        75,
+                        225,
+                        50,
+                        51,
+                        119,
+                        116,
+                        1,
+                        112
+                      ]
+                    }
+                  }
+                ],
+                "pc": "afec70fdf0c669b45660fe6ef3ad96133a9927a12d18b321011ab631bd6d131c"
+              }
+            ],
+            "omitted_frames": 0
+          },
+          "macro_origin": null,
+          "message": "operator requires supported concrete primitive operand descriptors",
+          "origin_attachment_failure": null,
+          "rendered_generated_origin": null,
+          "rendered_guest_stack": null,
+          "rendered_macro_origin": null
+        },
+        "message": "operator requires supported concrete primitive operand descriptors",
+        "phase": "executor",
+        "status": "fault"
+      }
+    },
+    {
+      "case": "tests/ui/generics/generic-derived-type.rs",
+      "status": "runtime_contract_pass",
+      "mode": "run-pass",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "expected_files": [],
+      "reference_rules": [],
+      "diagnostic_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      },
+      "compiler_tooling_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      },
+      "runtime_expected_files": [],
+      "runtime_expected_files_asserted": false,
+      "extern_flags": [],
+      "blockers": [],
+      "source_sha256": "59e07d17994d57e0175737319e69637680861a13e39a162cc2c12fe53e0ac06b",
+      "capture_context": "79ce35d1e90ffd35f91904186c515d47b2fbdc25f2333ba82114e3d85bc99e0d",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/generics/generic-derived-type.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "79ce35d1e90ffd35f91904186c515d47b2fbdc25f2333ba82114e3d85bc99e0d"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 0,
+        "pid": 71008,
+        "elapsed_seconds": 4.937656875001267,
+        "stdout_bytes": 2175,
+        "stdout_sha256": "41325e92b8889e1f3994f64a6293be92b2884726ec895f8c03c4c03a9ed4f17b",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "guest_output": {
+        "stderr": "",
+        "stdout": "10\n10\n"
+      },
+      "output_contract": "closed_managed_bytes; upstream run-pass has no output comparison without check-run-results"
+    },
+    {
+      "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+      "status": "runtime_contract_pass",
+      "mode": "run-pass",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "expected_files": [
+        "tests/ui/generics/empty-generic-brackets-equiv.stderr"
+      ],
+      "reference_rules": [],
+      "diagnostic_compatibility": {
+        "status": "outstanding",
+        "expected_files": [
+          "tests/ui/generics/empty-generic-brackets-equiv.stderr"
+        ]
+      },
+      "compiler_tooling_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      },
+      "runtime_expected_files": [],
+      "runtime_expected_files_asserted": false,
+      "extern_flags": [],
+      "blockers": [],
+      "source_sha256": "ef52000045d5cb79e9d4e037476032645f4ba4ac14dea08de0d444587939751b",
+      "capture_context": "a4ed0ee61ee596ea2be2ad87595fb1747ace3bbc5bf45d3b3b0f6da67175e0bd",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/generics/empty-generic-brackets-equiv.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "a4ed0ee61ee596ea2be2ad87595fb1747ace3bbc5bf45d3b3b0f6da67175e0bd"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 0,
+        "pid": 71018,
+        "elapsed_seconds": 3.887220000033267,
+        "stdout_bytes": 2123,
+        "stdout_sha256": "04a56525925a25106329bf0bf5d76f0e0fb0cc1780f7a1982126ca222134fe3e",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "guest_output": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "output_contract": "closed_managed_bytes; upstream run-pass has no output comparison without check-run-results"
+    }
+  ],
+  "runtime_summary": {
+    "selected_batch_passed": false,
+    "input_guard": "all_imported_originals_manifest_and_binary_unchanged",
+    "cases": [
+      {
+        "case": "tests/ui/associated-types/assoc-type-in-struct-constructor.rs",
+        "status": "runtime_contract_pass",
+        "edition": 2015,
+        "exit": 0,
+        "seconds": 4.741431999951601,
+        "checks_count": 13,
+        "all_checks": true,
+        "code": null,
+        "phase": null,
+        "message": null,
+        "guest_output": {
+          "stdout": "",
+          "stderr": ""
+        }
+      },
+      {
+        "case": "tests/ui/enum-discriminant/repr128.rs",
+        "status": "interpreter_failure",
+        "edition": 2015,
+        "exit": 2,
+        "seconds": 3.9180090830195695,
+        "checks_count": 0,
+        "all_checks": null,
+        "code": "LRR-E-OP-TYPE",
+        "phase": "executor",
+        "message": "operator requires supported concrete primitive operand descriptors",
+        "guest_output": null
+      },
+      {
+        "case": "tests/ui/generics/generic-derived-type.rs",
+        "status": "runtime_contract_pass",
+        "edition": 2015,
+        "exit": 0,
+        "seconds": 4.937656875001267,
+        "checks_count": 13,
+        "all_checks": true,
+        "code": null,
+        "phase": null,
+        "message": null,
+        "guest_output": {
+          "stderr": "",
+          "stdout": "10\n10\n"
+        }
+      },
+      {
+        "case": "tests/ui/generics/empty-generic-brackets-equiv.rs",
+        "status": "runtime_contract_pass",
+        "edition": 2015,
+        "exit": 0,
+        "seconds": 3.887220000033267,
+        "checks_count": 13,
+        "all_checks": true,
+        "code": null,
+        "phase": null,
+        "message": null,
+        "guest_output": {
+          "stdout": "",
+          "stderr": ""
+        }
+      }
+    ]
+  },
+  "runtime_input_guard": "all_imported_originals_manifest_and_binary_unchanged",
+  "runtime_comparison": {
+    "baseline": "worktracks/evidence/2026-10-20-v513-v514-ahead-preparation.json",
+    "new_distinct_runtime_passes": [],
+    "new_distinct_runtime_pass_count": 0,
+    "refreshed_full_suite_or_morning_delta": false
+  },
+  "audits": {
+    "bootstrap_exit": 0,
+    "pinned_files": 235,
+    "pinned_bytes": 4171712,
+    "original_rust_changes": 0,
+    "git_verified": true,
+    "vendor_exit": 0,
+    "default_bounds_exit": 0
+  },
+  "held_requirements": [
+    "Two negative parser controls remain held/unexecuted, not selected passes.",
+    "Cross-predicate filtered ordering is source-reviewed but unexecuted.",
+    "Alias-All parameter defaults, selected associated/HRTB/qualified clauses and no_implicit positive-bound role preparation remain typed holds.",
+    "Complete recursive compiler clauses/elaboration, complete typed fact producer, exact root/caller ParamEnv/inference-owner admission, response export and runtime/member migration remain open."
+  ],
+  "reviews": [
+    "worktracks/05-trait-goal-engine/2026-10-20-bound-context-provenance.md",
+    "worktracks/05-trait-goal-engine/2026-10-20-bound-provenance-review.md",
+    "worktracks/05-trait-goal-engine/2026-10-20-bound-context-review.md",
+    "worktracks/05-trait-goal-engine/2026-10-20-bound-context-final-review.md",
+    "worktracks/05-trait-goal-engine/2026-10-20-comparison-trait-source.md",
+    "worktracks/05-trait-goal-engine/2026-10-20-filtered-trait-clauses.md"
+  ],
+  "acceptance_scope": {
+    "focused_controls_passed": 11,
+    "focused_controls_selected": 11,
+    "stock_runtime_contract_passes_in_selected_batch": 3,
+    "stock_cases_selected": 4,
+    "new_distinct_runtime_gains": 0,
+    "complete_definition_factory": false,
+    "upstream_root_execution": false,
+    "full_fixture_acceptance": false,
+    "completed_spec_cards": [],
+    "upstream_runtime_acceptance": "incomplete",
+    "diagnostic_compatibility": "unassessed",
+    "compiler_tooling_compatibility": "unassessed",
+    "full_suite_compatibility": "incomplete",
+    "guest_jit_allowed": false
+  },
+  "raw_outputs_local_only": "artifacts/validation-current-v516",
+  "output_hashes": {
+    "artifacts/validation-current-v515/bootstrap-audit.log": "0a3183b9011c9a2fccebdb6a3b6e6ef46e83792ed1df4a573d177fa405249433",
+    "artifacts/validation-current-v515/build-terminal.json": "636f47d9b7a2064bfcc0c366edf543d5354999d72cc5b74c19a50aacd338ac00",
+    "artifacts/validation-current-v515/default-bounds-audit.log": "e80bf140fe61d42835fcf274e8a4e52859044c12325190e1dfaef48195235393",
+    "artifacts/validation-current-v515/digester-after-build.json": "94f59427522173b2164329b97e02f02b27e5c5f40ec39b76e4f298f432155e3f",
+    "artifacts/validation-current-v515/digester-after-runtime.json": "eed01f181f3340ad79ce73d4fc1fdadd1f24ee03222a625afbb14fa97ef39060",
+    "artifacts/validation-current-v515/lib-build.log": "a970da18c2fdaf500809995d578716f61ad0d12b0c0fd1bd4b0d27d21718d1ad",
+    "artifacts/validation-current-v515/terminals.json": "d32112042aab3889ec232fd627fbdb4a625f679553abc5a8e1a8df5d40e3e161",
+    "artifacts/validation-current-v515/vendor-audit.log": "e6326e56226204fbbc6723b245b703544bfc19fb92185746cc85683b99224186",
+    "artifacts/validation-current-v516/bootstrap-audit.log": "0a3183b9011c9a2fccebdb6a3b6e6ef46e83792ed1df4a573d177fa405249433",
+    "artifacts/validation-current-v516/build-terminal.json": "399a51f8ecb38a7e72d5da9d42b61143132c45d3eabe29151a6ce5821345f87b",
+    "artifacts/validation-current-v516/cli-build.log": "ff96020144db85bb3153dd7e4490d886dde29a0a5e360275c3ce7560cdcc36a9",
+    "artifacts/validation-current-v516/control-0.log": "7e58e4a9486aab2435c0b4ea46c31f626618204709e4ee69be8d43a21462bba9",
+    "artifacts/validation-current-v516/control-1.log": "bacfb3c8373b39f25aaf36ee66ebcb4ef4fbe92a7b90ca2a63e42c38f5e3bcc1",
+    "artifacts/validation-current-v516/control-10.log": "5ce360699b86e4492739b98f3d4616b0bf13f738b2027d09b3e710813f6acc44",
+    "artifacts/validation-current-v516/control-2.log": "14d10edfed1e09508962905e78b1afc6782ab81ed0334d6336ba10fe07503b1d",
+    "artifacts/validation-current-v516/control-3.log": "c8a7dc3197e52c372a4b734350964afeee29ed31e97f0311f2d576c4db451124",
+    "artifacts/validation-current-v516/control-4.log": "ea794a70975f942984b38d9bbdabde2876d7e140bef1a1b9f1944d24c28af715",
+    "artifacts/validation-current-v516/control-5.log": "6e6f49dba7d052e6a683369c4a28b81ef8d003a682cc0901b0c649b6fbd59528",
+    "artifacts/validation-current-v516/control-6.log": "e0b6089590caf674c587156eb2e237ecd5955e60b5d82359c89e017cf22a766f",
+    "artifacts/validation-current-v516/control-7.log": "68feedcc91e37aa2372a9f3a2302f42f7d567838f81556edea3d1214c45159dd",
+    "artifacts/validation-current-v516/control-8.log": "2d234b4c9d778ae96e75392edc59b995530f04447080f7cd5f22c462b38786e3",
+    "artifacts/validation-current-v516/control-9.log": "0bfc6eef51a7b55fc3306e4afdb633498df3ebf9c3cab12dfb824f0ea3ebff94",
+    "artifacts/validation-current-v516/control-results.json": "a295dd29efba361f50cfbb571dc808a0a040c933380bb92cc6d183a2b8a6b1c8",
+    "artifacts/validation-current-v516/controls-run.log": "6ba3bb1bab320643cb072f1a42a23214a82bc2f6a24486b7080ff69371230537",
+    "artifacts/validation-current-v516/default-bounds-audit.log": "e80bf140fe61d42835fcf274e8a4e52859044c12325190e1dfaef48195235393",
+    "artifacts/validation-current-v516/digester-after-build.json": "88081c323bca3052ea69bd49df43df8018afe7466f04e421ea75c8f0150902f7",
+    "artifacts/validation-current-v516/digester-after-runtime.json": "5b6c537861ea6dab7f26a1ea14f143fc1a67df0ffdc115928eb023853908f548",
+    "artifacts/validation-current-v516/lib-build.log": "bd08eedf005a08349daf4f2458623298ec75b8669f781e451a67fd5ab6425968",
+    "artifacts/validation-current-v516/new-fixture-provenance.json": "bc8e67bed437decd9e829d7183fc50c2fab6e04f8d8d820fa15acd1cf7b93ddd",
+    "artifacts/validation-current-v516/observed-control-counts.json": "d3fdf549745a86a3a3f60eefc6bb0b46c293742f9a59b1d3f6b4c75021a12723",
+    "artifacts/validation-current-v516/runtime-run.log": "4b057ae74ae4d6c9486a32ce36f5958265f288a456160923bdbbfa16338c343c",
+    "artifacts/validation-current-v516/runtime-summary.json": "b668d0727b35a1ffade83e38b0a72922109937d0b8bd3071eb5481f16b36a169",
+    "artifacts/validation-current-v516/source-delta.json": "6d20716ed8f0c6a039550358b0c57565c21001778ac03f264d49a99a3161625f",
+    "artifacts/validation-current-v516/source-digester-build.log": "a5559fda53231f769aaf3b342881d0b855ddd7359d911d537d90af71c08c238d",
+    "artifacts/validation-current-v516/terminals.json": "200f3a9899970875cf69e29f1450e5a8e97de9f3921a7d2263ed141726add867",
+    "artifacts/validation-current-v516/vendor-audit.log": "e6326e56226204fbbc6723b245b703544bfc19fb92185746cc85683b99224186"
+  }
+}

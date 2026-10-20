@@ -365,6 +365,8 @@ pub(crate) struct WrittenTypeDeclaration<'a> {
     parameter_rebase: Option<&'a std::collections::BTreeMap<crate::traits::term::ParamKey, crate::traits::term::ParamKey>>,
 }
 impl<'a> WrittenTypeDeclaration<'a> {
+    pub(crate) fn definition(&self) -> crate::core::digest::Digest { self.definition }
+    pub(crate) fn header_identity(&self) -> crate::core::digest::Digest { self.header.fingerprint() }
     /// A directly written parameter, before alias normalization. Used for
     /// declaration-bound identity, never a separate Type evaluator.
     pub(super) fn direct_type_parameter(
@@ -1511,10 +1513,22 @@ pub(super) enum ActualBoundSubject {
     RegionSyntax(ra_ap_syntax::ast::Lifetime),
     Missing,
 }
+/// Actual syntactic role assigned by the shared collector before lowering.
+/// A trait colon list and a matching Self where clause have different default
+/// bound semantics even when their lowered subjects are identical.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum ActualBoundSite {
+    TraitColon,
+    Parameter(crate::traits::term::ParamKey),
+    Where { predicate: crate::syntax::spans::SourceRange },
+    AssociatedOutput,
+}
 pub(super) struct ActualDeclarationBound {
     pub subject: ActualBoundSubject,
     pub bound: ra_ap_syntax::ast::TypeBound,
     pub where_binder: Option<ra_ap_syntax::ast::ForBinder>,
+    pub site: ActualBoundSite,
+    pub owner: crate::syntax::spans::SourceRange,
 }
 pub(super) struct ActualDeclarationBounds {
     pub bounds: Vec<ActualDeclarationBound>,
@@ -1529,6 +1543,7 @@ pub(super) fn actual_declaration_bound_syntax(
     use ra_ap_syntax::{AstNode, ast::{self, HasName, HasTypeBounds}};
     let mut result = ActualDeclarationBounds { bounds: Vec::new(), implicit_sized: Vec::new() };
     for scope in std::iter::once(owner.clone()).chain(actual_associated_owner(owner)) {
+        let source_owner = crate::syntax::ast_adapter::range(scope.text_range());
         if let Some(trait_owner) = ast::Trait::cast(scope.clone()) {
             let subject = declaration.generics.iter().rev().find(|parameter| parameter.name == "Self")
                 .map(|parameter| TyTerm::Param(ParamKey { definition: declaration.definition, ordinal: parameter.ordinal }));
@@ -1536,6 +1551,7 @@ pub(super) fn actual_declaration_bound_syntax(
                 result.bounds.push(ActualDeclarationBound {
                     subject: subject.clone().map_or(ActualBoundSubject::Missing, ActualBoundSubject::Type),
                     bound, where_binder: None,
+                    site: ActualBoundSite::TraitColon, owner: source_owner,
                 });
             }
         }
@@ -1564,6 +1580,7 @@ pub(super) fn actual_declaration_bound_syntax(
                         subject: if kind == GenericKind::Type { ActualBoundSubject::Type(TyTerm::Param(key)) }
                             else { ActualBoundSubject::Region(RegionTerm::Param(key)) },
                         bound, where_binder: None,
+                        site: ActualBoundSite::Parameter(key), owner: source_owner,
                     });
                 }
             }
@@ -1574,7 +1591,9 @@ pub(super) fn actual_declaration_bound_syntax(
                     let subject = if let Some(ty) = predicate.ty() { ActualBoundSubject::TypeSyntax(ty) }
                         else if let Some(region) = predicate.lifetime() { ActualBoundSubject::RegionSyntax(region) }
                         else { ActualBoundSubject::Missing };
-                    result.bounds.push(ActualDeclarationBound { subject, bound, where_binder: predicate.for_binder() });
+                    result.bounds.push(ActualDeclarationBound { subject, bound, where_binder: predicate.for_binder(),
+                        site: ActualBoundSite::Where { predicate: crate::syntax::ast_adapter::range(predicate.syntax().text_range()) },
+                        owner: source_owner });
                 }
             }
         }

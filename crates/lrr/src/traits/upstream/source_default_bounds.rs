@@ -246,16 +246,24 @@ impl PreparedSourceDefaultBounds {
         subject: &TyTerm,
         site: (Digest, SourceRange),
         context: DefaultBoundsContext,
-        written: &[SourcePredicateRecipe],
+        written: crate::frontend::source_predicates::DefaultBoundInputs<'_>,
     ) -> Result<Vec<SourcePredicateRecipe>, DefaultBoundsPending> {
         if let Some(p) = self.pending {
             return Err(p);
         }
         let header = self.header();
         let declaration = header.declaration();
-        let Some((parse, _, _, parsed)) = declaration.source_parts() else {
+        let Some((parse, _, declaration_context, parsed)) = declaration.source_parts() else {
             return Err(DefaultBoundsPending::Header);
         };
+        if !written.matches(
+            self.key.definition,
+            header.header().fingerprint(),
+            declaration_context.range,
+            context,
+        ) {
+            return Err(DefaultBoundsPending::Context);
+        }
         let header_span = header.span();
         if site.0 != parse.content
             || site.1.start < header_span.start
@@ -401,7 +409,7 @@ impl PreparedSourceDefaultBounds {
             return Err(DefaultBoundsPending::LanguageIdentity);
         }
         let mut selected = Vec::new();
-        for recipe in written.iter().filter(|_| !skips_written) {
+        for recipe in written.recipes().filter(|_| !skips_written) {
             match recipe {
                 SourcePredicateRecipe::Explicit { source, result } => {
                     if source.start < header_span.start || source.end > header_span.end {
@@ -477,7 +485,7 @@ impl PreparedSourceDefaultBounds {
     }
 }
 impl StableEncode for PreparedSourceDefaultBounds {
-    const DOMAIN: &'static str = "lrr/v1/source-default-bounds";
+    const DOMAIN: &'static str = "lrr/v2/source-default-bounds";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.digest(self.header.fingerprint());

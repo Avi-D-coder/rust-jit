@@ -96,7 +96,7 @@ pub struct PreparedSourceItemBounds {
     defaults: Vec<SourcePredicateRecipe>,
     subject: Option<TyTerm>,
     site: Option<(Digest, SourceRange)>,
-    written: Vec<SourcePredicateRecipe>,
+    written: Option<super::source_predicates::PreparedWrittenBounds>,
     parent_candidates: Vec<ParentItemBoundCandidate>,
     source_pending: Option<SourceItemBoundsPending>,
     parent_pending: Option<SourceItemBoundsPending>,
@@ -143,7 +143,13 @@ impl PreparedSourceItemBounds {
     pub(crate) fn written_recipes(
         &self,
     ) -> Result<&[SourcePredicateRecipe], SourceItemBoundsPending> {
-        self.source_pending.map_or(Ok(&self.written), Err)
+        if let Some(why) = self.source_pending {
+            return Err(why);
+        }
+        self.written
+            .as_ref()
+            .map(|written| written.recipes())
+            .ok_or(SourceItemBoundsPending::GenericLayout)
     }
     pub(crate) fn parent_candidates(
         &self,
@@ -184,7 +190,7 @@ impl PreparedSourceItemBounds {
             defaults: Vec::new(),
             subject: None,
             site: None,
-            written: Vec::new(),
+            written: None,
             parent_candidates: Vec::new(),
             source_pending: None,
             parent_pending: None,
@@ -343,7 +349,7 @@ impl PreparedSourceItemBounds {
             Some(self_type),
         );
         let core = environment.language_item_core(frame.profile());
-        result.written = ready!(super::source_predicates::prepare_output_bounds(
+        result.written = Some(ready!(super::source_predicates::prepare_output_bounds(
             db,
             environment.names(),
             &sources,
@@ -351,7 +357,7 @@ impl PreparedSourceItemBounds {
             &alias,
             &subject,
             core
-        ));
+        )));
         if let Some((parent_parse, parent_recipe, parent_context, parent_parsed)) =
             parent_declaration.source_parts()
         {
@@ -408,6 +414,16 @@ impl PreparedSourceItemBounds {
             return QueryPoll::Ready(Err(fault("actual source default-bound query differs")));
         };
         result.default_dependencies.clear();
+        if let Err(why) = result
+            .written
+            .as_mut()
+            .expect("captured actual output bounds")
+            .order_explicit_sized(policy)
+        {
+            result
+                .default_dependencies
+                .push(ItemBoundsDefaultDependency::Policy(why));
+        }
         for role in [
             SizednessRole::Sized,
             SizednessRole::MetaSized,
@@ -421,7 +437,11 @@ impl PreparedSourceItemBounds {
             &subject,
             result.site.expect("actual associated output site"),
             DefaultBoundsContext::AssociatedType,
-            &result.written,
+            result
+                .written
+                .as_ref()
+                .expect("captured actual output bounds")
+                .default_inputs(DefaultBoundsContext::AssociatedType),
         ) {
             Ok(defaults) => result.defaults = defaults,
             Err(why) => {
@@ -528,7 +548,7 @@ impl CurrentSourceItemBounds {
     }
 }
 impl StableEncode for PreparedSourceItemBounds {
-    const DOMAIN: &'static str = "lrr/v2/source-associated-item-bound-recipes";
+    const DOMAIN: &'static str = "lrr/v3/source-associated-item-bound-recipes";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.record(self.source());
@@ -552,7 +572,7 @@ impl StableEncode for PreparedSourceItemBounds {
             e.u32(source.start);
             e.u32(source.end);
         });
-        e.sequence(&self.written, |e, recipe| e.record(recipe));
+        e.option(&self.written, |e, written| e.record(written));
         e.sequence(&self.parent_candidates, |e, candidate| {
             e.digest(candidate.origin);
             e.record(&candidate.recipe);

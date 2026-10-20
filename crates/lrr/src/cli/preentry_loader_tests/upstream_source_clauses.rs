@@ -264,18 +264,18 @@ fn unchanged_hrtb_parent_is_unforced_for_own_bundle_and_pending_for_hierarchy() 
             let QueryValue::SourceDeclarationClauses(parent) = parent.value.as_ref() else {
                 unreachable!()
             };
-            // The actual parent now demands its trait-Self default policy.
-            // Its unsupported written HRTB row prevents that policy's complete
-            // source input before TypeIR clause encoding. The child own bundle
+            // TraitSelf defaults inspect only the empty colon list. The actual
+            // where HRTB remains an unsupported written clause, independently
+            // of its now-ready implicit MetaSized default. The child own bundle
             // above must still leave this entire parent demand cold.
             assert_eq!(
                 parent.pending(),
-                Some(SourceDeclarationClausesPending::Source(
-                    crate::frontend::declaration_source_predicates::DeclarationSourcePredicatesPending::DefaultBounds(
-                        crate::traits::upstream::source_default_bounds::DefaultBoundsPending::WrittenRecipe
+                Some(SourceDeclarationClausesPending::Recipe(
+                    crate::traits::upstream::source_predicates::SourcePredicatePending::Bound(
+                        crate::traits::predicate::PredicatePending::HigherRanked
                     )
                 )),
-                "actual parent default-bound input must remain explicitly pending"
+                "actual parent written HRTB must remain explicitly pending"
             );
             assert_cold(&db, before);
             own.require_current(&db).unwrap();

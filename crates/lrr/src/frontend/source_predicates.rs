@@ -5,14 +5,261 @@ use super::{
     source_types::{self, ActualBoundSubject, WrittenTypeDeclaration},
 };
 use crate::{
+    core::{
+        diagnostic::Diagnostic,
+        digest::{Digest, StableEncode, StableEncoder},
+    },
     db::{memo::Database, poll::QueryPoll},
     source::changes::PreparedSourceView,
     syntax::ast_adapter::range,
+    syntax::spans::SourceRange,
     traits::{
         predicate::{PredicatePending, PredicateResult, SourcePredicateRecipe},
-        term::{RegionTerm, TraitRef, TyTerm},
+        term::{ParamKey, RegionTerm, TraitRef, TyTerm},
+        upstream::source_default_bounds::DefaultBoundsContext,
     },
 };
+use std::collections::BTreeMap;
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum SourceBoundFilter {
+    All,
+    SelfOnly,
+    SelfAndAssociatedTypeBounds,
+}
+#[derive(Debug, Clone, Copy)]
+struct BoundSite {
+    site: source_types::ActualBoundSite,
+    owner: SourceRange,
+    parameter: Option<ParamKey>,
+}
+/// The compiler's two consumers use different lower_bounds scratch vectors.
+/// Declaration clauses have a fresh vector per predicate; filtered trait
+/// probes reuse one vector for all selected generic predicates.
+#[derive(Debug, Clone, Copy)]
+enum BoundOrdering {
+    Declaration,
+    TraitProbe,
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BoundList {
+    Source(source_types::ActualBoundSite),
+    GenericProbe,
+}
+/// Source-site identity is retained beside the one common lowered recipe list.
+/// Only actual source collection can construct a default input view.
+#[derive(Debug)]
+pub(crate) struct PreparedWrittenBounds {
+    definition: Digest,
+    header: Digest,
+    owner: SourceRange,
+    recipes: Vec<SourcePredicateRecipe>,
+    sites: BTreeMap<(u32, u32), BoundSite>,
+    ordering: BoundOrdering,
+}
+#[derive(Clone, Copy)]
+pub(crate) struct DefaultBoundInputs<'a> {
+    bounds: &'a PreparedWrittenBounds,
+    context: DefaultBoundsContext,
+}
+impl PreparedWrittenBounds {
+    pub(crate) fn recipes(&self) -> &[SourcePredicateRecipe] {
+        &self.recipes
+    }
+    pub(crate) fn into_recipes(self) -> Vec<SourcePredicateRecipe> {
+        self.recipes
+    }
+    pub(crate) fn default_inputs(&self, context: DefaultBoundsContext) -> DefaultBoundInputs<'_> {
+        DefaultBoundInputs {
+            bounds: self,
+            context,
+        }
+    }
+    /// Compiler order: TraitSelf defaults, colon bounds, parameter defaults,
+    /// then inline/where predicates. No lowering/planning is repeated here.
+    pub(crate) fn with_default_sets(
+        &self,
+        defaults: Vec<(DefaultBoundsContext, Vec<SourcePredicateRecipe>)>,
+    ) -> Vec<SourcePredicateRecipe> {
+        let colon = self
+            .recipes
+            .iter()
+            .take_while(|recipe| self.is_colon(recipe))
+            .count();
+        let mut result = Vec::new();
+        for (_, rows) in defaults
+            .iter()
+            .filter(|(context, _)| *context == DefaultBoundsContext::TraitSelf)
+        {
+            result.extend(rows.iter().cloned());
+        }
+        result.extend(self.recipes[..colon].iter().cloned());
+        for (_, rows) in defaults
+            .into_iter()
+            .filter(|(context, _)| *context != DefaultBoundsContext::TraitSelf)
+        {
+            result.extend(rows);
+        }
+        result.extend(self.recipes[colon..].iter().cloned());
+        result
+    }
+    /// rustc's lower_poly_trait_ref inserts each actual Sized clause at the
+    /// front of its current lower_bounds scratch vector. Its actual consumer
+    /// determines whether generic predicates share that vector. Retain
+    /// distinct source spans.
+    /// The role comes from the authenticated compiler-language receipt; a
+    /// same-spelled user trait cannot select this ordering rule.
+    pub(crate) fn order_explicit_sized(
+        &mut self,
+        policy: &crate::traits::upstream::source_default_bounds::PreparedSourceDefaultBounds,
+    ) -> Result<(), crate::traits::upstream::source_default_bounds::DefaultBoundsPending> {
+        use crate::traits::upstream::source_default_bounds::DefaultBoundsPending;
+        if policy.key().definition != self.definition {
+            return Err(DefaultBoundsPending::Context);
+        }
+        if let Some(why) = policy.pending() {
+            return Err(why);
+        }
+        if !self.recipes.iter().any(|recipe| {
+            matches!(
+                recipe,
+                SourcePredicateRecipe::Explicit {
+                    result: PredicateResult::Implemented(_),
+                    ..
+                }
+            )
+        }) {
+            return Ok(());
+        }
+        let sized = policy
+            .sizedness_identity("sized")
+            .ok_or(DefaultBoundsPending::LanguageIdentity)?;
+        if self.recipes.iter().any(|recipe| {
+            matches!(recipe,
+            SourcePredicateRecipe::Explicit { source, .. }
+                if !self.sites.contains_key(&(source.start, source.end)))
+        }) {
+            return Err(DefaultBoundsPending::SourceSite);
+        }
+        let mut current_list = None;
+        let mut list_start = 0;
+        let mut ordered = Vec::with_capacity(self.recipes.len());
+        for recipe in std::mem::take(&mut self.recipes) {
+            let (list, front) = match &recipe {
+                SourcePredicateRecipe::Explicit { source, result } => {
+                    let site = &self.sites[&(source.start, source.end)];
+                    let list = match (self.ordering, site.site) {
+                        (
+                            BoundOrdering::TraitProbe,
+                            source_types::ActualBoundSite::Parameter(_)
+                            | source_types::ActualBoundSite::Where { .. },
+                        ) => BoundList::GenericProbe,
+                        _ => BoundList::Source(site.site),
+                    };
+                    (
+                        Some((site.owner, list)),
+                        matches!(result,
+                        PredicateResult::Implemented(trait_ref) if trait_ref.trait_key == sized),
+                    )
+                }
+                _ => (None, false),
+            };
+            if list != current_list || list.is_none() {
+                list_start = ordered.len();
+                current_list = list;
+            }
+            if front {
+                ordered.insert(list_start, recipe);
+            } else {
+                ordered.push(recipe);
+            }
+        }
+        self.recipes = ordered;
+        Ok(())
+    }
+    pub(crate) fn with_defaults(
+        &self,
+        context: DefaultBoundsContext,
+        defaults: Vec<SourcePredicateRecipe>,
+    ) -> Vec<SourcePredicateRecipe> {
+        self.with_default_sets(vec![(context, defaults)])
+    }
+    fn is_colon(&self, recipe: &SourcePredicateRecipe) -> bool {
+        let SourcePredicateRecipe::Explicit { source, .. } = recipe else {
+            return false;
+        };
+        self.sites
+            .get(&(source.start, source.end))
+            .is_some_and(|site| matches!(site.site, source_types::ActualBoundSite::TraitColon))
+    }
+}
+impl DefaultBoundInputs<'_> {
+    pub(crate) fn matches(
+        &self,
+        definition: Digest,
+        header: Digest,
+        owner: SourceRange,
+        context: DefaultBoundsContext,
+    ) -> bool {
+        self.bounds.definition == definition
+            && self.bounds.header == header
+            && self.bounds.owner == owner
+            && self.context == context
+    }
+    pub(crate) fn recipes(&self) -> impl Iterator<Item = &SourcePredicateRecipe> {
+        self.bounds.recipes.iter().filter(|recipe| {
+            let SourcePredicateRecipe::Explicit { source, .. } = recipe else {
+                return false;
+            };
+            let Some(site) = self.bounds.sites.get(&(source.start, source.end)) else {
+                return false;
+            };
+            match self.context {
+                DefaultBoundsContext::TraitSelf => {
+                    matches!(site.site, source_types::ActualBoundSite::TraitColon)
+                }
+                DefaultBoundsContext::TypeParameter(key) => site.parameter == Some(key),
+                DefaultBoundsContext::AssociatedType => {
+                    matches!(site.site, source_types::ActualBoundSite::AssociatedOutput)
+                }
+            }
+        })
+    }
+}
+impl StableEncode for PreparedWrittenBounds {
+    const DOMAIN: &'static str = "lrr/v2/source-written-bound-sites";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        e.digest(self.definition);
+        e.digest(self.header);
+        e.u32(self.owner.start);
+        e.u32(self.owner.end);
+        e.u32(match self.ordering {
+            BoundOrdering::Declaration => 0,
+            BoundOrdering::TraitProbe => 1,
+        });
+        e.sequence(&self.recipes, |e, recipe| e.record(recipe));
+        e.map(&self.sites, |e, (start, end), site| {
+            e.u32(*start);
+            e.u32(*end);
+            e.u32(site.owner.start);
+            e.u32(site.owner.end);
+            match site.site {
+                source_types::ActualBoundSite::TraitColon => e.u32(0),
+                source_types::ActualBoundSite::Parameter(key) => {
+                    e.u32(1);
+                    e.record(&key);
+                }
+                source_types::ActualBoundSite::Where { predicate } => {
+                    e.u32(2);
+                    e.u32(predicate.start);
+                    e.u32(predicate.end);
+                }
+                source_types::ActualBoundSite::AssociatedOutput => e.u32(3),
+            }
+            e.option(&site.parameter, |e, key| e.record(key));
+        });
+    }
+}
 use ra_ap_syntax::{
     AstNode,
     ast::{self, HasGenericArgs, HasTypeBounds},
@@ -26,7 +273,11 @@ pub(crate) fn prepare(
     owner: &ra_ap_syntax::SyntaxNode,
     core: Option<crate::core::digest::Digest>,
 ) -> QueryPoll<Vec<SourcePredicateRecipe>> {
-    prepare_selected(db, graph, sources, declaration, owner, core, None)
+    match prepare_selected(db, graph, sources, declaration, owner, core, None) {
+        QueryPoll::Ready(Ok(bounds)) => QueryPoll::Ready(Ok(bounds.into_recipes())),
+        QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+    }
 }
 
 /// Own declaration bounds through the same collector and Type walk. Parent
@@ -44,7 +295,7 @@ pub(crate) fn prepare_own(
     core: Option<crate::core::digest::Digest>,
     own_parameters: u32,
     self_type: Option<&TyTerm>,
-) -> QueryPoll<Vec<SourcePredicateRecipe>> {
+) -> QueryPoll<PreparedWrittenBounds> {
     prepare_selected(
         db,
         graph,
@@ -64,14 +315,12 @@ fn prepare_selected(
     owner: &ra_ap_syntax::SyntaxNode,
     core: Option<crate::core::digest::Digest>,
     own: Option<(u32, Option<&TyTerm>)>,
-) -> QueryPoll<Vec<SourcePredicateRecipe>> {
+) -> QueryPoll<PreparedWrittenBounds> {
     let missing_self = matches!(own, Some((_, None)));
     let mut actual = source_types::actual_declaration_bound_syntax(declaration, owner);
     if let Some((_own_parameters, self_type)) = own {
-        let owner_range = owner.text_range();
-        actual
-            .bounds
-            .retain(|row| owner_range.contains_range(row.bound.syntax().text_range()));
+        let owner_range = range(owner.text_range());
+        actual.bounds.retain(|row| row.owner == owner_range);
         // Own-source defaults are supplied by the retained Q84 compiler policy.
         // Do not run the legacy simple-Sized filter and discard its result.
         actual.implicit_sized.clear();
@@ -80,13 +329,7 @@ fn prepare_selected(
         if ast::Trait::can_cast(owner.kind()) {
             for row in &mut actual.bounds {
                 if matches!(row.subject, ActualBoundSubject::Missing)
-                    && row
-                        .bound
-                        .syntax()
-                        .parent()
-                        .and_then(|list| list.parent())
-                        .as_ref()
-                        == Some(owner)
+                    && row.site == source_types::ActualBoundSite::TraitColon
                     && let Some(self_type) = self_type
                 {
                     row.subject = ActualBoundSubject::Type(self_type.clone());
@@ -94,7 +337,161 @@ fn prepare_selected(
             }
         }
     }
-    prepare_bound_rows(db, graph, sources, declaration, actual, core, missing_self)
+    prepare_written_rows(
+        db,
+        graph,
+        sources,
+        declaration,
+        owner,
+        actual,
+        core,
+        missing_self,
+        BoundOrdering::Declaration,
+    )
+}
+
+/// Same source collector/lowerer as explicit-own preparation. The compiler's
+/// requested subject domain is selected before Type/name/binder preparation.
+pub(crate) fn prepare_filtered_trait_bounds(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    declaration: &WrittenTypeDeclaration<'_>,
+    owner: &ra_ap_syntax::SyntaxNode,
+    core: Option<Digest>,
+    self_type: &TyTerm,
+    filter: SourceBoundFilter,
+) -> QueryPoll<PreparedWrittenBounds> {
+    let mut actual = source_types::actual_declaration_bound_syntax(declaration, owner);
+    actual.implicit_sized.clear();
+    let own_range = range(owner.text_range());
+    actual.bounds.retain(|row| {
+        if row.owner != own_range {
+            return false;
+        }
+        if row.site == source_types::ActualBoundSite::TraitColon {
+            return true;
+        }
+        if filter == SourceBoundFilter::All {
+            // probe_ty_param_bounds_in_generics skips region predicates.
+            return !matches!(
+                row.subject,
+                ActualBoundSubject::Region(_) | ActualBoundSubject::RegionSyntax(_)
+            );
+        }
+        if !matches!(row.site, source_types::ActualBoundSite::Where { .. }) {
+            return false;
+        }
+        match &row.subject {
+            ActualBoundSubject::Type(ty) => ty == self_type,
+            ActualBoundSubject::TypeSyntax(ty) => direct_self_type(ty),
+            _ => false,
+        }
+    });
+    for row in &mut actual.bounds {
+        if row.site == source_types::ActualBoundSite::TraitColon {
+            row.subject = ActualBoundSubject::Type(self_type.clone());
+        }
+    }
+    // Associated constraints still enter the one lowerer. Its explicit
+    // AssociatedIdentity pending is retained, including equality constraints;
+    // no pending row is dropped to claim complete filtered clauses.
+    prepare_written_rows(
+        db,
+        graph,
+        sources,
+        declaration,
+        owner,
+        actual,
+        core,
+        false,
+        BoundOrdering::TraitProbe,
+    )
+}
+fn direct_self_type(ty: &ast::Type) -> bool {
+    let mut ty = ty.clone();
+    while let ast::Type::ParenType(paren) = &ty {
+        let Some(inner) = paren.ty() else {
+            return false;
+        };
+        ty = inner;
+    }
+    let ast::Type::PathType(path) = ty else {
+        return false;
+    };
+    let Some(path) = path.path() else {
+        return false;
+    };
+    path.qualifier().is_none()
+        && path.coloncolon_token().is_none()
+        && path.segment().is_some_and(|segment| {
+            segment.kind() == Some(ast::PathSegmentKind::SelfTypeKw)
+                && segment.generic_arg_list().is_none()
+                && segment.parenthesized_arg_list().is_none()
+        })
+}
+fn prepare_written_rows(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    declaration: &WrittenTypeDeclaration<'_>,
+    owner: &ra_ap_syntax::SyntaxNode,
+    actual: source_types::ActualDeclarationBounds,
+    core: Option<Digest>,
+    missing_self: bool,
+    ordering: BoundOrdering,
+) -> QueryPoll<PreparedWrittenBounds> {
+    let mut sites = BTreeMap::new();
+    for row in &actual.bounds {
+        let source = range(row.bound.syntax().text_range());
+        let parameter = match &row.subject {
+            ActualBoundSubject::Type(TyTerm::Param(key)) => Some(*key),
+            ActualBoundSubject::TypeSyntax(ty) => match declaration.direct_type_parameter(ty) {
+                Ok(parameter) => parameter,
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            },
+            _ => None,
+        };
+        if sites
+            .insert(
+                (source.start, source.end),
+                BoundSite {
+                    site: row.site,
+                    owner: row.owner,
+                    parameter,
+                },
+            )
+            .is_some()
+        {
+            return QueryPoll::Ready(Err(Diagnostic::new(
+                "LRR-E-SOURCE-BOUND-SITE",
+                "duplicate actual bound site".into(),
+            )));
+        }
+    }
+    let recipes =
+        match prepare_bound_rows(db, graph, sources, declaration, actual, core, missing_self) {
+            QueryPoll::Ready(Ok(recipes)) => recipes,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+    if recipes.iter().any(|recipe| {
+        matches!(recipe, SourcePredicateRecipe::Explicit { source,.. }
+        if !sites.contains_key(&(source.start,source.end)))
+    }) {
+        return QueryPoll::Ready(Err(Diagnostic::new(
+            "LRR-E-SOURCE-BOUND-SITE",
+            "lowered bound lacks actual site".into(),
+        )));
+    }
+    QueryPoll::Ready(Ok(PreparedWrittenBounds {
+        definition: declaration.definition(),
+        header: declaration.header_identity(),
+        owner: range(owner.text_range()),
+        recipes,
+        sites,
+        ordering,
+    }))
 }
 
 /// Actual written associated output bounds with the caller's authenticated
@@ -107,7 +504,7 @@ pub(crate) fn prepare_output_bounds(
     alias: &ast::TypeAlias,
     subject: &TyTerm,
     core: Option<crate::core::digest::Digest>,
-) -> QueryPoll<Vec<SourcePredicateRecipe>> {
+) -> QueryPoll<PreparedWrittenBounds> {
     let actual = source_types::ActualDeclarationBounds {
         bounds: alias
             .type_bound_list()
@@ -117,11 +514,23 @@ pub(crate) fn prepare_output_bounds(
                 subject: ActualBoundSubject::Type(subject.clone()),
                 bound,
                 where_binder: None,
+                site: source_types::ActualBoundSite::AssociatedOutput,
+                owner: range(alias.syntax().text_range()),
             })
             .collect(),
         implicit_sized: Vec::new(),
     };
-    prepare_bound_rows(db, graph, sources, declaration, actual, core, false)
+    prepare_written_rows(
+        db,
+        graph,
+        sources,
+        declaration,
+        alias.syntax(),
+        actual,
+        core,
+        false,
+        BoundOrdering::Declaration,
+    )
 }
 
 /// Retain only actual parent where-bound candidates in its source/name frame.

@@ -1597,6 +1597,13 @@
       "upstream_sha256": "fd929ad293f584e1ca8530b25a83e52bdc708d7ae3c3df56a3f482c915b01c47"
     },
     {
+      "path": "library/core/src/cmp.rs",
+      "bytes": 85845,
+      "sha256": "437c8518b75c076da2437f913d95a07ff8c2bbfe8ae1dcce2571db1dcb9e7980",
+      "upstream": "library/core/src/cmp.rs",
+      "upstream_sha256": "437c8518b75c076da2437f913d95a07ff8c2bbfe8ae1dcce2571db1dcb9e7980"
+    },
+    {
       "path": "library/core/src/marker.rs",
       "bytes": 52981,
       "sha256": "95ffa834dd6e2a8214c6e8a919cd69f4602982021b09571efc71fc2386440223",
@@ -1742,6 +1749,7 @@
     "compiler/rustc_trait_selection/src/traits/util.rs",
     "compiler/rustc_trait_selection/src/traits/wf.rs",
     "compiler/rustc_ty_utils/src/ty.rs",
+    "library/core/src/cmp.rs",
     "library/core/src/marker.rs",
     "src/tools/rust-analyzer/crates/hir-ty/src/lib.rs",
     "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/mod.rs",

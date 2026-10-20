@@ -2153,11 +2153,28 @@
         "worktracks/05-trait-goal-engine/2026-10-20-ahead-preparation-review.md",
         "worktracks/05-trait-goal-engine/2026-10-20-ahead-preparation-controls.json",
         "worktracks/05-trait-goal-engine/2026-10-20-preflight-dependency-review.md",
-        "worktracks/05-trait-goal-engine/2026-10-20-query-domain-fact-factory.md"
+        "worktracks/05-trait-goal-engine/2026-10-20-query-domain-fact-factory.md",
+        "crates/lrr/src/cli/preentry_loader_tests/upstream_bound_contexts.rs",
+        "crates/lrr/src/traits/upstream/source_trait_clauses.rs",
+        "fixtures/upstream/rustc-checkout/tests/ui/higher-ranked/trait-bounds/normalize-under-binder/issue-62529-1.rs",
+        "fixtures/upstream/rustc-checkout/tests/ui/implied-bounds/implied-bounds-unconstrained-1.rs",
+        "vendor/rustc-trait-solver/library/core/src/cmp.rs",
+        "worktracks/05-trait-goal-engine/2026-10-20-bound-context-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-bound-context-final-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-bound-context-provenance.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-bound-context-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-bound-provenance-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-comparison-trait-source.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-filtered-trait-clauses.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-source-implied-closure.md",
+        "crates/lrr/facade/core/cmp.rs",
+        "crates/lrr/src/traits/upstream/mod.rs",
+        "crates/lrr/src/traits/upstream/source_default_bounds.rs",
+        "worktracks/evidence/2026-10-20-v515-v516-bound-contexts.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-20T21:40:07.569223+00:00",
+      "updated_at": "2026-10-20T22:13:37.862292+00:00",
       "review_after": "2026-10-20T10:52:01.627878+00:00",
       "shared_interfaces": [
         {
@@ -2503,10 +2520,82 @@
             "fixtures/upstream/rustc-checkout/manifest.json"
           ],
           "scope": "Same-root incremental unchanged GAT source witness import; existing original licenses retained, no fixture/runtime acceptance claim."
+        },
+        {
+          "claim": "LOCAL-046",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/cli/preentry_loader.rs"
+          ],
+          "scope": "Same implementing root owns the existing reservation and the common bound provenance/Q88 integration; exact path remains exclusively reserved under the existing claim. No ownership transfer or additional writer."
+        },
+        {
+          "claim": "LOCAL-046",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/cli/preentry_loader_tests.rs"
+          ],
+          "scope": "Same implementing root owns the existing reservation and the common bound provenance/Q88 integration; exact path remains exclusively reserved under the existing claim. No ownership transfer or additional writer."
+        },
+        {
+          "claim": "LOCAL-037",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/db/key.rs"
+          ],
+          "scope": "Same implementing root owns the existing reservation and the common bound provenance/Q88 integration; exact path remains exclusively reserved under the existing claim. No ownership transfer or additional writer."
+        },
+        {
+          "claim": "LOCAL-044",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/db/provider.rs"
+          ],
+          "scope": "Same implementing root owns the existing reservation and the common bound provenance/Q88 integration; exact path remains exclusively reserved under the existing claim. No ownership transfer or additional writer."
+        },
+        {
+          "claim": "LOCAL-037",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/db/value.rs"
+          ],
+          "scope": "Same implementing root owns the existing reservation and the common bound provenance/Q88 integration; exact path remains exclusively reserved under the existing claim. No ownership transfer or additional writer."
+        },
+        {
+          "claim": "LOCAL-047",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/frontend/source_predicates.rs"
+          ],
+          "scope": "Same implementing root owns the existing reservation and the common bound provenance/Q88 integration; exact path remains exclusively reserved under the existing claim. No ownership transfer or additional writer."
+        },
+        {
+          "claim": "LOCAL-037",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/frontend/source_types.rs"
+          ],
+          "scope": "Same implementing root owns the existing reservation and the common bound provenance/Q88 integration; exact path remains exclusively reserved under the existing claim. No ownership transfer or additional writer."
+        },
+        {
+          "claim": "LOCAL-046",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/service/expansion.rs"
+          ],
+          "scope": "Same implementing root owns the existing reservation and the common bound provenance/Q88 integration; exact path remains exclusively reserved under the existing claim. No ownership transfer or additional writer."
+        },
+        {
+          "claim": "LOCAL-037",
+          "owner": "/root",
+          "paths": [
+            "fixtures/upstream/rustc-checkout/manifest.json"
+          ],
+          "scope": "Same implementing root owns the existing reservation and the common bound provenance/Q88 integration; exact path remains exclusively reserved under the existing claim. No ownership transfer or additional writer."
         }
       ],
-      "latest_component_scope": "V513/V514 HELD M020 ahead-of-entry source preparation. Q85 authentic trait flags/configuration/lang roles, pinned DiscriminantKind nine output bounds and auto Send/Sync/Unpin source; Q86 actual impl identity/modifiers/conditional constness/head, genuine inferred-outlives empty and independently authenticated null clauses_of branch; Q87 actual alias argument namespaces through DeclarationParameters/Q77, replacing the Q83 always-pending marker method. Super-outlives/elaboration, complete compiler predicate families, per-query fact publication and an actual root-bound readiness certificate remain unfinished. V513 lib101 E0433/E0277 preserved; V514 fixes only helper module path and retained inventory fingerprint. All three fresh builds and six controls pass at 1ff6d8be1242d77b67a888276b41836cf5319ea62f043cebecdaaf208cb85b70 /8720inputs with exact closing source/HEAD/test/CLI/digester guards. Controls cover four editions/original-user-wrapper source, actual seven facade trait flags and nine output bounds per repr world, two primitive impl null-clause domains, GAT real namespaces and generic non-null hold, memo/cold/currentness plus constructor regressions. Owning2015 stock runtime remains3/4pass13checks each; repr128 executor LRR-E-OP-TYPE/noChecks, zero new distinct runtime gain or refreshed total. Two negative controls remain held/unexecuted. Reviews also identify existing PartialEq facade drift and trait colon-vs-where default-policy gap as next shared-source repair. Host abort policy retained; guest unwinding separate. No task/milestone, root, architecture, interpreter, JIT, full-suite, Linux or performance gate closed."
+      "latest_component_scope": "V515/V516 HELD M020 bound-context preparation. Shared actual owner/site/parameter provenance replaces Q84 flattened written input; Q78/Q82/Q88 retain one lowerer and encoder. Q88 filters before unrelated Type/HRTB preparation, retains selected nested associated pending, records immediate dependencies only. Pinned cmp const trait headers/PointeeSized bounds restored without changing method bodies. Authenticated Sized insertion/default prefix respects Declaration versus TraitProbe domains. V515 lib101 E0574 cfg observer preserved; V516 qualifies model::Span only. Three fresh builds/all11 controls pass at 6b06fbc81e9a2d96bbde7d32b6b57e15865a098ec7761de6fca8d1fa11919596 /8725inputs, with source/HEAD/test/CLI/DG closing guards. New5 controls each cover12 edition/original-user-wrapper worlds; existing6 source/constructor controls pass. Owning2015 runtime remains3/4pass13checks each, repr128 executor LRR-E-OP-TYPE/noChecks; zero new runtime gains or refreshed suite total. Audits all0,235 pinned files/4171712bytes/originalRustChanges0/Gitverified. Two negative controls and cross-predicate filtered ordering execution remain unexecuted; complete recursive clauses/elaboration, typed fact producer, exact root/caller ParamEnv/inference owner and VM migration remain held. No task/milestone, architecture, interpreter, JIT, full-fixture, Linux or performance gate closed."
     }
   ],
-  "updated_at": "2026-10-20T21:40:07.569223+00:00"
+  "updated_at": "2026-10-20T22:13:37.862292+00:00"
 }

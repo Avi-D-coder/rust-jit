@@ -17,6 +17,7 @@ pub(crate) mod source_default_bounds;
 pub(crate) mod source_definition_semantics;
 pub(crate) mod source_alias_layouts;
 pub(crate) mod source_trait_semantics;
+pub(crate) mod source_trait_clauses;
 pub(crate) mod source_impl_semantics;
 mod lang_names;
 mod source_bindings;

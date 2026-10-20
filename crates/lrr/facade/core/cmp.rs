@@ -1,15 +1,32 @@
 // `core::cmp`.
-use crate::marker::Sized;
+use crate::marker::{PointeeSized, Sized};
 use crate::option::Option;
 
-pub trait PartialEq<Rhs: ?Sized = Self> {
+// Pinned library/core/src/cmp.rs:253 (MIT OR Apache-2.0).
+#[lang = "eq"]
+#[stable(feature = "rust1", since = "1.0.0")]
+#[doc(alias = "==")]
+#[doc(alias = "!=")]
+#[diagnostic::on_unimplemented(
+    message = "can't compare `{Self}` with `{Rhs}`",
+    label = "no implementation for `{Self} == {Rhs}`"
+)]
+#[rustc_diagnostic_item = "PartialEq"]
+#[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
+pub const trait PartialEq<Rhs: PointeeSized = Self>: PointeeSized {
     fn eq(&self, other: &Rhs) -> bool;
     fn ne(&self, other: &Rhs) -> bool {
         !self.eq(other)
     }
 }
 
-pub trait Eq: PartialEq<Self> {}
+// Pinned library/core/src/cmp.rs:353 (MIT OR Apache-2.0).
+#[doc(alias = "==")]
+#[doc(alias = "!=")]
+#[stable(feature = "rust1", since = "1.0.0")]
+#[rustc_diagnostic_item = "Eq"]
+#[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
+pub const trait Eq: [const] PartialEq<Self> + PointeeSized {}
 
 pub enum Ordering {
     Less = -1,
@@ -91,7 +108,23 @@ impl crate::fmt::Debug for Ordering {
     }
 }
 
-pub trait PartialOrd<Rhs: ?Sized = Self>: PartialEq<Rhs> {
+// Pinned library/core/src/cmp.rs:1458 (MIT OR Apache-2.0).
+#[lang = "partial_ord"]
+#[stable(feature = "rust1", since = "1.0.0")]
+#[doc(alias = ">")]
+#[doc(alias = "<")]
+#[doc(alias = "<=")]
+#[doc(alias = ">=")]
+#[diagnostic::on_unimplemented(
+    message = "can't compare `{Self}` with `{Rhs}`",
+    label = "no implementation for `{Self} < {Rhs}` and `{Self} > {Rhs}`"
+)]
+#[rustc_diagnostic_item = "PartialOrd"]
+#[allow(multiple_supertrait_upcastable)] // FIXME(sized_hierarchy): remove this
+#[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
+pub const trait PartialOrd<Rhs: PointeeSized = Self>:
+    [const] PartialEq<Rhs> + PointeeSized
+{
     fn partial_cmp(&self, other: &Rhs) -> Option<Ordering>;
     fn lt(&self, other: &Rhs) -> bool {
         match self.partial_cmp(other) {
@@ -119,7 +152,15 @@ pub trait PartialOrd<Rhs: ?Sized = Self>: PartialEq<Rhs> {
     }
 }
 
-pub trait Ord: Eq + PartialOrd<Self> {
+// Pinned library/core/src/cmp.rs:1045 (MIT OR Apache-2.0).
+#[doc(alias = "<")]
+#[doc(alias = ">")]
+#[doc(alias = "<=")]
+#[doc(alias = ">=")]
+#[stable(feature = "rust1", since = "1.0.0")]
+#[rustc_diagnostic_item = "Ord"]
+#[rustc_const_unstable(feature = "const_cmp", issue = "143800")]
+pub const trait Ord: [const] Eq + [const] PartialOrd<Self> + PointeeSized {
     fn cmp(&self, other: &Self) -> Ordering;
     fn max(self, other: Self) -> Self
     where
