@@ -20219,12 +20219,20 @@
         "worktracks/05-trait-goal-engine/2026-10-19-typed-source-generics-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-typed-source-generics-controls.json",
         "worktracks/05-trait-goal-engine/2026-10-19-typed-source-generics-probe.json",
-        "worktracks/evidence/2026-10-20-v471-v478-upstream-discriminant.json"
+        "worktracks/evidence/2026-10-20-v471-v478-upstream-discriminant.json",
+        "worktracks/evidence/2026-10-20-v513-v514-ahead-preparation.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-source-trait-semantics.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-source-impl-semantics.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-source-alias-layouts.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-ahead-preparation-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-ahead-preparation-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-preflight-dependency-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-query-domain-fact-factory.md"
       ],
       "title": "Impl and trait header lowering",
       "acceptance_contract": "TR006 and indexed-versus-full-catalog property model. Depends: M018.",
       "release_complete": false,
-      "latest_component_scope": "V471-V478 HELD M019/M020/T060 source/client and M007 namespace repair. The complete pinned rustc Ty::discriminant_ty/coroutine rule plus three bound-region instantiation methods replace the discriminant function-pointer requirement; exact original hashes/mechanical generators pass. One extracted declaration repr parser serves existing runtime layout and retained source enum metadata, preserving usize/u64 source identity separately from physical width. Enum facts retain exact source/header/context/schema guards; full ADT/source/root readiness is not minted. V475 source-IR/client control passes164encoded source-head observations across60world rows, plus both existing layout controls; source matrix fails a real std intrinsic import. V476 attempted ordinary std re-export regresses all4selected runtimes at missing core module readiness; retained as failed evidence. Common named imports now accept already checked/installed non-root module aliases without synthetic item definitions, preserving frontiers/ambiguities. An ordinary embedded core::intrinsics public wrapper uses the exact pinned generic/reference/projected-result signature and existing closed helper; no new builtin ID or runtime Type guess. V477 source matrix passes60edition/origin worlds/180enum metadata encodings, including156unchanged-fixture source observations and24external usize/u64 header controls, cold-body/memo/withdrawal checks. Existing upstream ambiguity control passes; new host control fails an overly specific pending-ID oracle. Final V478 changes only that oracle, both builds and2/2affected controls pass; CLI/production byte-identical toV477. Unchanged discriminant_size/repr128 advance from imports to1188/1187 and28/27dispatch attempts/outcomes, then fail ownership/type and primitive operator boundaries. Generic union remains265failed at nested Iter<_> inference; union-align restored1462matched dispatches/25source calls/unit/empty streams/cleanup. Zero new complete distinct stock runtime gains or refreshed suite total. Remaining five semantic clients, real source/ADT facts/root/member/projection/VM joins, fixed-isize runtime intrinsic result, complete origin/currentness/cleanup and interpreter/JIT gates stay open. No full-fixture/diagnostic/tooling/Linux/performance closure.",
+      "latest_component_scope": "V513/V514 HELD M020 ahead-of-entry source preparation. Q85 authentic trait flags/configuration/lang roles, pinned DiscriminantKind nine output bounds and auto Send/Sync/Unpin source; Q86 actual impl identity/modifiers/conditional constness/head, genuine inferred-outlives empty and independently authenticated null clauses_of branch; Q87 actual alias argument namespaces through DeclarationParameters/Q77, replacing the Q83 always-pending marker method. Super-outlives/elaboration, complete compiler predicate families, per-query fact publication and an actual root-bound readiness certificate remain unfinished. V513 lib101 E0433/E0277 preserved; V514 fixes only helper module path and retained inventory fingerprint. All three fresh builds and six controls pass at 1ff6d8be1242d77b67a888276b41836cf5319ea62f043cebecdaaf208cb85b70 /8720inputs with exact closing source/HEAD/test/CLI/digester guards. Controls cover four editions/original-user-wrapper source, actual seven facade trait flags and nine output bounds per repr world, two primitive impl null-clause domains, GAT real namespaces and generic non-null hold, memo/cold/currentness plus constructor regressions. Owning2015 stock runtime remains3/4pass13checks each; repr128 executor LRR-E-OP-TYPE/noChecks, zero new distinct runtime gain or refreshed total. Two negative controls remain held/unexecuted. Reviews also identify existing PartialEq facade drift and trait colon-vs-where default-policy gap as next shared-source repair. Host abort policy retained; guest unwinding separate. No task/milestone, root, architecture, interpreter, JIT, full-suite, Linux or performance gate closed.",
       "source_baseline": "dcd056e542c86605f6a282470566952b2aea3c79",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
@@ -20290,7 +20298,8 @@
         "worktracks/05-trait-goal-engine/2026-10-19-source-impl-clauses.md",
         "worktracks/05-trait-goal-engine/2026-10-19-source-impl-clauses-review.md",
         "worktracks/05-trait-goal-engine/2026-10-19-source-impl-clauses-controls.json",
-        "worktracks/evidence/2026-10-19-v381-v388-source-impl-clauses.json"
+        "worktracks/evidence/2026-10-19-v381-v388-source-impl-clauses.json",
+        "worktracks/evidence/2026-10-20-v513-v514-ahead-preparation.json"
       ]
     },
     {
@@ -20442,7 +20451,15 @@
         "worktracks/05-trait-goal-engine/2026-10-20-negative-bound-source-transport.md",
         "worktracks/05-trait-goal-engine/2026-10-20-negative-bound-source-review.md",
         "worktracks/05-trait-goal-engine/2026-10-20-negative-bound-source-controls.json",
-        "worktracks/evidence/2026-10-20-v511-v512-conditional-applicability-hold.json"
+        "worktracks/evidence/2026-10-20-v511-v512-conditional-applicability-hold.json",
+        "worktracks/evidence/2026-10-20-v513-v514-ahead-preparation.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-source-trait-semantics.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-source-impl-semantics.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-source-alias-layouts.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-ahead-preparation-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-ahead-preparation-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-preflight-dependency-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-query-domain-fact-factory.md"
       ],
       "title": "Pinned upstream solver bridge and transactions",
       "acceptance_contract": "TR007/TR008, source/type/binder round trips, genuine upstream invocation, failed-candidate isolation and cold-body/unused-bound controls. Depends: M019.",
@@ -20450,7 +20467,7 @@
       "implementation_contract": "Files: traits/upstream/, traits/term.rs, frontend/source_view.rs, Cargo.toml and provenance manifests. Build the pinned shared solver on macOS Rust1.99.0; adapt actual source Types/ParamEnv/headers, upstream inference transactions and canonical responses to LRR queries. Migrate custom inference/canonicalization consumers and remove superseded algorithms with explicit holds until verified.",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
-      "latest_component_scope": "V511-V512 HELD M020 conditional applicability/source guard checkpoint. Shared retained TypeBound polarity/principal/header helpers prevent negative rows entering positive-only source selection or legacy token signature transport. The proposed parser extension was WITHDRAWN BEFORE BUILD/EXECUTION: direct conditional impl/default-body/Copy/Drop/Receiver legacy readers cannot yet propagate typed applicability. Both imported unchanged negative fixtures and their registered source-control candidates remain explicitly HELD_UNEXECUTED, not admitted/passed/inapplicable. Conditional applicability through the actual upstream solver/common query service is the next prerequisite, not a new boolean solver. V511 lib E0433 module-path failure is preserved; V512 fixes only two absolute syntax module paths and all three builds pass. All six active regression controls pass with matching source/HEAD/test/CLI/digester guards at source ebea0de06be9db158f640f7d6708335b1cfa9236a2a55edc481c8a2d4d215ec9: 12 Q80 integer-input worlds/36clauses/12projections, 12 Q82 worlds/12written12defaults, 12 GAT worlds/24Q83declarations, 12 HRTB worlds preserving child-own coldness and exact Source(DefaultBounds(WrittenRecipe)) parent hold, 12 constructor worlds/264operations and 4 activation worlds/1624operations. The V510 HRTB failed assertion is closed only at V512. Owning2015 runtime remains 3/4pass13checks each; repr128 still LRR-E-OP-TYPE. Zero new distinct runtime gains or refreshed suite/morning totals. Source metadata will be prepared ahead of solver entry under unchanged host abort profiles; guest unwinding remains separate. Complete compiler clause families/source fact closure/root/owned inference results and member/ownership integration remain open. No task/milestone, full negative transport, full-suite/interpreter/architecture/JIT/Linux/performance gate closes.",
+      "latest_component_scope": "V513/V514 HELD M020 ahead-of-entry source preparation. Q85 authentic trait flags/configuration/lang roles, pinned DiscriminantKind nine output bounds and auto Send/Sync/Unpin source; Q86 actual impl identity/modifiers/conditional constness/head, genuine inferred-outlives empty and independently authenticated null clauses_of branch; Q87 actual alias argument namespaces through DeclarationParameters/Q77, replacing the Q83 always-pending marker method. Super-outlives/elaboration, complete compiler predicate families, per-query fact publication and an actual root-bound readiness certificate remain unfinished. V513 lib101 E0433/E0277 preserved; V514 fixes only helper module path and retained inventory fingerprint. All three fresh builds and six controls pass at 1ff6d8be1242d77b67a888276b41836cf5319ea62f043cebecdaaf208cb85b70 /8720inputs with exact closing source/HEAD/test/CLI/digester guards. Controls cover four editions/original-user-wrapper source, actual seven facade trait flags and nine output bounds per repr world, two primitive impl null-clause domains, GAT real namespaces and generic non-null hold, memo/cold/currentness plus constructor regressions. Owning2015 stock runtime remains3/4pass13checks each; repr128 executor LRR-E-OP-TYPE/noChecks, zero new distinct runtime gain or refreshed total. Two negative controls remain held/unexecuted. Reviews also identify existing PartialEq facade drift and trait colon-vs-where default-policy gap as next shared-source repair. Host abort policy retained; guest unwinding separate. No task/milestone, root, architecture, interpreter, JIT, full-suite, Linux or performance gate closed.",
       "artifacts": [
         "worktracks/evidence/2026-10-19-v230-v231-pinned-binder-client.json",
         "worktracks/evidence/2026-10-19-v234-v235-pinned-client-relations.json",
@@ -20642,7 +20659,8 @@
         "worktracks/05-trait-goal-engine/2026-10-20-generated-projection-fields.md",
         "worktracks/evidence/2026-10-20-v498-v501-source-projections.json",
         "worktracks/evidence/2026-10-20-v509-v510-reached-root-source-inputs.json",
-        "worktracks/evidence/2026-10-20-v511-v512-conditional-applicability-hold.json"
+        "worktracks/evidence/2026-10-20-v511-v512-conditional-applicability-hold.json",
+        "worktracks/evidence/2026-10-20-v513-v514-ahead-preparation.json"
       ]
     },
     {

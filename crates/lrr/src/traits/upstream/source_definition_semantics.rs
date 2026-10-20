@@ -117,16 +117,6 @@ impl PreparedSourceDefinitionSemantics {
     pub(crate) fn alias_domain(&self) -> SourceSemantic<SourceAliasDomain> {
         self.alias_domain
     }
-    /// Actual source alias role is not the compiler's instantiated argument layout.
-    pub(crate) fn alias_argument_layouts(&self) -> SourceSemantic<()> {
-        match self.alias_domain {
-            SourceSemantic::Known(_) => {
-                SourceSemantic::Pending(DefinitionSemanticPending::AliasArgumentLayouts)
-            }
-            SourceSemantic::NotApplicable => SourceSemantic::NotApplicable,
-            SourceSemantic::Pending(why) => SourceSemantic::Pending(why),
-        }
-    }
     pub(crate) fn const_conditions(&self) -> SourceSemantic<&[SourcePredicateRecipe]> {
         match self.boolean(DefinitionBooleanQuery::IsConditionallyConst) {
             SourceSemantic::Known(true) => {

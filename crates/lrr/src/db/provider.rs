@@ -386,6 +386,27 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
+            QueryKey::SourceImplSemantics(key) => {
+                return match crate::traits::upstream::source_impl_semantics::PreparedSourceImplSemantics::prepare(db,key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::SourceImplSemantics(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
+            QueryKey::SourceTraitSemantics(key) => {
+                return match crate::traits::upstream::source_trait_semantics::PreparedSourceTraitSemantics::prepare(db,key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::SourceTraitSemantics(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
+            QueryKey::SourceAliasLayouts(key) => {
+                return match crate::traits::upstream::source_alias_layouts::PreparedSourceAliasLayouts::prepare(db,key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::SourceAliasLayouts(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::SourceDefinitionSemantics(key) => {
                 return match crate::traits::upstream::source_definition_semantics::PreparedSourceDefinitionSemantics::prepare(db,key) {
                     QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::SourceDefinitionSemantics(Box::new(value))),

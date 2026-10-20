@@ -1,5 +1,8 @@
 // `core::marker`.
 use crate::clone::Clone;
+use crate::cmp::{Eq, PartialEq};
+use crate::fmt::Debug;
+use crate::hash::Hash;
 
 // Pinned library/core/src/marker.rs:145-192 (MIT OR Apache-2.0).
 // Compiler-role and semantic attributes are retained as declaration metadata;
@@ -24,9 +27,14 @@ pub trait MetaSized: PointeeSized {}
 #[rustc_coinductive]
 pub trait PointeeSized {}
 pub trait Unsize<T: ?Sized> {}
-pub unsafe trait Send {}
-pub unsafe trait Sync {}
-pub trait Unpin {}
+// Pinned marker.rs:92/657/1014: these are ordinary auto declarations.
+#[rustc_diagnostic_item = "Send"]
+pub unsafe auto trait Send {}
+#[rustc_diagnostic_item = "Sync"]
+#[lang = "sync"]
+pub unsafe auto trait Sync {}
+#[lang = "unpin"]
+pub auto trait Unpin {}
 pub trait Copy: Clone {}
 pub trait StructuralPartialEq {}
 pub trait Tuple {}
@@ -35,8 +43,14 @@ pub trait ConstParamTy {}
 pub trait PointerLike {}
 pub trait Destruct {}
 pub trait FnPtr: Copy + Clone {}
+// Pinned library/core/src/marker.rs:880-887 (MIT OR Apache-2.0).
+// Actual source obligations; builtin normalization remains the pinned solver.
+#[lang = "discriminant_kind"]
+#[rustc_deny_explicit_impl]
+#[rustc_dyn_incompatible_trait]
 pub trait DiscriminantKind {
-    type Discriminant;
+    #[lang = "discriminant_type"]
+    type Discriminant: Clone + Copy + Debug + Eq + PartialEq + Hash + Send + Sync + Unpin;
 }
 
 // Zero-sized marker owning a `T` for the type system.

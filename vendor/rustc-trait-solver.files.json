@@ -300,6 +300,27 @@
       "upstream_sha256": "ecb7777ffca8e89ad7056cc864771983a3eb4384049d739fbd5b562ed2d53850"
     },
     {
+      "path": "compiler/rustc_hir_analysis/src/collect.rs",
+      "bytes": 71712,
+      "sha256": "0fdb73851e12d6c135fb1ba33746523966843647a62bb899c1e17aa0d46ac211",
+      "upstream": "compiler/rustc_hir_analysis/src/collect.rs",
+      "upstream_sha256": "0fdb73851e12d6c135fb1ba33746523966843647a62bb899c1e17aa0d46ac211"
+    },
+    {
+      "path": "compiler/rustc_hir_analysis/src/collect/clauses_of.rs",
+      "bytes": 49619,
+      "sha256": "465f5dd0f397f87716aedc65048a12dce7ec3af51d88e584ea5ad902b2251bf3",
+      "upstream": "compiler/rustc_hir_analysis/src/collect/clauses_of.rs",
+      "upstream_sha256": "465f5dd0f397f87716aedc65048a12dce7ec3af51d88e584ea5ad902b2251bf3"
+    },
+    {
+      "path": "compiler/rustc_hir_analysis/src/collect/item_bounds.rs",
+      "bytes": 22559,
+      "sha256": "aa745ea1aab56ef3b39d06f28dd77597604acf8c5d0ffcaf78ddf7506733f1c7",
+      "upstream": "compiler/rustc_hir_analysis/src/collect/item_bounds.rs",
+      "upstream_sha256": "aa745ea1aab56ef3b39d06f28dd77597604acf8c5d0ffcaf78ddf7506733f1c7"
+    },
+    {
       "path": "compiler/rustc_hir_analysis/src/collect/type_of.rs",
       "bytes": 23355,
       "sha256": "c643bb4fcd51048f7d3e912065c2759d4a91e51b5a2e726bdc30a998a4ee3730",
@@ -312,6 +333,13 @@
       "sha256": "d1a9036440b3611b71735a02dc9ec4cd1a572fb0715418cfeb79bfe4c5c1cbf9",
       "upstream": "compiler/rustc_hir_analysis/src/hir_ty_lowering/bounds.rs",
       "upstream_sha256": "d1a9036440b3611b71735a02dc9ec4cd1a572fb0715418cfeb79bfe4c5c1cbf9"
+    },
+    {
+      "path": "compiler/rustc_hir_analysis/src/outlives/mod.rs",
+      "bytes": 4377,
+      "sha256": "3b7aadd0577a4c0b6a6939f23b9e5e3ea9e66e015860fff7b5b0eda4f31fe7e9",
+      "upstream": "compiler/rustc_hir_analysis/src/outlives/mod.rs",
+      "upstream_sha256": "3b7aadd0577a4c0b6a6939f23b9e5e3ea9e66e015860fff7b5b0eda4f31fe7e9"
     },
     {
       "path": "compiler/rustc_hir_analysis/src/variance/constraints.rs",
@@ -1656,8 +1684,12 @@
     "compiler/rustc_data_structures/src/transitive_relation.rs",
     "compiler/rustc_data_structures/src/transitive_relation/tests.rs",
     "compiler/rustc_feature/src/unstable.rs",
+    "compiler/rustc_hir_analysis/src/collect.rs",
+    "compiler/rustc_hir_analysis/src/collect/clauses_of.rs",
+    "compiler/rustc_hir_analysis/src/collect/item_bounds.rs",
     "compiler/rustc_hir_analysis/src/collect/type_of.rs",
     "compiler/rustc_hir_analysis/src/hir_ty_lowering/bounds.rs",
+    "compiler/rustc_hir_analysis/src/outlives/mod.rs",
     "compiler/rustc_hir_analysis/src/variance/constraints.rs",
     "compiler/rustc_hir_analysis/src/variance/mod.rs",
     "compiler/rustc_hir_analysis/src/variance/solve.rs",

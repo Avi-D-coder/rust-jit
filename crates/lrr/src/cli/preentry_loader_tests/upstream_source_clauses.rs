@@ -8,8 +8,12 @@ use crate::{
     db::{key::QueryKey, poll::QueryPoll, provider::SyntaxProvider, value::QueryValue},
     source::manifest::ItemKind,
     traits::{
-        term::TyTerm,
-        upstream::{source_definition_semantics::{
+        term::{TyTerm, BoundKind},
+        upstream::{source_alias_layouts::{
+            CurrentSourceAliasLayouts, SourceAliasLayoutKind, AliasLayoutsPending,
+        }, source_impl_semantics::{
+            CurrentSourceImplSemantics, ImplSemantic, ImplSemanticsPending,
+        }, source_definition_semantics::{
             CurrentSourceDefinitionSemantics, DefinitionBooleanQuery as Boolean,
             DefinitionSemanticPending as SemanticPending, SourceSemantic,
             SourceDefinitionSemanticsKey, SourceAliasDomain,
@@ -80,6 +84,20 @@ fn unchanged_streaming_gat_clauses_use_pinned_parent_instantiation_all_editions_
             let (definition, expected_parent) = found[0];
             db.trace.detailed = true;
             let before = db.trace.events.len();
+            let inventory = ready(db.fetch(&SyntaxProvider, QueryKey::PreparedScopeImplHeaders(seal.clone()))).value;
+            let QueryValue::PreparedScopeImplHeaders(inventory) = inventory.as_ref() else { unreachable!() };
+            let implementation = inventory.inventory_root().headers().iter().find_map(|raw|
+                inventory.canonical_owner(raw.identity).filter(|owner|
+                    owner.identity() == expected_parent).map(|_| raw.identity)).unwrap();
+            let impl_semantics = ready(CurrentSourceImplSemantics::capture(&mut db,
+                &crate::traits::header_syntax::ImplHeaderSyntaxKey {
+                    inventory: seal.clone(), implementation,
+                }));
+            assert!(matches!(impl_semantics.plan().inferred_outlives_of(),
+                ImplSemantic::Known(clauses) if clauses.is_empty()));
+            assert_eq!(impl_semantics.plan().complete_clauses_of(),
+                ImplSemantic::Pending(ImplSemanticsPending::ClauseParameters),
+                "empty inferred outlives never erases actual generic impl predicates");
             // Observe source-proven query domains for both actual associated
             // declarations; missing elaboration/body producers stay pending.
             let streaming = named(&rows, root.crate_key, &[], "StreamingIterator", ItemKind::Trait);
@@ -90,6 +108,21 @@ fn unchanged_streaming_gat_clauses_use_pinned_parent_instantiation_all_editions_
                     && parent(&rows, id) == streaming).then_some(id)
             }).expect("actual trait associated Item declaration");
             let mut semantics = Vec::new();
+            let mut alias_layouts = Vec::new();
+            let trait_key = SourceDefinitionSemanticsKey {
+                inventory: seal.clone(), definition: streaming,
+            };
+            let trait_semantics = ready(crate::traits::upstream::source_trait_semantics::CurrentSourceTraitSemantics::capture(&mut db, &trait_key));
+            for flag in [
+                crate::traits::upstream::source_trait_semantics::TraitBooleanQuery::Auto,
+                crate::traits::upstream::source_trait_semantics::TraitBooleanQuery::Alias,
+                crate::traits::upstream::source_trait_semantics::TraitBooleanQuery::Coinductive,
+                crate::traits::upstream::source_trait_semantics::TraitBooleanQuery::DefaultTrait,
+                crate::traits::upstream::source_trait_semantics::TraitBooleanQuery::SizednessTrait,
+            ] {
+                assert_eq!(trait_semantics.plan().boolean(flag),
+                    crate::traits::upstream::source_trait_semantics::TraitSemantic::Known(false));
+            }
             for (item, owner, has_definition, alias) in [
                 (definition, expected_parent, true, SourceSemantic::NotApplicable),
                 (declaration_item, streaming, false, SourceSemantic::Known(SourceAliasDomain::ProjectionType)),
@@ -110,6 +143,28 @@ fn unchanged_streaming_gat_clauses_use_pinned_parent_instantiation_all_editions_
                 assert!(first.cacheable && Arc::ptr_eq(&first.value, &again.value));
                 assert_eq!(first.fingerprint, again.fingerprint);
                 current.require_current(&db).unwrap();
+                // One actual trait GAT has [Self, 'a], whereas the impl's
+                // assigned type is not a projection declaration. Both go
+                // through ordinary admitted source and parent identity joins.
+                let layouts = ready(CurrentSourceAliasLayouts::capture(&mut db, &key));
+                let layout_query = QueryKey::SourceAliasLayouts(Box::new(key.clone()));
+                let layout_first = ready(db.fetch(&SyntaxProvider, layout_query.clone()));
+                let layout_again = ready(db.fetch(&SyntaxProvider, layout_query));
+                assert!(layout_first.cacheable && Arc::ptr_eq(&layout_first.value, &layout_again.value));
+                assert_eq!(layout_first.fingerprint, layout_again.fingerprint);
+                if item == declaration_item {
+                    assert_eq!(layouts.plan().pending(), None);
+                    assert_eq!(layouts.plan().layout(SourceAliasLayoutKind::ProjectionType),
+                        Ok([BoundKind::Type, BoundKind::Region].as_slice()));
+                    assert_eq!(layouts.plan().layout(SourceAliasLayoutKind::FreeType),
+                        Err(AliasLayoutsPending::AliasKind));
+                } else {
+                    assert_eq!(layouts.plan().pending(), Some(AliasLayoutsPending::NotApplicable));
+                    assert_eq!(layouts.plan().layout(SourceAliasLayoutKind::ProjectionType),
+                        Err(AliasLayoutsPending::NotApplicable));
+                }
+                layouts.require_current(&db).unwrap();
+                alias_layouts.push(layouts);
                 semantics.push(current);
             }
             let key = SourceDeclarationClausesKey {
@@ -131,6 +186,9 @@ fn unchanged_streaming_gat_clauses_use_pinned_parent_instantiation_all_editions_
             db.begin_expansion_epoch(2).unwrap();
             assert!(current.require_current(&db).is_err());
             assert!(semantics.iter().all(|semantic| semantic.require_current(&db).is_err()));
+            assert!(alias_layouts.iter().all(|layout| layout.require_current(&db).is_err()));
+            assert!(trait_semantics.require_current(&db).is_err());
+            assert!(impl_semantics.require_current(&db).is_err());
             db.publish_inputs(BTreeMap::new()).unwrap();
             assert!(current.require_current(&db).is_err());
             if let Some(path) = temporary {
@@ -138,7 +196,7 @@ fn unchanged_streaming_gat_clauses_use_pinned_parent_instantiation_all_editions_
             }
             worlds += 1;
             eprintln!(
-                "actual source clause parent instantiation edition{edition},origin{origin}: 2parent/1own, actual owner rebasing/spans, pinned methods, memo/cold/withdrawal; 2source semantic declarations with actual domains/pending/currentness; full queries/root/runtime held"
+                "actual source clause parent instantiation edition{edition},origin{origin}: 2parent/1own, actual owner rebasing/spans, pinned methods, memo/cold/withdrawal; 2source semantic declarations and authenticated GAT argument layout; full queries/root/runtime held"
             );
         }
     }

@@ -231,6 +231,13 @@ fn unchanged_iterator_projection_fields_encode_actual_associated_declaration_all
 fn unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_editions_and_origins() {
     use crate::traits::upstream::source_declaration_clauses::SourceDeclarationClausesKey;
     use crate::traits::upstream::source_predicates::check_actual_projected_source_predicates;
+    use crate::traits::upstream::source_trait_semantics::{
+        CurrentSourceTraitSemantics, TraitBooleanQuery as Flag, TraitSemantic,
+        TraitSemanticsPending,
+    };
+    use crate::traits::upstream::source_impl_semantics::{
+        CurrentSourceImplSemantics, ImplSemantic, ImplSemanticsPending,
+    };
     let mut worlds = 0;
     let mut clauses = 0;
     let mut projected = 0;
@@ -262,6 +269,109 @@ fn unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_edition
             let partial_eq = actual_named(&rows, core, &["cmp"], "PartialEq", ItemKind::Trait);
             db.trace.detailed = true;
             let before = db.trace.events.len();
+            let mut trait_semantics = Vec::new();
+            // The real upstream builtin and impl search distinguish these
+            // actual declarations. A spelling alone cannot supply their flags.
+            for (name, auto, safety, coinductive, deny, force_dyn) in [
+                ("DiscriminantKind", false, false, false, true, true),
+                ("Sized", false, false, true, true, true),
+                ("MetaSized", false, false, true, true, false),
+                ("PointeeSized", false, false, true, true, false),
+                ("Send", true, true, true, false, false),
+                ("Sync", true, true, true, false, false),
+                ("Unpin", true, false, true, false, false),
+            ] {
+                let id = actual_named(&rows, core, &["marker"], name, ItemKind::Trait);
+                let key = crate::traits::upstream::source_definition_headers::DefinitionHeaderKey {
+                    inventory: seal.clone(), definition: id,
+                };
+                let current = ready(CurrentSourceTraitSemantics::capture(&mut db, &key));
+                let plan = current.plan();
+                assert_eq!(plan.pending(), None, "actual {name} semantic capture");
+                for (flag, expected) in [(Flag::Auto,auto),(Flag::Unsafe,safety),
+                    (Flag::Coinductive,coinductive),(Flag::DenyExplicitImpl,deny),
+                    (Flag::Alias,false),(Flag::Marker,false),
+                    (Flag::DefaultTrait,false),
+                    (Flag::SizednessTrait,matches!(name,"Sized"|"MetaSized")),
+                    (Flag::Fundamental,matches!(name,"Sized"|"MetaSized"|"PointeeSized"))] {
+                    assert_eq!(plan.boolean(flag), TraitSemantic::Known(expected),
+                        "actual {name} {flag:?}");
+                }
+                if force_dyn {
+                    assert!(matches!(plan.force_dyn_incompatible(), TraitSemantic::Known(Some(_))));
+                    assert_eq!(plan.dyn_compatible(), TraitSemantic::Known(false));
+                } else {
+                    assert_eq!(plan.force_dyn_incompatible(), TraitSemantic::Known(None));
+                    assert_eq!(plan.dyn_compatible(),
+                        TraitSemantic::Pending(TraitSemanticsPending::DynCompatibility));
+                }
+                let query = QueryKey::SourceTraitSemantics(Box::new(key));
+                let first = ready(db.fetch(&SyntaxProvider, query.clone()));
+                let again = ready(db.fetch(&SyntaxProvider, query));
+                assert!(first.cacheable && Arc::ptr_eq(&first.value, &again.value));
+                assert_eq!(first.fingerprint, again.fingerprint);
+                current.require_current(&db).unwrap();
+                trait_semantics.push(current);
+            }
+            let output = ready(crate::frontend::source_item_bounds::CurrentSourceItemBounds::capture(
+                &mut db, &crate::frontend::source_item_bounds::SourceItemBoundsKey {
+                    inventory: seal.clone(), definition: item,
+                }));
+            let written = output.plan().written_recipes().unwrap();
+            let expected_output_traits = [
+                (&["clone"][..], "Clone"), (&["marker"][..], "Copy"),
+                (&["fmt"][..], "Debug"), (&["cmp"][..], "Eq"),
+                (&["cmp"][..], "PartialEq"), (&["hash"][..], "Hash"),
+                (&["marker"][..], "Send"), (&["marker"][..], "Sync"),
+                (&["marker"][..], "Unpin"),
+            ].map(|(module,name)| actual_named(&rows,core,module,name,ItemKind::Trait));
+            assert_eq!(written.len(), expected_output_traits.len());
+            for (recipe, expected) in written.iter().zip(expected_output_traits) {
+                assert!(matches!(recipe,
+                    crate::traits::predicate::SourcePredicateRecipe::Explicit {
+                        result: crate::traits::predicate::PredicateResult::Implemented(reference), ..
+                    } if reference.trait_key == expected), "actual associated output bound: {recipe:?}");
+            }
+            // Observe genuine candidate metadata, not a filtered applicability
+            // certificate: the complete bucket remains owned by the catalog.
+            let catalog = ready(db.fetch(&SyntaxProvider, QueryKey::ImplTraitCatalog(seal.clone()))).value;
+            let QueryValue::ImplTraitCatalog(catalog) = catalog.as_ref() else { unreachable!() };
+            let mut primitive_impls = Vec::new();
+            for &(raw, canonical) in catalog.candidates(partial_eq).unwrap() {
+                let key = crate::traits::header_syntax::ImplHeaderSyntaxKey {
+                    inventory: seal.clone(), implementation: raw,
+                };
+                let head = ready(db.fetch(&SyntaxProvider, QueryKey::ImplHeadTypes(Box::new(key.clone())))).value;
+                let QueryValue::ImplHeadTypes(head) = head.as_ref() else { unreachable!() };
+                if !matches!(head.result(), crate::frontend::impl_head_types::ImplHeadTypeResult::Resolved {
+                    self_type: crate::traits::term::TyTerm::Primitive(crate::ir::op::PrimitiveType::I128 | crate::ir::op::PrimitiveType::U128), ..
+                }) { continue; }
+                let current = ready(CurrentSourceImplSemantics::capture(&mut db, &key));
+                let plan = current.plan();
+                assert_eq!(plan.pending(), None);
+                assert_eq!(plan.impl_definition(), ImplSemantic::Known(canonical));
+                assert_eq!(plan.trait_definition(), ImplSemantic::Known(partial_eq));
+                assert_eq!(plan.polarity(), ImplSemantic::Known(rustc_type_ir::ImplPolarity::Positive));
+                assert_eq!(plan.is_default(), ImplSemantic::Known(false));
+                assert_eq!(plan.is_const(), ImplSemantic::Known(false));
+                assert!(matches!(plan.inferred_outlives_of(), ImplSemantic::Known(rows) if rows.is_empty()));
+                match plan.complete_clauses_of() {
+                    ImplSemantic::Known(clauses) => {
+                        assert_eq!(clauses.parent(), None);
+                        assert!(clauses.recipes().is_empty());
+                    }
+                    other => panic!("actual nongeneric primitive impl clauses: {other:?}"),
+                }
+                assert_eq!(plan.impl_super_outlives(), ImplSemantic::Pending(ImplSemanticsPending::ElaborationClosure));
+                let query = QueryKey::SourceImplSemantics(Box::new(key));
+                let first = ready(db.fetch(&SyntaxProvider, query.clone()));
+                let again = ready(db.fetch(&SyntaxProvider, query));
+                assert!(first.cacheable && Arc::ptr_eq(&first.value, &again.value));
+                assert_eq!(first.fingerprint, again.fingerprint);
+                current.require_current(&db).unwrap();
+                primitive_impls.push(current);
+            }
+            assert_eq!(primitive_impls.len(), 2, "genuine i128/u128 PartialEq declarations");
             let query =
                 QueryKey::SourceDeclarationClauses(Box::new(SourceDeclarationClausesKey {
                     inventory: seal.clone(),
@@ -295,6 +405,9 @@ fn unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_edition
                 current.require_current(&db).is_err(),
                 "source withdrawal revokes projected predicate metadata"
             );
+            assert!(trait_semantics.iter().all(|query| query.require_current(&db).is_err()));
+            assert!(primitive_impls.iter().all(|query| query.require_current(&db).is_err()));
+            assert!(output.require_current(&db).is_err());
             worlds += 1;
             clauses += count;
             projected += projections;
