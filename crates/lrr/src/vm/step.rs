@@ -1045,14 +1045,14 @@ fn numeric_preflight(
             destination,
         } => {
             let cell = frame.cell(*source)?;
-            let value = match store.enum_cast_operand(cell)? {
+            let source_type = match store.enum_cast_type(cell)? {
                 Some(discriminant) => discriminant,
-                None => store.preview_scalar(cell, None)?,
+                None => TypeId(store.preview_scalar(cell, None)?.type_id),
             };
             let primitive = *target;
             let target = concrete(&HintRecipe::Primitive(primitive))?
                 .ok_or_else(|| invalid("cast target absent"))?;
-            numeric::cast_types(TypeId(value.type_id), target).map_err(runtime)?;
+            numeric::cast_types(source_type, target).map_err(runtime)?;
             // The result's Type is the written target primitive exactly.
             (*destination, target, Some(primitive))
         }

@@ -826,10 +826,7 @@ fn execute(
         LibraryFunction::DiscriminantValue => {
             let value = store.peek_ticket(argument()?)?;
             let answer = store.referent_discriminant(value)?;
-            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::signed(
-                crate::runtime::shape::TypeId(8),
-                answer,
-            )?)?))
+            Ok(FacadeOutcome::Value(store.ticket(answer)?))
         }
         LibraryFunction::Zeroed => {
             let [ty] = type_arguments else {

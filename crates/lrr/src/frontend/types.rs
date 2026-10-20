@@ -958,6 +958,13 @@ impl<'a> SchemaNames<'a> {
                 fields,
                 type_parameters: self.type_parameter_count()?,
                 discriminants,
+                discriminant_type: if self.definition.item_kind == crate::source::manifest::ItemKind::Enum {
+                    Some(crate::frontend::declaration_repr::declared_repr(
+                        &self.schema, &self.definition.declared_name,
+                    )?.integer.unwrap_or(crate::ir::op::PrimitiveType::Isize))
+                } else {
+                    None
+                },
             }),
         )))
     }
@@ -1520,6 +1527,7 @@ pub struct BoundNominalVariant {
     /// Enums only: the declaration-order discriminant table (see
     /// `NominalSchema::literal_discriminants`). Empty for structs.
     discriminants: std::sync::Arc<[Option<i128>]>,
+    discriminant_type: Option<crate::ir::op::PrimitiveType>,
 }
 /// A bound field's Type: concrete, or one of the declaration's own type
 /// parameters, instantiated by the value's `TypeKey::Nominal` args.
@@ -1660,12 +1668,13 @@ impl StableEncode for NominalFieldType {
     }
 }
 impl StableEncode for BoundNominalVariant {
-    const DOMAIN: &'static str = "lrr/v1/bound-nominal-variant";
+    const DOMAIN: &'static str = "lrr/v2/bound-nominal-variant";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.identity);
         e.record(&self.definition);
         e.digest(self.schema);
         e.u32(self.variant);
+        e.option(&self.discriminant_type, |e, ty| e.u32(ty.tag()));
         e.sequence(&self.fields, |e, field| e.record(field));
         if self.type_parameters != 0 {
             e.u32(self.type_parameters);
@@ -1736,6 +1745,9 @@ impl BoundNominalVariant {
     }
     pub(crate) fn discriminants(&self) -> &std::sync::Arc<[Option<i128>]> {
         &self.discriminants
+    }
+    pub(crate) fn discriminant_type(&self) -> Option<crate::ir::op::PrimitiveType> {
+        self.discriminant_type
     }
 }
 /// `[INT_NUMBER]` or `[-, INT_NUMBER]` with an optional integer suffix and any

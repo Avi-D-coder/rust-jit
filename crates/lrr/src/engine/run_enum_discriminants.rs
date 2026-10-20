@@ -103,11 +103,7 @@ impl RunMachine {
                 return Ok(QueryPoll::Ready(Ok(())));
             };
             let value = self.store.read_scalar(stored.cell)?;
-            let value = match value.kind {
-                4 => i128::from(value.payload as i64),
-                5 => i128::from(value.payload),
-                _ => return Err(call_fault("enum discriminant is not an integer")),
-            };
+            let value = self.store.integer_bits(value)? as i128;
             let table = schema.anchored_discriminants(anchor, value);
             self.store.attach_enum_discriminants(enumeration, &table)?;
         }

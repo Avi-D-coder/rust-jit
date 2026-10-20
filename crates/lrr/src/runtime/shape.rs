@@ -188,6 +188,8 @@ pub struct TypeDescriptor {
     /// Nominal enums only: the source-bound declaration-order discriminant
     /// table, attached by the first source-checked variant construction.
     pub discriminants: Option<Arc<[Option<i128>]>>,
+    /// Source integer identity, distinct from physical tag layout/width.
+    pub(crate) discriminant_type: Option<TypeId>,
 }
 /// Worker type table. E-R5-006: no descriptor count or metadata budget; the
 /// byte figure is an observation only.
@@ -227,6 +229,7 @@ fn primitive_descriptors() -> &'static [TypeDescriptor; 18] {
                 destructor: None,
                 representation_version: 1,
                 discriminants: None,
+                discriminant_type: None,
             }
         })
     })
@@ -451,6 +454,7 @@ impl TypeRegistry {
             destructor: None,
             representation_version: 1,
             discriminants: None,
+            discriminant_type: None,
         });
         // Every reference Type has its raw-pointer views, so call contracts and
         // pointer coercions can name them without interning (E-R5-008).
@@ -477,6 +481,25 @@ impl TypeRegistry {
     /// expression (E-R5-013).
     pub(crate) fn has_unevaluated_discriminants(&self) -> bool {
         self.unevaluated_discriminants > 0
+    }
+    pub(crate) fn attach_discriminant_type(
+        &mut self,
+        id: TypeId,
+        integer: crate::ir::op::PrimitiveType,
+    ) -> Result<(), Diagnostic> {
+        let ty = PrimitiveIdentity::from_recipe(integer)?.id();
+        if !matches!(primitive(ty)?, Primitive::Signed(_) | Primitive::Unsigned(_)) {
+            return Err(super::value::invalid());
+        }
+        let index = id.0.checked_sub(19).ok_or_else(super::value::invalid)?;
+        let descriptor = self.descriptors.get_mut(index as usize).ok_or_else(super::value::invalid)?;
+        if !matches!(descriptor.key.as_ref(), TypeKey::Nominal { definition, .. } if definition.item_kind == ItemKind::Enum)
+            || descriptor.discriminant_type.is_some_and(|prior| prior != ty)
+        {
+            return Err(super::value::invalid());
+        }
+        descriptor.discriminant_type = Some(ty);
+        Ok(())
     }
     /// Attach a nominal enum's source-bound discriminant table. The table is a
     /// property of the declaration schema, so a second attachment must agree.

@@ -1,0 +1,9 @@
+{
+  "controls": [
+    "frontend::nominal_constructors::tests::rustc_enum_discriminant_descriptor_retains_source_integer_identity",
+    "runtime::shape::tests::evaluated_discriminants_refine_an_attached_table_and_must_agree",
+    "cli::crate_graph::enum_discriminant_tests::repr_integer_discriminants_wrap_and_truncate_in_casts",
+    "cli::crate_graph::enum_discriminant_tests::discriminant_casts_nested_in_user_macros_wrappers_and_standard_macros",
+    "cli::crate_graph::mem_layout_tests::mem_discriminant_compares_hashes_and_prints_by_variant"
+  ]
+}

@@ -3444,7 +3444,7 @@ fn unchanged_enum_repr_uses_shared_source_integer_metadata_all_editions_and_orig
         traits::upstream::enum_repr::PreparedEnumDiscriminant};
     fn ready<T:std::fmt::Debug>(p:QueryPoll<T>)->T {match p {QueryPoll::Ready(Ok(v))=>v,other=>panic!("actual enum repr: {other:?}")}}
     let root=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout");
-    let mut worlds=0;let mut enums=0;
+    let mut worlds=0;let mut enums=0;let mut bound_variants=0;let mut scalar_values=0;
     for edition in [2015,2018,2021,2024] {
         for (case,start,expected,override_repr) in [
             ("tests/ui/enum-discriminant/discriminant_size.rs","use std::intrinsics",&[("E1",P::Isize),("E2",P::I8),("E3",P::Isize),("UnsignedIntEnum",P::Isize),("E4",P::I128)][..],None),
@@ -3464,13 +3464,15 @@ fn unchanged_enum_repr_uses_shared_source_integer_metadata_all_editions_and_orig
                 let (mut db,seal,scope)=configured_impl_catalog_world(&path,edition).unwrap();
                 let headers=ready(db.fetch(&SyntaxProvider,QueryKey::PreparedScopeImplHeaders(seal.clone()))).value;
                 let QueryValue::PreparedScopeImplHeaders(headers)=headers.as_ref()else{panic!()};
-                let names=headers.inventory_root().environment().unwrap().names();let mut definitions=Vec::new();
+                let environment=headers.inventory_root().environment().unwrap();
+                let names=environment.names();let views=environment.sources().iter().collect::<Vec<_>>();let mut definitions=Vec::new();
                 for &(name,integer) in expected {
                     let selected=names.lookup_source_path(crate::source::manifest::Namespace::Type,&[crate::syntax::imports::ImportSegment::Name(name.into())],false,&scope,edition).unwrap();
                     let NameLookup::Defined(definition)=selected else {panic!("actual enum {name}: {selected:?}")};
                     definitions.push((definition.identity,integer));
                 }
                 db.trace.detailed=true;let before=db.trace.events.len();let mut held=Vec::new();
+                let mut store=crate::runtime::cell::GuestStore::for_epoch(1).unwrap();
                 for (definition,integer) in definitions {
                     let plan=ready(PreparedEnumDiscriminant::prepare(&mut db,definition)).expect("actual enum metadata");
                     assert_eq!(plan.integer(),integer);plan.require_current(&db).unwrap();
@@ -3480,6 +3482,27 @@ fn unchanged_enum_repr_uses_shared_source_integer_metadata_all_editions_and_orig
                     let QueryValue::TypeSchema(schema)=first.as_ref()else{panic!()};let _: &NominalSchema=schema;
                     // Layout consumes the same result; C/layout width never substitutes for source Type.
                     assert_eq!(crate::frontend::declaration_repr::declared_repr(schema,"enum").unwrap().integer.unwrap_or(P::Isize),integer);
+                    let binding=match crate::frontend::types::SchemaNames::from_current_database(&mut db,names,&views,schema) {
+                        QueryPoll::Ready(Ok(binding))=>binding,
+                        QueryPoll::Ready(Err(error))=>panic!("actual variant binder: {error:?}"),
+                        QueryPoll::NeedInput(input)=>panic!("actual variant binder needs input: {input:?}"),
+                    };
+                    for variant in schema.variants.iter().filter(|variant|variant.fields.is_empty()) {
+                        let selected=ready(binding.bind_variant_current(&mut db,&views,variant.name.as_deref()));
+                        let crate::frontend::types::NominalBinding::Ready(bound)=selected else {panic!("actual prepared variant remains pending: {selected:?}")};
+                        assert_eq!(bound.discriminant_type(),Some(integer));
+                        let ty=store.intern_nominal(&bound).unwrap();
+                        assert_eq!(store.intern_nominal(&bound).unwrap(),ty);
+                        assert_eq!(store.type_descriptor(ty).unwrap().discriminant_type,
+                            Some(crate::runtime::shape::PrimitiveIdentity::from_recipe(integer).unwrap().id()));
+                        bound_variants+=1;
+                        if let Some(value)=bound.discriminants()[bound.variant() as usize] {
+                            let scalar=store.enum_discriminant_value(ty,bound.variant()).unwrap();
+                            assert_eq!(scalar.type_id,crate::runtime::shape::PrimitiveIdentity::from_recipe(integer).unwrap().id().0);
+                            assert_eq!(store.integer_bits(scalar).unwrap() as i128,value);
+                            scalar_values+=1;
+                        }
+                    }
                     held.push(plan);enums+=1;
                 }
                 assert!(db.trace.events[before..].iter().all(|e|!matches!(e.key,QueryKey::FunctionSignature(_)|QueryKey::BodyStructure(_)|QueryKey::Thunk(_)|QueryKey::PatternPlan(_))));
@@ -3490,4 +3513,5 @@ fn unchanged_enum_repr_uses_shared_source_integer_metadata_all_editions_and_orig
         }
     }
     assert_eq!((worlds,enums),(60,180));
+    assert_eq!((bound_variants,scalar_values),(456,396));
 }

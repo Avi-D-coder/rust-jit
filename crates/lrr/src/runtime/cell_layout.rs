@@ -494,7 +494,7 @@ impl GuestStore {
 
     /// `mem::discriminant`: the discriminant value of the enum value a
     /// reference designates. Any other value has discriminant 0.
-    pub(crate) fn referent_discriminant(&self, value: ValueRepr) -> Result<i64, Diagnostic> {
+    pub(crate) fn referent_discriminant(&mut self, value: ValueRepr) -> Result<ValueRepr, Diagnostic> {
         if value.kind != 9 {
             return Err(Diagnostic::new(
                 "LRR-E-OP-TYPE",
@@ -504,24 +504,24 @@ impl GuestStore {
         let record = self.references.get(RefId::from_bits(value.payload))?;
         self.validate_reference_record(record)?;
         let ReferenceLease::Location(location) = &record.lease else {
-            return Ok(0);
+            return ValueRepr::unsigned(TypeId(9), 0);
         };
         let cell = location.final_cell.cell;
-        let CellState::Live(held) = self.cells.get(cell)?.state else {
+        let CellState::Live(held) = self.state(cell)? else {
             return Err(lease_fault());
         };
         if held.kind != 8 {
-            return Ok(0);
+            return ValueRepr::unsigned(TypeId(9), 0);
+        }
+        let enumeration = TypeId(held.type_id);
+        if !matches!(self.types.descriptor(enumeration)?.key.as_ref(),
+            TypeKey::Nominal { definition, .. } if definition.item_kind == crate::source::manifest::ItemKind::Enum)
+        {
+            return ValueRepr::unsigned(TypeId(9), 0);
         }
         let (_, storage) = self.place_object(cell)?;
-        let Some(variant) = storage.variant else {
-            return Ok(0);
-        };
-        let table = self.types.descriptor(TypeId(held.type_id))?.discriminants.clone();
-        let declared = table
-            .as_ref()
-            .and_then(|table| table.get(variant as usize).copied().flatten());
-        Ok(declared.map_or(i64::from(variant), |value| value as i64))
+        let variant = storage.variant.ok_or_else(invalid)?;
+        self.enum_discriminant_value(enumeration, variant)
     }
 }
 

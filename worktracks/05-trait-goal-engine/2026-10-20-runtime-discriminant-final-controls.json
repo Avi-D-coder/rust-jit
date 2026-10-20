@@ -1,0 +1,6 @@
+{
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_enum_repr_uses_shared_source_integer_metadata_all_editions_and_origins",
+    "runtime::shape::tests::evaluated_discriminants_refine_an_attached_table_and_must_agree"
+  ]
+}

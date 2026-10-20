@@ -675,15 +675,16 @@ impl GuestStore {
             const_args: Box::new([]),
         })?;
         if bound.definition().item_kind == crate::source::manifest::ItemKind::Enum {
+            self.types.attach_discriminant_type(ty, bound.discriminant_type().ok_or_else(invalid)?)?;
             self.types.attach_discriminants(ty, bound.discriminants())?;
         }
         self.intern_unsized_box_view(ty)?;
         Ok(ty)
     }
     /// `as` operand of a fieldless enum value: its active variant's
-    /// discriminant as the default `isize` representation. Other values are
+    /// discriminant in its source integer representation. Other values are
     /// not enum cast operands (`None`); the operand stays in its cell.
-    pub(crate) fn enum_cast_operand(&self, id: CellId) -> Result<Option<ValueRepr>, Diagnostic> {
+    pub(crate) fn enum_cast_operand(&mut self, id: CellId) -> Result<Option<ValueRepr>, Diagnostic> {
         let cell = self.cells.get(id)?;
         if cell.retired {
             return Err(stale());
@@ -695,9 +696,40 @@ impl GuestStore {
         let Some((enumeration, variant)) = self.fieldless_enum_variant(id)? else {
             return Ok(None);
         };
-        let discriminant = self
-            .types
-            .descriptor(enumeration)?
+        self.enum_discriminant_value(enumeration, variant).map(Some)
+    }
+    /// Numeric preflight reads the source type without allocating a wide result.
+    pub(crate) fn enum_cast_type(&self, id: CellId) -> Result<Option<TypeId>, Diagnostic> {
+        if self.cells.get(id)?.retired {
+            return Err(stale());
+        }
+        if let Some(address) = self.pointer_address_operand(id)? {
+            return Ok(Some(TypeId(address.type_id)));
+        }
+        let Some((enumeration, variant)) = self.fieldless_enum_variant(id)? else {
+            return Ok(None);
+        };
+        self.enum_discriminant_parts(enumeration, variant).map(|(ty, _)| Some(ty))
+    }
+    /// One full-width scalar reader for casts and the discriminant intrinsic.
+    pub(crate) fn enum_discriminant_value(
+        &mut self, enumeration: TypeId, variant: u32,
+    ) -> Result<ValueRepr, Diagnostic> {
+        let (integer, discriminant) = self.enum_discriminant_parts(enumeration, variant)?;
+        match super::shape::primitive(integer)? {
+            super::shape::Primitive::Signed(128) | super::shape::Primitive::Unsigned(128) =>
+                self.wide_integer_value(integer, discriminant as u128),
+            super::shape::Primitive::Signed(_) => ValueRepr::signed(integer, discriminant as i64),
+            super::shape::Primitive::Unsigned(_) => ValueRepr::unsigned(integer, discriminant as u64),
+            _ => Err(invalid()),
+        }
+    }
+    fn enum_discriminant_parts(
+        &self, enumeration: TypeId, variant: u32,
+    ) -> Result<(TypeId, i128), Diagnostic> {
+        let descriptor = self.types.descriptor(enumeration)?;
+        let integer = descriptor.discriminant_type.ok_or_else(invalid)?;
+        let discriminant = descriptor
             .discriminants
             .as_ref()
             .and_then(|table| table.get(variant as usize).copied())
@@ -705,26 +737,11 @@ impl GuestStore {
             .ok_or_else(|| {
                 Diagnostic::new(
                     "LRR-E-UNSUPPORTED",
-                    "enum discriminant expression was not evaluated before its cast (E-R5-013)"
+                    "enum discriminant expression was not evaluated before its use (E-R5-013)"
                         .into(),
                 )
             })?;
-        // The value is the discriminant in the enum's representation; every
-        // such value is exactly an `isize`, or (a `u64` above `i64::MAX`) a
-        // `u64`, so the cast to the written target sees the declared bits.
-        let value = match i64::try_from(discriminant) {
-            Ok(value) => ValueRepr::signed(TypeId(8), value),
-            Err(_) => ValueRepr::unsigned(
-                TypeId(12),
-                u64::try_from(discriminant).map_err(|_| {
-                    Diagnostic::new(
-                        "LRR-E-UNSUPPORTED",
-                        "enum discriminant outside the 64-bit integer representation".into(),
-                    )
-                })?,
-            ),
-        };
-        value.map(Some)
+        Ok((integer, discriminant))
     }
     /// The enum type and active variant of a live fieldless enum value in
     /// `id`, or `None` for any other value (which is not an enum cast
