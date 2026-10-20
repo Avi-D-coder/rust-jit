@@ -1572,6 +1572,26 @@ fn prepare(
     let mut object_actuals = BTreeMap::new();
     let mut descriptors = Vec::new();
     for (index, (template, actual)) in templates.iter().zip(arguments).enumerate() {
+        // An explicit/earlier binding is the argument's coercion target,
+        // not an assertion that its original value already has that Type.
+        // Keep the original cell for packet sealing: only the boundary view
+        // changes here, using the same admission as the physical conversion.
+        let coerced;
+        let actual = if let TyTerm::Param(key) = template
+            && key.definition == definition
+            && let (Some(target), Some(source), Some(store)) =
+                (runtime.get(key), source_bindings.get(key), store)
+            && (store.pointer_type_coercion(actual.descriptor, *target)?
+                || store.pointer_family_interchange(*target, actual.descriptor))
+        {
+            coerced = ArgumentType {
+                source: source.clone(),
+                descriptor: *target,
+            };
+            &coerced
+        } else {
+            actual
+        };
         if actual.source.heap_bytes().is_none() {
             return Err(fault(
                 "LRR-E-METADATA-LIMIT",

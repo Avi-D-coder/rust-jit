@@ -1962,7 +1962,13 @@
         "worktracks/04-calls-source-views/2026-10-19-frame-type-review.md",
         "worktracks/04-calls-source-views/2026-10-19-frame-type-controls.json",
         "worktracks/04-calls-source-views/2026-10-19-frame-type-guard-controls.json",
-        "worktracks/04-calls-source-views/2026-10-19-frame-type-final-controls.json"
+        "worktracks/04-calls-source-views/2026-10-19-frame-type-final-controls.json",
+        "crates/lrr/src/runtime/cell_pointers.rs",
+        "worktracks/04-calls-source-views/2026-10-19-call-argument-coercions.md",
+        "worktracks/04-calls-source-views/2026-10-19-call-argument-coercion-review.md",
+        "worktracks/04-calls-source-views/2026-10-19-call-argument-coercion-controls.json",
+        "worktracks/evidence/2026-10-19-v422-v424-bound-call-coercions.json",
+        "worktracks/04-calls-source-views/2026-10-19-call-argument-coercion-route-control.json"
       ],
       "issue": null,
       "pull_request": null,
@@ -1986,7 +1992,8 @@
             "crates/lrr/src/frontend/declaration_field_types.rs",
             "crates/lrr/src/frontend/binding_constraint_patterns.rs",
             "crates/lrr/src/frontend/pattern_access.rs",
-            "crates/lrr/src/syntax/source_constraints.rs"
+            "crates/lrr/src/syntax/source_constraints.rs",
+            "crates/lrr/src/frontend/call_contracts.rs"
           ],
           "scope": "Same solo owner extends shared declaration/const-Type source capture and actual parameter transport; no concurrent owner or transfer."
         },
@@ -2090,9 +2097,18 @@
             "crates/lrr/src/frontend/pattern_names.rs"
           ],
           "scope": "Same solo root extends the common source-pattern declaration/constraint receipt; no parallel owner or transfer."
+        },
+        {
+          "claim": "LOCAL-038",
+          "owner": "/root",
+          "paths": [
+            "crates/lrr/src/cli/callable_value_tests.rs"
+          ],
+          "scope": "Same solo owner, no concurrent agent or ownership transfer."
         }
-      ]
+      ],
+      "latest_component_scope": "V422-V424 HELD T053/M018/M025 common bound-parameter call coercion. Existing pointer admission is factored into GuestStore::pointer_type_coercion and shared with physical pointer_coercion; an already-bound source/runtime parameter takes that admitted boundary view before existing symbolic/bind checks. Original cells, function identity and exact-once physical packet conversion remain unchanged. No eq/alias/macro-specific rule, new unifier, source parser or static check. V422 fails only a host fixture include path; V423 both builds and7/7 controls pass after correcting two selector paths (initial selector attempt ran zero tests). Unchanged fn-item-type-coerce.rs newly completes all4editions,17matched VM dispatch/outcomes,1source call,unit/empty streams/cleanup; parent V420 fails12dispatch at the eq call. Maintained harness accepts owning2015; supplemental2018/2021/2024 captures pass. V424 changes only the host regression and its lib build/strengthened control pass:16edition/origin worlds each execute ordinary CallPrepare/CallSeal/CheckParameters exactlyonce. V423 runtime receipts remain attached to their own source; production/CLI is byte-identical acrossV423/V424. One new distinct runtime-contract case (four edition rows); no refreshed suite total/full-fixture/card/milestone/upstream-solver/interpreter/JIT/Linux/diagnostic/tooling/performance closure. Generic annotation owner hints, full solver root/member/VM joins and legacy routes remain held."
     }
   ],
-  "updated_at": "2026-10-20T02:52:01.536715+00:00"
+  "updated_at": "2026-10-20T03:08:28.479825+00:00"
 }

@@ -1,0 +1,11 @@
+{
+  "controls": [
+    "cli::callable_value_tests::upstream_bound_function_pointer_arguments_share_the_ordinary_call_route",
+    "cli::crate_graph::pointer_tests::function_pointers_coerce_compare_and_call",
+    "cli::crate_graph::pointer_tests::pointer_casts_in_user_macros_and_assert_arguments",
+    "cli::callable_value_tests::constants_statics_and_function_items_are_ordinary_value_items",
+    "cli::preentry_loader_tests::unchanged_explicit_alias_keeps_shared_application_guard_all_editions_and_origins",
+    "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::official_three_call_plans_keep_nominal_identity_shared_rows_and_guarded_caller",
+    "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::type_argument_plan_keeps_real_unsupported_body_and_field_cold_and_resolves_caller_alias"
+  ]
+}

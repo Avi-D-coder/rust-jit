@@ -1,0 +1,5 @@
+{
+  "controls": [
+    "cli::callable_value_tests::upstream_bound_function_pointer_arguments_share_the_ordinary_call_route"
+  ]
+}

@@ -833,20 +833,32 @@ impl GuestStore {
         value: ValueRepr,
         expected: TypeId,
     ) -> Result<bool, Diagnostic> {
+        if value.kind != 8 && value.kind != 9 {
+            return Ok(false);
+        }
+        self.pointer_type_coercion(TypeId(value.type_id), expected)
+    }
+    /// Pure descriptor admission shared by reached call contracts and the
+    /// physical pointer conversion. This does not convert or consume a value.
+    pub(crate) fn pointer_type_coercion(
+        &self,
+        actual: TypeId,
+        expected: TypeId,
+    ) -> Result<bool, Diagnostic> {
         let TypeKey::RawPtr {
             mutable: to_mutable,
             ..
         } = self.types.descriptor(expected)?.key.as_ref()
         else {
             return Ok(match self.types.descriptor(expected)?.key.as_ref() {
-                TypeKey::Function { .. } => self.callable_identity(value).is_ok(),
+                TypeKey::Function { .. } => matches!(
+                    self.types.descriptor(actual)?.key.as_ref(),
+                    TypeKey::Callable { captures, .. } if captures.is_empty()
+                ),
                 _ => false,
             });
         };
-        if value.kind != 9 {
-            return Ok(false);
-        }
-        Ok(match self.types.descriptor(TypeId(value.type_id))?.key.as_ref() {
+        Ok(match self.types.descriptor(actual)?.key.as_ref() {
             TypeKey::Ref { mutable, .. } => !*to_mutable || *mutable,
             TypeKey::RawPtr { .. } => true,
             _ => false,

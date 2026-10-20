@@ -51,6 +51,40 @@ fn closures_made(report: &crate::engine::run::RunReport) -> u64 {
 }
 const EDITIONS: [u16; 2] = [2015, 2021];
 
+/// The imported program is unchanged; origin/standard-macro adaptations stay
+/// here. Source guards for its actual alias/call are covered in preentry tests.
+#[test]
+fn upstream_bound_function_pointer_arguments_share_the_ordinary_call_route() {
+    let original = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/functions-closures/fn-item-type-coerce.rs"
+    );
+    let (prefix, items) = original.split_at(original.find("\nfn foo").unwrap());
+    let emitted = format!(
+        "{prefix}\nmacro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} emit!{{{items}}}"
+    );
+    let wrapped = format!(
+        "{prefix}\nmacro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} \
+         macro_rules! wrap {{($($t:tt)*)=>{{emit!{{$($t)*}}}}}} wrap!{{{items}}}"
+    );
+    let nested = original.replace(
+        "eq::<IntMap>(foo, bar);",
+        "assert!({ eq::<IntMap>(foo, bar); true });",
+    );
+    for edition in [2015, 2018, 2021, 2024] {
+        for (origin, text) in [original, &emitted, &wrapped, &nested].into_iter().enumerate() {
+            let report = completed(text, edition);
+            assert!(report.output.is_empty());
+            // Stable ordinary opcodes: CallPrepare, CallSeal, CheckParameters.
+            // An alternate macro evaluator cannot stand in for the one call.
+            for opcode in [22, 19, 20] {
+                assert_eq!(report.opcode_counters.started_by_opcode[opcode], 1,
+                    "edition {edition}, origin {origin}, ordinary opcode {opcode}");
+            }
+            eprintln!("fn-item coercion edition={edition} origin={origin} ordinary prepare/seal/parameters=1/1/1");
+        }
+    }
+}
+
 #[test]
 fn constants_statics_and_function_items_are_ordinary_value_items() {
     const SOURCE: &str = "
