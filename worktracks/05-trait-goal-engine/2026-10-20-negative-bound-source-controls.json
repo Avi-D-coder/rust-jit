@@ -1,0 +1,24 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Held M020 source component regression after default-bound query integration: HRTB parent remains cold for child own bundle and explicitly pending when demanded; actual Q80 upstream root-input/Q82 default/Q83 semantic metadata and common constructor regressions. Negative-bound guard/control candidates are source-only held; parser activation is withdrawn until common conditional-impl query availability, selection and reached Copy/Drop consumers propagate typed pending. Neither negative-control is executed or passed; no upstream root/factory/runtime/gate closure.",
+  "controls": [
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_item_bounds::unchanged_associated_output_bound_uses_actual_projection_span_and_typed_default_holds",
+    "cli::preentry_loader_tests::upstream_source_clauses::unchanged_streaming_gat_clauses_use_pinned_parent_instantiation_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_source_clauses::unchanged_hrtb_parent_is_unforced_for_own_bundle_and_pending_for_hierarchy",
+    "cli::crate_graph::builtin_derive_tests::unchanged_associated_constructor_uses_reached_source_arguments_all_origins_and_editions",
+    "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins"
+  ],
+  "held_controls": [
+    {
+      "selector": "cli::preentry_loader_tests::upstream_source_clauses::unchanged_negative_supertrait_bounds_remain_typed_pending_all_editions_and_origins",
+      "status": "held_unexecuted",
+      "reason": "Common conditional impl applicability/member/Copy/Drop availability prerequisite is missing. Negative TypeBound parser activation was withdrawn before build/execution; these unchanged upstream source witnesses are not admitted/passed."
+    },
+    {
+      "selector": "cli::preentry_loader_tests::upstream_source_clauses::unchanged_negative_associated_constraints_keep_signature_transport_pending_all_editions_and_origins",
+      "status": "held_unexecuted",
+      "reason": "Common conditional impl applicability/member/Copy/Drop availability prerequisite is missing. Negative TypeBound parser activation was withdrawn before build/execution; these unchanged upstream source witnesses are not admitted/passed."
+    }
+  ]
+}

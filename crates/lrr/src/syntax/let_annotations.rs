@@ -325,12 +325,7 @@ impl ParsedFile {
             ast::Type::DynTraitType(object) => {
                 // The principal trait: the first trait bound; auto-trait and
                 // region bounds add no runtime structure.
-                let Some(principal) = object.type_bound_list().and_then(|bounds| {
-                    bounds.bounds().find_map(|bound| match bound.ty() {
-                        Some(ast::Type::PathType(path)) => Some(path),
-                        _ => None,
-                    })
-                }) else {
+                let Some(principal) = crate::syntax::source_bound_polarity::positive_principal(object.type_bound_list()) else {
                     return Ok(None);
                 };
                 let Some(node) = Self::path_type_node(body, index, &principal)? else {

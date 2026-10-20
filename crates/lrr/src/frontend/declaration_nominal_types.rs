@@ -78,8 +78,14 @@ impl SchemaNames<'_> {
                         })
                 }
             };
-            if !selected || bound.question_mark_token().is_some() || bound.lifetime().is_some() {
+            if !selected {
                 continue;
+            }
+            match crate::syntax::source_bound_polarity::polarity(&bound) {
+                crate::syntax::source_bound_polarity::SourceBoundPolarity::Negative =>
+                    return QueryPoll::Ready(Ok(None)),
+                crate::syntax::source_bound_polarity::SourceBoundPolarity::Positive => {},
+                _ => continue,
             }
             let Some(ast::Type::PathType(bound_type)) = bound.ty() else {
                 return QueryPoll::Ready(Ok(None));

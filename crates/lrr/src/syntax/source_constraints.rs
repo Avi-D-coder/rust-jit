@@ -1067,12 +1067,8 @@ fn annotate(
             },
             ast::Type::InferType(_) => Some(TypeShape::Infer),
             ast::Type::DynTraitType(object) => {
-                let principal = object.type_bound_list().and_then(|bounds| {
-                    bounds.bounds().find_map(|bound| match bound.ty() {
-                        Some(ast::Type::PathType(path)) => Some(ast::Type::PathType(path)),
-                        _ => None,
-                    })
-                });
+                let principal = crate::syntax::source_bound_polarity::positive_principal(object.type_bound_list())
+                    .map(ast::Type::PathType);
                 match principal {
                     Some(principal) => type_node(body, index, &principal)?.map(TypeShape::Dyn),
                     None => None,

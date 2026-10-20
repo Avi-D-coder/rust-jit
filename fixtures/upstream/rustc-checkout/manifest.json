@@ -19506,6 +19506,24 @@
       "bytes": 256
     },
     {
+      "path": "tests/ui/traits/negative-bounds/associated-constraints.rs",
+      "git_blob": "e38ec04506e2844125a76f86957435ff29c2a3b2",
+      "sha256": "b2441a8b4b8ca55a2305fa364d61a3c4bf613b6cc74890af3f9fc93f79dfc46c",
+      "bytes": 684
+    },
+    {
+      "path": "tests/ui/traits/negative-bounds/associated-constraints.stderr",
+      "git_blob": "a7fca4eaa81c470b3cecf534e6586da160bd8bf3",
+      "sha256": "f73733f69f422bae822e94a1f57360867925e7f470238887431f1e4b6778f875",
+      "bytes": 1053
+    },
+    {
+      "path": "tests/ui/traits/negative-bounds/supertrait.rs",
+      "git_blob": "4422b71e31690b6891004f6682ced1b468b0f306",
+      "sha256": "4db46fd8ae050112072dfa20e416f3dd7216f130dffa99c47078667900f53424",
+      "bytes": 137
+    },
+    {
       "path": "tests/ui/traits/negative-impls/negated-auto-traits-rpass.rs",
       "git_blob": "2d376a9b0562e2b823a13ff152e7cbd0e1746bd9",
       "sha256": "8622ddb381a40fa126174b1f2f51e9f73a71eb4cc300aa1eab92fc6822ef9fc6",
@@ -41784,6 +41802,23 @@
       "path": "tests/ui/traits/mut-trait-in-struct-8249.rs",
       "directives": [
         "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/traits/negative-bounds/associated-constraints.rs",
+      "directives": [
+        "//@ compile-flags: -Zinternal-testing-features"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/traits/negative-bounds/supertrait.rs",
+      "directives": [
+        "//@ compile-flags: -Zinternal-testing-features",
+        "//@ check-pass"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"

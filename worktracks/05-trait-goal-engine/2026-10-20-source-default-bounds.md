@@ -425,3 +425,64 @@ failing unit call, so it is source-metadata evidence rather than a required
 runtime pass. `simple.rs` has actual generic/where negative Copy requirements
 and both matching/mismatching impl contexts. No fixture was copied or changed,
 no source/control/tool was edited, and no Cargo/test/parser execution occurred.
+
+## Next bounded DiscriminantKind preflight proposal (V512 read-only)
+
+Witness: unchanged tests/ui/enum-discriminant/repr128.rs, first reached
+`discr(Signed::Zero, 0)` and its projected PartialEq<U> clause; no dummy WF root.
+Propose only source-contract alignment plus immutable per-query preflight, with
+abort retained and all missing callback inputs prepared before actual entry.
+
+Exact source patch scope: facade/core/marker.rs imports + DiscriminantKind block.
+Reuse licensed pinned library/core/src/marker.rs:880–887: lang discriminant_kind,
+rustc_deny_explicit_impl, rustc_dyn_incompatible_trait; associated lang
+`discriminant_type` and `Clone + Copy + Debug + Eq + PartialEq + Hash + Send +
+Sync + Unpin`. Preserve the raw original already registered; no new builtin impl.
+Add explicit actual imports `crate::fmt::Debug`, `crate::hash::Hash` and
+`crate::cmp::{Eq, PartialEq}` alongside existing Clone; Copy/Send/Sync/Unpin are
+same-module declarations. Current edition preludes already export Clone/Eq/
+PartialEq/Copy/Send/Sync/Unpin, but explicit imports avoid an implicit-name claim.
+All nine actual target traits/modules exist; name availability is not full facts.
+
+Prerequisite separation: current facade Send/Sync/Unpin are plain traits whereas
+pinned marker.rs:92/657/1014 has auto traits. Full associated-bound builtin
+closure cannot invent their auto/coinductive flags from names. Aligning those
+source contracts/activation is a separate reviewed slice, or retain explicit
+facade-conformance pending; do not claim the Discriminant block patch fixes it.
+Copy:Clone and Eq:PartialEq are real additional supertrait dependencies.
+Pinned collect.rs::trait_def (1088–1166) supplies exact flag policy: actual
+trait/alias role, auto/safety from declaration, marker iff !alias+#[marker],
+coinductive iff rustc_coinductive||auto, fundamental/force-dyn/deny-impl attrs.
+TraitHeader already retains auto/unsafe/alias/attrs; Q75 retains source receipts.
+Q83 does not produce all these trait query domains. A typed immutable per-query
+plan must distinguish known applicable data from unavailable/invalid domains;
+never fabricate unused TraitFacts/PredicateFacts fields or a legacy bool solver.
+
+Query ordering/cycles: Q75 header/DeclarationGenerics and TraitDeclaration ->
+Q76 lang classification/Q77 actual associated member identity -> Q84 owning
+configuration/default policy -> Q78 written+implicit own rows -> Q80/Q81 own/
+parent transport, with Q82 output rows separate. Keep Q84 free of Q78/Q82 and
+trait-flag/source identity preparation free of predicate elaboration recursion.
+The new associated #[lang] can be classified by actual Q76 source attrs; the
+shared SolverProjectionLangItem has no Discriminant variant and needs no new
+entry. Q77 actual item ID, parent and alias layouts remain the projection proof.
+
+Concrete builtin normalization reads actual trait flags/lang/relevant candidate
+buckets and enum kind/repr; existing PreparedEnumDiscriminant supplies i128/u128.
+It need not evaluate enum initializer values, bodies or physical layout.
+An actual enum Sized query uses pinned adt.rs:766 nonstruct->None, not a struct
+static checker. Relevant candidate membership/absence must be authentic before
+entry. The outer PartialEq root also needs real primitive_impls i128/u128 impl
+metadata/clauses and its same owned integer U; builtin normalization alone is
+component evidence. Distinct own/all/item/self/nonself/elaboration domains stay
+held until actual producers exist; Q82 source rows cannot impersonate them.
+
+Cost: prepare selected declaration/lang/candidate closure once in memo queries,
+retain Arc source/edition/epoch and positive/negative bucket dependencies; no
+source planning, full-world scan or callback IO during solver/runtime entry.
+Acceptance: unchanged repr128 all four editions and original/user/wrapper,
+actual trait/item IDs and nine source bounds/spans/import joins, typed holds for
+unavailable flags/domains, memo/currentness/withdrawal/cold-body observations,
+then real pinned normalization and outer PartialEq inference with U resolving
+i128/u128 and the actual runtime result. Full-fixture/static/standard-macro and
+runtime/JIT acceptance remain separate. No implementation or tests in this report.

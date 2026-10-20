@@ -580,12 +580,8 @@ pub(super) fn resolve_actual_type(
                     ast::Type::DynTraitType(object) => object.type_bound_list(),
                     _ => None,
                 };
-                let principal = bounds.and_then(|bounds| {
-                    bounds.bounds().find_map(|bound| match bound.ty() {
-                        Some(ast::Type::PathType(path)) => path.path(),
-                        _ => None,
-                    })
-                });
+                let principal = crate::syntax::source_bound_polarity::positive_principal(bounds)
+                    .and_then(|path| path.path());
                 let Some((segments, absolute)) =
                     principal.and_then(super::member_index::path_segments)
                 else {
@@ -1054,7 +1050,12 @@ pub(super) fn resolve_actual_type(
                             && path.segment().and_then(|segment| segment.name_ref())
                                 .is_some_and(|name| name.text() == parameter.name))),
                 };
-                if selected && bound.question_mark_token().is_none() && bound.lifetime().is_none()
+                if selected && crate::syntax::source_bound_polarity::polarity(&bound)
+                    == crate::syntax::source_bound_polarity::SourceBoundPolarity::Negative {
+                    return QueryPoll::Ready(Ok(None));
+                }
+                if selected && crate::syntax::source_bound_polarity::polarity(&bound)
+                    == crate::syntax::source_bound_polarity::SourceBoundPolarity::Positive
                     && let Some(ast::Type::PathType(ty)) = bound.ty()
                     && let Some(path) = ty.path()
                 { paths.push(path); }
@@ -1111,6 +1112,12 @@ pub(super) fn resolve_actual_type(
                     .into_iter()
                     .flat_map(|list| list.bounds())
                 {
+                    match crate::syntax::source_bound_polarity::polarity(&bound) {
+                        crate::syntax::source_bound_polarity::SourceBoundPolarity::Negative =>
+                            return QueryPoll::Ready(Ok(None)),
+                        crate::syntax::source_bound_polarity::SourceBoundPolarity::Positive => {},
+                        _ => continue,
+                    }
                     let Some(ast::Type::PathType(path)) = bound.ty() else {
                         continue;
                     };
@@ -1623,9 +1630,15 @@ pub(super) fn actual_bound_equation_candidates(
         .collect();
     let bounds = actual_declaration_bounds(declaration, owner);
     let mut candidates = Vec::new();
+    let mut polarity_complete = true;
     for (subject, written_subject, bound) in bounds {
-        if bound.question_mark_token().is_some() || bound.lifetime().is_some() {
-            continue;
+        match crate::syntax::source_bound_polarity::polarity(&bound) {
+            crate::syntax::source_bound_polarity::SourceBoundPolarity::Negative => {
+                polarity_complete = false;
+                continue;
+            },
+            crate::syntax::source_bound_polarity::SourceBoundPolarity::Positive => {},
+            _ => continue,
         }
         let Some(ast::Type::PathType(ty)) = bound.ty() else {
             continue;
@@ -1675,7 +1688,7 @@ pub(super) fn actual_bound_equation_candidates(
     }
     ActualBoundEquationCandidates {
         rows: candidates,
-        owner_complete: actual_bound_owner_complete(declaration, owner),
+        owner_complete: polarity_complete && actual_bound_owner_complete(declaration, owner),
     }
 }
 

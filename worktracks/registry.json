@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-20T20:41:03.818168+00:00",
+  "updated_at": "2026-10-20T21:09:14.784762+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -600,9 +600,10 @@
             "worktracks/05-trait-goal-engine/2026-10-20-source-item-bounds-review.md",
             "worktracks/evidence/2026-10-20-v506-v507-reached-constructors.json",
             "worktracks/evidence/2026-10-20-v508-constructor-source-scopes.json",
-            "worktracks/evidence/2026-10-20-v509-v510-reached-root-source-inputs.json"
+            "worktracks/evidence/2026-10-20-v509-v510-reached-root-source-inputs.json",
+            "worktracks/evidence/2026-10-20-v511-v512-conditional-applicability-hold.json"
           ],
-          "latest_component_scope": "V509-V510 HELD M020 source inputs for the real reached repr128 root. RootVariables owns a stable source-key map into the actual pinned InferCtxt and the same source_terms Encoder transports rigid declarations or scoped root variables. Q83 preserves source-proven Known/NotApplicable/Pending domains. Q84 retains complete pinned implicit/default-bound policy with real owning crate configuration and Sized/MetaSized/PointeeSized identities; Q78 own declarations and Q82 authentic projection outputs consume it. The legacy simple-Sized own route is removed; general collector/runtime legacy routes remain held. V509 lib fails E0423 (missing core local) before tests; V510 restores only that existing source identity and all three builds pass. Five of six exact controls pass: 12 repr128 input worlds/36 clauses/12 shared integer input-variable observations, 12 output-default worlds, 12 GAT worlds/24 semantic declarations, 12 constructor worlds and 4 activation worlds. HRTB parent control fails its old pending-enum expectation in the first world; actual enum was unprinted, not measured as a specific cause. No completed HRTB matrix pass or integration claim. Four unchanged owning2015 runtime cases retain three passes/13 checks each and repr128 LRR-E-OP-TYPE. All closing source/HEAD/test/CLI/digester guards match V510 source152353d13a9876be8005956a039a991eedfd179e152d2689f4077de008a49657. Zero new distinct runtime gains, refreshed suite/morning totals or task/architecture/root/interpreter/JIT closure. Complete fact assembly, actual solver root/owned response, negative syntax/polarity and query-family completeness remain open. Host abort/unwind design question remains pending and profiles unchanged."
+          "latest_component_scope": "V511-V512 HELD M020 conditional applicability/source guard checkpoint. Shared retained TypeBound polarity/principal/header helpers prevent negative rows entering positive-only source selection or legacy token signature transport. The proposed parser extension was WITHDRAWN BEFORE BUILD/EXECUTION: direct conditional impl/default-body/Copy/Drop/Receiver legacy readers cannot yet propagate typed applicability. Both imported unchanged negative fixtures and their registered source-control candidates remain explicitly HELD_UNEXECUTED, not admitted/passed/inapplicable. Conditional applicability through the actual upstream solver/common query service is the next prerequisite, not a new boolean solver. V511 lib E0433 module-path failure is preserved; V512 fixes only two absolute syntax module paths and all three builds pass. All six active regression controls pass with matching source/HEAD/test/CLI/digester guards at source ebea0de06be9db158f640f7d6708335b1cfa9236a2a55edc481c8a2d4d215ec9: 12 Q80 integer-input worlds/36clauses/12projections, 12 Q82 worlds/12written12defaults, 12 GAT worlds/24Q83declarations, 12 HRTB worlds preserving child-own coldness and exact Source(DefaultBounds(WrittenRecipe)) parent hold, 12 constructor worlds/264operations and 4 activation worlds/1624operations. The V510 HRTB failed assertion is closed only at V512. Owning2015 runtime remains 3/4pass13checks each; repr128 still LRR-E-OP-TYPE. Zero new distinct runtime gains or refreshed suite/morning totals. Source metadata will be prepared ahead of solver entry under unchanged host abort profiles; guest unwinding remains separate. Complete compiler clause families/source fact closure/root/owned inference results and member/ownership integration remain open. No task/milestone, full negative transport, full-suite/interpreter/architecture/JIT/Linux/performance gate closes."
         },
         {
           "id": "WT05-03",
@@ -762,10 +763,11 @@
         "worktracks/05-trait-goal-engine/2026-10-20-source-item-bounds-review.md",
         "worktracks/evidence/2026-10-20-v506-v507-reached-constructors.json",
         "worktracks/evidence/2026-10-20-v508-constructor-source-scopes.json",
-        "worktracks/evidence/2026-10-20-v509-v510-reached-root-source-inputs.json"
+        "worktracks/evidence/2026-10-20-v509-v510-reached-root-source-inputs.json",
+        "worktracks/evidence/2026-10-20-v511-v512-conditional-applicability-hold.json"
       ],
       "solver_policy": "Pinned upstream next-generation rustc solver; E-R5-014. Adapter integration not implemented.",
-      "latest_component_scope": "V509-V510 HELD M020 source inputs for the real reached repr128 root. RootVariables owns a stable source-key map into the actual pinned InferCtxt and the same source_terms Encoder transports rigid declarations or scoped root variables. Q83 preserves source-proven Known/NotApplicable/Pending domains. Q84 retains complete pinned implicit/default-bound policy with real owning crate configuration and Sized/MetaSized/PointeeSized identities; Q78 own declarations and Q82 authentic projection outputs consume it. The legacy simple-Sized own route is removed; general collector/runtime legacy routes remain held. V509 lib fails E0423 (missing core local) before tests; V510 restores only that existing source identity and all three builds pass. Five of six exact controls pass: 12 repr128 input worlds/36 clauses/12 shared integer input-variable observations, 12 output-default worlds, 12 GAT worlds/24 semantic declarations, 12 constructor worlds and 4 activation worlds. HRTB parent control fails its old pending-enum expectation in the first world; actual enum was unprinted, not measured as a specific cause. No completed HRTB matrix pass or integration claim. Four unchanged owning2015 runtime cases retain three passes/13 checks each and repr128 LRR-E-OP-TYPE. All closing source/HEAD/test/CLI/digester guards match V510 source152353d13a9876be8005956a039a991eedfd179e152d2689f4077de008a49657. Zero new distinct runtime gains, refreshed suite/morning totals or task/architecture/root/interpreter/JIT closure. Complete fact assembly, actual solver root/owned response, negative syntax/polarity and query-family completeness remain open. Host abort/unwind design question remains pending and profiles unchanged."
+      "latest_component_scope": "V511-V512 HELD M020 conditional applicability/source guard checkpoint. Shared retained TypeBound polarity/principal/header helpers prevent negative rows entering positive-only source selection or legacy token signature transport. The proposed parser extension was WITHDRAWN BEFORE BUILD/EXECUTION: direct conditional impl/default-body/Copy/Drop/Receiver legacy readers cannot yet propagate typed applicability. Both imported unchanged negative fixtures and their registered source-control candidates remain explicitly HELD_UNEXECUTED, not admitted/passed/inapplicable. Conditional applicability through the actual upstream solver/common query service is the next prerequisite, not a new boolean solver. V511 lib E0433 module-path failure is preserved; V512 fixes only two absolute syntax module paths and all three builds pass. All six active regression controls pass with matching source/HEAD/test/CLI/digester guards at source ebea0de06be9db158f640f7d6708335b1cfa9236a2a55edc481c8a2d4d215ec9: 12 Q80 integer-input worlds/36clauses/12projections, 12 Q82 worlds/12written12defaults, 12 GAT worlds/24Q83declarations, 12 HRTB worlds preserving child-own coldness and exact Source(DefaultBounds(WrittenRecipe)) parent hold, 12 constructor worlds/264operations and 4 activation worlds/1624operations. The V510 HRTB failed assertion is closed only at V512. Owning2015 runtime remains 3/4pass13checks each; repr128 still LRR-E-OP-TYPE. Zero new distinct runtime gains or refreshed suite/morning totals. Source metadata will be prepared ahead of solver entry under unchanged host abort profiles; guest unwinding remains separate. Complete compiler clause families/source fact closure/root/owned inference results and member/ownership integration remain open. No task/milestone, full negative transport, full-suite/interpreter/architecture/JIT/Linux/performance gate closes."
     },
     {
       "id": "WT06",
@@ -1262,8 +1264,8 @@
     "working_tree": "solo_held_source_checkpoint_after_collected_async_validation",
     "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
     "manifest_sha256": "874bb4abeda060172bf49847a132f921d8f51051005ec59bf971e182d14d5ffa",
-    "imported_cases": 2809,
-    "imported_files": 3484,
+    "imported_cases": 2815,
+    "imported_files": 3494,
     "claims_are_not_acceptance": true,
     "validation": "V186 solo held common explicit constructor arguments: shared retained indexed syntax/Type selection feeds source nominal constraints, record preparation and call entry; duplicate admitted AST walks removed. Empty generic brackets and no-initializer wildcard declarations follow ordinary Type/statement semantics. Both builds and11/11focused bodies pass;3/5selected unchanged upstream runtime contracts pass. Empty-generic-brackets-equiv newly completes all4editions (34dispatches,3sourcecalls,cleanup) versus recorded raw-v16 failure. One distinct new runtime gain; tracked resumption gains36, no refreshed suite total. Clone-basic advances24->37dispatches but remains __self_0 failure; let-else moved-location failure remains. Architecture/task/milestone/interpreter/JIT gates held.",
     "historical_runtime_contract_passes": 1429,
@@ -1272,7 +1274,7 @@
     "guest_jit": "blocked_by_runtime_acceptance",
     "source_checkpoint_pushed": true,
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired.",
-    "latest_targeted_evidence": "worktracks/evidence/2026-10-20-v509-v510-reached-root-source-inputs.json",
+    "latest_targeted_evidence": "worktracks/evidence/2026-10-20-v511-v512-conditional-applicability-hold.json",
     "evidence": [
       "worktracks/evidence/2026-10-18-interpreter-v92-v99-symbolic-places.json",
       "worktracks/evidence/2026-10-18-interpreter-v100-open-reference-coercions.json",
@@ -1346,11 +1348,12 @@
       "worktracks/05-trait-goal-engine/2026-10-20-source-item-bounds-review.md",
       "worktracks/evidence/2026-10-20-v506-v507-reached-constructors.json",
       "worktracks/evidence/2026-10-20-v508-constructor-source-scopes.json",
-      "worktracks/evidence/2026-10-20-v509-v510-reached-root-source-inputs.json"
+      "worktracks/evidence/2026-10-20-v509-v510-reached-root-source-inputs.json",
+      "worktracks/evidence/2026-10-20-v511-v512-conditional-applicability-hold.json"
     ],
-    "source_checkpoint_note": "Last confirmed pushed checkpoint before V494 candidate is a3e36397f8dd26c0bc5797d7e42908bce0726a26. Exact candidate source/binary fingerprints and held integration scope are in V494 evidence; a source checkpoint is not interpreter/root/release acceptance.",
+    "source_checkpoint_note": "49cffe1 was actually pushed before V511/V512 validation. New held checkpoint commit is recorded by Git history/final handoff; no self-referential commit hash or integration claim.",
     "previous_source_checkpoint_commit": "548d9d1b190d9d7e03e5067cd3c71fa0e9d24ea4",
-    "source_checkpoint_commit": "a3e36397f8dd26c0bc5797d7e42908bce0726a26",
+    "source_checkpoint_commit": "49cffe1587e2d931efe1c7c6b44f07fad97490af",
     "artifact_retention": {
       "evidence": "worktracks/evidence/2026-10-18-artifact-retention.json",
       "workflow": "tools/validation/README.md",
@@ -1524,6 +1527,11 @@
       "status": "held_component_checkpoint",
       "evidence": "worktracks/evidence/2026-10-20-v509-v510-reached-root-source-inputs.json",
       "scope": "V509-V510 HELD M020 source inputs for the real reached repr128 root. RootVariables owns a stable source-key map into the actual pinned InferCtxt and the same source_terms Encoder transports rigid declarations or scoped root variables. Q83 preserves source-proven Known/NotApplicable/Pending domains. Q84 retains complete pinned implicit/default-bound policy with real owning crate configuration and Sized/MetaSized/PointeeSized identities; Q78 own declarations and Q82 authentic projection outputs consume it. The legacy simple-Sized own route is removed; general collector/runtime legacy routes remain held. V509 lib fails E0423 (missing core local) before tests; V510 restores only that existing source identity and all three builds pass. Five of six exact controls pass: 12 repr128 input worlds/36 clauses/12 shared integer input-variable observations, 12 output-default worlds, 12 GAT worlds/24 semantic declarations, 12 constructor worlds and 4 activation worlds. HRTB parent control fails its old pending-enum expectation in the first world; actual enum was unprinted, not measured as a specific cause. No completed HRTB matrix pass or integration claim. Four unchanged owning2015 runtime cases retain three passes/13 checks each and repr128 LRR-E-OP-TYPE. All closing source/HEAD/test/CLI/digester guards match V510 source152353d13a9876be8005956a039a991eedfd179e152d2689f4077de008a49657. Zero new distinct runtime gains, refreshed suite/morning totals or task/architecture/root/interpreter/JIT closure. Complete fact assembly, actual solver root/owned response, negative syntax/polarity and query-family completeness remain open. Host abort/unwind design question remains pending and profiles unchanged."
+    },
+    "held_conditional_applicability": {
+      "status": "held_component_checkpoint",
+      "evidence": "worktracks/evidence/2026-10-20-v511-v512-conditional-applicability-hold.json",
+      "scope": "V511-V512 HELD M020 conditional applicability/source guard checkpoint. Shared retained TypeBound polarity/principal/header helpers prevent negative rows entering positive-only source selection or legacy token signature transport. The proposed parser extension was WITHDRAWN BEFORE BUILD/EXECUTION: direct conditional impl/default-body/Copy/Drop/Receiver legacy readers cannot yet propagate typed applicability. Both imported unchanged negative fixtures and their registered source-control candidates remain explicitly HELD_UNEXECUTED, not admitted/passed/inapplicable. Conditional applicability through the actual upstream solver/common query service is the next prerequisite, not a new boolean solver. V511 lib E0433 module-path failure is preserved; V512 fixes only two absolute syntax module paths and all three builds pass. All six active regression controls pass with matching source/HEAD/test/CLI/digester guards at source ebea0de06be9db158f640f7d6708335b1cfa9236a2a55edc481c8a2d4d215ec9: 12 Q80 integer-input worlds/36clauses/12projections, 12 Q82 worlds/12written12defaults, 12 GAT worlds/24Q83declarations, 12 HRTB worlds preserving child-own coldness and exact Source(DefaultBounds(WrittenRecipe)) parent hold, 12 constructor worlds/264operations and 4 activation worlds/1624operations. The V510 HRTB failed assertion is closed only at V512. Owning2015 runtime remains 3/4pass13checks each; repr128 still LRR-E-OP-TYPE. Zero new distinct runtime gains or refreshed suite/morning totals. Source metadata will be prepared ahead of solver entry under unchanged host abort profiles; guest unwinding remains separate. Complete compiler clause families/source fact closure/root/owned inference results and member/ownership integration remain open. No task/milestone, full negative transport, full-suite/interpreter/architecture/JIT/Linux/performance gate closes."
     }
   },
   "current_spec": {

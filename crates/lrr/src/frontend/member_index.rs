@@ -1733,27 +1733,36 @@ fn blanket_bounds(
         return Ok(None);
     };
     let mut bounds = Vec::new();
-    let mut add = |list: Option<ast::TypeBoundList>| -> Result<(), Diagnostic> {
+    let mut add = |list: Option<ast::TypeBoundList>| -> Result<bool, Diagnostic> {
         for bound in list.into_iter().flat_map(|list| list.bounds()) {
-            if bound.question_mark_token().is_some() || bound.lifetime().is_some() {
-                continue;
+            match crate::syntax::source_bound_polarity::polarity(&bound) {
+                crate::syntax::source_bound_polarity::SourceBoundPolarity::Negative => {
+                    // The outer None is existing unresolved applicability.
+                    // Inner None is permissive legacy metadata, not a pending
+                    // condition and cannot represent negative polarity.
+                    return Ok(false);
+                },
+                crate::syntax::source_bound_polarity::SourceBoundPolarity::Positive => {},
+                _ => continue,
             }
             let Some(ast::Type::PathType(ty)) = bound.ty() else {
                 continue;
             };
             bounds.push(resolve(ty.path())?);
         }
-        Ok(())
+        Ok(true)
     };
-    add(param.type_bound_list())?;
+    if !add(param.type_bound_list())? {
+        return Ok(None);
+    }
     if let Some(clause) = implementation.where_clause() {
         for predicate in clause.predicates() {
             let names_param = matches!(predicate.ty(), Some(ast::Type::PathType(ty))
                 if ty.path().is_some_and(|path| path.qualifier().is_none()
                     && path.segment().and_then(|segment| segment.name_ref())
                         .is_some_and(|n| n.text() == name.as_str())));
-            if names_param {
-                add(predicate.type_bound_list())?;
+            if names_param && !add(predicate.type_bound_list())? {
+                return Ok(None);
             }
         }
     }

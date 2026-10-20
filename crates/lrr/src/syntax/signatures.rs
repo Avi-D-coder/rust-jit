@@ -387,6 +387,16 @@ impl ParsedFile {
             return Ok(signature);
         }
         let function = self.function_header(definition, header, context, body)?;
+        // Raw-token callable/equality consumers cannot represent negative
+        // obligations. Keep them behind the actual retained-header boundary
+        // until that transport exists, rather than interpreting !Trait as a
+        // positive callable or projection equation. Cold bodies stay untouched.
+        if super::source_bound_polarity::negative_in_header(function.syntax())
+            || associated_owner(function.syntax()).is_some_and(|owner|
+                super::source_bound_polarity::negative_in_header(&owner)) {
+            return Err(Diagnostic::new("LRR-E-UNSUPPORTED",
+                "negative source bounds require semantic signature transport".into()));
+        }
         let (generics, layout) = self.declaration_generics(function.syntax())?;
         let list = function
             .param_list()

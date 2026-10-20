@@ -208,6 +208,8 @@ fn prepare_bound_rows(
             || row.bound.tilde_token().is_some()
             || row.bound.async_token().is_some()
             || row.bound.use_token().is_some()
+            || crate::syntax::source_bound_polarity::polarity(&row.bound)
+                == crate::syntax::source_bound_polarity::SourceBoundPolarity::Negative
         {
             pending!(QualifiedBound);
         }

@@ -213,3 +213,13 @@ candidate shadow impl search and would not demonstrate inference from the i128
 impl. The current source control intentionally still preserves T as a source
 parameter and does not evaluate a root; it establishes neither this call-site
 instantiation nor the correct runtime ParamEnv.
+
+Policy footnote for the V511 follow-on: the earlier reached-upstream-root-inputs
+record preserves the historical question about disposable host unwinding. The
+user subsequently asked about preparing facts ahead of entry; there is no
+approved or implemented host-unwinding/profile-policy change. Lead proceeds under
+the existing panic=abort contract: prepare the actual required source-fact/query
+closure before entry, return typed pending outside the root when it is missing,
+and retain the current guards. Metadata work is not waiting for a profile change.
+This footnote records the active path without deleting the earlier design-question
+context or claiming that the complete closure/root producer already exists.

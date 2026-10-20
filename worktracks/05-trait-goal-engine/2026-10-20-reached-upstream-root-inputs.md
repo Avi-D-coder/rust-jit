@@ -155,3 +155,51 @@ const/region root variables, owned inferred results, factory/root integration,
 host demand handling and complete runtime/architecture matrices remain open.
 The eight recurring modes above are distinct from audit IDs MA001–MA008; none
 of those historical findings is closed by this component/source review.
+
+## Ahead-of-entry preparation direction
+
+The user asked for a fuller explanation of host versus guest unwinding, then
+asked whether the necessary facts can be prepared ahead of solver entry. The
+lead explained the complete relevant source-query closure approach and will
+proceed within the existing abort contract: prepare immutable required metadata,
+certify the relevant closure before calling the solver, and leave missing
+source support as a typed preparation result. No host profile/spec policy change
+has been approved or made. This work need not wait for host-unwind authorization.
+Guest Rust unwinding/destructors/catch_unwind are a separate runtime requirement.
+
+Preflight must retain complete relevant candidate buckets and genuine compiler
+query domains, including recursively required bounds/supertraits/associated
+metadata and relevant ADT representation facts. It may prepare discarded
+candidates' metadata; it does not authorize callee-body/cold-branch preparation,
+a whole-program checker, fabricated empty query answers or the callee's own
+obligation as an assumption in the caller's ParamEnv. Existing broad mandatory
+fact bundles still need narrower representation and real complete producers.
+
+## Next prerequisite: actual prepared applicability, not legacy booleans
+
+The negative-bound review supplies minimal source counterexamples:
+`impl<T: !Bound> Copy for Wrapper<T>` can enter MemberIndex::copy_types without
+conditional solving; a trait provided default selected via such an impl has a
+trait-owned FunctionSignature, so rejecting impl-owned signatures cannot guard
+it. RunMachine::ensure_drop_inventory publishes copy_types/drop_types and reached
+GuestStore copy/drop paths consume them. MemberIndex::implements_depth's direct
+nominal/builtin branch also returns bool without conditional availability.
+
+Do not patch those with guessed false, omitted candidates, a global refusal,
+more trait-name cases or another conditional solver. Preserve complete relevant
+source candidates, prepare the actual upstream trait goal in the caller's
+ParamEnv, and carry a typed ready/pending/ambiguous/no-solution outcome through
+member selection and reached per-type ownership facts. Relevant conditional
+source requirements remain mandatory; unrelated nominal reads must not become
+blocked by a global unknown inventory. This is a common applicability/query
+availability repair before activating negative bounds, not a task/card closure.
+
+PreparedProvider::publish already validates actual source receipts, generic
+identity, complete relevant trait buckets and ADT representation. Preserve those
+checks. It does not require publishing every declaration in the entire catalog;
+the problem is mandatory unrelated domains on each published DefinitionFacts
+and broad associated-leaf cross-products. Narrow actual fact families and
+complete their real producers before root entry; do not remove completeness
+checks or fabricate defaults. Q78/Q80 explicit source clauses are not complete
+compiler clauses_of/item/self/nonself/super/implied families. The pinned clause
+collector/elaborator and actual source language metadata are still prerequisites.

@@ -660,10 +660,17 @@ fn parameter_member_traits(
                 None => None,
             },
         };
-        if subject.as_ref() != Some(&TyTerm::Param(parameter))
-            || bound.question_mark_token().is_some()
-        {
+        if subject.as_ref() != Some(&TyTerm::Param(parameter)) {
             continue;
+        }
+        match crate::syntax::source_bound_polarity::polarity(&bound) {
+            crate::syntax::source_bound_polarity::SourceBoundPolarity::Negative => {
+                bounds.push(SourceTraitBound { identity: None, arguments: Vec::new(),
+                    syntax: bound.syntax().clone(), complete: false, owning_trait: false });
+                continue;
+            },
+            crate::syntax::source_bound_polarity::SourceBoundPolarity::Positive => {},
+            _ => continue,
         }
         let Some(ast::Type::PathType(ty)) = bound.ty() else {
             continue;
