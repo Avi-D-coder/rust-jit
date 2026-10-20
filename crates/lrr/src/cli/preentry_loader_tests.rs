@@ -3197,3 +3197,60 @@ fn unchanged_pattern_aliases_share_actual_source_selection_all_editions_and_orig
     }
     assert_eq!(selected_count,36);
 }
+
+#[test]
+fn unchanged_static_alias_qualifiers_retain_closed_source_applications_all_editions_and_origins() {
+    use crate::{
+        db::{dependency::{InputKey,InputValue},key::QueryKey,poll::QueryPoll,provider::SyntaxProvider,value::QueryValue},
+        ir::pc::Phase,source::manifest::Namespace,syntax::imports::ImportSegment,
+        traits::term::{GenericArg,TyTerm},
+    };
+    use ra_ap_syntax::{AstNode,ast};
+    fn ready<T:std::fmt::Debug>(poll:QueryPoll<T>)->T {match poll {QueryPoll::Ready(Ok(value))=>value,other=>panic!("actual associated qualifier: {other:?}")}}
+    let original=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout/tests/ui/type-alias/static-method-type-alias-11047.rs");
+    let text=std::fs::read_to_string(&original).unwrap();let at=text.find("\npub mod foo").unwrap();let(prefix,items)=text.split_at(at);let mut count=0;
+    for edition in [2015,2018,2021,2024] {
+        let mut paths=vec![original.clone()];
+        for wrapper in [false,true] {let setup=if wrapper{"macro_rules! outer {($($t:tt)*)=>{emit!{$($t)*}}}"}else{""};let invoke=if wrapper{"outer"}else{"emit"};paths.push(temporary_source(&format!("static-alias-qualifier-{edition}-{wrapper}"),&format!("{prefix}\nmacro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} {setup} {invoke}!{{{items}}}")));}
+        for(origin,path)in paths.iter().enumerate() {
+            let(mut db,discovery,scope)=configured_impl_catalog_discovery(path,edition).unwrap();discovery.publish(&mut db).unwrap();
+            let headers=ready(db.fetch(&SyntaxProvider,QueryKey::PreparedScopeImplHeaders(discovery.key().clone()))).value;let QueryValue::PreparedScopeImplHeaders(headers)=headers.as_ref()else{panic!()};
+            let environment=headers.inventory_root().environment().unwrap();let sources=environment.sources().iter().collect::<Vec<_>>();
+            let lookup=|namespace,names:&[&str]| {let path=names.iter().map(|name|ImportSegment::Name((*name).into())).collect::<Vec<_>>();let found=environment.names().lookup_source_path(namespace,&path,false,&scope,edition).unwrap();let crate::frontend::names::NameLookup::Defined(found)=found else{panic!("actual source lookup: {found:?}")};found.identity};
+            let main=lookup(Namespace::Value,&["main"]);let target=lookup(Namespace::Type,&["foo","bar","baz","Qux"]);let vector=lookup(Namespace::Type,&["std","vec","Vec"]);let string=lookup(Namespace::Type,&["std","string","String"]);
+            let body=db.input(&InputKey::DefinitionBody(main)).unwrap();let InputValue::DefinitionBody(body)=body.as_ref()else{panic!()};let plan=ready(db.prepare_source_local_plan(&discovery,&sources,&body.key()));let owner=plan.context().source();
+            let mut nodes=Vec::new();
+            for node in owner.index().nodes().iter().filter(|node|node.role==crate::syntax::body_index::NodeRole::Expression(crate::syntax::body_index::ExpressionKind::Call)) {
+                let call=owner.parsed().entered_node_syntax(owner.body(),owner.index(),node.id).unwrap().and_then(ast::CallExpr::cast).unwrap();let name=call.expr().unwrap().syntax().text().to_string();
+                assert!(["foo::bar::baz::Qux::new","Ham::new","StringVec::new"].contains(&name.as_str()));nodes.push((node.operands[0],name));
+            }
+            assert_eq!(nodes.len(),3);db.trace.detailed=true;let start=db.trace.events.len();let mut guards=Vec::new();
+            for(node,name)in nodes {
+                let key=QueryKey::AssociatedItemQualifier(owner.index().pc(node,Phase::Entry).unwrap());let fetched=ready(db.fetch(&SyntaxProvider,key.clone()));assert!(fetched.cacheable);
+                let QueryValue::AssociatedItemQualifier(qualifier)=fetched.value.as_ref()else{panic!()};
+                if qualifier.source().is_none() {
+                    let queries=db.trace.events[start..].iter().filter_map(|event|matches!(event.key,QueryKey::QualifiedBodyType(_)).then_some(event.key.clone())).collect::<std::collections::BTreeSet<_>>();
+                    for query in queries {let answer=ready(db.fetch(&SyntaxProvider,query));eprintln!("qualified Type preparation: {:?}",answer.value);
+                        if let QueryValue::QualifiedBodyType(proof)=answer.value.as_ref() {
+                            eprintln!("qualified lookup: {:?}",proof.lookup());
+                            if let Some(crate::frontend::names::NameLookup::Defined(found))=proof.lookup() {eprintln!("selected declaration context: {:?}",db.input(&InputKey::DeclarationContext(found.identity)));}
+                        }
+                    }
+                    let queries=db.trace.events[start..].iter().filter_map(|event|matches!(event.key,QueryKey::CurrentModuleName(_)).then_some(event.key.clone())).collect::<std::collections::BTreeSet<_>>();
+                    for query in queries {let answer=ready(db.fetch(&SyntaxProvider,query));eprintln!("observed module name: {:?}",answer.value);}
+                }
+                let selected=qualifier.source().unwrap_or_else(||panic!("actual qualifier application absent: edition{edition},origin{origin},{name}: {qualifier:?}"));assert!(qualifier.pending().is_none());
+                let expected=if name=="StringVec::new" {TyTerm::Nominal(vector,vec![GenericArg::Type(TyTerm::Nominal(string,Vec::new()))])}else{TyTerm::Nominal(target,Vec::new())};assert_eq!(*selected.source(),expected);
+                let guard=ready(db.prepare_input_guard(&SyntaxProvider,&key,fetched.fingerprint));guard.require_current(&db).unwrap();guards.push(guard);let second=ready(db.fetch(&SyntaxProvider,key));assert!(std::sync::Arc::ptr_eq(&fetched.value,&second.value));count+=1;
+            }
+            let unwanted=db.trace.events[start..].iter().filter(|event|match &event.key {
+                QueryKey::BodyStructure(body)=>body!=owner.index().body() || event.action==crate::db::trace::Action::ProviderRun,
+                // Declared signatures are Type metadata, not executable bodies.
+                QueryKey::Thunk(_)|QueryKey::PatternPlan(_)|QueryKey::BindingConstraints(_)=>true,_=>false,
+            }).collect::<Vec<_>>();assert!(unwanted.is_empty(),"qualifier selection must not prepare executable calls: {unwanted:?}");
+            db.publish_inputs(std::collections::BTreeMap::new()).unwrap();for guard in guards{assert!(guard.require_current(&db).is_err());}
+            eprintln!("actual static alias qualifiers edition{edition},origin{origin}: Qux/Ham same target; StringVec retains String; cached/revoked source facts; no guest entry");
+        }
+    }
+    assert_eq!(count,36);
+}

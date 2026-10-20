@@ -350,7 +350,7 @@ impl PreparedAssociatedItemQualifier {
     }
 }
 impl StableEncode for PreparedAssociatedItemQualifier {
-    const DOMAIN: &'static str = "lrr/v1/prepared-associated-item-qualifier";
+    const DOMAIN: &'static str = "lrr/v2/prepared-associated-item-qualifier";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.digest(self.plan.source_identity());
@@ -621,6 +621,13 @@ fn prepare_named_qualifier(
                 Ok(source) => Some(ExplicitType::Selected(source)),
                 Err(error) => return QueryPoll::Ready(Err(error)),
             }
+        }
+        Some(NamedTypePreparation::Alias(crate::frontend::type_aliases::AliasTarget::Type(term))) => {
+            let Some(environment)=plan.environment()else{return QueryPoll::Ready(Err(fault("alias qualifier environment absent")));};
+            let completed=environment.macros().source_environment();
+            let sources=completed.sources().iter().collect::<Vec<_>>();
+            polled!(crate::frontend::written_terms::closed_written_type(db,&sources,&term))
+                .map(|written|ExplicitType::Written {term,written:Arc::new(written)})
         }
         _ => None,
     };

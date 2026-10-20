@@ -20035,10 +20035,18 @@
         "worktracks/04-calls-source-views/2026-10-19-alias-runtime.py",
         "worktracks/evidence/2026-10-19-v406-open-alias-applications.json",
         "worktracks/04-calls-source-views/2026-10-19-open-alias-applications.md",
-        "worktracks/04-calls-source-views/2026-10-19-open-alias-review.md"
+        "worktracks/04-calls-source-views/2026-10-19-open-alias-review.md",
+        "worktracks/evidence/2026-10-19-v407-v414-associated-qualifiers.json",
+        "worktracks/04-calls-source-views/2026-10-19-alias-qualifier-applications.md",
+        "worktracks/04-calls-source-views/2026-10-19-alias-qualifier-review.md",
+        "worktracks/04-calls-source-views/2026-10-19-alias-qualifier-final-controls.json",
+        "worktracks/04-calls-source-views/2026-10-19-alias-qualifier-namespace-controls.json",
+        "worktracks/04-calls-source-views/2026-10-19-alias-qualifier-baseline-controls.json",
+        "worktracks/04-calls-source-views/2026-10-19-alias-qualifier-controls.json"
       ],
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
-      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope."
+      "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
+      "notes": " V407-V414 HELD M018/M025 common associated qualifier source prerequisites. Q51 now retains already normalized closed alias Type applications through the existing written-Type finalizer. NamespaceReads::certify uses an exact current contained module receipt when a generated inline module is absent from its physical owning outline, then uses the existing CurrentModuleName bucket; ancestor-only alias fallback remains without that proof. No runtime member lookup, hygiene erasure or new trait-solving algorithm. V414 both macOS Rust1.99.0 builds pass;19/20 selected controls pass, including36 actual qualified Qux/Ham/StringVec source applications over12 edition/origin worlds, memo reuse, withdrawal and no executable callee preparation. The remaining Self::BAR control fails identically under controlled HEAD-production baseline V409. Original static-method alias main still fails9dispatches/1source call in all4 editions at qualified call admission. Struct-aliases still passes all4 editions at961dispatches; coherence-impl-in-fn freshly passes all4. Zero new distinct upstream runtime gains in this checkpoint; no refreshed suite total, specification-card, solver, milestone, interpreter or JIT closure."
     },
     {
       "id": "M019",

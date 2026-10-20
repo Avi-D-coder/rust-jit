@@ -359,7 +359,7 @@ impl NamespaceReads {
         if !self.enabled {
             return QueryPoll::Ready(Err(crate::runtime::arena::resource()));
         }
-        let mut semantic = StableEncoder::new("lrr/v1/current-resolver-read-answers");
+        let mut semantic = StableEncoder::new("lrr/v2/current-resolver-read-answers");
         semantic.digest(seed);
         semantic.u64(self.rows.len() as u64); // collector bounded100k
         for read in &self.rows {
@@ -448,6 +448,20 @@ impl NamespaceReads {
                             }
                         }
                     };
+                    // Discovery can introduce an inline module absent from
+                    // the physical source outline. Its exact contained scope
+                    // receipt, when present, owns this read just as an ordinary
+                    // outlined module does. An ancestor receipt alone still
+                    // cannot certify the final generated name bucket.
+                    // Observe absence too: later publication of that exact
+                    // scope must invalidate the ancestor-only conclusion.
+                    if effective != *scope
+                        && checked!(db.current_scope_certificate(
+                            source.selection(), scope, *namespace
+                        )).is_some()
+                    {
+                        effective = scope.clone();
+                    }
                     let aliased = effective != *scope;
                     semantic.record(scope);
                     semantic.u32(namespace.tag());
