@@ -33,6 +33,10 @@ pub(crate) fn prepare(
 
 /// Own declaration bounds through the same collector and Type walk. Parent
 /// requirements are a separate closure, never silently merged into own clauses.
+/// Associated callers supply their authenticated child-bound Self from the
+/// declaration source plan. Only own generic Sized defaults and own written
+/// where/generic bounds are selected here; associated output bounds belong to
+/// the separate item-bounds query, not this explicit-own recipe transport.
 pub(crate) fn prepare_own(
     db: &mut Database,
     graph: &NameNamespaces,

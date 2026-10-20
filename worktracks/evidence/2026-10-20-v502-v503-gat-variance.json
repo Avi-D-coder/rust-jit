@@ -645,7 +645,7 @@
     "/opt/homebrew/bin/python3.12 tools/validation/source_manifest.py artifacts/validation-reproduce before",
     "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json >artifacts/validation-reproduce/lib-build.jsonl",
     "cargo +1.99.0 build --offline --locked -p lrr --bin lrr",
-    "cargo +1.99.0 build --offline --locked -p lrr --example lrr_source_digests",
+    "cargo +1.99.0 build --offline --locked -p xtask --example lrr_source_digests",
     "/opt/homebrew/bin/python3.12 tools/validation/source_manifest.py artifacts/validation-reproduce after-build --cargo-messages artifacts/validation-reproduce/lib-build.jsonl --cli-binary target/debug/lrr",
     "/opt/homebrew/bin/python3.12 tools/validation/run_controls.py artifacts/validation-reproduce worktracks/05-trait-goal-engine/2026-10-20-gat-variance-controls.json",
     "LRR_EMBEDDED_FACADE=1 /opt/homebrew/bin/python3.12 tools/rustc_checkout_runtime.py --lrr target/debug/lrr --source-digester target/debug/examples/lrr_source_digests --report-dir /private/tmp/lrr-gat-variance-reproduce --timeout 240 --case tests/ui/enum-discriminant/repr128.rs --case tests/ui/generics/generic-derived-type.rs",

@@ -189,6 +189,8 @@ pub enum QueryKey {
     TraitAssociatedTypes(Box<crate::frontend::trait_associated_types::TraitAssociatedTypesKey>),
     DeclarationSourcePredicates(Box<crate::frontend::declaration_source_predicates::DeclarationSourcePredicatesKey>),
     SourceVarianceQueries(Box<crate::traits::upstream::source_variance_queries::SourceVarianceQueriesKey>),
+    SourceDeclarationClauses(Box<crate::traits::upstream::source_declaration_clauses::SourceDeclarationClausesKey>),
+    SourceDeclarationClauseHierarchy(Box<crate::traits::upstream::source_declaration_clauses::SourceDeclarationClausesKey>),
     SourceLangIdentity(Box<crate::traits::upstream::source_lang_identity::SourceLangIdentityKey>),
     ImplSourceTypes(Box<crate::traits::header_syntax::ImplHeaderSyntaxKey>),
     ImplSourcePredicates(Box<crate::traits::header_syntax::ImplHeaderSyntaxKey>),
@@ -230,7 +232,7 @@ impl QueryKey {
                     + key.bucket.name.capacity()
             }
             Self::DiscoverySeal(_) | Self::ScopeDeclarationInventory(_)
-            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) | Self::DeclarationGenerics(_) | Self::DeclarationGenericTypes(_) | Self::ImplTraitIdentity(_) | Self::ImplTraitCatalog(_) | Self::SolverConfiguration(_) | Self::AdtSourceFields(_) | Self::DefinitionHeaderPlan(_) | Self::TraitAssociatedTypes(_) | Self::DeclarationSourcePredicates(_) | Self::SourceVarianceQueries(_) | Self::SourceLangIdentity(_) | Self::ImplSourceTypes(_) | Self::ImplSourcePredicates(_) => 0,
+            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) | Self::DeclarationGenerics(_) | Self::DeclarationGenericTypes(_) | Self::ImplTraitIdentity(_) | Self::ImplTraitCatalog(_) | Self::SolverConfiguration(_) | Self::AdtSourceFields(_) | Self::DefinitionHeaderPlan(_) | Self::TraitAssociatedTypes(_) | Self::DeclarationSourcePredicates(_) | Self::SourceVarianceQueries(_) | Self::SourceDeclarationClauses(_) | Self::SourceDeclarationClauseHierarchy(_) | Self::SourceLangIdentity(_) | Self::ImplSourceTypes(_) | Self::ImplSourcePredicates(_) => 0,
             Self::ExpansionInput(k) | Self::CurrentExpansionInput(k) => {
                 std::mem::size_of_val(k.as_ref()) + crate::expand::record::key_heap_bytes(k)
             }
@@ -287,6 +289,8 @@ impl QueryKey {
             Self::ImplTraitIdentity(_) => "ImplTraitIdentity",
             Self::DeclarationSourcePredicates(_) => "DeclarationSourcePredicates",
             Self::SourceVarianceQueries(_) => "SourceVarianceQueries",
+            Self::SourceDeclarationClauses(_) => "SourceDeclarationClauses",
+            Self::SourceDeclarationClauseHierarchy(_) => "SourceDeclarationClauseHierarchy",
             Self::TraitAssociatedTypes(_) => "TraitAssociatedTypes",
             Self::DefinitionHeaderPlan(_) => "DefinitionHeaderPlan",
             Self::SourceLangIdentity(_) => "SourceLangIdentity",
@@ -363,6 +367,8 @@ impl StableEncode for QueryKey {
             Self::TraitAssociatedTypes(key) => { e.u32(77); e.record(key.as_ref()); }
             Self::DeclarationSourcePredicates(key) => { e.u32(78); e.record(key.as_ref()); }
             Self::SourceVarianceQueries(key) => { e.u32(79); e.record(key.as_ref()); }
+            Self::SourceDeclarationClauses(key) => { e.u32(80); e.record(key.as_ref()); }
+            Self::SourceDeclarationClauseHierarchy(key) => { e.u32(81); e.record(key.as_ref()); }
             Self::ImplSourceTypes(key) => { e.u32(68); e.record(key.as_ref()); }
             Self::SourcePatternName(key) => { e.u32(72); e.record(key); }
             Self::PreparedBodyTypeApplication(key) => { e.u32(73); e.record(key); }

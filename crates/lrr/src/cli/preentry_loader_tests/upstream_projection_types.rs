@@ -112,7 +112,7 @@ fn actual_trait_item(rows: &BTreeMap<Digest, ItemOutline>, parent: Digest, name:
     found[0]
 }
 
-fn fixture_world(
+pub(super) fn fixture_world(
     case: &str,
     first_item: &str,
     edition: u16,
@@ -229,7 +229,7 @@ fn unchanged_iterator_projection_fields_encode_actual_associated_declaration_all
 
 #[test]
 fn unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_editions_and_origins() {
-    use crate::frontend::declaration_source_predicates::DeclarationSourcePredicatesKey;
+    use crate::traits::upstream::source_declaration_clauses::SourceDeclarationClausesKey;
     use crate::traits::upstream::source_predicates::check_actual_projected_source_predicates;
     let mut worlds = 0;
     let mut clauses = 0;
@@ -263,7 +263,7 @@ fn unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_edition
             db.trace.detailed = true;
             let before = db.trace.events.len();
             let query =
-                QueryKey::DeclarationSourcePredicates(Box::new(DeclarationSourcePredicatesKey {
+                QueryKey::SourceDeclarationClauses(Box::new(SourceDeclarationClausesKey {
                     inventory: seal.clone(),
                     definition: owner,
                 }));
@@ -285,7 +285,7 @@ fn unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_edition
             let again = ready(db.fetch(&SyntaxProvider, query));
             assert!(
                 first.cacheable && Arc::ptr_eq(&first.value, &again.value),
-                "projected own-bound recipes reuse one retained source plan"
+                "projected own clauses reuse one production source bundle"
             );
             assert_eq!(first.fingerprint, again.fingerprint);
             current.require_current(&db).unwrap();

@@ -1,0 +1,12 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Actual explicit-own source clauses, separate parent hierarchy demand, associated source receipts and pinned parent/own instantiation. Source/IR component controls only; complete compiler clause families, source factory, solver root, runtime, diagnostic/full-fixture and JIT gates remain held.",
+  "controls": [
+    "cli::preentry_loader_tests::upstream_source_clauses::unchanged_streaming_gat_clauses_use_pinned_parent_instantiation_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_source_clauses::unchanged_hrtb_parent_is_unforced_for_own_bundle_and_pending_for_hierarchy",
+    "cli::preentry_loader_tests::upstream_associated_predicates::unchanged_associated_explicit_own_recipes_keep_real_parent_self_and_sized_ownership",
+    "cli::preentry_loader_tests::upstream_associated_predicates::unchanged_associated_own_recipes_leave_parent_hrtb_unforced",
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_editions_and_origins",
+    "cli::preentry_loader_tests::unchanged_conditional_impl_requirements_construct_actual_upstream_clauses_all_editions_and_origins"
+  ]
+}

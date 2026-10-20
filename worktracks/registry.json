@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-20T19:20:29.127465+00:00",
+  "updated_at": "2026-10-20T19:46:33.293549+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -424,10 +424,10 @@
           "id": "WT05-02",
           "title": "Pinned upstream solver bridge and transactions",
           "status": "in_progress",
-          "acceptance_scope": "V503 HELD M020 common GAT arguments and pinned source variance. One retained Type/region collector serves nominal, trait and associated paths; actual qualified own regions and shorthand own nominal Types reach genuine AliasTy parent/own layouts. SourceVarianceQueries(tag79) authenticates upstream total generic counts/query domains and retains actual pinned nominal variance results, replacing arbitrary fact slices. Common declaration metadata holds unproduced APIT/type-macro parameter identities before count publication. The complete registered compiler variance terms, constraint walk and fixed point reuse demanded local field inputs; source-role/domain adapters are independently reviewed. V502 six mechanical compile errors and guarded failed attempt remain preserved. Final macOS1.99 lib/CLI/digester, six source audits plus exact upstream-object verification, and7/7focused controls pass with source/HEAD/test/CLI closing guards and separate fresh digester identity. Actual observations:12qualified GAT worlds,12recursive own-Type GAT worlds,24variance-domain worlds/96declaration checks,24APIT worlds,12invariant pointer worlds; prior36field worlds/96fields/0pending and12generic generated projection-field worlds maintained. Generic-derived-type remains a runtime-contract pass; repr128 remains LRR-E-OP-TYPE. Zero new distinct stock runtime gains, refreshed suite total or task/milestone/interpreter/JIT closure. Complete declaration/parent/item predicate and registry production, applicable fact admission, function/opaque/foreign variance, anonymous identities, full GAT normalization and actual upstream root/member/VM integration remain held.",
+          "acceptance_scope": "V505 HELD M020 production source clause bundles and pinned parent instantiation. Q78 authenticates associated parents/Self/parameter rebasing and own parameter spans. Q80 retains own source requirements and bindings; Q81 separately demands parent requirements, leaving unsupported parent HRTB unforced for own data. Shared require_recipe/encode_recipe replace duplicate declaration/impl logic; the old cfg-only projected binding/encoding path is removed. Complete pinned GenericClauses methods preserve actual parent-before-own clauses/spans; identity keeps parent SourceParameter owners while instantiation with genuine child arguments rebinds them. V504 four compile errors are preserved with failed-build guards. V505 macOS1.99 lib/CLI/digester, seven source audits plus exact upstream verification and6/6focused controls pass with closing source/HEAD/test/CLI/digester guards. Controls cover 12parent-instantiation worlds,12own-vs-parent demand worlds,48associated worlds/108aliases, 12associated HRTB cold worlds,12projected worlds/36clauses/12projections and 60impl worlds/144clauses. Q80 independent source withdrawal passes; Q81 epoch-first revocation does not prove fresh source-only withdrawal. Existing generic-derived-type runtime passes and repr128 remains LRR-E-OP-TYPE. Additional unchanged assoc-type-in-struct-constructor reaches S::<I>(i) then fails LRR-E-UNSUPPORTED compound field binding. Zero new distinct stock runtime gains or refreshed suite total. Full compiler own/all/item predicates, MetaSized/PointeeSized/default source identities, applicable fact/root/member/VM integration and interpreter/JIT gates remain open; no task or milestone is closed.",
           "historical_candidate": "artifacts/macos-first/sol-canonical-candidate-transactions-v1/HANDOFF.md",
           "historical_acceptance_scope": "frozen source-only exact replay/fmt/provenance;10 Rust controls uncompiled; actual source-goal and normalization prerequisites incomplete",
-          "candidate": "worktracks/05-trait-goal-engine/2026-10-20-gat-source-arguments.md",
+          "candidate": "worktracks/05-trait-goal-engine/2026-10-20-source-clause-bundles.md",
           "evidence": [
             "worktracks/evidence/2026-10-19-v217-v220-upstream-solver-trait-self.json",
             "worktracks/evidence/2026-10-19-v221-v224-upstream-parameters.json",
@@ -583,9 +583,15 @@
             "worktracks/05-trait-goal-engine/2026-10-20-variance-query-domain.md",
             "worktracks/05-trait-goal-engine/2026-10-20-gat-variance-review.md",
             "worktracks/05-trait-goal-engine/2026-10-20-gat-variance-controls.json",
-            "worktracks/evidence/2026-10-20-v502-v503-gat-variance.json"
+            "worktracks/evidence/2026-10-20-v502-v503-gat-variance.json",
+            "worktracks/05-trait-goal-engine/2026-10-20-source-clause-bundles.md",
+            "worktracks/05-trait-goal-engine/2026-10-20-associated-declaration-predicates.md",
+            "worktracks/05-trait-goal-engine/2026-10-20-upstream-generic-clauses.md",
+            "worktracks/05-trait-goal-engine/2026-10-20-source-declaration-clauses-review.md",
+            "worktracks/05-trait-goal-engine/2026-10-20-source-clauses-controls.json",
+            "worktracks/evidence/2026-10-20-v504-v505-source-clauses.json"
           ],
-          "latest_component_scope": "V503 HELD M020 common GAT arguments and pinned source variance. One retained Type/region collector serves nominal, trait and associated paths; actual qualified own regions and shorthand own nominal Types reach genuine AliasTy parent/own layouts. SourceVarianceQueries(tag79) authenticates upstream total generic counts/query domains and retains actual pinned nominal variance results, replacing arbitrary fact slices. Common declaration metadata holds unproduced APIT/type-macro parameter identities before count publication. The complete registered compiler variance terms, constraint walk and fixed point reuse demanded local field inputs; source-role/domain adapters are independently reviewed. V502 six mechanical compile errors and guarded failed attempt remain preserved. Final macOS1.99 lib/CLI/digester, six source audits plus exact upstream-object verification, and7/7focused controls pass with source/HEAD/test/CLI closing guards and separate fresh digester identity. Actual observations:12qualified GAT worlds,12recursive own-Type GAT worlds,24variance-domain worlds/96declaration checks,24APIT worlds,12invariant pointer worlds; prior36field worlds/96fields/0pending and12generic generated projection-field worlds maintained. Generic-derived-type remains a runtime-contract pass; repr128 remains LRR-E-OP-TYPE. Zero new distinct stock runtime gains, refreshed suite total or task/milestone/interpreter/JIT closure. Complete declaration/parent/item predicate and registry production, applicable fact admission, function/opaque/foreign variance, anonymous identities, full GAT normalization and actual upstream root/member/VM integration remain held."
+          "latest_component_scope": "V505 HELD M020 production source clause bundles and pinned parent instantiation. Q78 authenticates associated parents/Self/parameter rebasing and own parameter spans. Q80 retains own source requirements and bindings; Q81 separately demands parent requirements, leaving unsupported parent HRTB unforced for own data. Shared require_recipe/encode_recipe replace duplicate declaration/impl logic; the old cfg-only projected binding/encoding path is removed. Complete pinned GenericClauses methods preserve actual parent-before-own clauses/spans; identity keeps parent SourceParameter owners while instantiation with genuine child arguments rebinds them. V504 four compile errors are preserved with failed-build guards. V505 macOS1.99 lib/CLI/digester, seven source audits plus exact upstream verification and6/6focused controls pass with closing source/HEAD/test/CLI/digester guards. Controls cover 12parent-instantiation worlds,12own-vs-parent demand worlds,48associated worlds/108aliases, 12associated HRTB cold worlds,12projected worlds/36clauses/12projections and 60impl worlds/144clauses. Q80 independent source withdrawal passes; Q81 epoch-first revocation does not prove fresh source-only withdrawal. Existing generic-derived-type runtime passes and repr128 remains LRR-E-OP-TYPE. Additional unchanged assoc-type-in-struct-constructor reaches S::<I>(i) then fails LRR-E-UNSUPPORTED compound field binding. Zero new distinct stock runtime gains or refreshed suite total. Full compiler own/all/item predicates, MetaSized/PointeeSized/default source identities, applicable fact/root/member/VM integration and interpreter/JIT gates remain open; no task or milestone is closed."
         },
         {
           "id": "WT05-03",
@@ -728,10 +734,16 @@
         "worktracks/05-trait-goal-engine/2026-10-20-variance-query-domain.md",
         "worktracks/05-trait-goal-engine/2026-10-20-gat-variance-review.md",
         "worktracks/05-trait-goal-engine/2026-10-20-gat-variance-controls.json",
-        "worktracks/evidence/2026-10-20-v502-v503-gat-variance.json"
+        "worktracks/evidence/2026-10-20-v502-v503-gat-variance.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-source-clause-bundles.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-associated-declaration-predicates.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-upstream-generic-clauses.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-source-declaration-clauses-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-source-clauses-controls.json",
+        "worktracks/evidence/2026-10-20-v504-v505-source-clauses.json"
       ],
       "solver_policy": "Pinned upstream next-generation rustc solver; E-R5-014. Adapter integration not implemented.",
-      "latest_component_scope": "V503 HELD M020 common GAT arguments and pinned source variance. One retained Type/region collector serves nominal, trait and associated paths; actual qualified own regions and shorthand own nominal Types reach genuine AliasTy parent/own layouts. SourceVarianceQueries(tag79) authenticates upstream total generic counts/query domains and retains actual pinned nominal variance results, replacing arbitrary fact slices. Common declaration metadata holds unproduced APIT/type-macro parameter identities before count publication. The complete registered compiler variance terms, constraint walk and fixed point reuse demanded local field inputs; source-role/domain adapters are independently reviewed. V502 six mechanical compile errors and guarded failed attempt remain preserved. Final macOS1.99 lib/CLI/digester, six source audits plus exact upstream-object verification, and7/7focused controls pass with source/HEAD/test/CLI closing guards and separate fresh digester identity. Actual observations:12qualified GAT worlds,12recursive own-Type GAT worlds,24variance-domain worlds/96declaration checks,24APIT worlds,12invariant pointer worlds; prior36field worlds/96fields/0pending and12generic generated projection-field worlds maintained. Generic-derived-type remains a runtime-contract pass; repr128 remains LRR-E-OP-TYPE. Zero new distinct stock runtime gains, refreshed suite total or task/milestone/interpreter/JIT closure. Complete declaration/parent/item predicate and registry production, applicable fact admission, function/opaque/foreign variance, anonymous identities, full GAT normalization and actual upstream root/member/VM integration remain held."
+      "latest_component_scope": "V505 HELD M020 production source clause bundles and pinned parent instantiation. Q78 authenticates associated parents/Self/parameter rebasing and own parameter spans. Q80 retains own source requirements and bindings; Q81 separately demands parent requirements, leaving unsupported parent HRTB unforced for own data. Shared require_recipe/encode_recipe replace duplicate declaration/impl logic; the old cfg-only projected binding/encoding path is removed. Complete pinned GenericClauses methods preserve actual parent-before-own clauses/spans; identity keeps parent SourceParameter owners while instantiation with genuine child arguments rebinds them. V504 four compile errors are preserved with failed-build guards. V505 macOS1.99 lib/CLI/digester, seven source audits plus exact upstream verification and6/6focused controls pass with closing source/HEAD/test/CLI/digester guards. Controls cover 12parent-instantiation worlds,12own-vs-parent demand worlds,48associated worlds/108aliases, 12associated HRTB cold worlds,12projected worlds/36clauses/12projections and 60impl worlds/144clauses. Q80 independent source withdrawal passes; Q81 epoch-first revocation does not prove fresh source-only withdrawal. Existing generic-derived-type runtime passes and repr128 remains LRR-E-OP-TYPE. Additional unchanged assoc-type-in-struct-constructor reaches S::<I>(i) then fails LRR-E-UNSUPPORTED compound field binding. Zero new distinct stock runtime gains or refreshed suite total. Full compiler own/all/item predicates, MetaSized/PointeeSized/default source identities, applicable fact/root/member/VM integration and interpreter/JIT gates remain open; no task or milestone is closed."
     },
     {
       "id": "WT06",
@@ -1238,7 +1250,7 @@
     "guest_jit": "blocked_by_runtime_acceptance",
     "source_checkpoint_pushed": true,
     "scope": "Held source WIP, not integration/runtime acceptance. Historical targeted evidence remains attached to its binary; current regressions must be repaired.",
-    "latest_targeted_evidence": "worktracks/evidence/2026-10-20-v502-v503-gat-variance.json",
+    "latest_targeted_evidence": "worktracks/evidence/2026-10-20-v504-v505-source-clauses.json",
     "evidence": [
       "worktracks/evidence/2026-10-18-interpreter-v92-v99-symbolic-places.json",
       "worktracks/evidence/2026-10-18-interpreter-v100-open-reference-coercions.json",
@@ -1295,7 +1307,13 @@
       "worktracks/05-trait-goal-engine/2026-10-20-variance-query-domain.md",
       "worktracks/05-trait-goal-engine/2026-10-20-gat-variance-review.md",
       "worktracks/05-trait-goal-engine/2026-10-20-gat-variance-controls.json",
-      "worktracks/evidence/2026-10-20-v502-v503-gat-variance.json"
+      "worktracks/evidence/2026-10-20-v502-v503-gat-variance.json",
+      "worktracks/05-trait-goal-engine/2026-10-20-source-clause-bundles.md",
+      "worktracks/05-trait-goal-engine/2026-10-20-associated-declaration-predicates.md",
+      "worktracks/05-trait-goal-engine/2026-10-20-upstream-generic-clauses.md",
+      "worktracks/05-trait-goal-engine/2026-10-20-source-declaration-clauses-review.md",
+      "worktracks/05-trait-goal-engine/2026-10-20-source-clauses-controls.json",
+      "worktracks/evidence/2026-10-20-v504-v505-source-clauses.json"
     ],
     "source_checkpoint_note": "Last confirmed pushed checkpoint before V494 candidate is a3e36397f8dd26c0bc5797d7e42908bce0726a26. Exact candidate source/binary fingerprints and held integration scope are in V494 evidence; a source checkpoint is not interpreter/root/release acceptance.",
     "previous_source_checkpoint_commit": "548d9d1b190d9d7e03e5067cd3c71fa0e9d24ea4",
@@ -1443,6 +1461,16 @@
       "status": "held_component_checkpoint",
       "evidence": "worktracks/evidence/2026-10-20-v502-v503-gat-variance.json",
       "focused_controls_passed": 7,
+      "new_distinct_stock_runtime_gains": 0,
+      "upstream_root_execution": false,
+      "guest_jit_allowed": false
+    },
+    "held_upstream_source_clauses": {
+      "baseline": "8c764548b147240f631f29f1e49cf4a1aea67fff",
+      "source_sha256": "24d558cff3b26279ee38bd0a05528c3ecbe380d99dfb59cae7fe3eaf5aed3bbf",
+      "status": "held_component_checkpoint",
+      "evidence": "worktracks/evidence/2026-10-20-v504-v505-source-clauses.json",
+      "focused_controls_passed": 6,
       "new_distinct_stock_runtime_gains": 0,
       "upstream_root_execution": false,
       "guest_jit_allowed": false

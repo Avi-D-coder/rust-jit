@@ -3578,3 +3578,8 @@ mod upstream_variance_fields;
 
 #[path = "preentry_loader_tests/generated_namespace_publication.rs"]
 mod generated_namespace_publication;
+
+#[path = "preentry_loader_tests/upstream_associated_predicates.rs"]
+mod upstream_associated_predicates;
+#[path = "preentry_loader_tests/upstream_source_clauses.rs"]
+mod upstream_source_clauses;

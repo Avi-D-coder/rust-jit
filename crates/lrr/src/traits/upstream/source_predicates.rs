@@ -65,6 +65,52 @@ fn require_trait(required: &mut SourceRequirements, reference: &TraitRef) {
         }
     }
 }
+/// Shared source requirement closure for declaration and impl recipes.
+/// Pending source never becomes an absent or empty semantic bound.
+pub(super) fn require_recipe(
+    required: &mut SourceRequirements, recipe: &SourcePredicateRecipe,
+) -> Result<(), SourcePredicatePending> {
+    match recipe {
+        SourcePredicateRecipe::ImplicitSizedDefault(_) => return Err(SourcePredicatePending::Sized),
+        SourcePredicateRecipe::ResolvedSizedDefault(reference) => require_trait(required, reference),
+        SourcePredicateRecipe::Explicit { result, .. } => match result {
+            PredicateResult::Implemented(reference) | PredicateResult::Relaxed { trait_ref: reference, .. } => require_trait(required, reference),
+            PredicateResult::TypeOutlives { ty, .. } => require_type(required, ty),
+            PredicateResult::RegionOutlives { .. } => {},
+            PredicateResult::Pending(why) => return Err(SourcePredicatePending::Bound(*why)),
+        },
+    }
+    Ok(())
+}
+
+/// One source-recipe -> upstream-clause transport, including source spans.
+/// A relaxed bound contributes no clause; its source metadata stays retained.
+pub(super) fn encode_recipe<'cx>(
+    cx: Cx<'cx>, configuration: &PreparedSolverConfiguration,
+    bindings: super::source_bindings::SourceTypeBindings<'_>,
+    recipe: &SourcePredicateRecipe, origin: Digest,
+    parameter_range: impl FnOnce(crate::traits::term::ParamKey) -> Option<crate::syntax::spans::SourceRange>,
+) -> Result<Option<(Clause<'cx, prepared::PreparedProvider<'cx>>, super::model::Span)>, SourcePredicatePending> {
+    let implicit;
+    let (predicate, source) = match recipe {
+        SourcePredicateRecipe::ResolvedSizedDefault(reference) => {
+            let crate::traits::term::TyTerm::Param(parameter) = reference.self_ty else {
+                return Err(SourcePredicatePending::Source(SourceTypePending::ParameterLayout));
+            };
+            let source = parameter_range(parameter).ok_or(SourcePredicatePending::Source(SourceTypePending::ParameterLayout))?;
+            implicit = PredicateResult::Implemented(reference.clone());
+            (&implicit, source)
+        }
+        SourcePredicateRecipe::Explicit { result: PredicateResult::Relaxed { .. }, .. } => return Ok(None),
+        SourcePredicateRecipe::Explicit { result: PredicateResult::Pending(why), .. } => return Err(SourcePredicatePending::Bound(*why)),
+        SourcePredicateRecipe::Explicit { source, result } => (result, *source),
+        SourcePredicateRecipe::ImplicitSizedDefault(_) => return Err(SourcePredicatePending::Sized),
+    };
+    let clause = super::source_terms::encode_predicate(cx, configuration, bindings, predicate)
+        .map_err(SourcePredicatePending::Source)?;
+    Ok(Some((clause, super::model::Span { origin, start: source.start, end: source.end })))
+}
+
 impl PreparedImplSourcePredicates {
     pub fn key(&self) -> &ImplHeaderSyntaxKey {
         &self.key
@@ -113,27 +159,9 @@ impl PreparedImplSourcePredicates {
         let definition = owner.identity();
         let mut required = SourceRequirements::from(BTreeMap::from([(definition, DefinitionKind::Impl)]));
         for recipe in recipes {
-            match recipe {
-                SourcePredicateRecipe::ImplicitSizedDefault(_) => {
-                    plan.pending = Some(SourcePredicatePending::Sized);
-                    return QueryPoll::Ready(Ok(plan));
-                }
-                SourcePredicateRecipe::ResolvedSizedDefault(reference) => {
-                    require_trait(&mut required, reference)
-                }
-                SourcePredicateRecipe::Explicit { result, .. } => match result {
-                    PredicateResult::Implemented(reference)
-                    | PredicateResult::Relaxed {
-                        trait_ref: reference,
-                        ..
-                    } => require_trait(&mut required, reference),
-                    PredicateResult::TypeOutlives { ty, .. } => require_type(&mut required, ty),
-                    PredicateResult::RegionOutlives { .. } => {}
-                    PredicateResult::Pending(why) => {
-                        plan.pending = Some(SourcePredicatePending::Bound(*why));
-                        return QueryPoll::Ready(Ok(plan));
-                    }
-                },
+            if let Err(pending) = require_recipe(&mut required, recipe) {
+                plan.pending = Some(pending);
+                return QueryPoll::Ready(Ok(plan));
             }
         }
         plan.bindings = ready!(SourceBindings::prepare(db, input, required));
@@ -177,50 +205,10 @@ impl PreparedImplSourcePredicates {
         let syntax = self.requirements().head().syntax();
         let mut clauses = Vec::new();
         for recipe in recipes {
-            let implicit;
-            let (predicate, source) = match recipe {
-                SourcePredicateRecipe::ResolvedSizedDefault(reference) => {
-                    let crate::traits::term::TyTerm::Param(parameter) = reference.self_ty else {
-                        return Err(SourcePredicatePending::Source(
-                            SourceTypePending::ParameterLayout,
-                        ));
-                    };
-                    let source = self.requirements().parameter_range(parameter).ok_or(
-                        SourcePredicatePending::Source(SourceTypePending::ParameterLayout),
-                    )?;
-                    implicit = PredicateResult::Implemented(reference.clone());
-                    (&implicit, source)
-                }
-                SourcePredicateRecipe::Explicit {
-                    result: PredicateResult::Relaxed { .. },
-                    ..
-                } => continue,
-                SourcePredicateRecipe::Explicit {
-                    result: PredicateResult::Pending(why),
-                    ..
-                } => {
-                    return Err(SourcePredicatePending::Bound(*why));
-                }
-                SourcePredicateRecipe::Explicit { source, result } => (result, *source),
-                SourcePredicateRecipe::ImplicitSizedDefault(_) => {
-                    return Err(SourcePredicatePending::Sized);
-                }
-            };
-            let clause = super::source_terms::encode_predicate(
-                cx,
-                configuration,
-                self.bindings.type_bindings(),
-                predicate,
-            )
-            .map_err(SourcePredicatePending::Source)?;
-            clauses.push((
-                clause,
-                super::model::Span {
-                    origin: syntax.source().content,
-                    start: source.start,
-                    end: source.end,
-                },
-            ));
+            if let Some(clause) = encode_recipe(cx, configuration, self.bindings.type_bindings(),
+                recipe, syntax.source().content, |parameter| self.requirements().parameter_range(parameter))? {
+                clauses.push(clause);
+            }
         }
         Ok(clauses)
     }
@@ -244,104 +232,52 @@ impl StableEncode for PreparedImplSourcePredicates {
     }
 }
 
-/// Actual memo roots and joined input closure for metadata-only declaration
-/// clause controls. This is not an impl record or ready solver provider.
-#[cfg(test)]
-pub(crate) struct CurrentSourcePredicates {
-    _source: Arc<QueryValue>,
-    _bindings: SourceBindings,
-    guard: crate::db::memo::PreparedInputGuard,
-}
-#[cfg(test)]
-impl CurrentSourcePredicates {
-    pub(crate) fn require_current(&self, db: &Database) -> Result<(), Diagnostic> { self.guard.require_current(db) }
-}
+/// Observe the production own-source bundle rather than rebuilding its
+/// dependency closure or encoding source recipes in a test-only route.
 #[cfg(test)]
 pub(crate) fn check_actual_projected_source_predicates(
     db: &mut Database, inventory: &crate::db::seals::SealKey, owner: Digest,
     expected_trait: Digest, expected_item: Digest, expected_bound_trait: Digest,
-) -> Result<(CurrentSourcePredicates, usize, usize), Diagnostic> {
-    use super::{configuration::SolverConfigurationKey, source_generics::SourceGenericLayouts};
-    use crate::frontend::declaration_source_predicates::DeclarationSourcePredicatesKey;
+) -> Result<(super::source_declaration_clauses::CurrentSourceDeclarationClauses, usize, usize), Diagnostic> {
+    use super::{configuration::SolverConfigurationKey,
+        source_declaration_clauses::{CurrentSourceDeclarationClauses, SourceDeclarationClausesKey}};
     use crate::traits::{predicate::PredicateResult, term::{TyTerm, ParamKey}};
     use rustc_type_ir::{self as ty, inherent::*};
-    let query = QueryKey::DeclarationSourcePredicates(Box::new(DeclarationSourcePredicatesKey { inventory: inventory.clone(), definition: owner }));
-    let source = match db.fetch(&SyntaxProvider, query.clone()) {
-        QueryPoll::Ready(Ok(value)) => value.value, QueryPoll::Ready(Err(error)) => return Err(error),
-        QueryPoll::NeedInput(_) => return Err(fault("actual declaration predicates need source input")),
-    };
-    let QueryValue::DeclarationSourcePredicates(plan) = source.as_ref() else { return Err(fault("actual declaration predicate query differs")); };
-    let recipes = plan.recipes().map_err(|pending| fault(&format!("actual declaration predicate metadata pending: {pending:?}")))?;
-    let input = db.input(&InputKey::DiscoverySeal(inventory.clone())).ok_or_else(|| fault("actual declaration predicate catalog absent"))?;
-    let InputValue::DiscoverySeal(catalog) = input.as_ref() else { return Err(fault("actual declaration predicate catalog differs")); };
-    let mut required = SourceRequirements::from(BTreeMap::from([(owner, DefinitionKind::Declaration)]));
-    for recipe in recipes {
-        match recipe {
-            SourcePredicateRecipe::ResolvedSizedDefault(reference) => require_trait(&mut required, reference),
-            SourcePredicateRecipe::Explicit { result: PredicateResult::Implemented(reference) | PredicateResult::Relaxed { trait_ref: reference, .. }, .. } => require_trait(&mut required, reference),
-            SourcePredicateRecipe::Explicit { result: PredicateResult::TypeOutlives { ty, .. }, .. } => require_type(&mut required, ty),
-            SourcePredicateRecipe::Explicit { result: PredicateResult::RegionOutlives { .. }, .. } => {},
-            SourcePredicateRecipe::Explicit { result: PredicateResult::Pending(pending), .. } => return Err(fault(&format!("actual projected predicate remains pending: {pending:?}"))),
-            SourcePredicateRecipe::ImplicitSizedDefault(_) => return Err(fault("actual declaration Sized source identity is not prepared")),
-        }
-    }
-    let bindings = match SourceBindings::prepare(db, Arc::clone(&input), required) {
+    let current = match CurrentSourceDeclarationClauses::capture(db, &SourceDeclarationClausesKey {
+        inventory: inventory.clone(), definition: owner,
+    }) {
         QueryPoll::Ready(Ok(value)) => value, QueryPoll::Ready(Err(error)) => return Err(error),
-        QueryPoll::NeedInput(_) => return Err(fault("actual projected predicate bindings need input")),
+        QueryPoll::NeedInput(_) => return Err(fault("actual declaration clauses need source input")),
     };
-    if let Some(pending) = bindings.pending { return Err(fault(&format!("actual projected predicate source closure pending: {pending:?}"))); }
-    let owner_id = bindings.definitions[&owner];
-    let QueryValue::DeclarationGenericTypes(actual) = bindings.generics[&owner_id].as_ref() else { unreachable!("actual owner generics") };
-    let (parse, header, context, _) = plan.declaration().source_parts().expect("actual declared predicate source");
-    assert!(actual.declaration().matches_metadata(parse, header, context));
-    let configuration_query = QueryKey::SolverConfiguration(Box::new(SolverConfigurationKey::from_source(
+    current.require_current(db)?;
+    let plan = current.plan();
+    let bindings = plan.bindings().map_err(|why| fault(&format!("actual clause bundle pending: {why:?}")))?;
+    let recipes = plan.source().recipes().map_err(|why| fault(&format!("actual source recipes pending: {why:?}")))?;
+    let input = Arc::clone(&bindings.catalog);
+    let InputValue::DiscoverySeal(catalog) = input.as_ref() else { unreachable!("actual clause catalog") };
+    let configuration = match db.fetch(&SyntaxProvider, QueryKey::SolverConfiguration(Box::new(SolverConfigurationKey::from_source(
         catalog.impl_catalog.as_ref().expect("actual catalog root").root(),
-    )));
-    let configuration = match db.fetch(&SyntaxProvider, configuration_query.clone()) {
+    )))) {
         QueryPoll::Ready(Ok(value)) => value.value, QueryPoll::Ready(Err(error)) => return Err(error),
         QueryPoll::NeedInput(_) => return Err(fault("actual projected predicate configuration needs input")),
     };
     let QueryValue::SolverConfiguration(configuration) = configuration.as_ref() else { unreachable!("actual source configuration") };
-    let mut keys = vec![query, configuration_query, QueryKey::DiscoverySeal(inventory.clone())];
-    keys.extend(bindings.generics.keys().map(|id| QueryKey::DeclarationGenericTypes(Box::new(
-        crate::frontend::declaration_generic_types::DeclarationGenericTypesKey { inventory: inventory.clone(), definition: id.source() },
-    ))));
-    keys.extend(bindings.projections.values().map(|binding| {
-        let QueryValue::TraitAssociatedTypes(plan) = binding.query.as_ref() else { unreachable!("actual associated query") };
-        QueryKey::TraitAssociatedTypes(Box::new(plan.key().clone()))
-    }));
-    let mut guards = Vec::new();
-    for key in keys {
-        let value = match db.fetch(&SyntaxProvider, key.clone()) {
-            QueryPoll::Ready(Ok(value)) => value, QueryPoll::Ready(Err(error)) => return Err(error),
-            QueryPoll::NeedInput(_) => return Err(fault("actual projected predicate guard needs input")),
-        };
-        let guard = match db.prepare_input_guard(&SyntaxProvider, &key, value.fingerprint) {
-            QueryPoll::Ready(Ok(value)) => value, QueryPoll::Ready(Err(error)) => return Err(error),
-            QueryPoll::NeedInput(_) => return Err(fault("actual projected predicate closure guard needs input")),
-        };
-        guards.push(guard);
-    }
-    let guard = crate::db::memo::PreparedInputGuard::join(&guards.iter().collect::<Vec<_>>())?;
-    guard.require_current(db)?;
-    let layouts = SourceGenericLayouts::from_bindings(Arc::clone(&input), [&bindings])?;
+    let layouts = plan.generic_layouts()?;
     let before = db.trace.events.len();
     let (count, projected) = configuration.with_source_context(db, Arc::clone(&input), Some(&layouts), |cx, _| {
         assert!(cx.services().ready(cx).is_err());
-        let mut count = 0; let mut projected = 0;
-        for recipe in recipes {
-            let implicit;
-            let predicate = match recipe {
-                SourcePredicateRecipe::ResolvedSizedDefault(reference) => {
-                    implicit = PredicateResult::Implemented(reference.clone()); &implicit
-                }
-                SourcePredicateRecipe::Explicit { result: PredicateResult::Relaxed { .. }, .. } => continue,
-                SourcePredicateRecipe::Explicit { result, .. } => result,
-                SourcePredicateRecipe::ImplicitSizedDefault(_) => panic!("unresolved actual Sized recipe"),
-            };
-            let clause = super::source_terms::encode_predicate(cx, configuration, bindings.type_bindings(), predicate)
-                .unwrap_or_else(|pending| panic!("actual projected clause TypeIR pending: {pending:?}"));
-            if let PredicateResult::Implemented(reference) = predicate
+        let clauses = plan.encode(cx, configuration).unwrap_or_else(|why| panic!("actual production clause encode pending: {why:?}"));
+        let positive_recipes = recipes.iter().filter(|recipe| !matches!(recipe,
+            SourcePredicateRecipe::Explicit { result: PredicateResult::Relaxed { .. }, .. })).collect::<Vec<_>>();
+        assert_eq!(clauses.len(), positive_recipes.len());
+        let mut projected = 0;
+        for ((clause, span), recipe) in clauses.iter().zip(positive_recipes) {
+            let parse = plan.source().declaration().source_parts().unwrap().0;
+            assert_eq!(span.origin, parse.content);
+            if let SourcePredicateRecipe::Explicit { source, .. } = recipe {
+                assert_eq!((span.start, span.end), (source.start, source.end));
+            }
+            if let SourcePredicateRecipe::Explicit { result: PredicateResult::Implemented(reference), .. } = recipe
                 && let TyTerm::Projection(projection) = &reference.self_ty {
                 assert_eq!(reference.trait_key, expected_bound_trait);
                 assert_eq!(projection.trait_ref.trait_key, expected_trait);
@@ -356,14 +292,13 @@ pub(crate) fn check_actual_projected_source_predicates(
                 assert!(matches!(argument.kind(), ty::TyKind::Param(parameter) if parameter.source()==(ParamKey { definition: owner, ordinal: 1 })));
                 projected += 1;
             }
-            count += 1;
         }
         assert!(cx.services().ready(cx).is_err());
-        (count, projected)
+        (clauses.len(), projected)
     })?;
-    assert_eq!(before, db.trace.events.len(), "actual projected clause encoding must not query source");
-    guard.require_current(db)?;
-    Ok((CurrentSourcePredicates { _source: source, _bindings: bindings, guard }, count, projected))
+    assert_eq!(before, db.trace.events.len(), "actual production clause encoding must not query source");
+    current.require_current(db)?;
+    Ok((current, count, projected))
 }
 
 #[cfg(test)]
