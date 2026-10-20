@@ -3583,3 +3583,6 @@ mod generated_namespace_publication;
 mod upstream_associated_predicates;
 #[path = "preentry_loader_tests/upstream_source_clauses.rs"]
 mod upstream_source_clauses;
+
+#[path = "preentry_loader_tests/upstream_item_bounds.rs"]
+mod upstream_item_bounds;

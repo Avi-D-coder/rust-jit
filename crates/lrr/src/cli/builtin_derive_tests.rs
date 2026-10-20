@@ -65,7 +65,12 @@ fn prints(label: &str, source: &str, editions: &[u16], expected: &str) {
             None,
         ) {
             Ok(StandaloneOutcome::Completed(report)) => {
-                assert_eq!(report.output.stdout, expected, "{edition}\n{source}")
+                assert_eq!(report.output.stdout, expected, "{edition}\n{source}");
+                eprintln!(
+                    "actual standalone constructor/derive control {label},edition{edition},operations{},completed{}",
+                    report.opcode_counters.operations_started,
+                    report.opcode_counters.operations_completed
+                );
             }
             Ok(StandaloneOutcome::Panicked(report)) => {
                 panic!("{edition} panicked: {:?}\n{source}", report.panic)
@@ -195,6 +200,11 @@ fn explicit_constructor_arguments_share_context_and_activation_across_origins() 
         r#"
 enum G<T, U> { A(T), B(U), C }
 struct S<T>(T);
+trait Project { type Value; }
+impl Project for u8 { type Value = u32; }
+impl Project for u16 { type Value = u64; }
+struct Projected<T: Project>(T::Value);
+fn construct<T: Project>(value: T::Value) { Projected::<T>(value); }
 macro_rules! emit { ($value:expr) => { $value }; }
 macro_rules! wrapper { ($value:expr) => { emit!($value) }; }
 fn touch(n: &mut i32) -> u8 { *n += 1; 3 }
@@ -221,9 +231,38 @@ fn main() {
     match first { G::A(value) => take_u8(value), _ => panic!() }
     let second = make::<u16>(2);
     match second { G::A(value) => take_u16(value), _ => panic!() }
+    // The same discarded constructor site has no inferred result context;
+    // each activation must bind fields using its own genuine T application.
+    construct::<u8>(3_u32);
+    construct::<u16>(4_u64);
+    // Empty turbofish preserves contextual inference, as in the unchanged
+    // rustc empty-generic-brackets-equiv.rs witness. This compound field
+    // additionally needs the retained context before it can be bound.
+    let _: Projected<u8> = Projected::<>(5_u32);
 }
+
 "#,
         &[2015, 2018, 2021, 2024],
         "",
     );
+}
+
+#[test]
+fn unchanged_associated_constructor_uses_reached_source_arguments_all_origins_and_editions() {
+    const ORIGINAL: &str = include_str!(
+        "../../../../fixtures/upstream/rustc-checkout/tests/ui/associated-types/assoc-type-in-struct-constructor.rs"
+    );
+    let emitted =
+        format!("macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }} emit! {{ {ORIGINAL} }}");
+    let wrapped = format!(
+        "macro_rules! emit {{ ($($t:tt)*) => {{ $($t)* }} }} macro_rules! wrapper {{ ($($t:tt)*) => {{ emit! {{ $($t)* }} }} }} wrapper! {{ {ORIGINAL} }}"
+    );
+    for (origin, text) in [ORIGINAL, &emitted, &wrapped].into_iter().enumerate() {
+        prints(
+            &format!("stock-associated-constructor-origin{origin}"),
+            text,
+            &[2015, 2018, 2021, 2024],
+            "",
+        );
+    }
 }

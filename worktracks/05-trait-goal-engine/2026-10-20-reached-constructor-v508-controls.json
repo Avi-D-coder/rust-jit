@@ -1,0 +1,9 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "V508 affected controls: reached constructor source applications including a contextual empty Type argument list and repeated generic activations; repaired Q82 associated output source-name ownership. Direct lifetime-only projected constructor execution remains unexecuted. The unchanged shared lowerer Q80 regression remains V507 evidence at its own fingerprint. No complete compiler item query, pinned solver root/full-factory, suite or JIT acceptance is established. Four unchanged runtime witnesses are captured separately.",
+  "controls": [
+    "cli::crate_graph::builtin_derive_tests::unchanged_associated_constructor_uses_reached_source_arguments_all_origins_and_editions",
+    "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins",
+    "cli::preentry_loader_tests::upstream_item_bounds::unchanged_associated_output_bound_uses_actual_projection_span_and_typed_default_holds"
+  ]
+}

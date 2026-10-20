@@ -20,14 +20,19 @@ use crate::{
 #[derive(Default)]
 pub(super) struct NominalRunFacts {
     values: BTreeMap<PcKey, Arc<BoundConstructor>>,
+    /// Source classification is independent of an activation's Type arguments.
     /// `None` records a call site whose callee is not a constructor.
-    calls: BTreeMap<
+    calls: BTreeMap<(BodyKey, crate::vm::call::CallIdentity), Option<NominalConstructorTarget>>,
+    /// A bound field witness belongs to the actual source application, not
+    /// just the call site (which may be entered under several generic bindings).
+    call_bindings: BTreeMap<
         (
             BodyKey,
             crate::vm::call::CallIdentity,
             Option<crate::traits::term::TyTerm>,
+            Option<Vec<Option<crate::traits::term::TyTerm>>>,
         ),
-        Option<Arc<BoundConstructor>>,
+        Arc<BoundConstructor>,
     >,
     /// Whether each call site's callee is bound lexically (a block item or
     /// import), decided once per site.
@@ -281,6 +286,15 @@ impl RunMachine {
         db: &mut Database,
         target: &crate::frontend::nominal_constructors::NominalConstructorTarget,
     ) -> QueryPoll<BoundConstructor> {
+        self.bind_constructor_application(db, target, None)
+    }
+
+    fn bind_constructor_application(
+        &self,
+        db: &mut Database,
+        target: &NominalConstructorTarget,
+        explicit: Option<&[Option<crate::traits::term::TyTerm>]>,
+    ) -> QueryPoll<BoundConstructor> {
         if let Some(RunNames::Legacy(graph)) = &self.graph {
             let sources: Vec<_> = self.sources.iter().collect();
             return bind_constructor(db, graph, &sources, target);
@@ -289,7 +303,7 @@ impl RunMachine {
             Ok(context) => context,
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
-        let arguments = match context {
+        let contextual_arguments = match context {
             Some(crate::traits::term::TyTerm::Nominal(definition, arguments))
                 if definition == target.identity() =>
             {
@@ -297,6 +311,18 @@ impl RunMachine {
             }
             _ => Vec::new(),
         };
+        // The indexed written application precedes field binding. Holes do
+        // not become guessed Types; an independently known result application
+        // remains the existing inference source for those cases.
+        let arguments = explicit
+            .and_then(|arguments| {
+                arguments
+                    .iter()
+                    .map(|argument| argument.clone().map(crate::traits::term::GenericArg::Type))
+                    .collect::<Option<Vec<_>>>()
+            })
+            .filter(|arguments| !arguments.is_empty())
+            .unwrap_or(contextual_arguments);
         if arguments.is_empty() {
             let Some(graph) = &self.graph else {
                 return QueryPoll::Ready(Err(call_fault("constructor source graph absent")));
@@ -407,17 +433,24 @@ impl RunMachine {
         db: &mut Database,
         path: &str,
     ) -> QueryPoll<Option<BoundConstructor>> {
-        self.select_nominal_constructor_with(db, path, false)
+        match self.select_nominal_constructor_target(db, path, false) {
+            QueryPoll::Ready(Ok(Some(target))) => {
+                self.bind_selected_constructor(db, &target).map(Some)
+            }
+            QueryPoll::Ready(Ok(None)) => QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
     }
     /// With `probe`, a callee whose Value-namespace resolution fails is simply
     /// not a constructor: the ordinary source-call route then reports it (or
     /// selects it through its entered lexical/macro contexts).
-    fn select_nominal_constructor_with(
+    fn select_nominal_constructor_target(
         &self,
         db: &mut Database,
         path: &str,
         probe: bool,
-    ) -> QueryPoll<Option<BoundConstructor>> {
+    ) -> QueryPoll<Option<NominalConstructorTarget>> {
         let Some(graph) = &self.graph else {
             return QueryPoll::Ready(Err(call_fault(
                 "value paths require a checked source catalogue",
@@ -457,7 +490,7 @@ impl RunMachine {
                 }
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             };
-        self.bind_selected_constructor(db, &target).map(Some)
+        QueryPoll::Ready(Ok(Some(target)))
     }
     /// Install the unit constructor selected for the `ValuePath` at this PC.
     pub(super) fn prepare_value_path(
@@ -598,46 +631,66 @@ impl RunMachine {
         if self.pending.contains_key(&identity) || name.starts_with('.') {
             return QueryPoll::Ready(Ok(false));
         }
-        let context = match self.constructor_context(site) {
-            Ok(context) => context,
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        };
-        let key = (self.frame.pc().body.clone(), identity, context);
-        // The classification of a call site is fixed for the run's source
-        // publication; ordinary calls are probed once, not per execution.
-        let bound = if let Some(cached) = self.nominal.calls.get(&key) {
+        let selection_key = (self.frame.pc().body.clone(), identity);
+        // Classify the declaration once. Only a selected constructor demands
+        // its explicit path Types; unrelated calls keep their own argument route.
+        let target = if let Some(cached) = self.nominal.calls.get(&selection_key) {
             match cached {
-                Some(bound) => Arc::clone(bound),
+                Some(target) => target.clone(),
                 None => return QueryPoll::Ready(Ok(false)),
             }
         } else {
-            // A callee a block item or import may bind is selected by its
-            // entered lexical Value goal, never by the module graph.
             let lexical = match self.requires_lexical_callee_context(db, name) {
                 QueryPoll::Ready(Ok(lexical)) => lexical,
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             };
             let selected = if lexical {
-                match self.lexical_call_constructor(db, site) {
-                    QueryPoll::Ready(Ok(selected)) => selected,
-                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-                }
+                self.lexical_call_constructor(db, site)
             } else {
-                match self.select_nominal_constructor_with(db, name, true) {
-                    QueryPoll::Ready(Ok(selected)) => selected,
-                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-                }
+                self.select_nominal_constructor_target(db, name, true)
             };
-            let bound = match selected {
-                Some(bound) => bound,
-                None => {
-                    self.nominal.calls.insert(key, None);
+            let target = match selected {
+                QueryPoll::Ready(Ok(Some(target))) => target,
+                QueryPoll::Ready(Ok(None)) => {
+                    self.nominal.calls.insert(selection_key, None);
                     return QueryPoll::Ready(Ok(false));
                 }
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             };
+            self.nominal
+                .calls
+                .insert(selection_key, Some(target.clone()));
+            target
+        };
+        let written = match self.constructor_arguments(db) {
+            QueryPoll::Ready(Ok(arguments)) => arguments,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let source_arguments = written
+            .as_ref()
+            .map(|arguments| arguments.source_terms(&self.frame, &self.store));
+        let context = match self.constructor_context(site) {
+            Ok(context) => context,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let binding_key = (
+            self.frame.pc().body.clone(),
+            identity,
+            context,
+            source_arguments,
+        );
+        let bound = if let Some(bound) = self.nominal.call_bindings.get(&binding_key) {
+            Arc::clone(bound)
+        } else {
+            let bound =
+                match self.bind_constructor_application(db, &target, binding_key.3.as_deref()) {
+                    QueryPoll::Ready(Ok(bound)) => bound,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
             match bound.shape() {
                 FieldShape::Tuple => {}
                 FieldShape::Unit => {
@@ -654,22 +707,20 @@ impl RunMachine {
                 }
             }
             let bound = Arc::new(bound);
-            self.nominal.calls.insert(key, Some(Arc::clone(&bound)));
+            self.nominal
+                .call_bindings
+                .insert(binding_key, Arc::clone(&bound));
             bound
         };
         if let Err(error) = bound.require_current(db) {
             return QueryPoll::Ready(Err(error));
         }
-        let explicit = match self.constructor_arguments(db) {
-            QueryPoll::Ready(Ok(Some(arguments))) => {
-                match arguments.value_descriptors(&self.frame, &mut self.store) {
-                    Ok(arguments) => Some(Arc::from(arguments)),
-                    Err(error) => return QueryPoll::Ready(Err(error)),
-                }
-            }
-            QueryPoll::Ready(Ok(None)) => None,
-            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        let explicit = match written {
+            Some(arguments) => match arguments.value_descriptors(&self.frame, &mut self.store) {
+                Ok(arguments) => Some(Arc::from(arguments)),
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            },
+            None => None,
         };
         self.frame
             .select_constructor_call(site, Arc::clone(bound.variant()), explicit);
@@ -787,7 +838,7 @@ impl RunMachine {
         &mut self,
         db: &mut Database,
         site: u32,
-    ) -> QueryPoll<Option<BoundConstructor>> {
+    ) -> QueryPoll<Option<NominalConstructorTarget>> {
         let Some(path) = self
             .frame
             .body
@@ -810,7 +861,7 @@ impl RunMachine {
             QueryPoll::Ready(Err(_)) => return QueryPoll::Ready(Ok(None)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
-        self.lexical_constructor(db, &selected)
+        self.lexical_constructor_target(db, &selected)
     }
     /// Constructor arguments take their declared field Types as hints, so a
     /// written literal is typed by its field exactly as by a callee parameter.

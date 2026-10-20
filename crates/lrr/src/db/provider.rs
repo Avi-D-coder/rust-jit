@@ -386,6 +386,13 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
+            QueryKey::SourceItemBounds(key) => {
+                return match crate::frontend::source_item_bounds::PreparedSourceItemBounds::prepare(db,key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::SourceItemBounds(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::SourceDeclarationClauseHierarchy(key) => {
                 return match crate::traits::upstream::source_declaration_clauses::PreparedSourceDeclarationClauseHierarchy::prepare(db,key) {
                     QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::SourceDeclarationClauseHierarchy(Box::new(value))),

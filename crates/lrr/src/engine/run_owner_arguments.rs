@@ -38,6 +38,19 @@ pub(super) enum OwnerArgument {
     Term(TyTerm),
 }
 impl OwnerArguments {
+    /// Preserve the selected source Types while substituting only this
+    /// activation's actual generic bindings. No descriptor or value tag is
+    /// used to choose an associated implementation.
+    pub(super) fn source_terms(&self, frame: &Frame, store: &GuestStore) -> Vec<Option<TyTerm>> {
+        self.arguments
+            .iter()
+            .map(|argument| {
+                argument
+                    .as_ref()
+                    .map(|argument| frame.bound_view(argument.source(), store))
+            })
+            .collect()
+    }
     /// Exact Type arguments under the current activation. The immutable
     /// selection is shared; descriptors stay local to this execution.
     pub(super) fn value_descriptors(

@@ -20,6 +20,19 @@ pub(crate) fn sized(
     profile: &ProfileIdentity,
     core: Option<Digest>,
 ) -> QueryPoll<Option<Digest>> {
+    marker_trait(db, sources, profile, core, "Sized")
+}
+
+/// Select an actual configured core::marker declaration through the same
+/// source namespace service. This proves source ownership, not a lang role;
+/// callers needing a compiler lang item must validate SourceLangIdentity.
+pub(crate) fn marker_trait(
+    db: &mut Database,
+    sources: &[&PreparedSourceView],
+    profile: &ProfileIdentity,
+    core: Option<Digest>,
+    name: &str,
+) -> QueryPoll<Option<Digest>> {
     let Some(core) = core else {
         return QueryPoll::Ready(Ok(None));
     };
@@ -46,7 +59,7 @@ pub(crate) fn sized(
         bucket: BucketKey {
             scope: scope.clone(),
             namespace: Namespace::Type,
-            name: "Sized".into(),
+            name: name.into(),
         },
     };
     let outcome = match db.fetch(

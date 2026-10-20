@@ -1,0 +1,570 @@
+{
+  "schema": 1,
+  "status": "held_component_checkpoint",
+  "baseline": "0c11e2e3aaa11513eb8860875e97c329dc23bbb9",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "1.99.0",
+  "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+  "task_ids": [
+    "T040",
+    "M020"
+  ],
+  "claims": [
+    "LOCAL-049"
+  ],
+  "attempts": [
+    {
+      "version": 506,
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T19:58:11.497771+00:00",
+          "head": "0c11e2e3aaa11513eb8860875e97c329dc23bbb9",
+          "file_count": 8702,
+          "source_sha256": "9d57fa744233942db9fcffa61d7147d97efb22d223bb843116d4e91eae610bb7",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T19:58:58.259741+00:00",
+          "head": "0c11e2e3aaa11513eb8860875e97c329dc23bbb9",
+          "file_count": 8702,
+          "source_sha256": "9d57fa744233942db9fcffa61d7147d97efb22d223bb843116d4e91eae610bb7",
+          "binaries": {
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "a3c6b5af08aedc91fda1d8671910b4ebf84bc6a3d59145c220faf68458e84498"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T19:58:58.709795+00:00",
+          "head": "0c11e2e3aaa11513eb8860875e97c329dc23bbb9",
+          "file_count": 8702,
+          "source_sha256": "9d57fa744233942db9fcffa61d7147d97efb22d223bb843116d4e91eae610bb7",
+          "binaries": {
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "a3c6b5af08aedc91fda1d8671910b4ebf84bc6a3d59145c220faf68458e84498"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "compile_errors": [
+        {
+          "code": "E0277",
+          "message": "the trait bound `traits::index::PreparedScopeImplHeaders: digest::StableEncode` is not satisfied",
+          "locations": [
+            {
+              "file_name": "crates/lrr/src/frontend/source_item_bounds.rs",
+              "line_start": 537,
+              "column_start": 22
+            }
+          ]
+        }
+      ],
+      "controls": [],
+      "scope": "Library build101; no fresh CLI/digester/control/runtime. Guarded CLI/digester explicitly from V505."
+    },
+    {
+      "version": 507,
+      "guards": {
+        "before": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T19:59:41.058920+00:00",
+          "head": "0c11e2e3aaa11513eb8860875e97c329dc23bbb9",
+          "file_count": 8702,
+          "source_sha256": "0a10a31324d0972292bd62007d6e6b6bd0c511372dd2426ad95a259fea538dee",
+          "binaries": {}
+        },
+        "after-build": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T20:01:27.575699+00:00",
+          "head": "0c11e2e3aaa11513eb8860875e97c329dc23bbb9",
+          "file_count": 8702,
+          "source_sha256": "0a10a31324d0972292bd62007d6e6b6bd0c511372dd2426ad95a259fea538dee",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+              "sha256": "491d3f89646bec6d24360e2b657392e866d8f279a48729a6096bcc84761f4e06"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "4e3e053864c0255d425ee32105c70ff07fb396b1a62f7abf0892d0859129fb31"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": []
+        },
+        "after-runtime": {
+          "schema": "lrr/validation-inputs/v2",
+          "time_utc": "2026-10-20T20:04:03.855512+00:00",
+          "head": "0c11e2e3aaa11513eb8860875e97c329dc23bbb9",
+          "file_count": 8702,
+          "source_sha256": "0a10a31324d0972292bd62007d6e6b6bd0c511372dd2426ad95a259fea538dee",
+          "binaries": {
+            "test": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+              "sha256": "491d3f89646bec6d24360e2b657392e866d8f279a48729a6096bcc84761f4e06"
+            },
+            "cli": {
+              "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+              "sha256": "4e3e053864c0255d425ee32105c70ff07fb396b1a62f7abf0892d0859129fb31"
+            }
+          },
+          "source_matches_before": true,
+          "head_matches_before": true,
+          "changed_sources": [],
+          "binaries_match_build": true
+        }
+      },
+      "compile_errors": [],
+      "controls": [
+        {
+          "selector": "cli::crate_graph::builtin_derive_tests::unchanged_associated_constructor_uses_reached_source_arguments_all_origins_and_editions",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+            "cli::crate_graph::builtin_derive_tests::unchanged_associated_constructor_uses_reached_source_arguments_all_origins_and_editions",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 47.66,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+            "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 24.551,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::upstream_item_bounds::unchanged_associated_output_bound_uses_actual_projection_span_and_typed_default_holds",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+            "cli::preentry_loader_tests::upstream_item_bounds::unchanged_associated_output_bound_uses_actual_projection_span_and_typed_default_holds",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 101,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": false,
+          "seconds": 2.683,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::upstream_projection_types::unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_editions_and_origins",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+            "cli::preentry_loader_tests::upstream_projection_types::unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_editions_and_origins",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 28.546,
+          "log": "control-3.log"
+        }
+      ],
+      "scope": "Current-source direct-checkout macOS builds and targeted source/runtime controls; full upstream solver/root and suite gates held."
+    }
+  ],
+  "parsed_control_counts": [
+    {
+      "exit": 0,
+      "seconds": 47.66,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "index": 0,
+      "worlds_observed": 12,
+      "fields_observed": null,
+      "pending_observed": null,
+      "operations_observed": 264,
+      "completed_operations_observed": 264
+    },
+    {
+      "exit": 0,
+      "seconds": 24.551,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "index": 1,
+      "worlds_observed": 4,
+      "fields_observed": null,
+      "pending_observed": null,
+      "operations_observed": 1592,
+      "completed_operations_observed": 1592
+    },
+    {
+      "exit": 101,
+      "seconds": 2.683,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "index": 2,
+      "worlds_observed": 0,
+      "fields_observed": null,
+      "pending_observed": null
+    },
+    {
+      "exit": 0,
+      "seconds": 28.546,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "index": 3,
+      "worlds_observed": 12,
+      "fields_observed": null,
+      "pending_observed": null,
+      "own_clauses_observed": 36,
+      "projected_subjects_observed": 12
+    }
+  ],
+  "failed_selector_preflight": {
+    "exit": 2,
+    "executed_control_bodies": 0,
+    "log_sha256": "4f3e4b541f035b89bf82e762ff61d906e183c1d86f23e2b156534d69fb1fddab",
+    "output": "usage: run_controls.py [-h] [--dry-run] directory selection\nrun_controls.py: error: control does not select exactly one test: cli::builtin_derive_tests::unchanged_associated_constructor_uses_reached_source_arguments_all_origins_and_editions\n"
+  },
+  "actual_control_observations": [
+    {
+      "selector": "cli::crate_graph::builtin_derive_tests::unchanged_associated_constructor_uses_reached_source_arguments_all_origins_and_editions",
+      "log_sha256": "c7d3aafd657e7a4820d0f44f7efc8f056a93fd52127d05175c94444d1d236a40",
+      "actual_receipts": [
+        "actual standalone constructor/derive control stock-associated-constructor-origin0,edition2018,operations22,completed22",
+        "actual standalone constructor/derive control stock-associated-constructor-origin0,edition2021,operations22,completed22",
+        "actual standalone constructor/derive control stock-associated-constructor-origin0,edition2024,operations22,completed22",
+        "actual standalone constructor/derive control stock-associated-constructor-origin1,edition2015,operations22,completed22",
+        "actual standalone constructor/derive control stock-associated-constructor-origin1,edition2018,operations22,completed22",
+        "actual standalone constructor/derive control stock-associated-constructor-origin1,edition2021,operations22,completed22",
+        "actual standalone constructor/derive control stock-associated-constructor-origin1,edition2024,operations22,completed22",
+        "actual standalone constructor/derive control stock-associated-constructor-origin2,edition2015,operations22,completed22",
+        "actual standalone constructor/derive control stock-associated-constructor-origin2,edition2018,operations22,completed22",
+        "actual standalone constructor/derive control stock-associated-constructor-origin2,edition2021,operations22,completed22",
+        "actual standalone constructor/derive control stock-associated-constructor-origin2,edition2024,operations22,completed22"
+      ]
+    },
+    {
+      "selector": "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins",
+      "log_sha256": "703082626c9fde96c05ed571dc15aa72fe6d34bc46598ce7338b3d90332f6e09",
+      "actual_receipts": [
+        "actual standalone constructor/derive control constructor-type-arguments,edition2018,operations398,completed398",
+        "actual standalone constructor/derive control constructor-type-arguments,edition2021,operations398,completed398",
+        "actual standalone constructor/derive control constructor-type-arguments,edition2024,operations398,completed398"
+      ]
+    },
+    {
+      "selector": "cli::preentry_loader_tests::upstream_item_bounds::unchanged_associated_output_bound_uses_actual_projection_span_and_typed_default_holds",
+      "log_sha256": "6ea6f95f3deee130c1cc834690abe0ccf4f898362e02b2f98994eb52165f07fc",
+      "actual_receipts": [
+        "actual output-bound source: Diagnostic { code: \"LRR-E-TYPE-CONTEXT\", message: \"local Type declaration owning declaration is absent\", macro_origin: None, rendered_macro_origin: None, generated_origin: None, rendered_generated_origin: None, guest_stack: None, rendered_guest_stack: None, origin_attachment_failure: None, prepared_input_change: None, failure_context: None }"
+      ]
+    },
+    {
+      "selector": "cli::preentry_loader_tests::upstream_projection_types::unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_editions_and_origins",
+      "log_sha256": "2d032189540e35826ae624bc3439262bdd4c521da6c6b032dd479ae2d84798a0",
+      "actual_receipts": [
+        "actual DiscriminantKind::Discriminant:PartialEq<U> source projection edition2015,origin1: 3own clauses,1projected subjects; canonical trait/item IDs, memo/currentness/revocation; solving/root/main held",
+        "actual DiscriminantKind::Discriminant:PartialEq<U> source projection edition2015,origin2: 3own clauses,1projected subjects; canonical trait/item IDs, memo/currentness/revocation; solving/root/main held",
+        "actual DiscriminantKind::Discriminant:PartialEq<U> source projection edition2018,origin0: 3own clauses,1projected subjects; canonical trait/item IDs, memo/currentness/revocation; solving/root/main held",
+        "actual DiscriminantKind::Discriminant:PartialEq<U> source projection edition2018,origin1: 3own clauses,1projected subjects; canonical trait/item IDs, memo/currentness/revocation; solving/root/main held",
+        "actual DiscriminantKind::Discriminant:PartialEq<U> source projection edition2018,origin2: 3own clauses,1projected subjects; canonical trait/item IDs, memo/currentness/revocation; solving/root/main held",
+        "actual DiscriminantKind::Discriminant:PartialEq<U> source projection edition2021,origin0: 3own clauses,1projected subjects; canonical trait/item IDs, memo/currentness/revocation; solving/root/main held",
+        "actual DiscriminantKind::Discriminant:PartialEq<U> source projection edition2021,origin1: 3own clauses,1projected subjects; canonical trait/item IDs, memo/currentness/revocation; solving/root/main held",
+        "actual DiscriminantKind::Discriminant:PartialEq<U> source projection edition2021,origin2: 3own clauses,1projected subjects; canonical trait/item IDs, memo/currentness/revocation; solving/root/main held",
+        "actual DiscriminantKind::Discriminant:PartialEq<U> source projection edition2024,origin0: 3own clauses,1projected subjects; canonical trait/item IDs, memo/currentness/revocation; solving/root/main held",
+        "actual DiscriminantKind::Discriminant:PartialEq<U> source projection edition2024,origin1: 3own clauses,1projected subjects; canonical trait/item IDs, memo/currentness/revocation; solving/root/main held",
+        "actual DiscriminantKind::Discriminant:PartialEq<U> source projection edition2024,origin2: 3own clauses,1projected subjects; canonical trait/item IDs, memo/currentness/revocation; solving/root/main held"
+      ]
+    }
+  ],
+  "source_digester_guards": {
+    "after_build": {
+      "phase": "after-build",
+      "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+      "sha256": "b44cd7b74d811d3e422690b5a54973f3e451f51efc2ffd71ca3b9fe05d15543c"
+    },
+    "after_runtime": {
+      "phase": "after-runtime",
+      "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+      "sha256": "b44cd7b74d811d3e422690b5a54973f3e451f51efc2ffd71ca3b9fe05d15543c",
+      "matches_build": true
+    }
+  },
+  "runtime": {
+    "report_sha256": "15873a192a4bdd2856cd58badda1ffdc02500ee9df8cfdfc45f5f66615c10ae4",
+    "interpreter_sha256": "4e3e053864c0255d425ee32105c70ff07fb396b1a62f7abf0892d0859129fb31",
+    "source_digester_sha256": "b44cd7b74d811d3e422690b5a54973f3e451f51efc2ffd71ca3b9fe05d15543c",
+    "native_execution": false,
+    "input_guard": "all_imported_originals_manifest_and_binary_unchanged",
+    "guest_jit_allowed": false,
+    "selected_batch_passed": false,
+    "selected_cases": [
+      {
+        "case": "tests/ui/associated-types/assoc-type-in-struct-constructor.rs",
+        "status": "runtime_contract_pass",
+        "mode": "run-pass",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "source_sha256": "8b7183304d6ee634fb3484db7aa3a00ece816496df723a904754198475de58b3",
+        "reference_rules": [],
+        "expected_files": [],
+        "diagnostic_compatibility": {
+          "status": "unassessed",
+          "expected_files": []
+        },
+        "compiler_tooling_compatibility": {
+          "status": "unassessed",
+          "expected_files": []
+        },
+        "runtime_expected_files": [],
+        "runtime_expected_files_asserted": false,
+        "extern_flags": [],
+        "blockers": [],
+        "capture_context": "caf4ab29a146bccffd9f7490ec068f5529a0b016ea7df1b50f96c97fb771abbf",
+        "observation": {
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "--edition",
+            "2015",
+            "run",
+            "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/associated-types/assoc-type-in-struct-constructor.rs",
+            "--runtime-capture",
+            "--capture-context",
+            "caf4ab29a146bccffd9f7490ec068f5529a0b016ea7df1b50f96c97fb771abbf"
+          ],
+          "timed_out": false,
+          "output_limited": false,
+          "exit_code": 0,
+          "pid": 38878,
+          "elapsed_seconds": 4.596258291974664,
+          "stdout_bytes": 2129,
+          "stdout_sha256": "3e76da3c98615848c4b56a5af2b96a7832d5d4b03893409ea9a37012b7a14849",
+          "stderr_bytes": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "checks": {
+          "clean_process_exit": true,
+          "protocol_not_guest_output": true,
+          "separate_host_preparation": true,
+          "owning_edition": true,
+          "completed_main": true,
+          "complete_capture": true,
+          "closed_guest_streams": true,
+          "actual_dispatch": true,
+          "terminal_and_cleanup": true,
+          "no_unobserved_boundaries": true,
+          "root_path": true,
+          "entry_identity": true,
+          "captured_originals": true
+        },
+        "guest_output": {
+          "stdout": "",
+          "stderr": ""
+        },
+        "output_contract": "closed_managed_bytes; upstream run-pass has no output comparison without check-run-results"
+      },
+      {
+        "case": "tests/ui/enum-discriminant/repr128.rs",
+        "status": "interpreter_failure",
+        "mode": "run-pass",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "source_sha256": "66af2eb56be2026a744d2169f8467d11df4c75e8ea21d204f0948db2c8e445bc",
+        "reference_rules": [],
+        "expected_files": [],
+        "diagnostic_compatibility": {
+          "status": "unassessed",
+          "expected_files": []
+        },
+        "compiler_tooling_compatibility": {
+          "status": "unassessed",
+          "expected_files": []
+        },
+        "runtime_expected_files": [],
+        "runtime_expected_files_asserted": false,
+        "extern_flags": [],
+        "blockers": [],
+        "capture_context": "b223e84e78580385819a62127b6b8cc8bdf7a5d6f17a5a877d4db62b489e8ceb",
+        "observation": {
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "--edition",
+            "2015",
+            "run",
+            "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/enum-discriminant/repr128.rs",
+            "--runtime-capture",
+            "--capture-context",
+            "b223e84e78580385819a62127b6b8cc8bdf7a5d6f17a5a877d4db62b489e8ceb"
+          ],
+          "timed_out": false,
+          "output_limited": false,
+          "exit_code": 2,
+          "pid": 38879,
+          "elapsed_seconds": 3.8007650420768186,
+          "stdout_bytes": 7361,
+          "stdout_sha256": "f4df334448a2e176824e67536eb9fa6476d136c9af071d6d7f7449144b97a11f",
+          "stderr_bytes": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "terminal": {
+          "code": "LRR-E-OP-TYPE",
+          "message": "operator requires supported concrete primitive operand descriptors",
+          "phase": "executor",
+          "status": "fault"
+        }
+      },
+      {
+        "case": "tests/ui/generics/generic-derived-type.rs",
+        "status": "runtime_contract_pass",
+        "mode": "run-pass",
+        "edition": 2015,
+        "directives": [
+          "//@ run-pass"
+        ],
+        "source_sha256": "59e07d17994d57e0175737319e69637680861a13e39a162cc2c12fe53e0ac06b",
+        "reference_rules": [],
+        "expected_files": [],
+        "diagnostic_compatibility": {
+          "status": "unassessed",
+          "expected_files": []
+        },
+        "compiler_tooling_compatibility": {
+          "status": "unassessed",
+          "expected_files": []
+        },
+        "runtime_expected_files": [],
+        "runtime_expected_files_asserted": false,
+        "extern_flags": [],
+        "blockers": [],
+        "capture_context": "60276e49f18b71eb2e2bed4f89813cbb236d4fc99036b3e062b58a41a2ead787",
+        "observation": {
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "--edition",
+            "2015",
+            "run",
+            "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/generics/generic-derived-type.rs",
+            "--runtime-capture",
+            "--capture-context",
+            "60276e49f18b71eb2e2bed4f89813cbb236d4fc99036b3e062b58a41a2ead787"
+          ],
+          "timed_out": false,
+          "output_limited": false,
+          "exit_code": 0,
+          "pid": 38891,
+          "elapsed_seconds": 4.800446167006157,
+          "stdout_bytes": 2175,
+          "stdout_sha256": "08eeb88c0f4ed0475cfa0297dff0b1d8e799cbb4b6016a772e3d7ecc0ebae35d",
+          "stderr_bytes": 0,
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "checks": {
+          "clean_process_exit": true,
+          "protocol_not_guest_output": true,
+          "separate_host_preparation": true,
+          "owning_edition": true,
+          "completed_main": true,
+          "complete_capture": true,
+          "closed_guest_streams": true,
+          "actual_dispatch": true,
+          "terminal_and_cleanup": true,
+          "no_unobserved_boundaries": true,
+          "root_path": true,
+          "entry_identity": true,
+          "captured_originals": true
+        },
+        "guest_output": {
+          "stderr": "",
+          "stdout": "10\n10\n"
+        },
+        "output_contract": "closed_managed_bytes; upstream run-pass has no output comparison without check-run-results"
+      }
+    ]
+  },
+  "measured_runtime_comparison": {
+    "baseline_evidence": "worktracks/evidence/2026-10-20-v504-v505-source-clauses.json",
+    "baseline_statuses": {
+      "tests/ui/enum-discriminant/repr128.rs": "interpreter_failure",
+      "tests/ui/generics/generic-derived-type.rs": "runtime_contract_pass",
+      "tests/ui/associated-types/assoc-type-in-struct-constructor.rs": "interpreter_failure"
+    },
+    "new_distinct_passes": [
+      "tests/ui/associated-types/assoc-type-in-struct-constructor.rs"
+    ]
+  },
+  "new_imported_originals": [],
+  "selection": "worktracks/05-trait-goal-engine/2026-10-20-reached-constructor-controls.json",
+  "architecture_reviews": [
+    "worktracks/05-trait-goal-engine/2026-10-20-reached-constructor-arguments.md",
+    "worktracks/05-trait-goal-engine/2026-10-20-constructor-application-review.md",
+    "worktracks/05-trait-goal-engine/2026-10-20-constructor-source-transport-review.md",
+    "worktracks/05-trait-goal-engine/2026-10-20-source-item-bounds-review.md"
+  ],
+  "implemented": [
+    "Ordinary constructor calls classify actual source targets before field binding, transport retained indexed explicit source arguments through the current frame, and retain field witnesses by actual generic application.",
+    "Existing shared nominal member binder/VM continuation consumes the source application; no new parser, macro evaluator, trait solver, numeric coercion or cleanup route. Existing legacy normalizer remains held migration debt.",
+    "Q82 retains authenticated associated output source recipes, actual parent/Self/member identity, output spans and parent candidates through the shared declaration row lowerer. Configuration, missing language identities and GAT remapping remain explicit dependencies."
+  ],
+  "acceptance_scope": {
+    "source_item_bounds_control": "failed_before_first_world_local_Type_owner_absent",
+    "focused_controls_passed": 3,
+    "focused_controls_selected": 4,
+    "new_distinct_stock_runtime_gains": 1,
+    "refreshed_full_suite_or_morning_delta": false,
+    "upstream_runtime_acceptance": "incomplete",
+    "diagnostic_compatibility": "not_assessed",
+    "compiler_tooling_compatibility": "not_assessed",
+    "full_suite_compatibility": "incomplete",
+    "complete_definition_factory": false,
+    "upstream_root_execution": false,
+    "guest_jit_allowed": false
+  },
+  "remaining": [
+    "repr128 requires actual reached projected-trait inference before generic literal fallback; primitive comparison and discriminant representation are unchanged. No primitive retagging or assertion rule.",
+    "Partial explicit holes, projection/function/opaque frame substitution, unit-value cache and no-BodyEnvironment legacy route remain bounded held scope.",
+    "Q82 written output recipes are not compiler item_bounds/self/nonself/elaborated queries or completed ParamEnv; nonempty parent where/nested/GAT branches remain unexecuted by its selected control.",
+    "Real source default configuration/MetaSized/PointeeSized and complete applicable facts/provider/root, typed demand suspension, source/member/VM migration and legacy removal remain incomplete.",
+    "Complete runtime/architecture/currentness/suspension/cleanup matrices, milestone, Linux, performance, full-suite and interpreter/JIT gates remain open."
+  ],
+  "reproduction": [
+    "Use tracked licensed originals/toolchain pins; raw artifacts and temporary packaging scripts are disposable.",
+    "/opt/homebrew/bin/python3.12 tools/validation/source_manifest.py artifacts/validation-reproduce before",
+    "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json >artifacts/validation-reproduce/lib-build.jsonl",
+    "cargo +1.99.0 build --offline --locked -p lrr --bin lrr",
+    "cargo +1.99.0 build --offline --locked -p xtask --example lrr_source_digests",
+    "/opt/homebrew/bin/python3.12 tools/validation/source_manifest.py artifacts/validation-reproduce after-build --cargo-messages artifacts/validation-reproduce/lib-build.jsonl --cli-binary target/debug/lrr",
+    "/opt/homebrew/bin/python3.12 tools/validation/run_controls.py artifacts/validation-reproduce worktracks/05-trait-goal-engine/2026-10-20-reached-constructor-controls.json",
+    "LRR_EMBEDDED_FACADE=1 /opt/homebrew/bin/python3.12 tools/rustc_checkout_runtime.py --lrr target/debug/lrr --source-digester target/debug/examples/lrr_source_digests --report-dir /private/tmp/lrr-constructor-reproduce --timeout 240 --case tests/ui/associated-types/assoc-type-in-struct-constructor.rs --case tests/ui/enum-discriminant/repr128.rs --case tests/ui/generics/generic-derived-type.rs",
+    "/opt/homebrew/bin/python3.12 tools/validation/source_manifest.py artifacts/validation-reproduce after-runtime"
+  ]
+}

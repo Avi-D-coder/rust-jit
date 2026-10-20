@@ -168,6 +168,22 @@ impl RunMachine {
         db: &mut Database,
         selected: &LexicalSelection,
     ) -> QueryPoll<Option<crate::frontend::nominal_constructors::BoundConstructor>> {
+        match self.lexical_constructor_target(db, selected) {
+            QueryPoll::Ready(Ok(Some(target))) => {
+                self.bind_selected_constructor(db, &target).map(Some)
+            }
+            QueryPoll::Ready(Ok(None)) => QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
+    }
+    /// Classification does not bind field Types. A reached call must supply
+    /// its actual source application before demanding those field Types.
+    pub(super) fn lexical_constructor_target(
+        &self,
+        db: &mut Database,
+        selected: &LexicalSelection,
+    ) -> QueryPoll<Option<crate::frontend::nominal_constructors::NominalConstructorTarget>> {
         use crate::frontend::nominal_constructors::NominalConstructorTarget;
         let Some(_graph) = &self.graph else {
             return QueryPoll::Ready(Err(call_fault(
@@ -211,7 +227,7 @@ impl RunMachine {
                     Err(error) => return QueryPoll::Ready(Err(error)),
                 }
             };
-            return self.bind_selected_constructor(db, &target).map(Some);
+            return QueryPoll::Ready(Ok(Some(target)));
         }
         let target = match (&selected.variant, selected.kind) {
             (Some(variant), _) => match NominalConstructorTarget::variant(db, &sources, variant) {
@@ -234,7 +250,7 @@ impl RunMachine {
             }
             _ => return QueryPoll::Ready(Ok(None)),
         };
-        self.bind_selected_constructor(db, &target).map(Some)
+        QueryPoll::Ready(Ok(Some(target)))
     }
     /// A static read by value at an already selected PC: only the cell's
     /// current state is read (no name selection or source work). A Copy

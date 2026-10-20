@@ -7,9 +7,7 @@ use super::{
 use crate::{
     db::{memo::Database, poll::QueryPoll},
     source::changes::PreparedSourceView,
-    syntax::{
-        ast_adapter::range,
-    },
+    syntax::ast_adapter::range,
     traits::{
         predicate::{PredicatePending, PredicateResult, SourcePredicateRecipe},
         term::{RegionTerm, TraitRef, TyTerm},
@@ -17,7 +15,7 @@ use crate::{
 };
 use ra_ap_syntax::{
     AstNode,
-    ast::{self, HasGenericArgs},
+    ast::{self, HasGenericArgs, HasTypeBounds},
 };
 
 pub(crate) fn prepare(
@@ -47,7 +45,15 @@ pub(crate) fn prepare_own(
     own_parameters: u32,
     self_type: Option<&TyTerm>,
 ) -> QueryPoll<Vec<SourcePredicateRecipe>> {
-    prepare_selected(db, graph, sources, declaration, owner, core, Some((own_parameters, self_type)))
+    prepare_selected(
+        db,
+        graph,
+        sources,
+        declaration,
+        owner,
+        core,
+        Some((own_parameters, self_type)),
+    )
 }
 
 fn prepare_selected(
@@ -59,6 +65,97 @@ fn prepare_selected(
     core: Option<crate::core::digest::Digest>,
     own: Option<(u32, Option<&TyTerm>)>,
 ) -> QueryPoll<Vec<SourcePredicateRecipe>> {
+    let missing_self = matches!(own, Some((_, None)));
+    let mut actual = source_types::actual_declaration_bound_syntax(declaration, owner);
+    if let Some((own_parameters, self_type)) = own {
+        let owner_range = owner.text_range();
+        actual
+            .bounds
+            .retain(|row| owner_range.contains_range(row.bound.syntax().text_range()));
+        actual
+            .implicit_sized
+            .retain(|key| key.ordinal < own_parameters);
+        // The collector's trait supertrait subject has no written parameter
+        // node. Use only the actual declaration's supplied implicit Self slot.
+        if ast::Trait::can_cast(owner.kind()) {
+            for row in &mut actual.bounds {
+                if matches!(row.subject, ActualBoundSubject::Missing)
+                    && row
+                        .bound
+                        .syntax()
+                        .parent()
+                        .and_then(|list| list.parent())
+                        .as_ref()
+                        == Some(owner)
+                    && let Some(self_type) = self_type
+                {
+                    row.subject = ActualBoundSubject::Type(self_type.clone());
+                }
+            }
+        }
+    }
+    prepare_bound_rows(db, graph, sources, declaration, actual, core, missing_self)
+}
+
+/// Actual written associated output bounds with the caller's authenticated
+/// projection subject. No generic-parameter/default or parent clauses are added.
+pub(crate) fn prepare_output_bounds(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    declaration: &WrittenTypeDeclaration<'_>,
+    alias: &ast::TypeAlias,
+    subject: &TyTerm,
+    core: Option<crate::core::digest::Digest>,
+) -> QueryPoll<Vec<SourcePredicateRecipe>> {
+    let actual = source_types::ActualDeclarationBounds {
+        bounds: alias
+            .type_bound_list()
+            .into_iter()
+            .flat_map(|list| list.bounds())
+            .map(|bound| source_types::ActualDeclarationBound {
+                subject: ActualBoundSubject::Type(subject.clone()),
+                bound,
+                where_binder: None,
+            })
+            .collect(),
+        implicit_sized: Vec::new(),
+    };
+    prepare_bound_rows(db, graph, sources, declaration, actual, core, false)
+}
+
+/// Retain only actual parent where-bound candidates in its source/name frame.
+/// The frame supplies the actual child-bound Self and parent parameter rebasing.
+/// Item filtering and GAT binder remapping are distinct compiler producers.
+pub(crate) fn prepare_parent_where_bounds(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    declaration: &WrittenTypeDeclaration<'_>,
+    parent: &ra_ap_syntax::SyntaxNode,
+    core: Option<crate::core::digest::Digest>,
+) -> QueryPoll<Vec<SourcePredicateRecipe>> {
+    let mut actual = source_types::actual_declaration_bound_syntax(declaration, parent);
+    let where_range = parent
+        .children()
+        .find_map(ast::WhereClause::cast)
+        .map(|clause| clause.syntax().text_range());
+    actual.bounds.retain(|row| {
+        where_range.is_some_and(|range| range.contains_range(row.bound.syntax().text_range()))
+    });
+    actual.implicit_sized.clear();
+    prepare_bound_rows(db, graph, sources, declaration, actual, core, false)
+}
+
+fn prepare_bound_rows(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    declaration: &WrittenTypeDeclaration<'_>,
+    actual: source_types::ActualDeclarationBounds,
+    core: Option<crate::core::digest::Digest>,
+    missing_self: bool,
+) -> QueryPoll<Vec<SourcePredicateRecipe>> {
     macro_rules! ready {
         ($value:expr) => {
             match $value {
@@ -68,28 +165,12 @@ fn prepare_selected(
             }
         };
     }
-    let missing_self = matches!(own, Some((_, None)));
-    let has_self = |ty: &ast::Type| ty.syntax().descendants()
-        .filter_map(ast::PathSegment::cast)
-        .any(|segment| segment.kind() == Some(ast::PathSegmentKind::SelfTypeKw));
-    let mut actual = source_types::actual_declaration_bound_syntax(declaration, owner);
-    if let Some((own_parameters, self_type)) = own {
-        let owner_range = owner.text_range();
-        actual.bounds.retain(|row| owner_range.contains_range(row.bound.syntax().text_range()));
-        actual.implicit_sized.retain(|key| key.ordinal < own_parameters);
-        // The collector's trait supertrait subject has no written parameter
-        // node. Use only the actual declaration's supplied implicit Self slot.
-        if ast::Trait::can_cast(owner.kind()) {
-            for row in &mut actual.bounds {
-                if matches!(row.subject, ActualBoundSubject::Missing)
-                    && row.bound.syntax().parent().and_then(|list| list.parent()).as_ref() == Some(owner)
-                    && let Some(self_type) = self_type
-                {
-                    row.subject = ActualBoundSubject::Type(self_type.clone());
-                }
-            }
-        }
-    }
+    let has_self = |ty: &ast::Type| {
+        ty.syntax()
+            .descendants()
+            .filter_map(ast::PathSegment::cast)
+            .any(|segment| segment.kind() == Some(ast::PathSegmentKind::SelfTypeKw))
+    };
     let sized = if actual.implicit_sized.is_empty() {
         None
     } else {
@@ -151,7 +232,9 @@ fn prepare_selected(
             ActualBoundSubject::TypeSyntax(ty) => {
                 // A declaration without represented Self must not invoke the
                 // legacy enclosing-impl text reconstruction fallback.
-                if missing_self && has_self(&ty) { pending!(Subject); }
+                if missing_self && has_self(&ty) {
+                    pending!(Subject);
+                }
                 if source_types::symbolic_type_pending(&ty).is_some() {
                     pending!(SymbolicType);
                 }
@@ -197,7 +280,9 @@ fn prepare_selected(
         let Some(ast::Type::PathType(ty)) = row.bound.ty() else {
             pending!(TraitName);
         };
-        if missing_self && has_self(&ast::Type::PathType(ty.clone())) { pending!(SymbolicType); }
+        if missing_self && has_self(&ast::Type::PathType(ty.clone())) {
+            pending!(SymbolicType);
+        }
         if source_types::symbolic_type_pending(&ast::Type::PathType(ty.clone())).is_some() {
             pending!(SymbolicType);
         }

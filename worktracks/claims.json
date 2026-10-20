@@ -1605,7 +1605,7 @@
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T08:29:03.723628+00:00",
+      "updated_at": "2026-10-20T20:13:55.764619+00:00",
       "review_after": "2026-10-18T09:44:05.987318+00:00",
       "transferred_paths": [
         "crates/lrr/src/vm/step.rs",
@@ -1615,7 +1615,14 @@
         "crates/lrr/src/syntax/constructors.rs",
         "crates/lrr/src/db/binding_constraint_thunk.rs",
         "crates/lrr/src/cli/reached_pattern_nominal_tests.rs"
-      ]
+      ],
+      "shared_interface_followup": {
+        "source_sha256": "73b4f0f96a40390f67a1a07d42d57548394bc2a41c437dcb6083c13bbae03697",
+        "evidence": "worktracks/evidence/2026-10-20-v508-constructor-source-scopes.json",
+        "owning_claim": "LOCAL-049",
+        "status": "held_component_checkpoint",
+        "note": "Existing same-root source/VM interface reservation reused; no duplicate path claim or task closure. Constructor application/source namespace common join; exact source and runtime scope in evidence."
+      }
     },
     {
       "id": "LOCAL-047",
@@ -1667,8 +1674,15 @@
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-19T10:36:05.193052+00:00",
-      "review_after": "2026-10-18T09:45:35.941918+00:00"
+      "updated_at": "2026-10-20T20:13:55.764619+00:00",
+      "review_after": "2026-10-18T09:45:35.941918+00:00",
+      "shared_interface_followup": {
+        "source_sha256": "73b4f0f96a40390f67a1a07d42d57548394bc2a41c437dcb6083c13bbae03697",
+        "evidence": "worktracks/evidence/2026-10-20-v508-constructor-source-scopes.json",
+        "owning_claim": "LOCAL-049",
+        "status": "held_component_checkpoint",
+        "note": "Existing same-root source/VM interface reservation reused; no duplicate path claim or task closure. Constructor application/source namespace common join; exact source and runtime scope in evidence."
+      }
     },
     {
       "id": "LOCAL-048",
@@ -2105,11 +2119,23 @@
         "worktracks/05-trait-goal-engine/2026-10-20-source-declaration-clauses-review.md",
         "worktracks/05-trait-goal-engine/2026-10-20-upstream-generic-clauses.md",
         "worktracks/05-trait-goal-engine/2026-10-20-source-clauses-controls.json",
-        "worktracks/evidence/2026-10-20-v504-v505-source-clauses.json"
+        "worktracks/evidence/2026-10-20-v504-v505-source-clauses.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-reached-constructor-arguments.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-constructor-application-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-constructor-source-transport-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-reached-constructor-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-reached-constructor-v508-controls.json",
+        "worktracks/05-trait-goal-engine/2026-10-20-repr128-reached-inference.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-source-item-bounds.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-source-item-bounds-review.md",
+        "worktracks/evidence/2026-10-20-v506-v507-reached-constructors.json",
+        "worktracks/evidence/2026-10-20-v508-constructor-source-scopes.json",
+        "crates/lrr/src/frontend/source_item_bounds.rs",
+        "crates/lrr/src/cli/preentry_loader_tests/upstream_item_bounds.rs"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-20T19:46:33.293549+00:00",
+      "updated_at": "2026-10-20T20:13:55.764619+00:00",
       "review_after": "2026-10-20T10:52:01.627878+00:00",
       "shared_interfaces": [
         {
@@ -2457,8 +2483,8 @@
           "scope": "Same-root incremental unchanged GAT source witness import; existing original licenses retained, no fixture/runtime acceptance claim."
         }
       ],
-      "latest_component_scope": "V505 HELD M020 production source clause bundles and pinned parent instantiation. Q78 authenticates associated parents/Self/parameter rebasing and own parameter spans. Q80 retains own source requirements and bindings; Q81 separately demands parent requirements, leaving unsupported parent HRTB unforced for own data. Shared require_recipe/encode_recipe replace duplicate declaration/impl logic; the old cfg-only projected binding/encoding path is removed. Complete pinned GenericClauses methods preserve actual parent-before-own clauses/spans; identity keeps parent SourceParameter owners while instantiation with genuine child arguments rebinds them. V504 four compile errors are preserved with failed-build guards. V505 macOS1.99 lib/CLI/digester, seven source audits plus exact upstream verification and6/6focused controls pass with closing source/HEAD/test/CLI/digester guards. Controls cover 12parent-instantiation worlds,12own-vs-parent demand worlds,48associated worlds/108aliases, 12associated HRTB cold worlds,12projected worlds/36clauses/12projections and 60impl worlds/144clauses. Q80 independent source withdrawal passes; Q81 epoch-first revocation does not prove fresh source-only withdrawal. Existing generic-derived-type runtime passes and repr128 remains LRR-E-OP-TYPE. Additional unchanged assoc-type-in-struct-constructor reaches S::<I>(i) then fails LRR-E-UNSUPPORTED compound field binding. Zero new distinct stock runtime gains or refreshed suite total. Full compiler own/all/item predicates, MetaSized/PointeeSized/default source identities, applicable fact/root/member/VM integration and interpreter/JIT gates remain open; no task or milestone is closed."
+      "latest_component_scope": "V508 HELD T040/M020 common reached constructor/source namespace checkpoint. Source target classification precedes binding; indexed explicit source Types join actual frame bindings and cached field witnesses key actual generic applications. Empty Type lists preserve inferred context. Shared associated declaration proof authenticates actual original/generated child and trait/impl parent, preserves generic/Self priority and child hygiene, and selects the genuine enclosing namespace without flattening local ribs. Q82 output recipes use the common bound-row lowerer with actual projection/member/spans and explicit defaults/config/GAT holds. V506 compile failure and V507 selector preflight/Q82 local-owner failure are retained. V508 macOS1.99 lib/CLI/digester and3/3focused controls pass with all closing source/HEAD/test/CLI/digester guards:12constructor origin worlds,4activation worlds/1624completed operations and12Q82worlds/12output recipes. Selected unchanged runtime3/4pass13checks each: associated constructor, generic-derived and empty-generic-brackets; repr128 still LRR-E-OP-TYPE. Associated constructor is1measured new distinct pass against V505; no failing baseline for emptycase and its warning diagnostics remain outstanding. V507Q80pass remains evidence at its own source, not rerun. No refreshed suite total or morning delta. Existing legacy normalization is unchanged migration debt; complete upstream facts/provider/root, default/source item-bound families, negative/local scope/cleanup/suspension matrices, interpreter and JIT gates remain open. No task/milestone closed."
     }
   ],
-  "updated_at": "2026-10-20T19:46:33.293549+00:00"
+  "updated_at": "2026-10-20T20:13:55.764619+00:00"
 }

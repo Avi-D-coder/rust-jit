@@ -244,6 +244,7 @@ fn lookup_name_inner(
         rows.current_parse(),
         written_name,
         selected,
+        None,
     )
 }
 
@@ -368,23 +369,46 @@ pub(crate) fn lookup_type_declaration_at(
         QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
     };
     let crate::db::value::QueryValue::ParseFile(parsed) = captured.as_ref() else {
-        return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "Type occurrence parse differs")));
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "Type occurrence parse differs",
+        )));
     };
     let Some(context) = db.input(&InputKey::DeclarationContext(declaration.definition)) else {
-        return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "Type occurrence declaration is absent")));
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "Type occurrence declaration is absent",
+        )));
     };
     let InputValue::DeclarationContext(context) = context.as_ref() else {
-        return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "Type occurrence declaration differs")));
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "Type occurrence declaration differs",
+        )));
     };
-    let occurrence = match parsed.declaration_type_name(declaration.definition, declaration.header, context, name) {
+    let occurrence = match parsed.declaration_type_name(
+        declaration.definition,
+        declaration.header,
+        context,
+        name,
+    ) {
         Ok(value) => value,
         Err(error) => return QueryPoll::Ready(Err(error)),
     };
-    if let Err(error) = occurrence.require(parse, declaration.definition, declaration.header, context, name.text()) {
+    if let Err(error) = occurrence.require(
+        parse,
+        declaration.definition,
+        declaration.header,
+        context,
+        name.text(),
+    ) {
         return QueryPoll::Ready(Err(error));
     }
     if context.scope != *declaration.scope {
-        return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "Type occurrence owner differs")));
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "Type occurrence owner differs",
+        )));
     }
     let selected = match GeneratedRows::current(db, declaration.definition, parse) {
         Ok(Some(rows)) => rows.unit_range(occurrence.range()),
@@ -392,7 +416,10 @@ pub(crate) fn lookup_type_declaration_at(
         Err(error) => return QueryPoll::Ready(Err(error)),
     };
     let Some(selected) = selected else {
-        return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "Type occurrence unit coordinates absent")));
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "Type occurrence unit coordinates absent",
+        )));
     };
     lookup_type_declaration_using(db, declaration, parse, name.text(), Some(selected))
 }
@@ -421,27 +448,61 @@ fn lookup_type_declaration_using(
             "generated Type canonical declaration absent",
         )));
     };
+    let namespace_scope =
+        match super::super::type_name_namespace::associated_declaration_scope(db, declaration, &[])
+        {
+            QueryPoll::Ready(Ok(scope)) => scope,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+    if namespace_scope
+        .as_ref()
+        .is_some_and(|scope| scope.owner.is_some())
+    {
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "generated associated Type namespace requires its enclosing local rib",
+        )));
+    }
     use crate::source::manifest::ItemKind;
     if definition.item_kind == ItemKind::Impl {
-        let inventory = match db.fetch(&SyntaxProvider,
-            crate::db::key::QueryKey::PreparedScopeImplHeaders(unit.seal.clone())) {
+        let inventory = match db.fetch(
+            &SyntaxProvider,
+            crate::db::key::QueryKey::PreparedScopeImplHeaders(unit.seal.clone()),
+        ) {
             QueryPoll::Ready(Ok(value)) => value,
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
-        let crate::db::value::QueryValue::PreparedScopeImplHeaders(inventory) = inventory.value.as_ref() else {
-            return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "generated impl header inventory differs")));
+        let crate::db::value::QueryValue::PreparedScopeImplHeaders(inventory) =
+            inventory.value.as_ref()
+        else {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-CALL-CONTEXT",
+                "generated impl header inventory differs",
+            )));
         };
         let Some(raw) = inventory.header_by_owner(declaration.definition) else {
-            return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "generated impl canonical source is absent or ambiguous")));
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-CALL-CONTEXT",
+                "generated impl canonical source is absent or ambiguous",
+            )));
         };
         if raw.requirements().header != declaration.header.tokens {
-            return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "generated impl actual header differs")));
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-CALL-CONTEXT",
+                "generated impl actual header differs",
+            )));
         }
-        let syntax = match db.fetch(&SyntaxProvider, QueryKey::ImplHeaderSyntax(Box::new(
-            crate::traits::header_syntax::ImplHeaderSyntaxKey {
-                inventory: unit.seal.clone(), implementation: raw.identity(),
-            }))) {
+        let syntax = match db.fetch(
+            &SyntaxProvider,
+            QueryKey::ImplHeaderSyntax(Box::new(
+                crate::traits::header_syntax::ImplHeaderSyntaxKey {
+                    inventory: unit.seal.clone(),
+                    implementation: raw.identity(),
+                },
+            )),
+        ) {
             QueryPoll::Ready(Ok(value)) => value,
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
@@ -452,23 +513,39 @@ fn lookup_type_declaration_using(
                 && syntax.scope().crate_key == declaration.scope.crate_key
                 && syntax.scope().module_path == declaration.scope.module_path)
         {
-            return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "generated impl canonical header proof differs")));
-        }
-        return QueryPoll::Ready(lookup_declaration_inner(db, declaration, parse, written_name, selected_range));
-    }
-    let key = match definition.item_kind {
-        kind if kind.is_nominal_type() => QueryKey::TypeSchema(declaration.definition),
-        ItemKind::TypeAlias => QueryKey::TypeAlias(declaration.definition),
-        ItemKind::Trait => QueryKey::TraitDeclaration(declaration.definition),
-        // Type names written in a function declaration use its actual retained
-        // source header. A function is not a nominal/alias Type recipe, and
-        // admitting its namespace must not prepare its executable signature.
-        ItemKind::Function => QueryKey::DeclarationGenerics(declaration.definition),
-        _ => {
             return QueryPoll::Ready(Err(fault(
                 "LRR-E-CALL-CONTEXT",
-                "generated declaration has no nominal/alias Type recipe",
+                "generated impl canonical header proof differs",
             )));
+        }
+        return QueryPoll::Ready(lookup_declaration_inner(
+            db,
+            declaration,
+            parse,
+            written_name,
+            selected_range,
+            None,
+        ));
+    }
+    let key = if namespace_scope.is_some() {
+        // Associated source syntax is certified by its actual declaration and
+        // parent receipts, not by instantiating a free-alias target recipe.
+        QueryKey::DeclarationGenerics(declaration.definition)
+    } else {
+        match definition.item_kind {
+            kind if kind.is_nominal_type() => QueryKey::TypeSchema(declaration.definition),
+            ItemKind::TypeAlias => QueryKey::TypeAlias(declaration.definition),
+            ItemKind::Trait => QueryKey::TraitDeclaration(declaration.definition),
+            // Type names written in a function declaration use its actual retained
+            // source header. A function is not a nominal/alias Type recipe, and
+            // admitting its namespace must not prepare its executable signature.
+            ItemKind::Function => QueryKey::DeclarationGenerics(declaration.definition),
+            _ => {
+                return QueryPoll::Ready(Err(fault(
+                    "LRR-E-CALL-CONTEXT",
+                    "generated declaration has no nominal/alias Type recipe",
+                )));
+            }
         }
     };
     let captured = match db.fetch(&SyntaxProvider, key) {
@@ -478,7 +555,7 @@ fn lookup_type_declaration_using(
     };
     let valid = match captured.value.as_ref() {
         crate::db::value::QueryValue::DeclarationGenerics(recipe) => {
-            recipe.definition() == declaration.definition && recipe.is_function()
+            recipe.definition() == declaration.definition && (recipe.is_function() || namespace_scope.is_some())
                 && recipe.source_parts().is_some_and(|(source, header, context, parsed)| {
                     source == parse && parsed.key() == *parse && header == declaration.header
                         && &context.scope == declaration.scope
@@ -513,6 +590,7 @@ fn lookup_type_declaration_using(
         parse,
         written_name,
         selected_range,
+        namespace_scope.as_ref(),
     ))
 }
 
@@ -524,6 +602,7 @@ fn lookup_declaration_inner(
     parse: &ParseKey,
     written_name: &str,
     selected_range: Option<crate::syntax::spans::SourceRange>,
+    associated_scope: Option<&crate::syntax::outline::ScopeKey>,
 ) -> Result<super::super::names::NameLookup, Diagnostic> {
     let missing = || {
         fault(
@@ -541,7 +620,12 @@ fn lookup_declaration_inner(
     if unit.key != *parse
         || declaration.header.profile != unit.key.profile
         || &context.scope != declaration.scope
-        || declaration.scope.owner.is_some()
+        || (declaration.scope.owner.is_some() && associated_scope.is_none())
+        || associated_scope.is_some_and(|scope| {
+            scope.owner.is_some()
+                || scope.crate_key != declaration.scope.crate_key
+                || scope.module_path != declaration.scope.module_path
+        })
         || definition.crate_key != declaration.scope.crate_key
         || definition.module_path != declaration.scope.module_path
         || declaration.scope.crate_key != unit.scope.crate_key
@@ -590,9 +674,10 @@ fn lookup_declaration_inner(
     {
         return Err(missing());
     }
+    let namespace_scope = associated_scope.unwrap_or(declaration.scope);
     let mut selected = None;
     for receipt in &publication.type_scopes {
-        if &receipt.scope().scope == declaration.scope
+        if &receipt.scope().scope == namespace_scope
             && receipt.scope().edition == declaration.header.profile.edition
         {
             if selected.is_some() {
@@ -602,7 +687,7 @@ fn lookup_declaration_inner(
         }
     }
     let receipt = selected.ok_or_else(missing)?;
-    receipt.require_owner(declaration.scope, &declaration.header.profile)?;
+    receipt.require_owner(namespace_scope, &declaration.header.profile)?;
     receipt.require_current(db, publication)?;
     let name =
         crate::expand::scopes::MacroName::parse(written_name, declaration.header.profile.edition)?;

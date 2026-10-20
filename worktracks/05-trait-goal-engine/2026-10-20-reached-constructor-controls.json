@@ -1,0 +1,10 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Reached constructor source argument transport through the ordinary standalone pipeline, all four editions and original/user/wrapper origins, plus repeated generic activations with different projected fields; actual source item-output recipes with typed default holds; one production Q80 projected-bound regression because the shared source bound collector changed. Existing legacy associated normalization remains migration debt; these controls do not establish complete compiler item queries, pinned upstream root execution or full fixture/JIT acceptance. Runtime harness observations are recorded separately.",
+  "controls": [
+    "cli::crate_graph::builtin_derive_tests::unchanged_associated_constructor_uses_reached_source_arguments_all_origins_and_editions",
+    "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins",
+    "cli::preentry_loader_tests::upstream_item_bounds::unchanged_associated_output_bound_uses_actual_projection_span_and_typed_default_holds",
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_editions_and_origins"
+  ]
+}

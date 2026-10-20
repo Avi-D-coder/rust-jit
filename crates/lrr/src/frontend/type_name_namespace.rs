@@ -113,6 +113,150 @@ pub(crate) fn lookup_declaration_name(
     }
 }
 
+/// Prove an associated declaration's real enclosing scope. An owner digest can
+/// also denote an executable lexical rib, so its presence alone grants nothing.
+/// The returned scope is the parent's actual scope, including any local owner.
+pub(crate) fn associated_declaration_scope(
+    db: &mut Database,
+    declaration: SourceTypeOwner<'_>,
+    sources: &[&PreparedSourceView],
+) -> QueryPoll<Option<ScopeKey>> {
+    use ra_ap_syntax::{AstNode, ast};
+    if declaration.scope.owner.is_none() {
+        return QueryPoll::Ready(Ok(None));
+    }
+    macro_rules! ready {
+        ($value:expr) => {
+            match $value {
+                QueryPoll::Ready(Ok(value)) => value,
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+        };
+    }
+    let child = ready!(db.fetch(
+        &SyntaxProvider,
+        QueryKey::DeclarationGenerics(declaration.definition)
+    ))
+    .value;
+    let QueryValue::DeclarationGenerics(child) = child.as_ref() else {
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-TYPE-CONTEXT",
+            "associated Type declaration metadata differs",
+        )));
+    };
+    let Some((parse, header, context, parsed)) = child.source_parts() else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    if header != declaration.header || context.scope != *declaration.scope {
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-TYPE-CONTEXT",
+            "associated Type declaration receipt differs",
+        )));
+    }
+    let node = match parsed.syntax_at(context.range, |node| ast::Item::can_cast(node.kind())) {
+        Ok(Some(node)) => node,
+        Ok(None) => return QueryPoll::Ready(Ok(None)),
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    let Some(list) = node
+        .parent()
+        .filter(|node| ast::AssocItemList::can_cast(node.kind()))
+    else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let Some(parent_node) = list.parent() else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let kind = if ast::Trait::can_cast(parent_node.kind()) {
+        ItemKind::Trait
+    } else if ast::Impl::can_cast(parent_node.kind()) {
+        ItemKind::Impl
+    } else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let missing = || {
+        fault(
+            "LRR-E-TYPE-CONTEXT",
+            "associated Type declaration parent source join is absent",
+        )
+    };
+    let generated = db.input(&InputKey::GeneratedSyntax(parse.content));
+    let (parent, parent_header_fingerprint, parent_scope) = if let Some(input) = &generated {
+        let InputValue::GeneratedSyntax(unit) = input.as_ref() else {
+            return QueryPoll::Ready(Err(missing()));
+        };
+        let Some(item) = unit.declaration(declaration.definition) else {
+            return QueryPoll::Ready(Err(missing()));
+        };
+        if unit.key != *parse
+            || item.scope != context.scope
+            || item.declaration_span != context.range
+            || item.header != *header
+        {
+            return QueryPoll::Ready(Err(missing()));
+        }
+        let Some(parent) = unit.declaration_for_member_scope(&context.scope) else {
+            return QueryPoll::Ready(Err(missing()));
+        };
+        let Some(item) = unit.declaration(parent) else {
+            return QueryPoll::Ready(Err(missing()));
+        };
+        if item.def_key.item_kind != kind
+            || item.declaration_span != crate::syntax::ast_adapter::range(parent_node.text_range())
+        {
+            return QueryPoll::Ready(Err(missing()));
+        }
+        (parent, item.header.fingerprint(), item.scope.clone())
+    } else {
+        let mut matches = sources
+            .iter()
+            .flat_map(|source| source.outline().declaration_rows())
+            .filter(|item| {
+                item.def_key.item_kind == kind
+                    && item.scope.crate_key == context.scope.crate_key
+                    && item.scope.module_path == context.scope.module_path
+                    && item.declaration_span
+                        == crate::syntax::ast_adapter::range(parent_node.text_range())
+                    && match kind {
+                        ItemKind::Trait => Some(item.def_key.fingerprint()) == context.scope.owner,
+                        ItemKind::Impl => item.def_key.enclosing_impl == context.scope.owner,
+                        _ => false,
+                    }
+            });
+        let Some(item) = matches.next() else {
+            return QueryPoll::Ready(Err(missing()));
+        };
+        if matches.next().is_some() {
+            return QueryPoll::Ready(Err(missing()));
+        }
+        (
+            item.def_key.fingerprint(),
+            item.header.fingerprint(),
+            item.scope.clone(),
+        )
+    };
+    let parent_root =
+        ready!(db.fetch(&SyntaxProvider, QueryKey::DeclarationGenerics(parent))).value;
+    let QueryValue::DeclarationGenerics(parent) = parent_root.as_ref() else {
+        return QueryPoll::Ready(Err(missing()));
+    };
+    let Some((parent_parse, parent_header, parent_context, _)) = parent.source_parts() else {
+        return QueryPoll::Ready(Err(missing()));
+    };
+    if parent_parse != parse
+        || parent_header.fingerprint() != parent_header_fingerprint
+        || parent_context.scope != parent_scope
+        || parent_header.tokens != header.context
+        || parent_context.range != crate::syntax::ast_adapter::range(parent_node.text_range())
+        || parent_context.scope.crate_key != context.scope.crate_key
+        || parent_context.scope.module_path != context.scope.module_path
+    {
+        return QueryPoll::Ready(Err(missing()));
+    }
+    QueryPoll::Ready(Ok(Some(parent_context.scope.clone())))
+}
+
 /// Ordinary declaration-local preparation and classification, shared by alias
 /// targets and reached member type preparation. No synthetic function owner.
 pub(crate) fn resolve_declaration_name(
@@ -130,6 +274,28 @@ pub(crate) fn resolve_declaration_name(
         generics,
         written_name,
     ) {
+        Ok(Some(local @ super::signature_names::SignatureName::NeedOwnerContext(_)))
+            if written_name != "Self" =>
+        {
+            match associated_declaration_scope(db, declaration, sources) {
+                QueryPoll::Ready(Ok(Some(scope))) if scope.owner.is_none() => {
+                    return match lookup_declaration_name(db, declaration, sources, written_name) {
+                        QueryPoll::Ready(Ok(lookup)) => QueryPoll::Ready(
+                            super::signature_names::classify_completed_type_lookup(
+                                written_name,
+                                declaration.header.profile.edition,
+                                lookup,
+                            ),
+                        ),
+                        QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                    };
+                }
+                QueryPoll::Ready(Ok(_)) => return QueryPoll::Ready(Ok(local)),
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+        }
         Ok(Some(local)) => return QueryPoll::Ready(Ok(local)),
         Ok(None) => {}
         Err(error) => return QueryPoll::Ready(Err(error)),
@@ -152,52 +318,153 @@ pub(crate) fn resolve_declaration_name(
 /// Source parameters remain local facts; generated names retain their own
 /// parser-proven Type token instead of borrowing the entire header's origins.
 pub(crate) fn resolve_declaration_name_at(
-    db: &mut Database, declaration: SourceTypeOwner<'_>,
+    db: &mut Database,
+    declaration: SourceTypeOwner<'_>,
     generics: &[crate::syntax::signatures::DefinitionParameter],
-    sources: &[&PreparedSourceView], name: &ra_ap_syntax::ast::NameRef,
+    sources: &[&PreparedSourceView],
+    name: &ra_ap_syntax::ast::NameRef,
 ) -> QueryPoll<super::signature_names::SignatureName> {
     use super::signature_names::{declaration_type_name_local, declaration_type_name_with_lookup};
-    match declaration_type_name_local(declaration.definition, declaration.scope,
-        declaration.header.profile.edition, generics, name.text()) {
+    let mut associated = false;
+    match declaration_type_name_local(
+        declaration.definition,
+        declaration.scope,
+        declaration.header.profile.edition,
+        generics,
+        name.text(),
+    ) {
         Ok(Some(local @ super::signature_names::SignatureName::NeedOwnerContext(_)))
-            if declaration.scope.owner.is_some() && name.text() != "Self" => {
-            match super::source_locals::cold_declarations::lookup(db, declaration, name) {
-                QueryPoll::Ready(Ok(Some(found))) => return QueryPoll::Ready(
-                    super::signature_names::classify_completed_type_lookup(name.text(),
-                        declaration.header.profile.edition, found)),
-                QueryPoll::Ready(Ok(None)) => {},
+            if declaration.scope.owner.is_some() && name.text() != "Self" =>
+        {
+            match associated_declaration_scope(db, declaration, sources) {
+                QueryPoll::Ready(Ok(Some(scope))) => {
+                    if scope.owner.is_some() {
+                        return QueryPoll::Ready(Ok(local));
+                    }
+                    associated = true;
+                }
+                QueryPoll::Ready(Ok(None)) => {}
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             }
-            let owner = match super::source_types::local_declaration_owner(db,declaration.definition) {
-                QueryPoll::Ready(Ok(Some(owner))) => owner,
-                QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(local)),
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-            };
-            return owner.plan.resolve_declaration_type_name(db,declaration,name)
-                .map(|resolved| resolved.unwrap_or(local));
+            if !associated {
+                match super::source_locals::cold_declarations::lookup(db, declaration, name) {
+                    QueryPoll::Ready(Ok(Some(found))) => {
+                        return QueryPoll::Ready(
+                            super::signature_names::classify_completed_type_lookup(
+                                name.text(),
+                                declaration.header.profile.edition,
+                                found,
+                            ),
+                        );
+                    }
+                    QueryPoll::Ready(Ok(None)) => {}
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+                let owner = match super::source_types::local_declaration_owner(
+                    db,
+                    declaration.definition,
+                ) {
+                    QueryPoll::Ready(Ok(Some(owner))) => owner,
+                    QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(local)),
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+                return owner
+                    .plan
+                    .resolve_declaration_type_name(db, declaration, name)
+                    .map(|resolved| resolved.unwrap_or(local));
+            }
         }
         Ok(Some(local)) => return QueryPoll::Ready(Ok(local)),
-        Ok(None) => {},
+        Ok(None) => {}
         Err(error) => return QueryPoll::Ready(Err(error)),
     }
     let Some(source) = db.input(&InputKey::DefinitionSource(declaration.definition)) else {
         return resolve_declaration_name(db, declaration, generics, sources, name.text());
     };
     let InputValue::DefinitionSource(parse) = source.as_ref() else {
-        return QueryPoll::Ready(Err(fault("LRR-E-CALL-CONTEXT", "Type occurrence source differs")));
+        return QueryPoll::Ready(Err(fault(
+            "LRR-E-CALL-CONTEXT",
+            "Type occurrence source differs",
+        )));
     };
-    if db.published_input(&InputKey::GeneratedSyntax(parse.content)).is_none() {
+    if associated {
+        let parsed = match db.fetch(&SyntaxProvider, QueryKey::ParseFile(parse.clone())) {
+            QueryPoll::Ready(Ok(value)) => value.value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::ParseFile(parsed) = parsed.as_ref() else {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-TYPE-CONTEXT",
+                "associated Type occurrence parser differs",
+            )));
+        };
+        let context = db.input(&InputKey::DeclarationContext(declaration.definition));
+        let Some(InputValue::DeclarationContext(context)) = context.as_deref() else {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-TYPE-CONTEXT",
+                "associated Type occurrence context absent",
+            )));
+        };
+        if let Err(error) = parsed
+            .declaration_type_name(declaration.definition, declaration.header, context, name)
+            .and_then(|occurrence| {
+                occurrence.require(
+                    parse,
+                    declaration.definition,
+                    declaration.header,
+                    context,
+                    name.text(),
+                )
+            })
+        {
+            return QueryPoll::Ready(Err(error));
+        }
+    }
+    if db
+        .published_input(&InputKey::GeneratedSyntax(parse.content))
+        .is_none()
+    {
+        if associated {
+            return match lookup_declaration_name(db, declaration, sources, name.text()) {
+                QueryPoll::Ready(Ok(lookup)) => {
+                    QueryPoll::Ready(super::signature_names::classify_completed_type_lookup(
+                        name.text(),
+                        declaration.header.profile.edition,
+                        lookup,
+                    ))
+                }
+                QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+            };
+        }
         return resolve_declaration_name(db, declaration, generics, sources, name.text());
     }
     match super::call_contracts::generated_result_namespace::lookup_type_declaration_at(
-        db, declaration, parse, name,
+        db,
+        declaration,
+        parse,
+        name,
     ) {
-        QueryPoll::Ready(Ok(lookup)) => QueryPoll::Ready(declaration_type_name_with_lookup(
-            declaration.definition, declaration.scope, declaration.header.profile.edition,
-            generics, name.text(), lookup,
-        )),
+        QueryPoll::Ready(Ok(lookup)) => QueryPoll::Ready(if associated {
+            super::signature_names::classify_completed_type_lookup(
+                name.text(),
+                declaration.header.profile.edition,
+                lookup,
+            )
+        } else {
+            declaration_type_name_with_lookup(
+                declaration.definition,
+                declaration.scope,
+                declaration.header.profile.edition,
+                generics,
+                name.text(),
+                lookup,
+            )
+        }),
         QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
         QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
     }
