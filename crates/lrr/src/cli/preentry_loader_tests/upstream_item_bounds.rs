@@ -7,10 +7,7 @@ use crate::{
     db::{key::QueryKey, poll::QueryPoll, provider::SyntaxProvider, value::QueryValue},
     frontend::{
         member_index::associated_name_key,
-        source_item_bounds::{
-            CurrentSourceItemBounds, ItemBoundsDefaultDependency, SizednessRole,
-            SourceItemBoundsKey,
-        },
+        source_item_bounds::{CurrentSourceItemBounds, SizednessRole, SourceItemBoundsKey},
     },
     source::manifest::ItemKind,
     syntax::ast_adapter::range,
@@ -116,21 +113,40 @@ fn unchanged_associated_output_bound_uses_actual_projection_span_and_typed_defau
                 "this actual trait declares no parent where candidates"
             );
             assert!(
-                plan.default_dependencies()
-                    .contains(&ItemBoundsDefaultDependency::Configuration)
+                plan.default_dependencies().is_empty(),
+                "actual source defaults must have genuine configuration/lang receipts"
             );
-            for role in [
-                SizednessRole::Sized,
-                SizednessRole::MetaSized,
-                SizednessRole::PointeeSized,
+            let core = crate::facade::unit(&rows[&parent].parse.profile, "core");
+            let sized = named(&rows, core, &["marker"], "Sized", ItemKind::Trait);
+            let meta = named(&rows, core, &["marker"], "MetaSized", ItemKind::Trait);
+            let pointee = named(&rows, core, &["marker"], "PointeeSized", ItemKind::Trait);
+            for (role, actual) in [
+                (SizednessRole::Sized, sized),
+                (SizednessRole::MetaSized, meta),
+                (SizednessRole::PointeeSized, pointee),
             ] {
                 assert_eq!(
-                    plan.sizedness_identity(role).is_none(),
-                    plan.default_dependencies()
-                        .contains(&ItemBoundsDefaultDependency::LanguageIdentity(role)),
-                    "missing source lang role must remain a typed dependency"
+                    plan.sizedness_identity(role),
+                    Some(actual),
+                    "actual facade role ID, never a name hash"
                 );
             }
+            let defaults = plan
+                .default_recipes()
+                .expect("actual associated output defaults");
+            assert_eq!(defaults.len(), 1);
+            assert!(
+                matches!(&defaults[0],SourcePredicateRecipe::Explicit {source,result:PredicateResult::Implemented(reference)}
+                if *source==range(alias.syntax().text_range()) && reference.trait_key==sized
+                && Some(&reference.self_ty)==plan.projection_subject() && reference.args.is_empty())
+            );
+            assert_eq!(
+                crate::traits::upstream::source_default_bounds::check_actual_item_default_encoding(
+                    &mut db, &key, sized, parent, item
+                )
+                .expect("actual output default shared encoding"),
+                1
+            );
             let again = ready(db.fetch(&SyntaxProvider, query));
             assert!(first.cacheable && Arc::ptr_eq(&first.value, &again.value));
             assert_eq!(first.fingerprint, again.fingerprint);
@@ -140,7 +156,7 @@ fn unchanged_associated_output_bound_uses_actual_projection_span_and_typed_defau
             assert!(current.require_current(&db).is_err());
             worlds += 1;
             eprintln!(
-                "actual associated output recipe edition{edition},origin{origin}: real R/ToI32/projection/span, own0/output1, defaults explicit, memo/cold/epoch; full item queries/root/runtime held"
+                "actual associated output recipe edition{edition},origin{origin}: real R/ToI32/projection/span, own0/output1/default1, real Sized projection TypeIR, memo/cold/epoch; full item queries/root/runtime held"
             );
             if let Some(path) = temporary {
                 std::fs::remove_dir_all(path.parent().unwrap()).unwrap();

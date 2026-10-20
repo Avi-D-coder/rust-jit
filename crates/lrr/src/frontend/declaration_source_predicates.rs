@@ -17,12 +17,15 @@ use crate::{
         key::QueryKey, memo::Database, poll::QueryPoll, provider::SyntaxProvider, seals::SealKey,
         value::QueryValue,
     },
-    syntax::{ast_adapter::range, spans::SourceRange},
+    syntax::{ast_adapter::range, signatures::GenericKind, spans::SourceRange},
     traits::{
         predicate::SourcePredicateRecipe,
         term::{ParamKey, TyTerm},
-        upstream::source_definition_headers::{
-            DefinitionHeaderKey, PreparedDefinitionHeader, SourceHeaderParent,
+        upstream::{
+            source_default_bounds::{DefaultBoundsContext, DefaultBoundsPending},
+            source_definition_headers::{
+                DefinitionHeaderKey, PreparedDefinitionHeader, SourceHeaderParent,
+            },
         },
     },
 };
@@ -51,6 +54,7 @@ pub enum DeclarationSourcePredicatesPending {
     UnsupportedDeclaration,
     ParentGenerics(GenericTypesPending),
     ParentLayout,
+    DefaultBounds(DefaultBoundsPending),
 }
 #[derive(Debug)]
 pub struct PreparedDeclarationSourcePredicates {
@@ -60,6 +64,7 @@ pub struct PreparedDeclarationSourcePredicates {
     source_header: Option<Arc<QueryValue>>,
     parent_header: Option<Arc<QueryValue>>,
     parent_generic_types: Option<Arc<QueryValue>>,
+    default_bounds: Option<Arc<QueryValue>>,
     parent_definition: Option<Digest>,
     parameter_rebase: BTreeMap<ParamKey, ParamKey>,
     self_type: Option<TyTerm>,
@@ -154,6 +159,7 @@ impl PreparedDeclarationSourcePredicates {
             source_header: None,
             parent_header: None,
             parent_generic_types: None,
+            default_bounds: None,
             parent_definition: None,
             parameter_rebase: BTreeMap::new(),
             self_type: None,
@@ -457,7 +463,7 @@ impl PreparedDeclarationSourcePredicates {
             &syntax,
             self_type.as_ref(),
         );
-        let recipes = ready!(super::source_predicates::prepare_own(
+        let written = ready!(super::source_predicates::prepare_own(
             db,
             environment.names(),
             &sources,
@@ -467,6 +473,43 @@ impl PreparedDeclarationSourcePredicates {
             layout.own,
             self_type.as_ref()
         ));
+        let mut recipes = Vec::new();
+        let own_types = declaration.parameters().iter()
+            .filter(|parameter| parameter.ordinal < layout.own && parameter.kind == GenericKind::Type)
+            .collect::<Vec<_>>();
+        let trait_self = ast::Trait::can_cast(syntax.kind());
+        if !own_types.is_empty() || trait_self {
+            let defaults_root = ready!(db.fetch(
+                &SyntaxProvider,
+                QueryKey::SourceDefaultBounds(Box::new(key.clone())),
+            )).value;
+            result.default_bounds = Some(Arc::clone(&defaults_root));
+            let QueryValue::SourceDefaultBounds(defaults) = defaults_root.as_ref() else {
+                return QueryPoll::Ready(Err(fault("actual default-bound query differs")));
+            };
+            for parameter in own_types {
+                let parameter = ParamKey { definition: key.definition, ordinal: parameter.ordinal };
+                let Some(site) = result.parameter_range(parameter) else {
+                    pending!(DeclarationSourcePredicatesPending::Source);
+                };
+                match defaults.apply(&TyTerm::Param(parameter), (source.content, site),
+                    DefaultBoundsContext::TypeParameter(parameter), &written) {
+                    Ok(implicit) => recipes.extend(implicit),
+                    Err(why) => pending!(DeclarationSourcePredicatesPending::DefaultBounds(why)),
+                }
+            }
+            if trait_self {
+                let Some(subject) = self_type.as_ref() else {
+                    pending!(DeclarationSourcePredicatesPending::SelfType);
+                };
+                match defaults.apply(subject, (source.content, range(syntax.text_range())),
+                    DefaultBoundsContext::TraitSelf, &written) {
+                    Ok(implicit) => recipes.extend(implicit),
+                    Err(why) => pending!(DeclarationSourcePredicatesPending::DefaultBounds(why)),
+                }
+            }
+        }
+        recipes.extend(written);
         result.self_type = self_type;
         result.recipes = recipes;
         QueryPoll::Ready(Ok(result))
@@ -476,7 +519,7 @@ fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-DECLARATION-SOURCE-PREDICATES", message.into())
 }
 impl StableEncode for PreparedDeclarationSourcePredicates {
-    const DOMAIN: &'static str = "lrr/v2/actual-declaration-source-predicates";
+    const DOMAIN: &'static str = "lrr/v3/actual-declaration-source-predicates";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.record(self.generic_types());
@@ -498,6 +541,7 @@ impl StableEncode for PreparedDeclarationSourcePredicates {
             };
             e.record(types.as_ref());
         });
+        e.option(&self.default_bounds, |e, value| e.digest(value.fingerprint()));
         e.option(&self.parent_definition, |e, definition| {
             e.digest(*definition)
         });
@@ -527,6 +571,10 @@ impl StableEncode for PreparedDeclarationSourcePredicates {
                 e.u32(*why as u32);
             }
             DeclarationSourcePredicatesPending::ParentLayout => e.u32(7),
+            DeclarationSourcePredicatesPending::DefaultBounds(why) => {
+                e.u32(8);
+                e.u8(*why as u8);
+            }
         });
     }
 }

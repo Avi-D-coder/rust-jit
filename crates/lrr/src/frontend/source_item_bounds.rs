@@ -26,8 +26,8 @@ use crate::{
         predicate::{PredicatePending, PredicateResult, SourcePredicateRecipe},
         term::{ConstTerm, GenericArg, ParamKey, ProjectionKey, RegionTerm, TraitRef, TyTerm},
         upstream::{
+            source_default_bounds::{DefaultBoundsContext, DefaultBoundsPending},
             source_definition_headers::DefinitionHeaderRole,
-            source_lang_identity::SourceLangIdentityKey,
         },
     },
 };
@@ -55,13 +55,6 @@ pub enum SizednessRole {
     PointeeSized = 2,
 }
 impl SizednessRole {
-    fn source_name(self) -> &'static str {
-        match self {
-            Self::Sized => "Sized",
-            Self::MetaSized => "MetaSized",
-            Self::PointeeSized => "PointeeSized",
-        }
-    }
     fn compiler_name(self) -> &'static str {
         match self {
             Self::Sized => "sized",
@@ -72,10 +65,11 @@ impl SizednessRole {
 }
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ItemBoundsDefaultDependency {
-    /// Real RustcNoImplicitBounds/default-trait option inputs are not exposed.
+    /// Owning-source policy has not been prepared after an earlier source hold.
     Configuration,
     /// Missing selected source role is a dependency, never complete absence.
     LanguageIdentity(SizednessRole),
+    Policy(DefaultBoundsPending),
 }
 /// Source association only. Even a direct target is not a completed compiler
 /// bound: PredicateFilter/elaboration/defaults remain separate producers.
@@ -98,7 +92,8 @@ pub struct PreparedSourceItemBounds {
     source: Arc<QueryValue>,
     members: Option<Arc<QueryValue>>,
     environment: Option<Arc<QueryValue>>,
-    languages: Vec<Arc<QueryValue>>,
+    default_plan: Option<Arc<QueryValue>>,
+    defaults: Vec<SourcePredicateRecipe>,
     subject: Option<TyTerm>,
     site: Option<(Digest, SourceRange)>,
     written: Vec<SourcePredicateRecipe>,
@@ -157,6 +152,16 @@ impl PreparedSourceItemBounds {
             .or(self.parent_pending)
             .map_or(Ok(&self.parent_candidates), Err)
     }
+    /// Implicit output defaults only. Written and parent rows remain separate;
+    /// this is not compiler full item_bounds or a completed TypeIR publication.
+    pub(crate) fn default_recipes(
+        &self,
+    ) -> Result<&[SourcePredicateRecipe], &[ItemBoundsDefaultDependency]> {
+        if !self.default_dependencies.is_empty() {
+            return Err(&self.default_dependencies);
+        }
+        Ok(&self.defaults)
+    }
     pub(crate) fn default_dependencies(&self) -> &[ItemBoundsDefaultDependency] {
         &self.default_dependencies
     }
@@ -175,7 +180,8 @@ impl PreparedSourceItemBounds {
             source,
             members: None,
             environment: None,
-            languages: Vec::new(),
+            default_plan: None,
+            defaults: Vec::new(),
             subject: None,
             site: None,
             written: Vec::new(),
@@ -392,48 +398,50 @@ impl PreparedSourceItemBounds {
         } else {
             result.parent_pending = Some(SourceItemBoundsPending::ParentSource);
         }
-        // Role lookup is a source query only. Default selection is held until
-        // genuine crate/options inputs and the full pinned policy are exposed.
+        let default_plan = ready!(db.fetch(
+            &SyntaxProvider,
+            QueryKey::SourceDefaultBounds(Box::new(key.clone()))
+        ))
+        .value;
+        result.default_plan = Some(Arc::clone(&default_plan));
+        let QueryValue::SourceDefaultBounds(policy) = default_plan.as_ref() else {
+            return QueryPoll::Ready(Err(fault("actual source default-bound query differs")));
+        };
+        result.default_dependencies.clear();
         for role in [
             SizednessRole::Sized,
             SizednessRole::MetaSized,
             SizednessRole::PointeeSized,
         ] {
-            let identity = ready!(super::language_items::marker_trait(
-                db,
-                &sources,
-                frame.profile(),
-                core,
-                role.source_name()
-            ));
-            let Some(identity) = identity else {
-                result
-                    .default_dependencies
-                    .push(ItemBoundsDefaultDependency::LanguageIdentity(role));
-                continue;
-            };
-            let language = ready!(db.fetch(
-                &SyntaxProvider,
-                QueryKey::SourceLangIdentity(Box::new(SourceLangIdentityKey {
-                    inventory: key.inventory.clone(),
-                    definition: identity
-                },))
-            ))
-            .value;
-            let QueryValue::SourceLangIdentity(actual) = language.as_ref() else {
-                return QueryPoll::Ready(Err(fault(
-                    "actual sizedness lang identity query differs",
-                )));
-            };
-            if matches!(actual.classification(), Ok(Some((name, _))) if name == role.compiler_name())
-            {
+            if let Some(identity) = policy.sizedness_identity(role.compiler_name()) {
                 result.sizedness_identities.insert(role, identity);
-            } else {
+            }
+        }
+        match policy.apply(
+            &subject,
+            result.site.expect("actual associated output site"),
+            DefaultBoundsContext::AssociatedType,
+            &result.written,
+        ) {
+            Ok(defaults) => result.defaults = defaults,
+            Err(why) => {
                 result
                     .default_dependencies
-                    .push(ItemBoundsDefaultDependency::LanguageIdentity(role));
+                    .push(ItemBoundsDefaultDependency::Policy(why));
+                if why == DefaultBoundsPending::LanguageIdentity {
+                    for role in [
+                        SizednessRole::Sized,
+                        SizednessRole::MetaSized,
+                        SizednessRole::PointeeSized,
+                    ] {
+                        if !result.sizedness_identities.contains_key(&role) {
+                            result
+                                .default_dependencies
+                                .push(ItemBoundsDefaultDependency::LanguageIdentity(role));
+                        }
+                    }
+                }
             }
-            result.languages.push(language);
         }
         QueryPoll::Ready(Ok(result))
     }
@@ -520,7 +528,7 @@ impl CurrentSourceItemBounds {
     }
 }
 impl StableEncode for PreparedSourceItemBounds {
-    const DOMAIN: &'static str = "lrr/v1/source-associated-item-bound-recipes";
+    const DOMAIN: &'static str = "lrr/v2/source-associated-item-bound-recipes";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.record(self.source());
@@ -536,12 +544,8 @@ impl StableEncode for PreparedSourceItemBounds {
             };
             e.digest(value.fingerprint());
         });
-        e.sequence(&self.languages, |e, value| {
-            let QueryValue::SourceLangIdentity(value) = value.as_ref() else {
-                unreachable!()
-            };
-            e.record(value.as_ref());
-        });
+        e.option(&self.default_plan, |e, value| e.digest(value.fingerprint()));
+        e.sequence(&self.defaults, |e, recipe| e.record(recipe));
         e.option(&self.subject, |e, subject| e.record(subject));
         e.option(&self.site, |e, (origin, source)| {
             e.digest(*origin);
@@ -584,6 +588,10 @@ impl StableEncode for PreparedSourceItemBounds {
         }
         e.sequence(&self.default_dependencies, |e, why| match why {
             ItemBoundsDefaultDependency::Configuration => e.u32(0),
+            ItemBoundsDefaultDependency::Policy(why) => {
+                e.u32(2);
+                e.u32(*why as u32);
+            }
             ItemBoundsDefaultDependency::LanguageIdentity(role) => {
                 e.u32(1);
                 e.u32(*role as u32);

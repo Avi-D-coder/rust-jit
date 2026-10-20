@@ -26,6 +26,9 @@ CRATES = (
 )
 LICENSES = ("LICENSE-MIT", "LICENSE-APACHE", "COPYRIGHT")
 SUPPORT_SOURCES = (
+    'compiler/rustc_hir_analysis/src/hir_ty_lowering/bounds.rs',
+    'compiler/rustc_session/src/options.rs',
+    'library/core/src/marker.rs',
     "compiler/rustc_hir_analysis/src/collect/type_of.rs",
     "compiler/rustc_middle/src/ty/generics.rs",
     "compiler/rustc_middle/src/ty/util.rs",

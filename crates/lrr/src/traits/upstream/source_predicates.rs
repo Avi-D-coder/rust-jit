@@ -236,33 +236,108 @@ impl StableEncode for PreparedImplSourcePredicates {
 /// dependency closure or encoding source recipes in a test-only route.
 #[cfg(test)]
 pub(crate) fn check_actual_projected_source_predicates(
-    db: &mut Database, inventory: &crate::db::seals::SealKey, owner: Digest,
-    expected_trait: Digest, expected_item: Digest, expected_bound_trait: Digest,
-) -> Result<(super::source_declaration_clauses::CurrentSourceDeclarationClauses, usize, usize), Diagnostic> {
-    use super::{configuration::SolverConfigurationKey,
-        source_declaration_clauses::{CurrentSourceDeclarationClauses, SourceDeclarationClausesKey}};
-    use crate::traits::{predicate::PredicateResult, term::{TyTerm, ParamKey}};
+    db: &mut Database,
+    inventory: &crate::db::seals::SealKey,
+    owner: Digest,
+    expected_trait: Digest,
+    expected_item: Digest,
+    expected_bound_trait: Digest,
+) -> Result<
+    (
+        super::source_declaration_clauses::CurrentSourceDeclarationClauses,
+        usize,
+        usize,
+    ),
+    Diagnostic,
+> {
+    use super::{
+        configuration::SolverConfigurationKey,
+        source_declaration_clauses::{
+            CurrentSourceDeclarationClauses, SourceDeclarationClausesKey,
+        },
+    };
+    use crate::traits::{
+        predicate::PredicateResult,
+        term::{ParamKey, TyTerm},
+    };
     use rustc_type_ir::{self as ty, inherent::*};
-    let current = match CurrentSourceDeclarationClauses::capture(db, &SourceDeclarationClausesKey {
-        inventory: inventory.clone(), definition: owner,
-    }) {
-        QueryPoll::Ready(Ok(value)) => value, QueryPoll::Ready(Err(error)) => return Err(error),
-        QueryPoll::NeedInput(_) => return Err(fault("actual declaration clauses need source input")),
+    let current = match CurrentSourceDeclarationClauses::capture(
+        db,
+        &SourceDeclarationClausesKey {
+            inventory: inventory.clone(),
+            definition: owner,
+        },
+    ) {
+        QueryPoll::Ready(Ok(value)) => value,
+        QueryPoll::Ready(Err(error)) => return Err(error),
+        QueryPoll::NeedInput(_) => {
+            return Err(fault("actual declaration clauses need source input"));
+        }
     };
     current.require_current(db)?;
     let plan = current.plan();
-    let bindings = plan.bindings().map_err(|why| fault(&format!("actual clause bundle pending: {why:?}")))?;
-    let recipes = plan.source().recipes().map_err(|why| fault(&format!("actual source recipes pending: {why:?}")))?;
+    let bindings = plan
+        .bindings()
+        .map_err(|why| fault(&format!("actual clause bundle pending: {why:?}")))?;
+    let recipes = plan
+        .source()
+        .recipes()
+        .map_err(|why| fault(&format!("actual source recipes pending: {why:?}")))?;
     let input = Arc::clone(&bindings.catalog);
-    let InputValue::DiscoverySeal(catalog) = input.as_ref() else { unreachable!("actual clause catalog") };
-    let configuration = match db.fetch(&SyntaxProvider, QueryKey::SolverConfiguration(Box::new(SolverConfigurationKey::from_source(
-        catalog.impl_catalog.as_ref().expect("actual catalog root").root(),
-    )))) {
-        QueryPoll::Ready(Ok(value)) => value.value, QueryPoll::Ready(Err(error)) => return Err(error),
-        QueryPoll::NeedInput(_) => return Err(fault("actual projected predicate configuration needs input")),
+    let InputValue::DiscoverySeal(catalog) = input.as_ref() else {
+        unreachable!("actual clause catalog")
     };
-    let QueryValue::SolverConfiguration(configuration) = configuration.as_ref() else { unreachable!("actual source configuration") };
+    let configuration = match db.fetch(
+        &SyntaxProvider,
+        QueryKey::SolverConfiguration(Box::new(SolverConfigurationKey::from_source(
+            catalog
+                .impl_catalog
+                .as_ref()
+                .expect("actual catalog root")
+                .root(),
+        ))),
+    ) {
+        QueryPoll::Ready(Ok(value)) => value.value,
+        QueryPoll::Ready(Err(error)) => return Err(error),
+        QueryPoll::NeedInput(_) => {
+            return Err(fault(
+                "actual projected predicate configuration needs input",
+            ));
+        }
+    };
+    let QueryValue::SolverConfiguration(configuration) = configuration.as_ref() else {
+        unreachable!("actual source configuration")
+    };
     let layouts = plan.generic_layouts()?;
+    let default_root = match db.fetch(
+        &SyntaxProvider,
+        QueryKey::SourceDefaultBounds(Box::new(
+            super::source_default_bounds::SourceDefaultBoundsKey {
+                inventory: inventory.clone(),
+                definition: owner,
+            },
+        )),
+    ) {
+        QueryPoll::Ready(Ok(value)) => value.value,
+        QueryPoll::Ready(Err(error)) => return Err(error),
+        QueryPoll::NeedInput(_) => {
+            return Err(fault("actual root-input default source needs input"));
+        }
+    };
+    let QueryValue::SourceDefaultBounds(defaults) = default_root.as_ref() else {
+        unreachable!("actual source default-bound query")
+    };
+    assert_eq!(defaults.pending(), None);
+    let actual_sized = defaults
+        .sizedness_identity("sized")
+        .expect("actual source Sized identity");
+    let actual_u_site = plan
+        .source()
+        .parameter_range(ParamKey {
+            definition: owner,
+            ordinal: 1,
+        })
+        .expect("actual U source parameter span");
     let before = db.trace.events.len();
     let (count, projected) = configuration.with_source_context(db, Arc::clone(&input), Some(&layouts), |cx, _| {
         assert!(cx.services().ready(cx).is_err());
@@ -290,13 +365,105 @@ pub(crate) fn check_actual_projected_source_predicates(
                 super::source_terms::check_actual_projection_alias(cx, *self_ty,
                     ParamKey { definition: owner, ordinal: 0 }, expected_trait, expected_item);
                 assert!(matches!(argument.kind(), ty::TyKind::Param(parameter) if parameter.source()==(ParamKey { definition: owner, ordinal: 1 })));
+                // The reached call keeps U open until the same source encoder
+                // transports its owned key into this actual pinned inference store.
+                use super::{
+                    infer::{InferenceContext, delegate::SolverContext},
+                    root_variables::{RootVariableKind, RootVariables},
+                    source_terms::{SourceTypePending, encode_predicate, encode_root_predicate},
+                };
+                use crate::traits::{subst::Substitution, term::{GenericArg, InferVarKey}};
+                let parameter = ParamKey { definition: owner, ordinal: 1 };
+                let key = InferVarKey { transaction: owner, ordinal: 0 };
+                let mut substitution = Substitution::default();
+                substitution.insert(parameter, GenericArg::Type(TyTerm::Infer(key))).unwrap();
+                let mut reached = reference.clone();
+                reached.self_ty = substitution.apply(&reference.self_ty).unwrap();
+                let [GenericArg::Type(source_argument)] = reference.args.as_slice() else {
+                    panic!("actual PartialEq source argument is not U")
+                };
+                assert_eq!(source_argument, &TyTerm::Param(parameter));
+                reached.args = vec![GenericArg::Type(substitution.apply(source_argument).unwrap())];
+                assert_eq!(reached.args, vec![GenericArg::Type(TyTerm::Infer(key))]);
+                let reached = PredicateResult::Implemented(reached);
+                assert!(matches!(encode_predicate(cx, configuration, bindings.type_bindings(), &reached),
+                    Err(SourceTypePending::Inference)), "declaration encoding stays rigid");
+                let solver = SolverContext::from_inference_context(
+                    InferenceContext::new(cx, ty::TypingMode::PostAnalysis));
+                let variables = RootVariables::new(&solver, [(key, RootVariableKind::Integer)], *span).unwrap();
+                let first = encode_root_predicate(&solver, &variables, configuration,
+                    bindings.type_bindings(), &reached).unwrap();
+                let repeated = encode_root_predicate(&solver, &variables, configuration,
+                    bindings.type_bindings(), &reached).unwrap();
+                let ty::ClauseKind::Trait(first) = first.kind().skip_binder() else {
+                    panic!("actual reached predicate lost trait clause")
+                };
+                let ty::ClauseKind::Trait(repeated) = repeated.kind().skip_binder() else {
+                    panic!("repeated actual predicate lost trait clause")
+                };
+                assert_eq!(first.trait_ref.def_id.source(), expected_bound_trait);
+                let [super::model::Arg::Type(projected_self), super::model::Arg::Type(variable)] = first.trait_ref.args.items() else {
+                    panic!("actual reached PartialEq argument layout lost")
+                };
+                super::source_terms::check_actual_projection_alias(cx, *projected_self,
+                    ParamKey { definition: owner, ordinal: 0 }, expected_trait, expected_item);
+                assert!(matches!(variable.kind(), ty::TyKind::Infer(ty::InferTy::IntVar(_))),
+                    "an open reached integer stays an actual upstream integer variable");
+                assert_eq!(*variable, variables.variable(key).unwrap());
+                assert_eq!(first.trait_ref.args, repeated.trait_ref.args,
+                    "repeated source occurrences share one actual inference variable");
+                assert_eq!(variables.resolved(key).unwrap(), *variable,
+                    "input observation does not resolve an unevaluated root");
+                // U also occurs in its genuine own Sized default. Observe the
+                // shared variable across two different actual source clauses.
+                let repeated_source = recipes.iter().find_map(|recipe| match recipe {
+                    SourcePredicateRecipe::Explicit { source, result: PredicateResult::Implemented(reference) }
+                        if reference.self_ty == TyTerm::Param(parameter)
+                            && reference.trait_key == actual_sized && *source == actual_u_site => Some(reference),
+                    _ => None,
+                }).expect("actual Q84 discr U Sized source default and parameter span");
+                assert!(repeated_source.args.is_empty());
+                let mut repeated_default = repeated_source.clone();
+                repeated_default.self_ty = substitution.apply(&repeated_source.self_ty).unwrap();
+                let repeated_default = encode_root_predicate(&solver, &variables, configuration,
+                    bindings.type_bindings(), &PredicateResult::Implemented(repeated_default)).unwrap();
+                let ty::ClauseKind::Trait(repeated_default) = repeated_default.kind().skip_binder() else {
+                    panic!("actual U default lost its trait clause")
+                };
+                assert_eq!(repeated_default.trait_ref.def_id.source(), repeated_source.trait_key);
+                let [super::model::Arg::Type(repeated_variable)] = repeated_default.trait_ref.args.items() else {
+                    panic!("actual U default lost its Self argument")
+                };
+                assert_eq!(repeated_variable, variable,
+                    "U in the actual own default and projected bound is the same integer variable");
+                let foreign_solver = SolverContext::from_inference_context(
+                    InferenceContext::new(cx, ty::TypingMode::PostAnalysis));
+                assert!(foreign_solver.interner == solver.interner);
+                assert!(matches!(encode_root_predicate(&foreign_solver, &variables, configuration,
+                    bindings.type_bindings(), &reached), Err(SourceTypePending::InferenceOwner)),
+                    "the same source Cx cannot authorize another inference owner");
+                let unknown_key = InferVarKey { transaction: key.transaction, ordinal: 1 };
+                assert!(matches!(variables.variable(unknown_key), Err(SourceTypePending::Inference)));
+                let mut unknown_substitution = Substitution::default();
+                unknown_substitution.insert(parameter,
+                    GenericArg::Type(TyTerm::Infer(unknown_key))).unwrap();
+                let mut unknown = reference.clone();
+                unknown.self_ty = unknown_substitution.apply(&reference.self_ty).unwrap();
+                unknown.args = vec![GenericArg::Type(unknown_substitution.apply(source_argument).unwrap())];
+                assert!(matches!(encode_root_predicate(&solver, &variables, configuration,
+                    bindings.type_bindings(), &PredicateResult::Implemented(unknown)),
+                    Err(SourceTypePending::Inference)), "unknown root key remains pending");
                 projected += 1;
             }
         }
         assert!(cx.services().ready(cx).is_err());
         (clauses.len(), projected)
     })?;
-    assert_eq!(before, db.trace.events.len(), "actual production clause encoding must not query source");
+    assert_eq!(
+        before,
+        db.trace.events.len(),
+        "actual production clause encoding must not query source"
+    );
     current.require_current(db)?;
     Ok((current, count, projected))
 }

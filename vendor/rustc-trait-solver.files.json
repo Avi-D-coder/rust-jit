@@ -307,6 +307,13 @@
       "upstream_sha256": "c643bb4fcd51048f7d3e912065c2759d4a91e51b5a2e726bdc30a998a4ee3730"
     },
     {
+      "path": "compiler/rustc_hir_analysis/src/hir_ty_lowering/bounds.rs",
+      "bytes": 41684,
+      "sha256": "d1a9036440b3611b71735a02dc9ec4cd1a572fb0715418cfeb79bfe4c5c1cbf9",
+      "upstream": "compiler/rustc_hir_analysis/src/hir_ty_lowering/bounds.rs",
+      "upstream_sha256": "d1a9036440b3611b71735a02dc9ec4cd1a572fb0715418cfeb79bfe4c5c1cbf9"
+    },
+    {
       "path": "compiler/rustc_hir_analysis/src/variance/constraints.rs",
       "bytes": 17076,
       "sha256": "a2e76421f2acbd0b61276eff8548a180f7fe5bed4b9539be288cdbcf9bb1e0dd",
@@ -907,6 +914,13 @@
       "sha256": "30b279f3b182ad08a00889b98525219f7db9b7f99ad04170d648b5d317d537f4",
       "upstream": "compiler/rustc_next_trait_solver/src/solve/trait_goals.rs",
       "upstream_sha256": "30b279f3b182ad08a00889b98525219f7db9b7f99ad04170d648b5d317d537f4"
+    },
+    {
+      "path": "compiler/rustc_session/src/options.rs",
+      "bytes": 139935,
+      "sha256": "36f697a2b27db7c037be556a8477f6f6e5c611384d390630faa5a3bbd9dc5c9e",
+      "upstream": "compiler/rustc_session/src/options.rs",
+      "upstream_sha256": "36f697a2b27db7c037be556a8477f6f6e5c611384d390630faa5a3bbd9dc5c9e"
     },
     {
       "path": "compiler/rustc_span/src/symbol.rs",
@@ -1555,6 +1569,13 @@
       "upstream_sha256": "fd929ad293f584e1ca8530b25a83e52bdc708d7ae3c3df56a3f482c915b01c47"
     },
     {
+      "path": "library/core/src/marker.rs",
+      "bytes": 52981,
+      "sha256": "95ffa834dd6e2a8214c6e8a919cd69f4602982021b09571efc71fc2386440223",
+      "upstream": "library/core/src/marker.rs",
+      "upstream_sha256": "95ffa834dd6e2a8214c6e8a919cd69f4602982021b09571efc71fc2386440223"
+    },
+    {
       "path": "src/tools/rust-analyzer/crates/hir-ty/src/lib.rs",
       "bytes": 22640,
       "sha256": "02d3b83996bbbf175a6aede097e451036c75e66bc39fe5982bc7bed1056a4a6b",
@@ -1636,6 +1657,7 @@
     "compiler/rustc_data_structures/src/transitive_relation/tests.rs",
     "compiler/rustc_feature/src/unstable.rs",
     "compiler/rustc_hir_analysis/src/collect/type_of.rs",
+    "compiler/rustc_hir_analysis/src/hir_ty_lowering/bounds.rs",
     "compiler/rustc_hir_analysis/src/variance/constraints.rs",
     "compiler/rustc_hir_analysis/src/variance/mod.rs",
     "compiler/rustc_hir_analysis/src/variance/solve.rs",
@@ -1680,6 +1702,7 @@
     "compiler/rustc_middle/src/ty/sty.rs",
     "compiler/rustc_middle/src/ty/trait_def.rs",
     "compiler/rustc_middle/src/ty/util.rs",
+    "compiler/rustc_session/src/options.rs",
     "compiler/rustc_span/src/symbol.rs",
     "compiler/rustc_trait_selection/src/solve/delegate.rs",
     "compiler/rustc_trait_selection/src/traits/mod.rs",
@@ -1687,6 +1710,7 @@
     "compiler/rustc_trait_selection/src/traits/util.rs",
     "compiler/rustc_trait_selection/src/traits/wf.rs",
     "compiler/rustc_ty_utils/src/ty.rs",
+    "library/core/src/marker.rs",
     "src/tools/rust-analyzer/crates/hir-ty/src/lib.rs",
     "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/mod.rs",
     "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/opaque_types/mod.rs",

@@ -2131,11 +2131,18 @@
         "worktracks/evidence/2026-10-20-v506-v507-reached-constructors.json",
         "worktracks/evidence/2026-10-20-v508-constructor-source-scopes.json",
         "crates/lrr/src/frontend/source_item_bounds.rs",
-        "crates/lrr/src/cli/preentry_loader_tests/upstream_item_bounds.rs"
+        "crates/lrr/src/cli/preentry_loader_tests/upstream_item_bounds.rs",
+        "worktracks/05-trait-goal-engine/2026-10-20-reached-upstream-root-inputs.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-demanded-root-lifecycle-review.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-source-definition-semantics.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-source-default-bounds.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-reached-root-input-controls.md",
+        "worktracks/05-trait-goal-engine/2026-10-20-reached-root-source-controls.json",
+        "worktracks/evidence/2026-10-20-v509-v510-reached-root-source-inputs.json"
       ],
       "issue": null,
       "pull_request": null,
-      "updated_at": "2026-10-20T20:13:55.764619+00:00",
+      "updated_at": "2026-10-20T20:41:03.818168+00:00",
       "review_after": "2026-10-20T10:52:01.627878+00:00",
       "shared_interfaces": [
         {
@@ -2483,7 +2490,7 @@
           "scope": "Same-root incremental unchanged GAT source witness import; existing original licenses retained, no fixture/runtime acceptance claim."
         }
       ],
-      "latest_component_scope": "V508 HELD T040/M020 common reached constructor/source namespace checkpoint. Source target classification precedes binding; indexed explicit source Types join actual frame bindings and cached field witnesses key actual generic applications. Empty Type lists preserve inferred context. Shared associated declaration proof authenticates actual original/generated child and trait/impl parent, preserves generic/Self priority and child hygiene, and selects the genuine enclosing namespace without flattening local ribs. Q82 output recipes use the common bound-row lowerer with actual projection/member/spans and explicit defaults/config/GAT holds. V506 compile failure and V507 selector preflight/Q82 local-owner failure are retained. V508 macOS1.99 lib/CLI/digester and3/3focused controls pass with all closing source/HEAD/test/CLI/digester guards:12constructor origin worlds,4activation worlds/1624completed operations and12Q82worlds/12output recipes. Selected unchanged runtime3/4pass13checks each: associated constructor, generic-derived and empty-generic-brackets; repr128 still LRR-E-OP-TYPE. Associated constructor is1measured new distinct pass against V505; no failing baseline for emptycase and its warning diagnostics remain outstanding. V507Q80pass remains evidence at its own source, not rerun. No refreshed suite total or morning delta. Existing legacy normalization is unchanged migration debt; complete upstream facts/provider/root, default/source item-bound families, negative/local scope/cleanup/suspension matrices, interpreter and JIT gates remain open. No task/milestone closed."
+      "latest_component_scope": "V509-V510 HELD M020 source inputs for the real reached repr128 root. RootVariables owns a stable source-key map into the actual pinned InferCtxt and the same source_terms Encoder transports rigid declarations or scoped root variables. Q83 preserves source-proven Known/NotApplicable/Pending domains. Q84 retains complete pinned implicit/default-bound policy with real owning crate configuration and Sized/MetaSized/PointeeSized identities; Q78 own declarations and Q82 authentic projection outputs consume it. The legacy simple-Sized own route is removed; general collector/runtime legacy routes remain held. V509 lib fails E0423 (missing core local) before tests; V510 restores only that existing source identity and all three builds pass. Five of six exact controls pass: 12 repr128 input worlds/36 clauses/12 shared integer input-variable observations, 12 output-default worlds, 12 GAT worlds/24 semantic declarations, 12 constructor worlds and 4 activation worlds. HRTB parent control fails its old pending-enum expectation in the first world; actual enum was unprinted, not measured as a specific cause. No completed HRTB matrix pass or integration claim. Four unchanged owning2015 runtime cases retain three passes/13 checks each and repr128 LRR-E-OP-TYPE. All closing source/HEAD/test/CLI/digester guards match V510 source152353d13a9876be8005956a039a991eedfd179e152d2689f4077de008a49657. Zero new distinct runtime gains, refreshed suite/morning totals or task/architecture/root/interpreter/JIT closure. Complete fact assembly, actual solver root/owned response, negative syntax/polarity and query-family completeness remain open. Host abort/unwind design question remains pending and profiles unchanged."
     }
   ],
   "updated_at": "2026-10-20T20:13:55.764619+00:00"

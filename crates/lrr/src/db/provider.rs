@@ -386,6 +386,20 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
+            QueryKey::SourceDefinitionSemantics(key) => {
+                return match crate::traits::upstream::source_definition_semantics::PreparedSourceDefinitionSemantics::prepare(db,key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::SourceDefinitionSemantics(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
+            QueryKey::SourceDefaultBounds(key) => {
+                return match crate::traits::upstream::source_default_bounds::PreparedSourceDefaultBounds::prepare(db,key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::SourceDefaultBounds(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::SourceItemBounds(key) => {
                 return match crate::frontend::source_item_bounds::PreparedSourceItemBounds::prepare(db,key) {
                     QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::SourceItemBounds(Box::new(value))),

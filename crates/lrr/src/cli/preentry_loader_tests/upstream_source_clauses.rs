@@ -9,10 +9,15 @@ use crate::{
     source::manifest::ItemKind,
     traits::{
         term::TyTerm,
-        upstream::source_declaration_clauses::{
+        upstream::{source_definition_semantics::{
+            CurrentSourceDefinitionSemantics, DefinitionBooleanQuery as Boolean,
+            DefinitionSemanticPending as SemanticPending, SourceSemantic,
+            SourceDefinitionSemanticsKey, SourceAliasDomain,
+        }, source_declaration_clauses::{
             CurrentSourceDeclarationClauseHierarchy, CurrentSourceDeclarationClauses,
             SourceDeclarationClausesKey, SourceDeclarationClausesPending,
             check_actual_parent_source_clauses,
+        },
         },
     },
 };
@@ -75,6 +80,38 @@ fn unchanged_streaming_gat_clauses_use_pinned_parent_instantiation_all_editions_
             let (definition, expected_parent) = found[0];
             db.trace.detailed = true;
             let before = db.trace.events.len();
+            // Observe source-proven query domains for both actual associated
+            // declarations; missing elaboration/body producers stay pending.
+            let streaming = named(&rows, root.crate_key, &[], "StreamingIterator", ItemKind::Trait);
+            let declaration_item = rows.iter().find_map(|(&id, row)| {
+                (row.item.scope.crate_key == root.crate_key
+                    && row.item.def_key.item_kind == ItemKind::TypeAlias
+                    && row.item.def_key.declared_name == "Item"
+                    && parent(&rows, id) == streaming).then_some(id)
+            }).expect("actual trait associated Item declaration");
+            let mut semantics = Vec::new();
+            for (item, owner, has_definition, alias) in [
+                (definition, expected_parent, true, SourceSemantic::NotApplicable),
+                (declaration_item, streaming, false, SourceSemantic::Known(SourceAliasDomain::ProjectionType)),
+            ] {
+                let key = SourceDefinitionSemanticsKey { inventory: seal.clone(), definition: item };
+                let query = QueryKey::SourceDefinitionSemantics(Box::new(key.clone()));
+                let first = ready(db.fetch(&SyntaxProvider, query.clone()));
+                let current = ready(CurrentSourceDefinitionSemantics::capture(&mut db, &key));
+                let semantic = current.plan();
+                assert_eq!(semantic.parent(), SourceSemantic::Known(owner));
+                assert_eq!(semantic.boolean(Boolean::HasItemDefinition), SourceSemantic::Known(has_definition));
+                assert_eq!(semantic.boolean(Boolean::IsConditionallyConst), SourceSemantic::Known(false));
+                assert_eq!(semantic.boolean(Boolean::RequiresSizedSelf), SourceSemantic::Pending(SemanticPending::ClauseElaboration));
+                assert_eq!(semantic.boolean(Boolean::HasTargetFeatures), SourceSemantic::NotApplicable);
+                assert_eq!(semantic.alias_domain(), alias);
+                assert!(matches!(semantic.opaque_types_defined_by(), SourceSemantic::Pending(SemanticPending::OpaqueTypeWalk)));
+                let again = ready(db.fetch(&SyntaxProvider, query));
+                assert!(first.cacheable && Arc::ptr_eq(&first.value, &again.value));
+                assert_eq!(first.fingerprint, again.fingerprint);
+                current.require_current(&db).unwrap();
+                semantics.push(current);
+            }
             let key = SourceDeclarationClausesKey {
                 inventory: seal.clone(),
                 definition,
@@ -93,6 +130,7 @@ fn unchanged_streaming_gat_clauses_use_pinned_parent_instantiation_all_editions_
             current.require_current(&db).unwrap();
             db.begin_expansion_epoch(2).unwrap();
             assert!(current.require_current(&db).is_err());
+            assert!(semantics.iter().all(|semantic| semantic.require_current(&db).is_err()));
             db.publish_inputs(BTreeMap::new()).unwrap();
             assert!(current.require_current(&db).is_err());
             if let Some(path) = temporary {
@@ -100,7 +138,7 @@ fn unchanged_streaming_gat_clauses_use_pinned_parent_instantiation_all_editions_
             }
             worlds += 1;
             eprintln!(
-                "actual source clause parent instantiation edition{edition},origin{origin}: 2parent/1own, actual owner rebasing/spans, pinned methods, memo/cold/withdrawal; full queries/root/runtime held"
+                "actual source clause parent instantiation edition{edition},origin{origin}: 2parent/1own, actual owner rebasing/spans, pinned methods, memo/cold/withdrawal; 2source semantic declarations with actual domains/pending/currentness; full queries/root/runtime held"
             );
         }
     }

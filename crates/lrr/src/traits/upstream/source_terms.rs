@@ -19,6 +19,7 @@ pub enum SourceTypePending {
     HeadTypes = 0, SourceDefinition = 1, ParameterLayout = 2, Inference = 3, Placeholder = 4,
     RegionMetadata = 5, ConstTypeMetadata = 6, TargetPointerWidth = 7, DynMetadata = 8,
     OpaqueMetadata = 9, ProjectionMetadata = 10, FunctionMetadata = 11,
+    InferenceOwner = 12,
 }
 #[derive(Debug)]
 pub struct PreparedImplSourceTypes {
@@ -76,7 +77,7 @@ impl PreparedImplSourceTypes {
         if configuration.source() != self.catalog().impl_catalog.as_ref().expect("checked catalog").root()
             || cx.services().source_world() != self.catalog().seal.fingerprint() { return Err(SourceTypePending::SourceDefinition); }
         let ImplHeadTypeResult::Resolved { self_type, trait_ref } = self.head().result() else { return Err(SourceTypePending::HeadTypes); };
-        let encoder = Encoder { bindings: self.bindings.type_bindings(), cx, configuration };
+        let encoder = Encoder { bindings: self.bindings.type_bindings(), cx, configuration, inference: None };
         let self_ty = encoder.ty(self_type, &[])?;
         let trait_arguments = trait_ref.as_ref()
             .map(|reference| encoder.trait_arguments(reference, self_ty)).transpose()?;
@@ -104,8 +105,30 @@ impl<'cx> EncodedTraitArguments<'cx> {
 pub(super) fn encode_predicate<'cx>(cx: Cx<'cx>, configuration: &PreparedSolverConfiguration,
     bindings: super::source_bindings::SourceTypeBindings<'_>, predicate: &crate::traits::predicate::PredicateResult)
     -> Result<model::Clause<'cx, prepared::PreparedProvider<'cx>>, SourceTypePending> {
+    let encoder = Encoder { bindings, cx, configuration, inference: None };
+    encode_predicate_using(&encoder, predicate)
+}
+
+/// The same source walker, with actual root variables owned by its caller's
+/// pinned InferCtxt. Ordinary declaration encoding remains rigid.
+pub(super) fn encode_root_predicate<'owner, 'cx>(
+    owner: &'owner super::infer::delegate::SolverContext<'cx>,
+    variables: &'owner super::root_variables::RootVariables<'owner, 'cx>,
+    configuration: &'owner PreparedSolverConfiguration,
+    bindings: super::source_bindings::SourceTypeBindings<'owner>,
+    predicate: &crate::traits::predicate::PredicateResult,
+) -> Result<model::Clause<'cx, prepared::PreparedProvider<'cx>>, SourceTypePending> {
+    variables.require_owner(owner)?;
+    let encoder = Encoder {
+        bindings, cx: variables.context(), configuration, inference: Some(variables),
+    };
+    encode_predicate_using(&encoder, predicate)
+}
+
+fn encode_predicate_using<'cx>(encoder: &Encoder<'_, 'cx>, predicate: &crate::traits::predicate::PredicateResult)
+    -> Result<model::Clause<'cx, prepared::PreparedProvider<'cx>>, SourceTypePending> {
     use crate::traits::predicate::PredicateResult;
-    let encoder = Encoder { bindings, cx, configuration };
+    let cx = encoder.cx;
     let kind = match predicate {
         PredicateResult::Implemented(reference) => {
             let self_ty = encoder.ty(&reference.self_ty, &[])?;
@@ -121,10 +144,13 @@ pub(super) fn encode_predicate<'cx>(cx: Cx<'cx>, configuration: &PreparedSolverC
     };
     Ok(model::Clause::new(cx, ty::Binder::dummy(kind)))
 }
-struct Encoder<'a, 'cx> { bindings: super::source_bindings::SourceTypeBindings<'a>, cx: Cx<'cx>, configuration: &'a PreparedSolverConfiguration }
+struct Encoder<'a, 'cx> {
+    bindings: super::source_bindings::SourceTypeBindings<'a>, cx: Cx<'cx>, configuration: &'a PreparedSolverConfiguration,
+    inference: Option<&'a super::root_variables::RootVariables<'a, 'cx>>,
+}
 pub(super) fn encode_declared<'cx>(cx: Cx<'cx>, configuration: &PreparedSolverConfiguration,
     bindings: super::source_bindings::SourceTypeBindings<'_>, ty: &TyTerm) -> Result<Ty<'cx, prepared::PreparedProvider<'cx>>, SourceTypePending> {
-    Encoder { bindings, cx, configuration }.ty(ty, &[])
+    Encoder { bindings, cx, configuration, inference: None }.ty(ty, &[])
 }
 impl<'cx> Encoder<'_, 'cx> {
     fn trait_arguments(&self, reference: &term::TraitRef, self_ty: Ty<'cx, prepared::PreparedProvider<'cx>>)
@@ -207,7 +233,9 @@ impl<'cx> Encoder<'_, 'cx> {
             // provide the actual function signature before a shared fn Type
             // can be built. Never guess safe Rust ABI from this erased term.
             TyTerm::Function(_) => return Err(SourceTypePending::FunctionMetadata),
-            TyTerm::Infer(_) => return Err(SourceTypePending::Inference), TyTerm::Placeholder(_) => return Err(SourceTypePending::Placeholder),
+            TyTerm::Infer(key) => return self.inference
+                .ok_or(SourceTypePending::Inference)?.variable(*key),
+            TyTerm::Placeholder(_) => return Err(SourceTypePending::Placeholder),
             TyTerm::Dyn(_) => return Err(SourceTypePending::DynMetadata), TyTerm::Opaque(..) => return Err(SourceTypePending::OpaqueMetadata),
             TyTerm::Projection(projection) => {
                 let binding = self.bindings.projections.get(&(projection.trait_ref.trait_key, projection.item))

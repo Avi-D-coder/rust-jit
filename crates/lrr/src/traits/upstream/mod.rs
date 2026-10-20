@@ -10,8 +10,11 @@ pub(crate) mod source_definition_headers;
 pub(crate) mod source_variance_queries;
 pub(crate) mod source_declaration_clauses;
 mod generic_clauses;
+mod root_variables;
 mod variance;
 pub(crate) mod source_lang_identity;
+pub(crate) mod source_default_bounds;
+pub(crate) mod source_definition_semantics;
 mod lang_names;
 mod source_bindings;
 use rustc_next_trait_solver::{

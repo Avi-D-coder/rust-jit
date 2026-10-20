@@ -1,0 +1,12 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Held M020 source input component: actual repr128 Q80 clauses and scoped integer inference owner; pinned Q84 defaults through actual Q78 own declarations/Q82 projection output; Q83 source semantic domains through unchanged GAT declarations; parent HRTB cold-demand and prior common constructor regressions. This is source transport evidence; it does not invoke upstream root solving or claim new runtime passes/full compiler query completeness.",
+  "controls": [
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_item_bounds::unchanged_associated_output_bound_uses_actual_projection_span_and_typed_default_holds",
+    "cli::preentry_loader_tests::upstream_source_clauses::unchanged_streaming_gat_clauses_use_pinned_parent_instantiation_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_source_clauses::unchanged_hrtb_parent_is_unforced_for_own_bundle_and_pending_for_hierarchy",
+    "cli::crate_graph::builtin_derive_tests::unchanged_associated_constructor_uses_reached_source_arguments_all_origins_and_editions",
+    "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins"
+  ]
+}

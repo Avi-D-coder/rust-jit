@@ -32,8 +32,8 @@ pub(crate) fn prepare(
 /// Own declaration bounds through the same collector and Type walk. Parent
 /// requirements are a separate closure, never silently merged into own clauses.
 /// Associated callers supply their authenticated child-bound Self from the
-/// declaration source plan. Only own generic Sized defaults and own written
-/// where/generic bounds are selected here; associated output bounds belong to
+/// declaration source plan. Only own written where/generic bounds are selected
+/// here; Q78 applies the pinned default-bound policy separately. Output bounds belong to
 /// the separate item-bounds query, not this explicit-own recipe transport.
 pub(crate) fn prepare_own(
     db: &mut Database,
@@ -67,14 +67,14 @@ fn prepare_selected(
 ) -> QueryPoll<Vec<SourcePredicateRecipe>> {
     let missing_self = matches!(own, Some((_, None)));
     let mut actual = source_types::actual_declaration_bound_syntax(declaration, owner);
-    if let Some((own_parameters, self_type)) = own {
+    if let Some((_own_parameters, self_type)) = own {
         let owner_range = owner.text_range();
         actual
             .bounds
             .retain(|row| owner_range.contains_range(row.bound.syntax().text_range()));
-        actual
-            .implicit_sized
-            .retain(|key| key.ordinal < own_parameters);
+        // Own-source defaults are supplied by the retained Q84 compiler policy.
+        // Do not run the legacy simple-Sized filter and discard its result.
+        actual.implicit_sized.clear();
         // The collector's trait supertrait subject has no written parameter
         // node. Use only the actual declaration's supplied implicit Self slot.
         if ast::Trait::can_cast(owner.kind()) {

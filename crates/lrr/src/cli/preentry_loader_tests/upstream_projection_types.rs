@@ -299,7 +299,7 @@ fn unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_edition
             clauses += count;
             projected += projections;
             eprintln!(
-                "actual DiscriminantKind::Discriminant:PartialEq<U> source projection edition{edition},origin{origin}: {count}own clauses,{projections}projected subjects; canonical trait/item IDs, memo/currentness/revocation; solving/root/main held"
+                "actual DiscriminantKind::Discriminant:PartialEq<U> source projection edition{edition},origin{origin}: {count}own clauses,{projections}projected subjects; canonical trait/item IDs, shared upstream Integer root variable, rigid/foreign-owner/unknown-key refusals, memo/currentness/revocation; root evaluation/main held"
             );
             if let Some(path) = temporary {
                 std::fs::remove_dir_all(path.parent().unwrap()).unwrap();

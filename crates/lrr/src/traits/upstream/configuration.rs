@@ -28,6 +28,15 @@ pub struct PreparedSolverConfiguration {
     cfg: Arc<InputValue>,
     settings: crate::syntax::solver_configuration::SolverCrateConfiguration,
 }
+/// The supported standalone semantic profile has no compiler-option override
+/// channel. This receipt cannot be supplied by a caller as a guessed bool.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct NoCompilerDefaultOverrides(());
+impl NoCompilerDefaultOverrides {
+    /// Exact pinned rustc_session/src/options.rs experimental_default_bounds=false.
+    /// Available only after authoritative standalone profile admission.
+    pub(super) fn experimental_default_bounds(self) -> bool { false }
+}
 impl PreparedSolverConfiguration {
     pub fn source(&self) -> &SourceSelection { &self.source }
     pub(crate) fn matches_key(&self, key: &SolverConfigurationKey) -> bool {
@@ -35,6 +44,12 @@ impl PreparedSolverConfiguration {
     }
     pub(crate) fn features(&self) -> &std::collections::BTreeSet<String> { &self.settings.features }
     pub(crate) fn recursion_limit(&self) -> usize { self.settings.recursion_limit }
+    pub(super) fn rustc_no_implicit_bounds(&self) -> bool { self.settings.rustc_no_implicit_bounds }
+    pub(super) fn default_bound_options(&self) -> Option<NoCompilerDefaultOverrides> {
+        // Any future Cargo/compiler override profile needs its own producer.
+        self.source.outline.parse.profile.validate_source().ok()
+            .map(|()| NoCompilerDefaultOverrides(()))
+    }
     pub(crate) fn prepare(db: &mut Database, key: &SolverConfigurationKey) -> QueryPoll<Self> {
         let source = SourceSelection { outline: key.source.clone(), path: key.path.clone() };
         if !source.outline.module_path.is_empty() {
@@ -125,10 +140,10 @@ impl PreparedSolverConfiguration {
 }
 fn fault(message: &str) -> Diagnostic { Diagnostic::new("LRR-E-UPSTREAM-SOLVER-INPUT", message.into()) }
 impl StableEncode for PreparedSolverConfiguration {
-    const DOMAIN: &'static str = "lrr/v1/prepared-source-solver-configuration";
+    const DOMAIN: &'static str = "lrr/v2/prepared-source-solver-configuration";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.string(self.source.path.as_str()); e.record(&self.source.outline);
-        e.u64(self.settings.recursion_limit as u64);
+        e.u64(self.settings.recursion_limit as u64); e.bool(self.settings.rustc_no_implicit_bounds);
         e.sequence(&self.settings.features.iter().collect::<Vec<_>>(), |e, name| e.string(name));
         let QueryValue::ParseFile(parsed) = self.parsed.as_ref() else { unreachable!("checked source parse") };
         e.record(&parsed.key()); e.digest(self.cfg.fingerprint());
