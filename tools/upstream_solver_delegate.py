@@ -58,13 +58,6 @@ type Canonical<'db,V> = ty::Canonical<DbInterner<'db>,V>;
 type CanonicalVarValues<'db> = ty::CanonicalVarValues<DbInterner<'db>>;
 type CanonicalVarKind<'db> = ty::CanonicalVarKind<DbInterner<'db>>;
 
-/// Required real compiler-client functions over admitted immutable source facts.
-/// No Default, test stub, guest-loaded function or implicit incomplete answer.
-/// Implementing/installing these clients remains a separate root-entry gate.
-pub(crate) struct SolverClients<'db> {
-    pub(crate) transmutable: fn(&InferenceContext<'db>,Ty<'db>,Ty<'db>,Const<'db>) -> Result<Certainty,NoSolution>,
-}
-
 /// Own exactly one inference context. Safe ownership replaces the upstream
 /// transparent borrowed-reference transmute; there is no second mutable store.
 pub(crate) struct SolverContext<'db>(InferenceContext<'db>);
@@ -105,7 +98,8 @@ impl<'db> SolverDelegate for SolverContext<'db> {
         self.0.add_item_bounds_for_hidden_type(id,args,env,hidden,goals)
     }
     fn is_transmutable(&self,src:Ty<'db>,dst:Ty<'db>,assume:Const<'db>) -> Result<Certainty,NoSolution> {
-        (self.interner.services().solver_clients().transmutable)(&self.0,src,dst,assume)
+        super::transmute::is_transmutable(&self.0,src,dst,assume)
+            .unwrap_or_else(|dependency| panic!("transmute client entered before required immutable input admission: {dependency:?}"))
     }
     fn emit_next_solver_overflow_fcw(&self,goal:Goal<Self::Interner,Predicate<'db>>,span:Span) {
         // E006: no static lint enforcement. Retain non-enforcing diagnostic
@@ -116,4 +110,4 @@ impl<'db> SolverDelegate for SolverContext<'db> {
 '''
     outputs['delegate.rs'] = rustfmt(header + imports + methods + clients)
     outputs['mod.rs'] += b'\npub(crate) mod delegate;\n'
-    outputs['mod.rs'] += b'\npub(crate) mod well_formed;\npub(crate) mod const_eval;\n'
+    outputs['mod.rs'] += b'\npub(crate) mod well_formed;\npub(crate) mod const_eval;\npub(crate) mod transmute;\n'

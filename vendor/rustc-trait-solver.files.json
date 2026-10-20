@@ -10,7 +10,8 @@
     "rustc_index_macros",
     "rustc_abi",
     "rustc_ast_ir",
-    "rustc_hashes"
+    "rustc_hashes",
+    "rustc_transmute"
   ],
   "files": [
     {
@@ -22,8 +23,8 @@
     },
     {
       "path": "Cargo.toml",
-      "bytes": 260,
-      "sha256": "d3384009ef2c73e0852b2968ef06e3e0cb860c3ca71c207d46ef03f3d9513c03"
+      "bytes": 288,
+      "sha256": "7ebc3339792d783823041c03117febc0dc0043bdf8d90d518b3a2bf967baed8d"
     },
     {
       "path": "LICENSE-APACHE",
@@ -166,11 +167,25 @@
       "upstream_sha256": "cff2b03cfe1ea460d64fe953b15d1e72bb258547cb4fd5340948f2d7f9d49ba7"
     },
     {
+      "path": "compiler/rustc_attr_ir/src/lang_items.rs",
+      "bytes": 41074,
+      "sha256": "947f488e46c70f47f0565d6df979e8b5126af6fb49a8c1c32fe2e4b802c7a6a0",
+      "upstream": "compiler/rustc_attr_ir/src/lang_items.rs",
+      "upstream_sha256": "947f488e46c70f47f0565d6df979e8b5126af6fb49a8c1c32fe2e4b802c7a6a0"
+    },
+    {
       "path": "compiler/rustc_data_structures/src/frozen.rs",
       "bytes": 1835,
       "sha256": "09a4a7d611ad449efbdb89bf30da347050c363bbbcf198fc80784df19c65e3c1",
       "upstream": "compiler/rustc_data_structures/src/frozen.rs",
       "upstream_sha256": "09a4a7d611ad449efbdb89bf30da347050c363bbbcf198fc80784df19c65e3c1"
+    },
+    {
+      "path": "compiler/rustc_data_structures/src/fx.rs",
+      "bytes": 1918,
+      "sha256": "4aa1903ab2e425e4651bd9fb2954ca76399c6d0cb1cc8ddda214638141605e51",
+      "upstream": "compiler/rustc_data_structures/src/fx.rs",
+      "upstream_sha256": "4aa1903ab2e425e4651bd9fb2954ca76399c6d0cb1cc8ddda214638141605e51"
     },
     {
       "path": "compiler/rustc_data_structures/src/graph/iterate/mod.rs",
@@ -887,6 +902,170 @@
       "upstream_sha256": "435c6263bce04bc57eda37461de1d65be70aad19c2dbb038d9b967d15708b151"
     },
     {
+      "path": "compiler/rustc_transmute/Cargo.toml",
+      "bytes": 363,
+      "sha256": "ff5948fc63283e6b7a4e2804f4241623a0400c1b7ec94b71d251fca6b93a4715",
+      "upstream": "compiler/rustc_transmute/Cargo.toml",
+      "upstream_sha256": "9f9a09b694d0076770d357900b76bbc80494c4efc4be815f2f1c8b72d559060e",
+      "mechanical_adapter": "stable-transmute-v1"
+    },
+    {
+      "path": "compiler/rustc_transmute/Cargo.toml.upstream",
+      "bytes": 724,
+      "sha256": "9f9a09b694d0076770d357900b76bbc80494c4efc4be815f2f1c8b72d559060e",
+      "upstream": "compiler/rustc_transmute/Cargo.toml",
+      "upstream_sha256": "9f9a09b694d0076770d357900b76bbc80494c4efc4be815f2f1c8b72d559060e"
+    },
+    {
+      "path": "compiler/rustc_transmute/LICENSE-APACHE",
+      "bytes": 9723,
+      "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      "upstream": "LICENSE-APACHE",
+      "upstream_sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+    },
+    {
+      "path": "compiler/rustc_transmute/LICENSE-MIT",
+      "bytes": 1068,
+      "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1",
+      "upstream": "LICENSE-MIT",
+      "upstream_sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/layout/dfa.rs",
+      "bytes": 18208,
+      "sha256": "e07789f08377bacec77d6363c2a481eed38fb80d23380e2db890e6f6466ba57b",
+      "upstream": "compiler/rustc_transmute/src/layout/dfa.rs",
+      "upstream_sha256": "26f40c187b57e39f334cf589eae52024478a2075f4cb196ce79bad4cd37f6863",
+      "mechanical_adapter": "stable-transmute-v1"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/layout/dfa.rs.upstream",
+      "bytes": 17431,
+      "sha256": "26f40c187b57e39f334cf589eae52024478a2075f4cb196ce79bad4cd37f6863",
+      "upstream": "compiler/rustc_transmute/src/layout/dfa.rs",
+      "upstream_sha256": "26f40c187b57e39f334cf589eae52024478a2075f4cb196ce79bad4cd37f6863"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/layout/dfa/tests.rs",
+      "bytes": 4085,
+      "sha256": "35f00238dd112b3352b7170fdf02c1a985916c860af11039c46b8d2f528901b2",
+      "upstream": "compiler/rustc_transmute/src/layout/dfa/tests.rs",
+      "upstream_sha256": "6aa647dcbbd8ad4de2fa4f6ab7eddc4b477b89f865ab75fc210ccb927a99c9f1",
+      "mechanical_adapter": "stable-transmute-v1"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/layout/dfa/tests.rs.upstream",
+      "bytes": 3836,
+      "sha256": "6aa647dcbbd8ad4de2fa4f6ab7eddc4b477b89f865ab75fc210ccb927a99c9f1",
+      "upstream": "compiler/rustc_transmute/src/layout/dfa/tests.rs",
+      "upstream_sha256": "6aa647dcbbd8ad4de2fa4f6ab7eddc4b477b89f865ab75fc210ccb927a99c9f1"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/layout/mod.rs",
+      "bytes": 4518,
+      "sha256": "da894289aa957a0d84388381be9a56a15bffe28466508adb61e581ee8b418b0f",
+      "upstream": "compiler/rustc_transmute/src/layout/mod.rs",
+      "upstream_sha256": "9193d455a3e8be89f3b31547464a6263c7728c9164a734ff5022815e49989eb4",
+      "mechanical_adapter": "stable-transmute-v1"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/layout/mod.rs.upstream",
+      "bytes": 4476,
+      "sha256": "9193d455a3e8be89f3b31547464a6263c7728c9164a734ff5022815e49989eb4",
+      "upstream": "compiler/rustc_transmute/src/layout/mod.rs",
+      "upstream_sha256": "9193d455a3e8be89f3b31547464a6263c7728c9164a734ff5022815e49989eb4"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/layout/tree.rs",
+      "bytes": 23614,
+      "sha256": "01beb7578d95fec87602aad1cd733116c118db946a6c1cd9d34f9dfefd74837e",
+      "upstream": "compiler/rustc_transmute/src/layout/tree.rs",
+      "upstream_sha256": "755cd4c22bf2405d8aeba2ca265341e4cfa3cc2d1702bbffb067813094b69e20",
+      "mechanical_adapter": "stable-transmute-v1"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/layout/tree.rs.upstream",
+      "bytes": 23535,
+      "sha256": "755cd4c22bf2405d8aeba2ca265341e4cfa3cc2d1702bbffb067813094b69e20",
+      "upstream": "compiler/rustc_transmute/src/layout/tree.rs",
+      "upstream_sha256": "755cd4c22bf2405d8aeba2ca265341e4cfa3cc2d1702bbffb067813094b69e20"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/layout/tree/tests.rs",
+      "bytes": 6483,
+      "sha256": "8c48629dd2ba7db5224822551cbb68ebefbba445318cd9e2668b81da04f44f21",
+      "upstream": "compiler/rustc_transmute/src/layout/tree/tests.rs",
+      "upstream_sha256": "4da0d33e9a6e3c026b9cb92e04ad76448e135589f66938a387cd32a414522c18",
+      "mechanical_adapter": "stable-transmute-v1"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/layout/tree/tests.rs.upstream",
+      "bytes": 5403,
+      "sha256": "4da0d33e9a6e3c026b9cb92e04ad76448e135589f66938a387cd32a414522c18",
+      "upstream": "compiler/rustc_transmute/src/layout/tree/tests.rs",
+      "upstream_sha256": "4da0d33e9a6e3c026b9cb92e04ad76448e135589f66938a387cd32a414522c18"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/lib.rs",
+      "bytes": 6333,
+      "sha256": "f8871273e13e590d0abdb7dad39154d728c6688dfe6a567e70ade93d55b76548",
+      "upstream": "compiler/rustc_transmute/src/lib.rs",
+      "upstream_sha256": "2a633afa84df60051dec79f9b837ebcefc2d04c47949fd042b80121d23208088",
+      "mechanical_adapter": "stable-transmute-v1"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/lib.rs.upstream",
+      "bytes": 6220,
+      "sha256": "2a633afa84df60051dec79f9b837ebcefc2d04c47949fd042b80121d23208088",
+      "upstream": "compiler/rustc_transmute/src/lib.rs",
+      "upstream_sha256": "2a633afa84df60051dec79f9b837ebcefc2d04c47949fd042b80121d23208088"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/maybe_transmutable/mod.rs",
+      "bytes": 18078,
+      "sha256": "80b22acfbee2848f47d44fd1188a452f85360cbacac1bebf4c289334c3868663",
+      "upstream": "compiler/rustc_transmute/src/maybe_transmutable/mod.rs",
+      "upstream_sha256": "f91b800126a2af653a1323b088e833dd430f5ad95814b9034e23da6378ef0996",
+      "mechanical_adapter": "stable-transmute-v1"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/maybe_transmutable/mod.rs.upstream",
+      "bytes": 17454,
+      "sha256": "f91b800126a2af653a1323b088e833dd430f5ad95814b9034e23da6378ef0996",
+      "upstream": "compiler/rustc_transmute/src/maybe_transmutable/mod.rs",
+      "upstream_sha256": "f91b800126a2af653a1323b088e833dd430f5ad95814b9034e23da6378ef0996"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/maybe_transmutable/query_context.rs",
+      "bytes": 1343,
+      "sha256": "cbbfd8d075c4ffced8567e82264d22381043108311c615140147b785a4810d88",
+      "upstream": "compiler/rustc_transmute/src/maybe_transmutable/query_context.rs",
+      "upstream_sha256": "fc7bd92708ce9c0e0d45d627563b343d1cd3424250e5a08db8328f6a89bb853b",
+      "mechanical_adapter": "stable-transmute-v1"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/maybe_transmutable/query_context.rs.upstream",
+      "bytes": 1310,
+      "sha256": "fc7bd92708ce9c0e0d45d627563b343d1cd3424250e5a08db8328f6a89bb853b",
+      "upstream": "compiler/rustc_transmute/src/maybe_transmutable/query_context.rs",
+      "upstream_sha256": "fc7bd92708ce9c0e0d45d627563b343d1cd3424250e5a08db8328f6a89bb853b"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/maybe_transmutable/tests.rs",
+      "bytes": 21072,
+      "sha256": "44d97f0a4b77f87ef52de8ff0e81861d1eced3991833a6d86ed6dc156deabf1d",
+      "upstream": "compiler/rustc_transmute/src/maybe_transmutable/tests.rs",
+      "upstream_sha256": "0c5b04c7626159af6f94a6b4d359509bc7ecaacc1a2b31bc7a964896e055763c",
+      "mechanical_adapter": "stable-transmute-v1"
+    },
+    {
+      "path": "compiler/rustc_transmute/src/maybe_transmutable/tests.rs.upstream",
+      "bytes": 17998,
+      "sha256": "0c5b04c7626159af6f94a6b4d359509bc7ecaacc1a2b31bc7a964896e055763c",
+      "upstream": "compiler/rustc_transmute/src/maybe_transmutable/tests.rs",
+      "upstream_sha256": "0c5b04c7626159af6f94a6b4d359509bc7ecaacc1a2b31bc7a964896e055763c"
+    },
+    {
       "path": "compiler/rustc_ty_utils/src/ty.rs",
       "bytes": 15698,
       "sha256": "0d1edae3ada2b3186448a44c151a6d07916461b781f1803edb9f1e5f6bd5afee",
@@ -1391,7 +1570,9 @@
     }
   ],
   "support_sources": [
+    "compiler/rustc_attr_ir/src/lang_items.rs",
     "compiler/rustc_data_structures/src/frozen.rs",
+    "compiler/rustc_data_structures/src/fx.rs",
     "compiler/rustc_data_structures/src/graph/iterate/mod.rs",
     "compiler/rustc_data_structures/src/graph/iterate/tests.rs",
     "compiler/rustc_data_structures/src/graph/mod.rs",
@@ -1460,7 +1641,8 @@
     "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/type_variable.rs",
     "src/tools/rust-analyzer/crates/hir-ty/src/next_solver/infer/unify_key.rs"
   ],
-  "packaging": "stable-shared-v2: retain all originals; registered stable-region-assumptions-v2-leak-indexes compiler-helper projections; retain upstream manifests; omit optional compiler-only dependencies; disable default/nightly feature activation",
+  "packaging": "stable-shared-v2: retain all originals; registered stable-region-assumptions-v2-leak-indexes compiler-helper projections and stable-transmute-v1 automaton packaging; retain upstream manifests; omit optional compiler-only dependencies; disable default/nightly feature activation",
   "rust_adaptation": "stable-region-assumptions-v2-leak-indexes",
-  "supported_features": "default-features=false; no compiler-only/nightly/randomize features"
+  "supported_features": "default-features=false; no compiler-only/nightly/randomize features",
+  "transmute_adaptation": "stable-transmute-v1"
 }

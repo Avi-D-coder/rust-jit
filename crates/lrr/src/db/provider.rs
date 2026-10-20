@@ -379,6 +379,20 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
+            QueryKey::DefinitionHeaderPlan(key) => {
+                return match crate::traits::upstream::source_definition_headers::PreparedDefinitionHeader::prepare(db,key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::DefinitionHeaderPlan(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
+            QueryKey::SourceLangIdentity(key) => {
+                return match crate::traits::upstream::source_lang_identity::PreparedSourceLangIdentity::prepare(db,key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::SourceLangIdentity(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::AdtSourceFields(key) => {
                 return match crate::traits::upstream::source_adt_fields::PreparedAdtSourceFields::prepare(db,key) {
                     QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::AdtSourceFields(Box::new(value))),

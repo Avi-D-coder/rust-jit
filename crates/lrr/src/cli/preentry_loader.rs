@@ -337,7 +337,7 @@ impl Packet {
                 | QueryKey::PreparedScopeImplHeaders(_)
                 | QueryKey::ImplHeaderSyntax(_)
                 | QueryKey::ImplHeadTypes(_)
-                | QueryKey::ImplTraitIdentity(_) | QueryKey::ImplTraitCatalog(_) | QueryKey::SolverConfiguration(_) | QueryKey::AdtSourceFields(_) | QueryKey::ImplSourceTypes(_) | QueryKey::ImplSourcePredicates(_)
+                | QueryKey::ImplTraitIdentity(_) | QueryKey::ImplTraitCatalog(_) | QueryKey::SolverConfiguration(_) | QueryKey::AdtSourceFields(_) | QueryKey::DefinitionHeaderPlan(_) | QueryKey::SourceLangIdentity(_) | QueryKey::ImplSourceTypes(_) | QueryKey::ImplSourcePredicates(_)
                 | QueryKey::ImplPredicates(_)
                 | QueryKey::TraitDeclaration(_) | QueryKey::DeclarationGenerics(_) | QueryKey::DeclarationGenericTypes(_)
                 | QueryKey::ParseFile(_)

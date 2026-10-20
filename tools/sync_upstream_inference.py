@@ -2,7 +2,7 @@
 """Audit/regenerate pinned next-solver inference storage; no custom transactions.
 
 Only concrete IR/import/diagnostic-span spelling changes. The original licensed
-files stay unchanged. Required source-dependent delegate clients and body inference remain absent.
+files stay unchanged. Actual complete source/query-input production and root admission remain held.
 """
 import argparse
 import hashlib
@@ -21,6 +21,7 @@ from upstream_solver_delegate import extend_solver_delegate
 from upstream_hidden_type_bounds import extend_hidden_type_bounds
 from upstream_wellformed import expected as expected_well_formed
 from upstream_const_eval import expected as expected_const_eval
+from upstream_transmute import adapter as expected_transmute
 
 ROOT = Path(__file__).resolve().parents[1]
 PIN = 'ae0fe511b15ab760d7e963b13389d1bc2ab42b18'
@@ -153,6 +154,7 @@ impl Span {
     extend_hidden_type_bounds(outputs, header, rustfmt)
     outputs['well_formed.rs'] = expected_well_formed()
     outputs['const_eval.rs'] = expected_const_eval()
+    outputs['transmute.rs'] = expected_transmute()
     return outputs
 
 
@@ -168,7 +170,7 @@ def main():
                 target.write_bytes(raw)
             if target.read_bytes() != raw:
                 raise ValueError('inference storage differs from registered pinned client: ' + name)
-        print('Pinned inference storage: exact originals and registered mechanical port; no local undo/commit/unification algorithm; source-dependent delegate clients remain required.')
+        print('Pinned inference storage: exact originals and registered mechanical port; no local undo/commit/unification algorithm; actual source/query admission remains required.')
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         parser.exit(1, str(error) + '\n' + getattr(error, 'stderr', b'').decode(errors='replace'))
 

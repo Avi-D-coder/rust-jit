@@ -160,8 +160,9 @@ impl PreparedScopeImplHeaders {
         // Once per selected source inventory, not once per header query.
         let mut source_owners = std::collections::BTreeMap::new();
         let mut source_members = std::collections::BTreeMap::new();
+        let mut trait_members = std::collections::BTreeMap::new();
         for scan in scans {
-            if scan.impls().is_empty() {
+            if scan.impls().is_empty() && scan.traits().is_empty() {
                 continue;
             }
             let Some(syntax) = inventory.syntax_source(scan.fingerprint()) else {
@@ -176,6 +177,24 @@ impl PreparedScopeImplHeaders {
                         AssociatedDeclarationsPreparation::Original(prepared) => {
                             if prepared.scan().fingerprint() != scan.fingerprint() {
                                 return Err(error("canonical impl source scan differs"));
+                            }
+                            // The same captured canonical owner join serves
+                            // original trait and impl members. Keep trait scopes
+                            // once in the retained index, never reconstruct them
+                            // from a caller's bare owner digest per method.
+                            for raw in scan.traits() {
+                                if let Some(owner) = prepared.owner(raw.identity)
+                                    && let (Some(item), Some(member)) = (owner.canonical, owner.member_owner)
+                                {
+                                    let mut scope = item.scope.clone();
+                                    scope.owner = Some(member);
+                                    let identity = item.def_key.fingerprint();
+                                    if let Some(old) = trait_members.insert(scope, identity)
+                                        && old != identity
+                                    {
+                                        return Err(error("associated trait scope has conflicting canonical declarations"));
+                                    }
+                                }
                             }
                             for raw in scan.impls() {
                                 if let Some(owner) = prepared.owner(raw.identity)
@@ -235,7 +254,7 @@ impl PreparedScopeImplHeaders {
             }
         }
         owner_locations.sort_unstable();
-        let mut member_declarations = std::collections::BTreeMap::new();
+        let mut member_declarations = trait_members;
         for (header, owner) in headers.iter().zip(&owners) {
             if let (Some(scope), Some(owner)) = (source_members.remove(&header.identity), owner)
                 && member_declarations.insert(scope, owner.identity()).is_some() {

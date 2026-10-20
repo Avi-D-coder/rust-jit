@@ -13,6 +13,7 @@ from pathlib import Path
 import subprocess
 import tomllib
 import upstream_solver_stable as stable
+import upstream_transmute as transmute
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMIT = "ae0fe511b15ab760d7e963b13389d1bc2ab42b18"
@@ -21,6 +22,7 @@ MANIFEST = ROOT / "vendor/rustc-trait-solver.files.json"
 CRATES = (
     "rustc_next_trait_solver", "rustc_type_ir", "rustc_type_ir_macros",
     "rustc_index", "rustc_index_macros", "rustc_abi", "rustc_ast_ir", "rustc_hashes",
+    "rustc_transmute",
 )
 LICENSES = ("LICENSE-MIT", "LICENSE-APACHE", "COPYRIGHT")
 SUPPORT_SOURCES = (
@@ -76,6 +78,10 @@ SUPPORT_SOURCES = (
     'compiler/rustc_data_structures/src/graph/vec_graph/mod.rs',
     'compiler/rustc_data_structures/src/graph/vec_graph/tests.rs',
 ) + stable.SUPPORT_SOURCES
+SUPPORT_SOURCES = tuple(sorted(set(SUPPORT_SOURCES + ('compiler/rustc_data_structures/src/fx.rs', 'compiler/rustc_feature/src/unstable.rs', 'compiler/rustc_infer/src/infer/at.rs', 'compiler/rustc_middle/src/mir/interpret/queries.rs', 'compiler/rustc_middle/src/ty/adt.rs', 'compiler/rustc_middle/src/ty/consts.rs', 'compiler/rustc_middle/src/ty/consts/int.rs', 'compiler/rustc_middle/src/ty/consts/valtree.rs', 'compiler/rustc_middle/src/ty/context.rs', 'compiler/rustc_span/src/symbol.rs', 'compiler/rustc_trait_selection/src/traits/mod.rs', 'compiler/rustc_trait_selection/src/traits/project.rs', 'compiler/rustc_trait_selection/src/traits/wf.rs', 'compiler/rustc_ty_utils/src/ty.rs'))))
+SUPPORT_SOURCES = tuple(sorted(set(SUPPORT_SOURCES + ('compiler/rustc_attr_ir/src/lang_items.rs',))))
+TRANSMUTE_PREFIX = 'compiler/rustc_transmute/'
+TRANSMUTE_ADAPTATION = 'stable-transmute-v1'
 
 
 def digest(data):
@@ -144,11 +150,20 @@ def packaged_sources(originals):
         path = "compiler/" + name + "/Cargo.toml"
         original = originals[path]
         installed[path + ".upstream"] = original
-        installed[path] = stable_manifest(original)
+        installed[path] = transmute.CARGO.encode() if name == "rustc_transmute" else stable_manifest(original)
     installed["Cargo.toml"] = workspace_manifest()
     for path in stable.RETAIN_ORIGINAL:
         installed[path + ".upstream"] = originals[path]
     installed.update(stable.projections(originals))
+    for name, expected_hash in transmute.PINS.items():
+        path = TRANSMUTE_PREFIX + name
+        raw = originals[path]
+        if digest(raw) != expected_hash:
+            raise ValueError("pinned transmute package source differs: " + path)
+        installed[path + ".upstream"] = raw
+        installed[path] = transmute.CARGO.encode() if name == "Cargo.toml" else transmute.stable(name, raw.decode())
+    for name in ("LICENSE-MIT", "LICENSE-APACHE"):
+        installed[TRANSMUTE_PREFIX + name] = originals[name]
     return installed
 
 
@@ -156,18 +171,23 @@ def source_inventory(originals, installed):
     rows = []
     for path, raw in sorted(installed.items()):
         upstream = stable.PROJECTION_SOURCES.get(path, path.removesuffix(".upstream"))
+        if path in (TRANSMUTE_PREFIX + "LICENSE-MIT", TRANSMUTE_PREFIX + "LICENSE-APACHE"):
+            upstream = path.removeprefix(TRANSMUTE_PREFIX)
         row = {"path": path, "bytes": len(raw), "sha256": digest(raw)}
         if upstream in originals:
             row.update(upstream=upstream, upstream_sha256=digest(originals[upstream]))
         if path in stable.PROJECTION_SOURCES:
             row["mechanical_adapter"] = stable.ADAPTATION
+        if path.startswith(TRANSMUTE_PREFIX) and path.removeprefix(TRANSMUTE_PREFIX) in transmute.PINS:
+            row["mechanical_adapter"] = TRANSMUTE_ADAPTATION
         rows.append(row)
     return {
         "schema": 3, "repository": "https://github.com/rust-lang/rust.git",
         "commit": COMMIT, "crates": list(CRATES), "files": rows,
         "support_sources": list(SUPPORT_SOURCES),
-        "packaging": "stable-shared-v2: retain all originals; registered " + stable.ADAPTATION + " compiler-helper projections; retain upstream manifests; omit optional compiler-only dependencies; disable default/nightly feature activation",
+        "packaging": "stable-shared-v2: retain all originals; registered " + stable.ADAPTATION + " compiler-helper projections and stable-transmute-v1 automaton packaging; retain upstream manifests; omit optional compiler-only dependencies; disable default/nightly feature activation",
         "rust_adaptation": stable.ADAPTATION,
+        "transmute_adaptation": TRANSMUTE_ADAPTATION,
         "supported_features": "default-features=false; no compiler-only/nightly/randomize features",
     }
 
@@ -193,11 +213,14 @@ def audit(checkout=None):
     if (inventory["schema"] != 3 or inventory["commit"] != COMMIT
             or inventory["crates"] != list(CRATES)
             or inventory.get("support_sources") != list(SUPPORT_SOURCES)
-            or inventory.get("rust_adaptation") != stable.ADAPTATION):
+            or inventory.get("rust_adaptation") != stable.ADAPTATION
+            or inventory.get("transmute_adaptation") != TRANSMUTE_ADAPTATION):
         raise ValueError("solver inventory pin/closure differs")
     originals = {path: (TREE / (path + ".upstream" if path in stable.RETAIN_ORIGINAL else path)).read_bytes()
                  for path in stable.HASHES}
     projections = stable.projections(originals)
+    transmute_originals = {TRANSMUTE_PREFIX + name: transmute.original(name).encode() for name in transmute.PINS}
+    transmute_projections = {TRANSMUTE_PREFIX + name: transmute.CARGO.encode() if name == "Cargo.toml" else transmute.stable(name, transmute.original(name)) for name in transmute.PINS}
     expected = set()
     total = 0
     for row in inventory["files"]:
@@ -213,7 +236,13 @@ def audit(checkout=None):
         if len(raw) != row["bytes"] or digest(raw) != row["sha256"]:
             raise ValueError("installed source differs: " + path)
         total += len(raw)
-        if path in projections:
+        if path in transmute_projections:
+            if (raw != transmute_projections[path]
+                    or row.get("mechanical_adapter") != TRANSMUTE_ADAPTATION
+                    or row.get("upstream") != path
+                    or row.get("upstream_sha256") != digest(transmute_originals[path])):
+                raise ValueError("registered transmute projection differs: " + path)
+        elif path in projections:
             source = stable.PROJECTION_SOURCES[path]
             if (raw != projections[path]
                     or row.get("mechanical_adapter") != stable.ADAPTATION
@@ -241,14 +270,21 @@ def audit(checkout=None):
     actual.discard("Cargo.lock")
     if (actual != expected or not set(LICENSES) <= expected
             or not set(projections) <= expected
+            or not set(transmute_projections) <= expected
+            or not {p + ".upstream" for p in transmute_originals} <= expected
             or not {p + ".upstream" for p in stable.RETAIN_ORIGINAL} <= expected):
         raise ValueError("solver source membership/licenses differ")
     changed = sum(projections[path] != originals[source]
                   for path, source in stable.PROJECTION_SOURCES.items())
+    transmute_changed = sum(raw != transmute_originals[path]
+                            for path, raw in transmute_projections.items() if path.endswith(".rs"))
+    changed += transmute_changed
     return {"commit": COMMIT, "crates": len(CRATES), "files": len(expected),
             "source_bytes": total, "rust_source_changes": changed,
             "retained_original_rust_changes": 0,
+            "transmute_rust_source_changes": transmute_changed,
             "registered_rust_adaptation": stable.ADAPTATION,
+            "registered_transmute_adaptation": TRANSMUTE_ADAPTATION,
             "upstream_git_objects_verified": checkout is not None}
 
 

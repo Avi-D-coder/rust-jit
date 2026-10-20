@@ -191,13 +191,6 @@ pub(super) struct Settings<'cx> {
     pub(super) disable_trait_solver_fast_paths: bool,
 }
 
-/// Required actual pinned-client functions. These cannot be loaded from guest
-/// source, serialized, or defaulted to a stub. Installing the real functions is
-/// a separate integration requirement, not established by this record type.
-pub(super) struct Clients<'cx> {
-    pub(super) solver: super::infer::delegate::SolverClients<'cx>,
-}
-
 pub(super) struct PredicateFacts<'cx> {
     pub(super) explicit_item: Spanned<'cx>,
     pub(super) item: ClauseList<'cx>,
@@ -432,7 +425,7 @@ pub(super) struct PreparedFacts<'cx> {
     pub(super) parameters: BTreeMap<(ParamKey, BoundKind), DefinitionId>,
     pub(super) lang: LangItems,
     pub(super) const_evaluation: super::infer::const_eval::PreparedConstEvalInputs<'cx>,
-    pub(super) clients: Clients<'cx>,
+    pub(super) transmutability: super::infer::transmute::PreparedTransmuteInputs<'cx>,
     /// Optional diagnostic-print attachments, not semantic region inference.
     pub(super) anonymous_bounds: BTreeMap<(usize, usize), Region<Cx<'cx>>>,
     pub(super) anonymous_canonical: BTreeMap<usize, Region<Cx<'cx>>>,
@@ -457,7 +450,7 @@ impl ImplBucket {
     }
 }
 impl<'cx> PreparedFacts<'cx> {
-    /// All source facts/client functions are explicit; the candidate index is
+    /// All source facts and typed compiler-query inputs are explicit; the candidate index is
     /// derived later with the actual pinned classifier, never caller-supplied.
     pub(super) fn new(
         context: Cx<'cx>,
@@ -471,7 +464,7 @@ impl<'cx> PreparedFacts<'cx> {
         parameters: BTreeMap<(ParamKey, BoundKind), DefinitionId>,
         lang: LangItems,
         const_evaluation: super::infer::const_eval::PreparedConstEvalInputs<'cx>,
-        clients: Clients<'cx>,
+        transmutability: super::infer::transmute::PreparedTransmuteInputs<'cx>,
         anonymous_bounds: BTreeMap<(usize, usize), Region<Cx<'cx>>>,
         anonymous_canonical: BTreeMap<usize, Region<Cx<'cx>>>,
     ) -> Self {
@@ -487,7 +480,7 @@ impl<'cx> PreparedFacts<'cx> {
             parameters,
             lang,
             const_evaluation,
-            clients,
+            transmutability,
             anonymous_bounds,
             anonymous_canonical,
             indexes: OnceCell::new(),
@@ -505,7 +498,7 @@ pub(crate) struct ReadyProvider<'cx> {
 }
 
 /// The concrete shared root-goal entry is gated by actual source preparation.
-/// Required source-dependent solver clients are not yet implemented/installed.
+/// Actual complete source/query-input production and root admission remain held.
 pub(crate) fn evaluate_prepared<'cx>(
     ready: ReadyProvider<'cx>,
     delegate: &super::infer::delegate::SolverContext<'cx>,
@@ -591,10 +584,8 @@ pub(super) fn with_provider<R>(
     Ok(run(view.context(), provider))
 }
 impl<'cx> PreparedProvider<'cx> {
-    pub(super) fn solver_clients(self) -> &'cx super::infer::delegate::SolverClients<'cx> {
-        &self.data().clients.solver
-    }
     pub(super) fn const_eval_inputs(self)->&'cx super::infer::const_eval::PreparedConstEvalInputs<'cx> { &self.data().const_evaluation }
+    pub(super) fn transmute_inputs(self)->&'cx super::infer::transmute::PreparedTransmuteInputs<'cx> { &self.data().transmutability }
     pub(super) fn const_param_ty_trait(self) -> Option<DefinitionId> {
         self.data().lang.const_param_ty
     }

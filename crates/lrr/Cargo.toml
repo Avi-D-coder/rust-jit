@@ -24,6 +24,7 @@ unicode-normalization.workspace = true
 lrr-expand-adapter = { path = "../lrr-expand-adapter" }
 rustc_next_trait_solver.workspace = true
 rustc_type_ir.workspace = true
+rustc_transmute.workspace = true
 rustc_abi.workspace = true
 typed-arena.workspace = true
 rustc_index.workspace = true

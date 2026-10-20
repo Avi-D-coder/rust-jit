@@ -112,6 +112,8 @@ pub enum QueryValue {
     ImplTraitIdentity(Box<crate::frontend::impl_trait_identity::PreparedImplTraitIdentity>),
     SolverConfiguration(Box<crate::traits::upstream::configuration::PreparedSolverConfiguration>),
     AdtSourceFields(Box<crate::traits::upstream::source_adt_fields::PreparedAdtSourceFields>),
+    DefinitionHeaderPlan(Box<crate::traits::upstream::source_definition_headers::PreparedDefinitionHeader>),
+    SourceLangIdentity(Box<crate::traits::upstream::source_lang_identity::PreparedSourceLangIdentity>),
     ImplSourceTypes(Box<crate::traits::upstream::source_terms::PreparedImplSourceTypes>),
     ImplSourcePredicates(Box<crate::traits::upstream::source_predicates::PreparedImplSourcePredicates>),
     ImplTraitCatalog(Box<crate::traits::trait_catalog::PreparedImplTraitCatalog>),
@@ -247,6 +249,8 @@ impl QueryValue {
         if let (Self::ImplHeadTypes(value), QueryKey::ImplHeadTypes(key)) = (self, key) { return value.key() == key.as_ref(); }
         if let (Self::ImplTraitIdentity(value), QueryKey::ImplTraitIdentity(key)) = (self, key) { return value.key() == key.as_ref(); }
         if let (Self::SolverConfiguration(value), QueryKey::SolverConfiguration(key)) = (self, key) { return value.matches_key(key); }
+        if let (Self::DefinitionHeaderPlan(value), QueryKey::DefinitionHeaderPlan(key)) = (self,key) { return value.key()==key.as_ref(); }
+        if let (Self::SourceLangIdentity(value), QueryKey::SourceLangIdentity(key)) = (self,key) { return value.key()==key.as_ref(); }
         if let (Self::AdtSourceFields(value), QueryKey::AdtSourceFields(key)) = (self,key) { return value.key()==key.as_ref(); }
         if let (Self::ImplSourceTypes(value), QueryKey::ImplSourceTypes(key)) = (self, key) { return value.key() == key.as_ref(); }
         if let (Self::SourcePatternName(value), QueryKey::SourcePatternName(key)) = (self,key) { return value.key()==key; }
@@ -472,6 +476,8 @@ impl QueryValue {
             Self::ImplTraitIdentity(value) => { e.u32(65); e.record(value.as_ref()); }
             Self::SolverConfiguration(value) => { e.u32(67); e.record(value.as_ref()); }
             Self::AdtSourceFields(value) => { e.u32(74); e.record(value.as_ref()); }
+            Self::SourceLangIdentity(value) => { e.u32(76); e.record(value.as_ref()); }
+            Self::DefinitionHeaderPlan(value) => { e.u32(75); e.record(value.as_ref()); }
             Self::ImplSourceTypes(value) => { e.u32(68); e.record(value.as_ref()); }
             Self::SourcePatternName(value) => { e.u32(72); e.record(value.as_ref()); }
             Self::PreparedBodyTypeApplication(value) => { e.u32(73); e.record(value.as_ref()); }
@@ -669,7 +675,7 @@ impl QueryValue {
             Self::ConstructorPlan(v) => v.estimated_bytes().unwrap_or(usize::MAX),
             // E006: no new retained-admission memory accounting.
             Self::ArrayRepeatPlan(_) | Self::PreparedArrayRepeat(_) | Self::DeclarationOwnerTemplate(_)
-            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) | Self::DeclarationGenerics(_) | Self::DeclarationGenericTypes(_) | Self::ImplTraitIdentity(_) | Self::ImplTraitCatalog(_) | Self::SolverConfiguration(_) | Self::AdtSourceFields(_) | Self::ImplSourceTypes(_) | Self::ImplSourcePredicates(_) => 0,
+            | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) | Self::DeclarationGenerics(_) | Self::DeclarationGenericTypes(_) | Self::ImplTraitIdentity(_) | Self::ImplTraitCatalog(_) | Self::SolverConfiguration(_) | Self::AdtSourceFields(_) | Self::DefinitionHeaderPlan(_) | Self::SourceLangIdentity(_) | Self::ImplSourceTypes(_) | Self::ImplSourcePredicates(_) => 0,
             Self::AssociatedItemQualifier(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::AssociatedEquations(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::NominalMember(value) => value.metadata_bytes().unwrap_or(usize::MAX),

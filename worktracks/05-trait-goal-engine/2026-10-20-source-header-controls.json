@@ -1,0 +1,9 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Actual source header/lang identity metadata and affected source TypeIR control. No complete fact factory, transmute/const query producer, upstream root, interpreter runtime or full-fixture acceptance inferred.",
+  "controls": [
+    "cli::preentry_loader_tests::upstream_definition_headers::unchanged_declarations_prepare_actual_header_inputs_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_definition_headers::source_lang_attributes_and_aliases_preserve_actual_definition_identity",
+    "cli::preentry_loader_tests::unchanged_nominal_fields_encode_through_shared_source_types_all_editions_and_origins"
+  ]
+}

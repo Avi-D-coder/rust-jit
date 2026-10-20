@@ -3557,3 +3557,6 @@ fn unchanged_nominal_fields_encode_through_shared_source_types_all_editions_and_
     }
     assert_eq!((fields,pending),(72,12));
 }
+
+#[path = "preentry_loader_tests/upstream_definition_headers.rs"]
+mod upstream_definition_headers;
