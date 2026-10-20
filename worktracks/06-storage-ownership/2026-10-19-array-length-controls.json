@@ -1,0 +1,7 @@
+{
+  "controls": [
+    "frontend::source_locals::owned_plan::field_types::tests::source_parameter_goal_tests::upstream_parameter_order_retains_const_regions_and_pending_function_binders",
+    "syntax::thunks::integer_written_spelling_tests::unchanged_static_parenthesized_integer_preserves_source_spelling_all_editions",
+    "cli::crate_graph::mem_layout_tests::structs_follow_repr_rust_c_packed_and_align"
+  ]
+}

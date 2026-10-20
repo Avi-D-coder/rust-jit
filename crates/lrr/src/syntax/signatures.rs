@@ -641,7 +641,8 @@ pub(crate) fn lower_type(
                 semantic_name(&ts[0].text).and_then(|name| parameter(&name, GenericKind::Const))
             {
                 ConstTerm::Param(key)
-            } else if let Ok(value) = ts[0].text.replace('_', "").parse::<u64>() {
+            } else if let Some(ast::Expr::Literal(literal)) = array.const_arg().and_then(|arg| arg.expr())
+                && let Some(value) = super::literal_decode::array_length(&literal) {
                 ConstTerm::Value(value)
             } else {
                 return Ok(None);

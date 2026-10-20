@@ -119,22 +119,11 @@ impl HeaderShape {
                 else {
                     return Ok(None);
                 };
-                let Some(number) = length
-                    .syntax()
-                    .children_with_tokens()
-                    .filter_map(|item| item.into_token())
-                    .find_map(<ast::IntNumber as ra_ap_syntax::AstToken>::cast)
-                else {
-                    return Ok(None);
-                };
-                if !matches!(number.suffix(), None | Some("usize")) {
-                    return Ok(None);
-                }
-                let Ok(len) = number.value() else {
+                let Some(len) = crate::syntax::literal_decode::array_length(&length) else {
                     return Ok(None);
                 };
                 match nested(array.ty())? {
-                    Some(element) => Self::Array(Box::new(element), len as u64),
+                    Some(element) => Self::Array(Box::new(element), len),
                     None => return Ok(None),
                 }
             }

@@ -1,6 +1,20 @@
 //! Immutable reached integer lexical decoding. No guest binding, query or effect.
 use crate::ir::op::{DecodedLiteral, IntegerLexicalError, PrimitiveType};
 use ra_ap_syntax::ast;
+
+/// An actual integer literal used as retained array-length metadata. Lexical
+/// decoding is shared with expressions and pure constants; no text is reparsed
+/// and no runtime binding or static const-type check is performed here.
+pub(crate) fn array_length(literal: &ast::Literal) -> Option<u64> {
+    let ast::LiteralKind::IntNumber(number) = literal.kind() else {
+        return None;
+    };
+    match integer(&number, false) {
+        DecodedLiteral::Integer { magnitude, .. } => u64::try_from(magnitude).ok(),
+        _ => None,
+    }
+}
+
 pub(super) fn integer(number: &ast::IntNumber, negative: bool) -> DecodedLiteral {
     let radix = number.radix() as u8;
     let written_suffix = number.suffix();

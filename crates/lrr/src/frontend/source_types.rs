@@ -735,15 +735,7 @@ pub(super) fn resolve_actual_type(
                     }
                     _ => return QueryPoll::Ready(Ok(None)),
                 };
-                let digits: String = length
-                    .syntax()
-                    .text()
-                    .to_string()
-                    .trim_end_matches("usize")
-                    .chars()
-                    .filter(|c| *c != '_')
-                    .collect();
-                let Ok(len) = digits.parse::<u64>() else {
+                let Some(len) = crate::syntax::literal_decode::array_length(&length) else {
                     return QueryPoll::Ready(Ok(None));
                 };
                 match walk(db, graph, sources, signature, &element) {
