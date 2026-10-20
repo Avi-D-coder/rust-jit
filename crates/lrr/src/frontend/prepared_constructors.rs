@@ -114,6 +114,8 @@ impl PreparedRecordConstructor {
             bytes = bytes.checked_add(match argument {
                 ExplicitType::Selected(source) => source.heap_bytes().ok()?,
                 ExplicitType::Parameter(term) => term.heap_bytes()?,
+                // E006: no new retained-admission resource accounting.
+                ExplicitType::FrameTemplate { .. } => 0,
                 ExplicitType::Written { term, written } => {
                     term.heap_bytes()?.checked_add(written.heap_bytes())?
                 }

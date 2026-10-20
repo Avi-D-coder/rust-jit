@@ -1,0 +1,9 @@
+{
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_explicit_alias_keeps_shared_application_guard_all_editions_and_origins",
+    "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::official_three_call_plans_keep_nominal_identity_shared_rows_and_guarded_caller",
+    "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::type_argument_plan_keeps_real_unsupported_body_and_field_cold_and_resolves_caller_alias",
+    "frontend::source_locals::owned_plan::field_types::tests::entered_type_goal_tests::actual_same_spelled_type_declaration_cannot_receive_primitive_cast_authority",
+    "frontend::source_locals::owned_plan::field_types::tests::entered_type_goal_tests::prepared_cast_guard_rejects_actual_source_input_revocation_without_queries"
+  ]
+}

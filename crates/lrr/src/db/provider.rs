@@ -1047,6 +1047,13 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
+            QueryKey::PreparedBodyTypeApplication(key) => {
+                return match crate::frontend::body_type_applications::prepare(db,key) {
+                    QueryPoll::Ready(Ok(value))=>Provided::pure(QueryValue::PreparedBodyTypeApplication(Box::new(value))),
+                    QueryPoll::Ready(Err(error))=>QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input)=>QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::SourcePatternName(key) => {
                 return match crate::frontend::pattern_names::prepare_source_name(db,key) {
                     QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::SourcePatternName(Box::new(value))),

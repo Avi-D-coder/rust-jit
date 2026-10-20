@@ -1,0 +1,9 @@
+{
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_impl_self_uses_actual_member_owner_template_all_editions_and_origins",
+    "cli::value_scope_tests::associated_constants_select_through_the_member_index",
+    "cli::preentry_loader_tests::unchanged_static_alias_qualifiers_retain_closed_source_applications_all_editions_and_origins",
+    "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::official_three_call_plans_keep_nominal_identity_shared_rows_and_guarded_caller",
+    "frontend::source_locals::owned_plan::field_types::tests::explicit_type_argument_tests::type_argument_plan_keeps_real_unsupported_body_and_field_cold_and_resolves_caller_alias"
+  ]
+}

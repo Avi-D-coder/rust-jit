@@ -121,6 +121,7 @@ pub enum QueryValue {
     ),
     EnteredCall(Box<crate::frontend::entered_call_goals::EnteredCallGoal>),
     SourcePatternName(Box<crate::frontend::pattern_names::PreparedSourcePatternName>),
+    PreparedBodyTypeApplication(Box<crate::frontend::body_type_applications::PreparedBodyTypeApplication>),
     DeclaredReturnGoal(Box<crate::frontend::source_return_goals::ReturnGoalObservation>),
     PreparedReturnPlan(Box<crate::frontend::source_return_goals::PreparedReturnPlan>),
     EnteredType(Box<crate::frontend::entered_type_goals::EnteredTypeGoal>),
@@ -188,6 +189,7 @@ impl QueryValue {
             }
             Self::EnteredCall(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::EnteredType(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
+            Self::PreparedBodyTypeApplication(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::PreparedTypePlan(value) => {
                 Some(SourceArtifactRef::LocalPlan(value.retained_plan()))
             }
@@ -246,6 +248,7 @@ impl QueryValue {
         if let (Self::SolverConfiguration(value), QueryKey::SolverConfiguration(key)) = (self, key) { return value.matches_key(key); }
         if let (Self::ImplSourceTypes(value), QueryKey::ImplSourceTypes(key)) = (self, key) { return value.key() == key.as_ref(); }
         if let (Self::SourcePatternName(value), QueryKey::SourcePatternName(key)) = (self,key) { return value.key()==key; }
+        if let (Self::PreparedBodyTypeApplication(value), QueryKey::PreparedBodyTypeApplication(key)) = (self,key) { return value.key()==key; }
         if let (Self::ImplSourcePredicates(value), QueryKey::ImplSourcePredicates(key)) = (self, key) { return value.key() == key.as_ref(); }
         if let (Self::ImplTraitCatalog(value), QueryKey::ImplTraitCatalog(key)) = (self, key) { return value.key() == key; }
         if let (Self::ImplPredicates(value), QueryKey::ImplPredicates(key)) = (self, key) { return value.key() == key.as_ref(); }
@@ -468,6 +471,7 @@ impl QueryValue {
             Self::SolverConfiguration(value) => { e.u32(67); e.record(value.as_ref()); }
             Self::ImplSourceTypes(value) => { e.u32(68); e.record(value.as_ref()); }
             Self::SourcePatternName(value) => { e.u32(72); e.record(value.as_ref()); }
+            Self::PreparedBodyTypeApplication(value) => { e.u32(73); e.record(value.as_ref()); }
             Self::ImplSourcePredicates(value) => { e.u32(71); e.record(value.as_ref()); }
             Self::ImplTraitCatalog(value) => { e.u32(66); e.record(value.as_ref()); }
             Self::ImplPredicates(value) => { e.u32(59); e.record(value.as_ref()); }
@@ -652,7 +656,7 @@ impl QueryValue {
             Self::ReferenceHeader(v) => v
                 .metadata_bytes()
                 .saturating_add(2 * std::mem::size_of::<usize>()),
-            Self::SourcePatternName(_) => 0,
+            Self::SourcePatternName(_) | Self::PreparedBodyTypeApplication(_) => 0,
             Self::PatternAccess(_) => 0, // E006: no retained-admission resource accounting.
             Self::PatternPlan(v) => v
                 .metadata_bytes()

@@ -77,31 +77,10 @@ impl EnteredTypeGoal {
         site: &PcKey,
         range: SourceRange,
     ) -> Result<&SourceType, Diagnostic> {
-        let source = self.plan.context().source();
-        if self.key.phase != 0
-            || &self.key != site
-            || index.body() != &site.body
-            || source.body().key() != site.body
-            || index.semantic_identity() != self.structure
-            || source.index().semantic_identity() != self.structure
-            || self.range != range
-            || !source.body().range.contains(range)
-        {
+        if &self.key!=site || self.range!=range || index.semantic_identity()!=self.structure {
             return Err(fault("prepared Type use source/body/range differs"));
         }
-        let node = index
-            .nodes()
-            .get(site.node as usize)
-            .filter(|node| node.id == NodeId(site.node) && node.role == NodeRole::Syntax)
-            .ok_or_else(|| fault("prepared Type use indexed occurrence differs"))?;
-        let start = source.body().range.start;
-        if start.checked_add(node.range.start) != Some(range.start)
-            || start.checked_add(node.range.end) != Some(range.end)
-            || range.start.checked_sub(start) != Some(node.range.start)
-            || range.end.checked_sub(start) != Some(node.range.end)
-        {
-            return Err(fault("prepared Type use indexed range differs"));
-        }
+        self.plan.context().source().require_type_site(index,site,range)?;
         Ok(&self.source)
     }
     pub(crate) fn primitive_for(

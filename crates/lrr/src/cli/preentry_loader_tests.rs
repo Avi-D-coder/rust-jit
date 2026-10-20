@@ -207,6 +207,13 @@ fn prepared_impl_header_world(
     crate::db::seals::SealKey,
     crate::syntax::outline::ScopeKey,
 ) {
+    let (db,discovery,root)=prepared_source_scope_world(path,edition);
+    (db,discovery.key().clone(),root)
+}
+
+fn prepared_source_scope_world(
+    path:&std::path::Path,edition:u16,
+)->(crate::db::memo::Database,crate::expand::source_discovery::SourceDiscovery,crate::syntax::outline::ScopeKey){
     use crate::{
         core::profile::ProfileIdentity,
         db::memo::Database,
@@ -258,7 +265,7 @@ fn prepared_impl_header_world(
             _ => panic!("actual projection header requires an unprepared producer"),
         }
     }
-    (db, discovery.key().clone(), root)
+    (db, discovery, root)
 }
 
 #[test]
@@ -3294,6 +3301,16 @@ fn unchanged_impl_self_uses_actual_member_owner_template_all_editions_and_origin
                     if !matches!(occurrence.segments(),[BodyTypeSegment::SelfType(_)]){continue}
                     let result=match plan.prepare_named_body_type_outcome(&mut db,node.id) {QueryPoll::Ready(Ok(result))=>result,QueryPoll::Ready(Err(error))=>panic!("Self source error: {error:?}"),QueryPoll::NeedInput(input)=>panic!("Self source input: {input:?}")};
                     let NamedTypeOutcome::Ready(NamedTypePreparation::Alias(AliasTarget::Type(actual)))=result else{panic!("actual applied Self missing: {nominal},{edition},{origin}")};assert_eq!(actual,expected);
+                    if generic {
+                        use crate::frontend::explicit_type_arguments::ExplicitType;
+                        let site=owner.index().pc(node.id,Phase::Entry).unwrap();let key=QueryKey::AssociatedItemQualifier(site);
+                        let selected=ready(db.fetch(&SyntaxProvider,key.clone()));let QueryValue::AssociatedItemQualifier(qualifier)=selected.value.as_ref()else{panic!()};
+                        let application=qualifier.source().expect("actual generic Self qualifier application");assert_eq!(application.source(),&expected);
+                        assert!(matches!(application,ExplicitType::FrameTemplate{definition:actual,..}if *actual==definition));
+                        let guard=ready(db.prepare_input_guard(&SyntaxProvider,&key,selected.fingerprint));guard.require_current(&db).unwrap();guards.push(guard);let second=ready(db.fetch(&SyntaxProvider,key));assert!(std::sync::Arc::ptr_eq(&selected.value,&second.value));
+                        let foreign=TyTerm::Nominal(found.identity,vec![GenericArg::Type(TyTerm::Param(ParamKey{definition:crate::core::digest::Digest::of_bytes(b"foreign-source-owner"),ordinal:0}))]);
+                        assert!(ready(crate::frontend::explicit_type_arguments::prepare_application(&mut db,&plan,foreign)).is_none(),"a foreign source parameter cannot become a caller ordinal");
+                    }
                     let key=QueryKey::DeclarationOwnerTemplate(DeclarationOwnerTemplateKey{caller_path:owner.index().pc(node.id,Phase::Entry).unwrap(),definition});let selected=ready(db.fetch(&SyntaxProvider,key.clone()));let QueryValue::DeclarationOwnerTemplate(template)=selected.value.as_ref()else{panic!()};assert!(template.demand().is_none());assert!(matches!(template.owner(),Some(DeclarationOwner::Impl{self_type:Some(actual),..})if actual==&expected));
                     let guard=ready(db.prepare_input_guard(&SyntaxProvider,&key,selected.fingerprint));guard.require_current(&db).unwrap();guards.push(guard);let second=ready(db.fetch(&SyntaxProvider,key));assert!(std::sync::Arc::ptr_eq(&selected.value,&second.value));count+=1;
                 }
@@ -3305,4 +3322,38 @@ fn unchanged_impl_self_uses_actual_member_owner_template_all_editions_and_origin
         }
     }
     assert_eq!(count,36);
+}
+
+#[test]
+fn unchanged_explicit_alias_keeps_shared_application_guard_all_editions_and_origins() {
+    use crate::{
+        db::{dependency::{DependencyStamp,InputKey,InputValue},key::QueryKey,poll::QueryPoll,provider::SyntaxProvider,value::QueryValue},
+        frontend::entered_call_goals::EnteredTypeArgument,
+        ir::pc::Phase,source::manifest::Namespace,syntax::{imports::ImportSegment,spans::SourceRange},
+    };
+    fn ready<T:std::fmt::Debug>(poll:QueryPoll<T>)->T{match poll{QueryPoll::Ready(Ok(value))=>value,other=>panic!("actual alias application: {other:?}")}}
+    let original=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout/tests/ui/functions-closures/fn-item-type-coerce.rs");
+    let text=std::fs::read_to_string(&original).unwrap();let(prefix,items)=text.split_at(text.find("\nfn foo").unwrap());let mut count=0;
+    for edition in [2015,2018,2021,2024] {
+        let mut paths=vec![original.clone()];
+        for wrapper in [false,true] {let outer=if wrapper{"macro_rules! outer {($($t:tt)*)=>{emit!{$($t)*}}}"}else{""};let invoke=if wrapper{"outer"}else{"emit"};paths.push(temporary_source(&format!("explicit-source-alias-{edition}-{wrapper}"),&format!("{prefix}\nmacro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} {outer} {invoke}!{{{items}}}")));}
+        for(origin,path)in paths.iter().enumerate() {
+            let(mut db,discovery,scope)=prepared_source_scope_world(path,edition);
+            let headers=ready(db.fetch(&SyntaxProvider,QueryKey::PreparedScopeImplHeaders(discovery.key().clone()))).value;let QueryValue::PreparedScopeImplHeaders(headers)=headers.as_ref()else{panic!()};let environment=headers.inventory_root().environment().unwrap();let views=environment.sources().iter().collect::<Vec<_>>();
+            let found=environment.names().lookup_source_path(Namespace::Value,&[ImportSegment::Name("main".into())],false,&scope,edition).unwrap();let crate::frontend::names::NameLookup::Defined(found)=found else{panic!()};
+            let body=db.input(&InputKey::DefinitionBody(found.identity)).unwrap();let InputValue::DefinitionBody(body)=body.as_ref()else{panic!()};let owner=ready(db.prepare_source_local_plan(&discovery,&views,&body.key()));let source=owner.context().source();let index=source.index();
+            let calls=index.nodes().iter().filter(|node|node.role==crate::syntax::body_index::NodeRole::Expression(crate::syntax::body_index::ExpressionKind::Call)).collect::<Vec<_>>();assert_eq!(calls.len(),1);let pc=index.pc(calls[0].id,Phase::Entry).unwrap();
+            let call=ready(db.fetch(&SyntaxProvider,QueryKey::EnteredCall(pc.clone()))).value;let QueryValue::EnteredCall(call)=call.as_ref()else{panic!()};if call.signature().is_none(){if let crate::frontend::entered_call_goals::EnteredCallSelection::Pending(demand)=call.selection(){eprintln!("actual IntMap caller pending: {demand:?}");}else{eprintln!("actual IntMap caller selection: {call:?}");}}let target=call.written_source_name().unwrap();let Some(EnteredTypeArgument::Indexed(site))=target.arguments()[0].type_argument()else{panic!()};
+            db.trace.detailed=true;let start=db.trace.events.len();let key=QueryKey::PreparedExplicitTypeArguments(pc.clone());let selected=ready(db.fetch(&SyntaxProvider,key.clone()));let QueryValue::PreparedExplicitTypeArguments(plan)=selected.value.as_ref()else{panic!()};assert_eq!(plan.rows().len(),1);let argument=plan.rows()[0].source();assert!(matches!(argument.source(),crate::traits::term::TyTerm::Function(_)));
+            let application_key=QueryKey::PreparedBodyTypeApplication(site.key().clone());let application=ready(db.fetch(&SyntaxProvider,application_key.clone()));let QueryValue::PreparedBodyTypeApplication(application)=application.value.as_ref()else{panic!()};assert_eq!(application.source_for(index,site.key(),site.range()).unwrap().unwrap().source(),argument.source());
+            assert!(application.source_for(index,site.key(),SourceRange{start:site.range().start+1,end:site.range().end}).is_err());
+            assert!(db.memo(&key).unwrap().dependencies.iter().any(|stamp|matches!(stamp,DependencyStamp::Query{key,..}if key==&application_key)),"ordinary explicit argument must depend on the common source application");
+            let mut store=crate::runtime::cell::GuestStore::new(1,u32::MAX,usize::MAX).unwrap();let descriptor=argument.materialize(&mut store).unwrap();assert_eq!(store.descriptor_source_term(descriptor).as_ref(),Some(argument.source()));
+            plan.guard().require_current(&db).unwrap();let second=ready(db.fetch(&SyntaxProvider,key));assert!(std::sync::Arc::ptr_eq(&selected.value,&second.value));
+            assert!(!db.trace.events[start..].iter().any(|event|match &event.key {QueryKey::BodyStructure(body)=>body!=index.body()||event.action==crate::db::trace::Action::ProviderRun,QueryKey::Thunk(_)=>true,_=>false}),"alias source preparation must leave executable callees cold");
+            db.publish_inputs(std::collections::BTreeMap::new()).unwrap();assert!(plan.guard().require_current(&db).is_err());count+=1;
+            eprintln!("actual IntMap application edition{edition},origin{origin}: Q47->Q73, exact source/descriptor, site range, cached/revoked guard; no guest entry");
+        }
+    }
+    assert_eq!(count,12);
 }

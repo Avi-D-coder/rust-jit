@@ -159,6 +159,7 @@ pub enum QueryKey {
     PreparedExplicitTypeArguments(crate::source::manifest::PcKey),
     EnteredCall(crate::source::manifest::PcKey),
     SourcePatternName(crate::source::manifest::PcKey),
+    PreparedBodyTypeApplication(crate::source::manifest::PcKey),
     DeclaredReturnGoal(Digest),
     PreparedReturnPlan(Digest),
     EnteredType(crate::source::manifest::PcKey),
@@ -239,6 +240,7 @@ impl QueryKey {
             | Self::AssociatedItemQualifier(_)
             | Self::PreparedExplicitTypeArguments(_)
             | Self::SourcePatternName(_)
+            | Self::PreparedBodyTypeApplication(_)
             | Self::EnteredCall(_)
             | Self::PreparedReturnPlan(_)
             | Self::DeclaredReturnGoal(_)
@@ -292,6 +294,7 @@ impl QueryKey {
             Self::PreparedExplicitTypeArguments(_) => "PreparedExplicitTypeArguments",
             Self::EnteredCall(_) => "EnteredCall",
             Self::SourcePatternName(_) => "SourcePatternName",
+            Self::PreparedBodyTypeApplication(_) => "PreparedBodyTypeApplication",
             Self::DeclaredReturnGoal(_) => "DeclaredReturnGoal",
             Self::PreparedReturnPlan(_) => "PreparedReturnPlan",
             Self::EnteredType(_) => "EnteredType",
@@ -344,6 +347,7 @@ impl StableEncode for QueryKey {
             Self::SolverConfiguration(key) => { e.u32(67); e.record(key.as_ref()); }
             Self::ImplSourceTypes(key) => { e.u32(68); e.record(key.as_ref()); }
             Self::SourcePatternName(key) => { e.u32(72); e.record(key); }
+            Self::PreparedBodyTypeApplication(key) => { e.u32(73); e.record(key); }
             Self::ImplSourcePredicates(key) => { e.u32(71); e.record(key.as_ref()); }
             Self::ImplTraitCatalog(key) => { e.u32(66); e.record(key); }
             Self::ImplPredicates(key) => { e.u32(59); e.record(key.as_ref()); }

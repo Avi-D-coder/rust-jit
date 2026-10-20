@@ -16,7 +16,7 @@ use crate::{
     ir::pc::{NodeId, PcKey, Phase},
     source::changes::PreparedSourceView,
     syntax::{
-        body_index::BodyIndex,
+        body_index::{BodyIndex,NodeRole},
         outline::{BodyHandle, DeclarationContext, HeaderRecipe, ScopeKey},
         parse::ParsedFile,
         token_wire::{Edition, SpanRecord},
@@ -50,6 +50,29 @@ pub(crate) struct AdmittedBodyContext {
     exclusive_bytes: usize,
 }
 impl AdmittedBodyContext {
+    /// Exact immutable indexed Type-use location. Current source/query guards
+    /// are supplied by the owning preparation result, not by this projection.
+    pub(crate) fn require_type_site(
+        &self,index:&BodyIndex,site:&PcKey,range:crate::syntax::spans::SourceRange,
+    )->Result<(),Diagnostic>{
+        let error=|message:&str|Diagnostic::new("LRR-E-TYPE-CONTEXT",message.into());
+        if site.phase!=0 || index.body()!=&site.body || self.body().key()!=site.body
+            || self.index().semantic_identity()!=index.semantic_identity()
+            || !self.body().range.contains(range) {
+            return Err(error("prepared Type use source/body/range differs"));
+        }
+        let node=index.nodes().get(site.node as usize)
+            .filter(|node|node.id==NodeId(site.node)&&node.role==NodeRole::Syntax)
+            .ok_or_else(||error("prepared Type use indexed occurrence differs"))?;
+        let start=self.body().range.start;
+        if start.checked_add(node.range.start)!=Some(range.start)
+            || start.checked_add(node.range.end)!=Some(range.end)
+            || range.start.checked_sub(start)!=Some(node.range.start)
+            || range.end.checked_sub(start)!=Some(node.range.end) {
+            return Err(error("prepared Type use indexed range differs"));
+        }
+        Ok(())
+    }
     pub(crate) fn identity(&self) -> Digest {
         self.identity
     }

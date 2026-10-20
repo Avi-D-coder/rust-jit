@@ -184,7 +184,7 @@ fn query_bytes(query: &QueryKey) -> Result<usize, Diagnostic> {
         | QueryKey::PreparedScopeImplHeaders(_) | QueryKey::ImplHeaderSyntax(_) | QueryKey::ImplHeadTypes(_) | QueryKey::ImplTraitIdentity(_) | QueryKey::ImplTraitCatalog(_) | QueryKey::SolverConfiguration(_) | QueryKey::ImplSourceTypes(_) | QueryKey::ImplSourcePredicates(_)
                 | QueryKey::ImplPredicates(_) | QueryKey::TraitDeclaration(_) | QueryKey::DeclarationGenerics(_) | QueryKey::DeclarationGenericTypes(_) => {}
         QueryKey::ConstructorPlan(_)
-        | QueryKey::BoundRecordConstructor(_) | QueryKey::SourcePatternName(_)
+        | QueryKey::BoundRecordConstructor(_) | QueryKey::SourcePatternName(_) | QueryKey::PreparedBodyTypeApplication(_)
         | QueryKey::QualifiedBodyType(_)
         | QueryKey::MacroDefinitionModule { .. }
         | QueryKey::SourceLocalPlan(_)

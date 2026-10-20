@@ -83,12 +83,19 @@ pub(crate) enum ExplicitType {
     /// The caller's own generic Type parameter (`TyTerm::Param`): its runtime
     /// instantiation is the reached frame's binding, read at the call.
     Parameter(TyTerm),
+    /// A composite application of this actual caller's parameters. The full
+    /// source term is retained separately from the runtime descriptor recipe.
+    FrameTemplate {
+        definition: Digest,
+        term: TyTerm,
+        written: Arc<WrittenType>,
+    },
 }
 impl ExplicitType {
     pub(crate) fn source(&self) -> &TyTerm {
         match self {
             Self::Selected(source) => source.source(),
-            Self::Written { term, .. } | Self::Parameter(term) => term,
+            Self::Written { term, .. } | Self::FrameTemplate { term, .. } | Self::Parameter(term) => term,
         }
     }
     /// The run-local descriptor under the calling frame: a caller generic
@@ -105,6 +112,19 @@ impl ExplicitType {
                     "explicit caller parameter has no reached runtime binding".into(),
                 )
             }),
+            Self::FrameTemplate { definition, written, .. } => {
+                if frame.pc().body.definition != *definition {
+                    return Err(fault("Type application belongs to another calling frame"));
+                }
+                let context = frame.shared_generic_context()
+                    .ok_or_else(|| fault("Type application calling frame has no generic bindings"))?;
+                if context.definition().definition != *definition {
+                    return Err(fault("Type application generic owner differs from its source"));
+                }
+                written.materialize_with(store, &|ordinal| context.runtime_binding(
+                    crate::traits::term::ParamKey { definition: *definition, ordinal }
+                ))?.ok_or_else(|| fault("Type application requires its actual reached parameter bindings"))
+            }
             _ => self.materialize(store),
         }
     }
@@ -112,7 +132,7 @@ impl ExplicitType {
     /// (a trait object or slice pointee) has none.
     pub(crate) fn materialize(&self, store: &mut GuestStore) -> Result<TypeId, Diagnostic> {
         match self {
-            Self::Parameter(_) => Err(Diagnostic::new(
+            Self::Parameter(_) | Self::FrameTemplate { .. } => Err(Diagnostic::new(
                 "LRR-E-TYPE-CONTEXT",
                 "explicit caller parameter needs its calling frame's binding".into(),
             )),
@@ -130,6 +150,8 @@ impl ExplicitType {
     pub(super) fn heap_bytes(&self) -> Result<usize, Diagnostic> {
         match self {
             Self::Selected(source) => source.heap_bytes(),
+            // E006: no new retained-admission resource accounting.
+            Self::FrameTemplate { .. } => Ok(0),
             Self::Written { term, .. } => term
                 .heap_bytes()
                 .and_then(|bytes| bytes.checked_add(std::mem::size_of::<WrittenType>()))
@@ -139,7 +161,7 @@ impl ExplicitType {
     }
 }
 impl StableEncode for ExplicitType {
-    const DOMAIN: &'static str = "lrr/v1/explicit-type-argument-type";
+    const DOMAIN: &'static str = "lrr/v2/explicit-type-argument-type";
     fn encode_fields(&self, e: &mut StableEncoder) {
         match self {
             Self::Selected(source) => {
@@ -155,8 +177,47 @@ impl StableEncode for ExplicitType {
                 e.u8(2);
                 e.record(term);
             }
+            Self::FrameTemplate { definition, term, written } => {
+                e.u8(3);
+                e.digest(*definition);
+                e.record(term);
+                e.record(written.as_ref());
+            }
         }
     }
+}
+/// Common source application finalizer for aliases, associated qualifiers and
+/// ordinary explicit arguments. No source or schema planning occurs at use.
+pub(crate) fn prepare_application(
+    db: &mut Database,
+    plan: &Arc<PreparedSourceLocalPlan>,
+    term: TyTerm,
+) -> QueryPoll<Option<ExplicitType>> {
+    let definition = plan.context().source().index().body().definition;
+    if let TyTerm::Param(key) = &term {
+        return QueryPoll::Ready(Ok((key.definition == definition)
+            .then_some(ExplicitType::Parameter(term))));
+    }
+    let Some(environment) = plan.environment() else {
+        return QueryPoll::Ready(Err(fault("Type application source environment absent")));
+    };
+    let completed = environment.macros().source_environment();
+    let sources = completed.sources().iter().collect::<Vec<_>>();
+    if let Some(written) = ready!(crate::frontend::written_terms::closed_written_type(db,&sources,&term)) {
+        return QueryPoll::Ready(Ok(Some(ExplicitType::Written {term,written:Arc::new(written)})));
+    }
+    let Some(written) = ready!(crate::frontend::written_terms::written_template(db,&sources,&term,definition)) else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    // The template converter may leave unsupported parts for inference. An
+    // explicit application cannot turn those holes or foreign binders into a
+    // caller's parameter: its exact symbolic source must round-trip.
+    if !written.has_parameters() || written.source_with(&|ordinal| Some(TyTerm::Param(
+        crate::traits::term::ParamKey {definition,ordinal}
+    ))).as_ref() != Some(&term) {
+        return QueryPoll::Ready(Ok(None));
+    }
+    QueryPoll::Ready(Ok(Some(ExplicitType::FrameTemplate {definition,term,written:Arc::new(written)})))
 }
 #[derive(Debug)]
 pub(crate) struct ExplicitTypeArgument {
@@ -417,32 +478,24 @@ pub(crate) fn select_argument(
         }
         _ => {}
     }
-    // A leaf naming the caller's own generic parameter has no source
-    // descriptor of its own: the calling frame's binding instantiates it.
-    if let crate::frontend::source_types::NamedTypePreparation::Parameter(key) =
-        ready!(plan.prepare_named_body_type(db, NodeId(site.node)))
-    {
-        return QueryPoll::Ready(Ok(Some(SelectedTypeArgument {
-            source: ExplicitType::Parameter(TyTerm::Param(key)),
-            guards: Vec::new(),
-            observation: None,
-        })));
-    }
-    let value = ready!(db.fetch(&SyntaxProvider, QueryKey::PreparedTypePlan(site.clone())));
-    let QueryValue::PreparedTypePlan(ty) = value.value.as_ref() else {
-        return QueryPoll::Ready(Err(fault("explicit Type plan query variant differs")));
+    // The common application query owns every alias/parameter/schema read.
+    // Retain its complete guard, not only the caller target's dependencies.
+    let application_key=QueryKey::PreparedBodyTypeApplication(site.clone());
+    let selected=ready!(db.fetch(&SyntaxProvider,application_key.clone()));
+    let QueryValue::PreparedBodyTypeApplication(application)=selected.value.as_ref()else{
+        return QueryPoll::Ready(Err(fault("explicit Type application query variant differs")));
     };
-    if !value.cacheable || !plan.same_environment(ty.retained_plan()) {
-        return QueryPoll::Ready(Err(fault("explicit Type argument owning source differs")));
+    if !selected.cacheable || application.key()!=site || !plan.same_environment(application.retained_plan()) {
+        return QueryPoll::Ready(Err(fault("explicit Type application actual source differs")));
     }
-    checked!(ty.guard().require_current(db));
-    let source = checked!(ty.goal().source_for(index, site, range));
-    QueryPoll::Ready(Ok(Some(SelectedTypeArgument {
-        source: ExplicitType::Selected(source.clone()),
-        guards: vec![Arc::clone(ty.guard())],
-        observation: Some(value.fingerprint),
-    })))
+    let Some(source)=checked!(application.source_for(index,site,range)) else {
+        return QueryPoll::Ready(Err(fault("explicit Type application requires its actual source preparation")));
+    };
+    let guard=Arc::new(ready!(db.prepare_input_guard(&SyntaxProvider,&application_key,selected.fingerprint)));
+    checked!(guard.require_current(db));
+    QueryPoll::Ready(Ok(Some(SelectedTypeArgument{source:source.clone(),guards:vec![guard],observation:Some(selected.fingerprint)})))
 }
+
 pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedExplicitTypeArguments> {
     if key.phase != 0 {
         return QueryPoll::Ready(Err(fault("explicit Types require call entry")));

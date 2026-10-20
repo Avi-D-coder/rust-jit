@@ -95,29 +95,39 @@ pub(crate) fn select(
                 node: node.0,
                 phase: 0,
             };
-            let prepared = ready!(db.fetch(&SyntaxProvider, QueryKey::PreparedTypePlan(key)));
-            let QueryValue::PreparedTypePlan(plan) = prepared.value.as_ref() else {
-                return QueryPoll::Ready(Err(fault(
-                    "annotation prepared Type plan variant differs",
-                )));
+            let query=QueryKey::PreparedBodyTypeApplication(key.clone());
+            let prepared=ready!(db.fetch(&SyntaxProvider,query.clone()));
+            let QueryValue::PreparedBodyTypeApplication(application)=prepared.value.as_ref()else{
+                return QueryPoll::Ready(Err(fault("annotation Type application variant differs")));
             };
-            if !prepared.cacheable {
-                return QueryPoll::Ready(Err(fault(
-                    "annotation Type dependencies are not retained",
-                )));
+            if !prepared.cacheable || application.key()!=&key {
+                return QueryPoll::Ready(Err(fault("annotation Type application is not retained")));
             }
-            guards.push(Arc::clone(plan.guard()));
-            let source = plan.goal().source_type();
-            if let Some(primitive) = source.primitive() {
-                WrittenType::Primitive(primitive)
-            } else if matches!(source.source(), TyTerm::Str) {
-                WrittenType::Str
-            } else if matches!(source.source(), TyTerm::Nominal(_, args) if args.is_empty()) {
-                WrittenType::Nominal(Box::new(source.clone()))
-            } else {
-                return QueryPoll::Ready(Err(unsupported(
-                    "local annotation Type requires further source type integration",
-                )));
+            let owner=application.retained_plan().context().source();
+            let node=owner.index().nodes().get(key.node as usize)
+                .ok_or_else(||fault("annotation actual Type index absent"));
+            let node=match node{Ok(node)=>node,Err(error)=>return QueryPoll::Ready(Err(error))};
+            let (Some(start),Some(end))=(owner.body().range.start.checked_add(node.range.start),owner.body().range.start.checked_add(node.range.end))else{
+                return QueryPoll::Ready(Err(fault("annotation Type range overflow")));
+            };
+            let source=match application.source_for(owner.index(),&key,crate::syntax::spans::SourceRange{start,end}){
+                Ok(Some(source))=>source,Ok(None)=>return QueryPoll::Ready(Err(unsupported("annotation Type application requires actual source preparation"))),
+                Err(error)=>return QueryPoll::Ready(Err(error)),
+            };
+            let guard=Arc::new(ready!(db.prepare_input_guard(&SyntaxProvider,&query,prepared.fingerprint)));
+            if let Err(error)=guard.require_current(db){return QueryPoll::Ready(Err(error));}
+            guards.push(guard);
+            use crate::frontend::explicit_type_arguments::ExplicitType;
+            match source {
+                ExplicitType::Selected(source)=>{
+                    if let Some(primitive)=source.primitive(){WrittenType::Primitive(primitive)}
+                    else if matches!(source.source(),TyTerm::Str){WrittenType::Str}
+                    else if matches!(source.source(),TyTerm::Nominal(_,args)if args.is_empty()){
+                        WrittenType::Nominal(Box::new(source.clone()))
+                    }else{return QueryPoll::Ready(Err(unsupported("local annotation Type requires further source integration")));}
+                }
+                ExplicitType::Written{written,..}=>written.as_ref().clone(),
+                ExplicitType::Parameter(_)|ExplicitType::FrameTemplate{..}=>return QueryPoll::Ready(Err(unsupported("annotation Type parameter requires its owning frame hint"))),
             }
         }
         // `()` is the unit primitive, the one canonical spelling.

@@ -10,9 +10,7 @@ use crate::{
     db::{memo::Database, poll::QueryPoll},
     frontend::{
         entered_call_goals::{EnteredGenericArgument, written_argument},
-        source_locals::{
-            PreparedSourceLocalPlan, owned_plan::source_value_goals::EnteredValueGoal,
-        },
+        source_locals::PreparedSourceLocalPlan,
     },
     ir::pc::{NodeId, PcKey, Phase},
     syntax::{
@@ -133,9 +131,10 @@ impl StableEncode for AssociatedConstPathOccurrence {
 /// not that an associated constant or source Type was absent.
 pub(crate) fn prepare_occurrence(
     db: &mut Database,
-    value: &EnteredValueGoal,
+    plan: &Arc<PreparedSourceLocalPlan>,
+    key: &PcKey,
 ) -> QueryPoll<Option<AssociatedConstPathOccurrence>> {
-    let plan = Arc::clone(value.retained_plan());
+    let plan = Arc::clone(plan);
     match plan.require_current(db) {
         QueryPoll::Ready(Ok(())) => {}
         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -143,7 +142,6 @@ pub(crate) fn prepare_occurrence(
     }
     QueryPoll::Ready((|| {
         let source = plan.context().source();
-        let key = value.key();
         let node = NodeId(key.node);
         if key.phase != 0
             || source.body().key() != key.body
@@ -350,7 +348,7 @@ impl PreparedAssociatedItemQualifier {
     }
 }
 impl StableEncode for PreparedAssociatedItemQualifier {
-    const DOMAIN: &'static str = "lrr/v2/prepared-associated-item-qualifier";
+    const DOMAIN: &'static str = "lrr/v4/prepared-associated-item-qualifier";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.digest(self.plan.source_identity());
@@ -387,19 +385,13 @@ pub(crate) fn prepare(
             }
         };
     }
-    let selected = polled!(db.fetch(&SyntaxProvider, QueryKey::EnteredValue(key.clone())));
-    let QueryValue::EnteredValue(value) = selected.value.as_ref() else {
-        return QueryPoll::Ready(Err(fault(
-            "associated qualifier Value query variant differs",
-        )));
-    };
-    if !selected.cacheable || value.key() != key {
-        return QueryPoll::Ready(Err(fault(
-            "associated qualifier owning Value is not retained",
-        )));
+    let selected = polled!(db.fetch(&SyntaxProvider,QueryKey::SourceLocalPlan(key.body.clone())));
+    let QueryValue::SourceLocalPlan(plan)=selected.value.as_ref()else{return QueryPoll::Ready(Err(fault("associated qualifier source plan variant differs")));};
+    if !selected.cacheable || plan.context().source().index().body()!=&key.body {
+        return QueryPoll::Ready(Err(fault("associated qualifier actual source body differs")));
     }
-    let plan = Arc::clone(value.retained_plan());
-    let occurrence = polled!(prepare_occurrence(db, value));
+    let plan=Arc::clone(plan);
+    let occurrence=polled!(prepare_occurrence(db,&plan,key));
     let mut source = None;
     let mut trait_qualifier = None;
     let mut anchor_traits = None;
@@ -549,89 +541,17 @@ fn prepare_named_qualifier(
     db: &mut Database,
     plan: &Arc<PreparedSourceLocalPlan>,
     node: NodeId,
-) -> QueryPoll<(
-    Option<crate::frontend::explicit_type_arguments::ExplicitType>,
-    Option<Digest>,
-)> {
-    use crate::{
-        db::{key::QueryKey, provider::SyntaxProvider, value::QueryValue},
-        frontend::{
-            explicit_type_arguments::ExplicitType,
-            source_locals::owned_plan::{NamedTypeOutcome, type_declarations::BodyTypeDemand},
-            source_types::NamedTypePreparation,
-        },
-        traits::term::TyTerm,
+) -> QueryPoll<(Option<crate::frontend::explicit_type_arguments::ExplicitType>,Option<Digest>)> {
+    use crate::db::{key::QueryKey,provider::SyntaxProvider,value::QueryValue};
+    let key=match plan.context().source().index().pc(node,Phase::Entry){Ok(key)=>key,Err(error)=>return QueryPoll::Ready(Err(error))};
+    let selected=match db.fetch(&SyntaxProvider,QueryKey::PreparedBodyTypeApplication(key.clone())){
+        QueryPoll::Ready(Ok(value))=>value,QueryPoll::Ready(Err(error))=>return QueryPoll::Ready(Err(error)),QueryPoll::NeedInput(input)=>return QueryPoll::NeedInput(input),
     };
-    macro_rules! polled {
-        ($value:expr) => {
-            match $value {
-                QueryPoll::Ready(Ok(value)) => value,
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-            }
-        };
+    let QueryValue::PreparedBodyTypeApplication(application)=selected.value.as_ref()else{return QueryPoll::Ready(Err(fault("named qualifier application query variant differs")));};
+    if !selected.cacheable || application.key()!=&key || !Arc::ptr_eq(application.retained_plan().context(),plan.context()) {
+        return QueryPoll::Ready(Err(fault("named qualifier actual source application differs")));
     }
-    let mut trait_qualifier = None;
-    let outcome = polled!(plan.prepare_named_body_type_outcome(db, node));
-    let prepared = match outcome {
-        NamedTypeOutcome::Ready(value) => Some(value),
-        NamedTypeOutcome::Pending { demand, .. } => {
-            if let BodyTypeDemand::TypeRecipe(identity) = demand {
-                if let Some(environment) = plan.environment() {
-                    let members = match environment.macros().source_environment().member_index() {
-                        Ok(members) => members,
-                        Err(error) => return QueryPoll::Ready(Err(error)),
-                    };
-                    if members.is_trait(identity) {
-                        trait_qualifier = Some(identity);
-                    }
-                }
-            }
-            None
-        }
-    };
-    let source = match prepared {
-        Some(NamedTypePreparation::Ready(actual)) => {
-            let generic = match actual.source() {
-                TyTerm::Nominal(identity, _) => {
-                    let captured =
-                        polled!(db.fetch(&SyntaxProvider, QueryKey::TypeSchema(*identity)));
-                    let QueryValue::TypeSchema(schema) = captured.value.as_ref() else {
-                        return QueryPoll::Ready(Err(fault(
-                            "associated qualifier schema variant differs",
-                        )));
-                    };
-                    !schema.generics.is_empty()
-                }
-                _ => false,
-            };
-            (!generic).then(|| ExplicitType::Selected(actual.clone()))
-        }
-        Some(NamedTypePreparation::Parameter(parameter)) => {
-            Some(ExplicitType::Parameter(TyTerm::Param(parameter)))
-        }
-        Some(NamedTypePreparation::Alias(crate::frontend::type_aliases::AliasTarget::Type(
-            TyTerm::Primitive(primitive),
-        ))) => match crate::frontend::source_types::SourceType::selected_primitive(primitive) {
-            Ok(source) => Some(ExplicitType::Selected(source)),
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        },
-        Some(NamedTypePreparation::Alias(crate::frontend::type_aliases::AliasTarget::Str)) => {
-            match crate::frontend::source_types::SourceType::selected_str() {
-                Ok(source) => Some(ExplicitType::Selected(source)),
-                Err(error) => return QueryPoll::Ready(Err(error)),
-            }
-        }
-        Some(NamedTypePreparation::Alias(crate::frontend::type_aliases::AliasTarget::Type(term))) => {
-            let Some(environment)=plan.environment()else{return QueryPoll::Ready(Err(fault("alias qualifier environment absent")));};
-            let completed=environment.macros().source_environment();
-            let sources=completed.sources().iter().collect::<Vec<_>>();
-            polled!(crate::frontend::written_terms::closed_written_type(db,&sources,&term))
-                .map(|written|ExplicitType::Written {term,written:Arc::new(written)})
-        }
-        _ => None,
-    };
-    QueryPoll::Ready(Ok((source, trait_qualifier)))
+    QueryPoll::Ready(Ok((application.source().cloned(),application.trait_qualifier())))
 }
 
 /// The declared member scope of a source parameter, without inspecting the
