@@ -53,6 +53,19 @@ impl RunMachine {
     ) -> QueryPoll<()> {
         use crate::frontend::nominal_member_goals::{NominalMemberKey, NominalMemberSelection};
         use crate::traits::term::{GenericArg, TyTerm};
+        // An open source application is prepared by the ordinary component
+        // service. Never execute it by treating alias declaration Params as
+        // calling-frame Params or dropping its fixed/repeated relationships.
+        if source.prepared().application().is_some_and(|application|application.is_open()) {
+            let context=match self.constructor_context(self.frame.pc().node) {
+                Ok(context)=>context.or_else(||stated.and_then(|written|written.source())),
+                Err(error)=>return QueryPoll::Ready(Err(error)),
+            };
+            let ready=context.map(|context|self.frame.bound_view(&context,&self.store))
+                .is_some_and(|context|matches!(&context,TyTerm::Nominal(owner,_)if *owner==source.prepared().mapping().definition())
+                    && crate::frontend::call_contracts::closed_term(&context));
+            if !ready {return QueryPoll::Ready(Err(unsupported("record source application requires its inferred result Type context")));}
+        }
         if source.prepared().bound().is_some() {
             return QueryPoll::Ready(
                 self.frame

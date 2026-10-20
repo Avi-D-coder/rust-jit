@@ -1,0 +1,1220 @@
+{
+  "schema": "lrr/source-checkpoint-evidence/v1",
+  "recorded_at": "2026-10-20T01:33:22.316427+00:00",
+  "status": "held_component",
+  "claim": "LOCAL-049",
+  "tasks": [
+    "M018",
+    "T040"
+  ],
+  "baseline": "4b525bc40a671cffb757aa4fae78d4376ca8ca2a",
+  "source_sha256": "047646536d1ba4e083ca79d30d7d0d958aa6c4ed9f0362a0ad09059d3fbd617b",
+  "source_files": {
+    "crates/lrr/src/cli/preentry_loader_tests.rs": "eb6367630ebfbc12fbe3e7c2e4517fc3aa1bb6ab16e4021361fae9ecf3b77ac7",
+    "crates/lrr/src/engine/run_constructors.rs": "e2a90fe808aa28383d8154bc676a0db19514fce672166e7215e7a092c59f2e9c",
+    "crates/lrr/src/frontend/binding_constraint_nominal.rs": "17a0bc9d1ce3a6001d1721a81d9ed9eda0bee870f39bc5accf824eb64053997d",
+    "crates/lrr/src/frontend/binding_constraint_open.rs": "f1f574e80da875cb33d11d30eec29dcc41e8bfd8ee9653463dd1f36ee44151bd",
+    "crates/lrr/src/frontend/constructors.rs": "d26c7cbc3e2f8be4a6c6270bfbd93d6a609725e4600134b1d47f224c465f1cd0",
+    "crates/lrr/src/frontend/pattern_names.rs": "ee6759f2bf31cb3bb1945977a9b136da57fc256dd24fac479f1ce838c7246f3c",
+    "crates/lrr/src/frontend/prepared_constructors.rs": "2b5a7f3a2aba2470d7095619e81a766388afadb39ca448211995deebd1359336",
+    "crates/lrr/src/frontend/source_types.rs": "b6b63ec5c39865c22d24e0c26547263b8fe6f0c645d29b253c5bec4d17ba4781"
+  },
+  "summary": "V406 HELD M018/T040 retained open source Type applications. prepare_alias_application completes missing Type inputs with actual alias declaration ParamKeys, then reuses the same AliasNormalizer/retained Type walk/mixed Substitution finalizer. SourceTypeApplication preserves the entire fixed/repeated/permuted/compound target and unresolved keys separately from runtime caller bindings. BoundRecordConstructor and SourcePatternName retain it; record/pattern constraints feed existing project_parametric/parameter_paths/component relations and OpenShape into the existing solver and ordinary result-hint lowering. Installed execution reads retained context and refuses unsolved applications; VM matching/construction remain unchanged. Both macOS1.99.0 builds and15/15selected controls pass under exact source/HEAD/binary guards:36record bindings,36pattern selections and12actual u8,char source inferences across4editions/3origins, memo reuse, source withdrawal, ordinary constructor/constraint/cold/guard/exact-once controls. Unchanged struct-aliases.rs now completes961VMdispatches with complete unit/empty streams/cleanup captures in every edition(parent fails247 at inferred S4). This is1new distinct upstream runtime-contract pass across4edition rows; not4new fixtures or a refreshed suite total. Other4static-method alias rows remain9dispatches/1call at lexical-callee integration. Missing const/default alias inputs, rewritten nested-pattern projection prefixes and unexecuted repeated/permuted/compound matrix entries remain held. Upstream solver source clients/root/member/VM integration, legacy routes and all task/milestone/interpreter/JIT/Linux/full-fixture/diagnostic/tooling/performance gates remain open.",
+  "binaries": {
+    "test": {
+      "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+      "sha256": "267e43942a04152433f4d26440119f585905615062c742dd46fdfb03069fae34"
+    },
+    "cli": {
+      "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+      "sha256": "42b3f720163f27bcdc2d2de559deed2492d0dd99a6dbecb4ed939abb8b0ceffa"
+    }
+  },
+  "validation": {
+    "local_outputs": "artifacts/validation-current-v406",
+    "phases": {
+      "before": {
+        "time_utc": "2026-10-20T01:28:34.126642+00:00",
+        "head": "4b525bc40a671cffb757aa4fae78d4376ca8ca2a",
+        "source_sha256": "047646536d1ba4e083ca79d30d7d0d958aa6c4ed9f0362a0ad09059d3fbd617b",
+        "manifest_sha256": "60edcf8ac82faf1a72a2d776808a10c99565f04a0544de317826b7b8d5b57e4e"
+      },
+      "after-build": {
+        "time_utc": "2026-10-20T01:30:01.824190+00:00",
+        "head": "4b525bc40a671cffb757aa4fae78d4376ca8ca2a",
+        "source_sha256": "047646536d1ba4e083ca79d30d7d0d958aa6c4ed9f0362a0ad09059d3fbd617b",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "manifest_sha256": "11af95ab29fa52de3c7b78c47de69e76d186dddd22033b696e85e3d85ad80bbe"
+      },
+      "after-runtime": {
+        "time_utc": "2026-10-20T01:32:33.238554+00:00",
+        "head": "4b525bc40a671cffb757aa4fae78d4376ca8ca2a",
+        "source_sha256": "047646536d1ba4e083ca79d30d7d0d958aa6c4ed9f0362a0ad09059d3fbd617b",
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "binaries_match_build": true,
+        "manifest_sha256": "3d83488e83a7d7abb5b9c7be73227124501a9f81c7492c15df6da79e6c2851e3"
+      }
+    },
+    "builds": {
+      "lib-build": {
+        "outer_exit": 0,
+        "build_finished": [
+          {
+            "reason": "build-finished",
+            "success": true
+          }
+        ],
+        "jsonl_sha256": "a455eb1add16f900c10c096512d6c3bebe39f3bb2c49b5b90d86781c05da2ad8"
+      },
+      "cli-build": {
+        "outer_exit": 0,
+        "build_finished": [
+          {
+            "reason": "build-finished",
+            "success": true
+          }
+        ],
+        "jsonl_sha256": "5958451dbc1229140f08177ef049bb1e625b0b20daa6e1be641b5f7d5535a119"
+      }
+    },
+    "controls_outer_exit": 0,
+    "controls": [
+      {
+        "selector": "cli::preentry_loader_tests::unchanged_record_aliases_retain_actual_target_arguments_all_editions_and_origins",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+          "cli::preentry_loader_tests::unchanged_record_aliases_retain_actual_target_arguments_all_editions_and_origins",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 32.535,
+        "log": "control-0.log",
+        "log_sha256": "98b22caa080ff2015e3985c9192306ebe20aa983cb08e7e8dc21935c39164bec"
+      },
+      {
+        "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::stock_records_share_one_binding_between_query_and_repeated_installed_lookup_all_editions",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+          "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::stock_records_share_one_binding_between_query_and_repeated_installed_lookup_all_editions",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 1.058,
+        "log": "control-1.log",
+        "log_sha256": "5352f61bfdf31a959ce1c901e427c807de57246589468c2df06aa7555b895955"
+      },
+      {
+        "selector": "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::installed_record_rejects_revoked_owning_epoch_without_replanning",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+          "frontend::source_locals::owned_plan::field_types::tests::prepared_constructor_tests::installed_record_rejects_revoked_owning_epoch_without_replanning",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 0.526,
+        "log": "control-2.log",
+        "log_sha256": "b1d5341dfe2a5a59420c7c6b56dece32b7b87087dd1b3ee8b3a042a4f19d400d"
+      },
+      {
+        "selector": "frontend::source_locals::owned_plan::field_types::tests::binding_constraint_tests::nominal_fields_constructors_and_patterns_relate_declared_field_types",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+          "frontend::source_locals::owned_plan::field_types::tests::binding_constraint_tests::nominal_fields_constructors_and_patterns_relate_declared_field_types",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 1.552,
+        "log": "control-3.log",
+        "log_sha256": "2c0ba223fe5d4c2598a37a80d40a5515787b4ceed15e569b0e2983746817c11f"
+      },
+      {
+        "selector": "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+          "cli::crate_graph::builtin_derive_tests::explicit_constructor_arguments_share_context_and_activation_across_origins",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 24.934,
+        "log": "control-4.log",
+        "log_sha256": "4002b72f04eb1cc3d1f2dabe07fe5a6d516becf392144b123d2ba9d216fe2ae6"
+      },
+      {
+        "selector": "cli::type_preparation::tests::unchanged_local_record_main_uses_ordinary_construct_project_and_assign_all_editions",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+          "cli::type_preparation::tests::unchanged_local_record_main_uses_ordinary_construct_project_and_assign_all_editions",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 0.758,
+        "log": "control-5.log",
+        "log_sha256": "846586814f9c951e440028bf02f0108c5831db9bd9ff9abeceb7fd2c1c85400f"
+      },
+      {
+        "selector": "cli::preentry_loader_tests::unchanged_lifetime_aliases_use_retained_target_ast_and_mixed_substitution_all_editions_and_origins",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+          "cli::preentry_loader_tests::unchanged_lifetime_aliases_use_retained_target_ast_and_mixed_substitution_all_editions_and_origins",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 27.754,
+        "log": "control-6.log",
+        "log_sha256": "6eb6280773e8ff7523378701856c37f9b55e55ac5353bb27d80e524f869dc042"
+      },
+      {
+        "selector": "cli::preentry_loader_tests::unchanged_pattern_aliases_share_actual_source_selection_all_editions_and_origins",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+          "cli::preentry_loader_tests::unchanged_pattern_aliases_share_actual_source_selection_all_editions_and_origins",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 29.738,
+        "log": "control-7.log",
+        "log_sha256": "3e3d82809e61635e28b9837741de5ef6380980f134c7ab95ea2e0eeb11bb450f"
+      },
+      {
+        "selector": "cli::reached_pattern_nominal_tests::nested_nominal_pattern_goals_keep_each_actual_application_and_scrutinee_once",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+          "cli::reached_pattern_nominal_tests::nested_nominal_pattern_goals_keep_each_actual_application_and_scrutinee_once",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 5.121,
+        "log": "control-8.log",
+        "log_sha256": "3d90ac63d8058b9b35900da1b3d4108aab017c484554e29d8aeeefc0a20d30da"
+      },
+      {
+        "selector": "engine::run::pattern_tests::rustc_range_originals_execute_through_the_shared_matcher",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+          "engine::run::pattern_tests::rustc_range_originals_execute_through_the_shared_matcher",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 0.388,
+        "log": "control-9.log",
+        "log_sha256": "f494bb47ba46f192f970f2e71885f9db758c96a1901c7db7de24f8ee3268021b"
+      },
+      {
+        "selector": "engine::run::pattern_tests::unreached_arms_keep_unsupported_patterns_and_results_cold",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+          "engine::run::pattern_tests::unreached_arms_keep_unsupported_patterns_and_results_cold",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 0.382,
+        "log": "control-10.log",
+        "log_sha256": "4cdf1406fab6249c3cd61dbf7a4a8dcb3072120424cfedce7decced7bd2f6ebf"
+      },
+      {
+        "selector": "engine::run::pattern_tests::nominal_constructor_patterns_share_the_matcher_across_owner_kinds",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+          "engine::run::pattern_tests::nominal_constructor_patterns_share_the_matcher_across_owner_kinds",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 4.85,
+        "log": "control-11.log",
+        "log_sha256": "efc551f34467b8801d476cfed709a5d9adf16bf02b3c724d00a372c4255bf5da"
+      },
+      {
+        "selector": "engine::run::pattern_tests::false_guard_retries_later_alternatives_of_the_same_arm_without_replaying_the_scrutinee",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+          "engine::run::pattern_tests::false_guard_retries_later_alternatives_of_the_same_arm_without_replaying_the_scrutinee",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 0.385,
+        "log": "control-12.log",
+        "log_sha256": "766f896ac14b9e0b72df4179ebd67c5f0b651e52507795ef136d5ee984603a1c"
+      },
+      {
+        "selector": "service::common_pattern_route_tests::changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+          "service::common_pattern_route_tests::changing_only_a_cold_pattern_result_to_a_source_call_keeps_it_unprepared",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 1.187,
+        "log": "control-13.log",
+        "log_sha256": "a2b036fdae69c016314ed885362bc472d22ea798601a5954a251f4deea0e83d1"
+      },
+      {
+        "selector": "frontend::callables::entered_module::tests::canonical_module_projection_rejects_rebound_source_header_context_and_namespace",
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+          "frontend::callables::entered_module::tests::canonical_module_projection_rejects_rebound_source_header_context_and_namespace",
+          "--exact",
+          "--nocapture",
+          "--test-threads=1"
+        ],
+        "exit": 0,
+        "one_body": true,
+        "inputs_unchanged": true,
+        "pass": true,
+        "seconds": 0.726,
+        "log": "control-14.log",
+        "log_sha256": "7e38295a845c20e6d5512a16043208b1ab0cb101a691a2755e2ce768a1adca7d"
+      }
+    ],
+    "runtime_observer_outer_exit": 0,
+    "runtime_rows": [
+      {
+        "path": "tests/ui/type-alias/static-method-type-alias-11047.rs",
+        "edition": 2015,
+        "sha256": "bbd1a7b205e796bf377489b0c151ee14988c8beaac045d32c77f12403d9ff68b",
+        "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+        "directives": [
+          "//@ run-pass"
+        ],
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/type-alias/static-method-type-alias-11047.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "46c85cc996ebd014dd3012d76b1ae95e456cb6dfac7a21bf229b52e6eb2b11e4"
+        ],
+        "environment": {
+          "LRR_EMBEDDED_FACADE": "1"
+        },
+        "exit": 2,
+        "seconds": 5.059,
+        "inputs_unchanged": true,
+        "runtime_contract_pass": false,
+        "capture_complete": false,
+        "guest": {
+          "status": "unobserved",
+          "stdout": null,
+          "stderr": null
+        },
+        "expected_stdout_bytes": [],
+        "expected_stderr_bytes": [],
+        "facts": {
+          "classified_operation_candidates": 12,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 1,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 1,
+          "vm_dispatches": 9,
+          "vm_outcomes": 8
+        },
+        "terminal": {
+          "code": "LRR-E-UNSUPPORTED",
+          "message": "lexical item callee requires body namespace integration",
+          "phase": "executor",
+          "status": "fault"
+        },
+        "stdout_sha256": "e27f7d3fa2edb0fcaa8c811435dd57f80904234fe065c0d5622638229ab8e76e",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "tests/ui/type-alias/static-method-type-alias-11047.rs",
+        "edition": 2018,
+        "sha256": "bbd1a7b205e796bf377489b0c151ee14988c8beaac045d32c77f12403d9ff68b",
+        "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+        "directives": [
+          "//@ run-pass"
+        ],
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2018",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/type-alias/static-method-type-alias-11047.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "d55a4350119acb60ad3cb751a42f54f502e9fb02ebd82cc57fe2e372b8a7089a"
+        ],
+        "environment": {
+          "LRR_EMBEDDED_FACADE": "1"
+        },
+        "exit": 2,
+        "seconds": 4.072,
+        "inputs_unchanged": true,
+        "runtime_contract_pass": false,
+        "capture_complete": false,
+        "guest": {
+          "status": "unobserved",
+          "stdout": null,
+          "stderr": null
+        },
+        "expected_stdout_bytes": [],
+        "expected_stderr_bytes": [],
+        "facts": {
+          "classified_operation_candidates": 12,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 1,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 1,
+          "vm_dispatches": 9,
+          "vm_outcomes": 8
+        },
+        "terminal": {
+          "code": "LRR-E-UNSUPPORTED",
+          "message": "lexical item callee requires body namespace integration",
+          "phase": "executor",
+          "status": "fault"
+        },
+        "stdout_sha256": "c3d3c1ff70760100415896f545616622c7827eefa06ab770c697a119fa9e226c",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "tests/ui/type-alias/static-method-type-alias-11047.rs",
+        "edition": 2021,
+        "sha256": "bbd1a7b205e796bf377489b0c151ee14988c8beaac045d32c77f12403d9ff68b",
+        "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+        "directives": [
+          "//@ run-pass"
+        ],
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2021",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/type-alias/static-method-type-alias-11047.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "a53e5a24bb20e3434842a4d5a1d9d7dbfda2a42870268e3165a422a0b3712b77"
+        ],
+        "environment": {
+          "LRR_EMBEDDED_FACADE": "1"
+        },
+        "exit": 2,
+        "seconds": 4.071,
+        "inputs_unchanged": true,
+        "runtime_contract_pass": false,
+        "capture_complete": false,
+        "guest": {
+          "status": "unobserved",
+          "stdout": null,
+          "stderr": null
+        },
+        "expected_stdout_bytes": [],
+        "expected_stderr_bytes": [],
+        "facts": {
+          "classified_operation_candidates": 12,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 1,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 1,
+          "vm_dispatches": 9,
+          "vm_outcomes": 8
+        },
+        "terminal": {
+          "code": "LRR-E-UNSUPPORTED",
+          "message": "lexical item callee requires body namespace integration",
+          "phase": "executor",
+          "status": "fault"
+        },
+        "stdout_sha256": "c48080d345b7ecb5f477333210c31ad1f3be8314c93419c27a20683b1c5155e4",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "tests/ui/type-alias/static-method-type-alias-11047.rs",
+        "edition": 2024,
+        "sha256": "bbd1a7b205e796bf377489b0c151ee14988c8beaac045d32c77f12403d9ff68b",
+        "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+        "directives": [
+          "//@ run-pass"
+        ],
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2024",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/type-alias/static-method-type-alias-11047.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "bc14d62b07c600511f3915500da8945097bc22793c5db502e7dbadf348b695e7"
+        ],
+        "environment": {
+          "LRR_EMBEDDED_FACADE": "1"
+        },
+        "exit": 2,
+        "seconds": 4.096,
+        "inputs_unchanged": true,
+        "runtime_contract_pass": false,
+        "capture_complete": false,
+        "guest": {
+          "status": "unobserved",
+          "stdout": null,
+          "stderr": null
+        },
+        "expected_stdout_bytes": [],
+        "expected_stderr_bytes": [],
+        "facts": {
+          "classified_operation_candidates": 12,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 1,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 1,
+          "vm_dispatches": 9,
+          "vm_outcomes": 8
+        },
+        "terminal": {
+          "code": "LRR-E-UNSUPPORTED",
+          "message": "lexical item callee requires body namespace integration",
+          "phase": "executor",
+          "status": "fault"
+        },
+        "stdout_sha256": "09f572ff1bfba08d8fa71e1c7d847853b0a16f64a1077bb5b500694acb546e5f",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "tests/ui/structs-enums/struct-aliases.rs",
+        "edition": 2015,
+        "sha256": "8da894106e96817d0e10bea2b1668090bd62f661804742b32ff0d474ccb59ab3",
+        "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+        "directives": [
+          "//@ run-pass"
+        ],
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/structs-enums/struct-aliases.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "7efb6b5fca2931e900ad29c1a2fe43e1a19f8ef77af0e334ad6b34a551f393ba"
+        ],
+        "environment": {
+          "LRR_EMBEDDED_FACADE": "1"
+        },
+        "exit": 0,
+        "seconds": 5.474,
+        "inputs_unchanged": true,
+        "runtime_contract_pass": true,
+        "capture_complete": true,
+        "guest": {
+          "status": "closed_no_external_effects_observed",
+          "stdout": [],
+          "stderr": []
+        },
+        "expected_stdout_bytes": [],
+        "expected_stderr_bytes": [],
+        "facts": {
+          "classified_operation_candidates": 1952,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 4,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 961,
+          "vm_outcomes": 961
+        },
+        "terminal": {
+          "installed_lrir_bytes": 4237298,
+          "installed_recipes": 388,
+          "live_edition": 2015,
+          "opcode_counters": {
+            "backedge_polls": 0,
+            "backedges_completed": 0,
+            "cleanup_elements_completed": 170,
+            "exits_completed": 394,
+            "fuel_used": 1126,
+            "operations_completed": 562,
+            "operations_started": 562,
+            "panic_scopes_cleaned": 0,
+            "return_scopes_cleaned": 3,
+            "started_by_opcode": [
+              14,
+              12,
+              35,
+              39,
+              81,
+              78,
+              0,
+              3,
+              0,
+              22,
+              8,
+              8,
+              0,
+              63,
+              0,
+              0,
+              0,
+              8,
+              0,
+              4,
+              2,
+              2,
+              4,
+              4,
+              0,
+              0,
+              0,
+              11,
+              22,
+              11,
+              27,
+              18,
+              16,
+              0,
+              0,
+              0,
+              0,
+              0,
+              2,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              44,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              16,
+              0,
+              8,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "schema": "lrr/v2/development-run",
+          "semantics_profile": "lrr-2024-v2",
+          "status": "completed",
+          "value": {
+            "kind": "unit"
+          }
+        },
+        "stdout_sha256": "07130fe4f2efabbb1e4e23a015f18cf6d35a6c23ccce256d6e971ed765e2f439",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "tests/ui/structs-enums/struct-aliases.rs",
+        "edition": 2018,
+        "sha256": "8da894106e96817d0e10bea2b1668090bd62f661804742b32ff0d474ccb59ab3",
+        "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+        "directives": [
+          "//@ run-pass"
+        ],
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2018",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/structs-enums/struct-aliases.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "a149b26241b1108b40c3b7bd6365d3983c3ee41ace263d32fb1464d26ad388b9"
+        ],
+        "environment": {
+          "LRR_EMBEDDED_FACADE": "1"
+        },
+        "exit": 0,
+        "seconds": 5.904,
+        "inputs_unchanged": true,
+        "runtime_contract_pass": true,
+        "capture_complete": true,
+        "guest": {
+          "status": "closed_no_external_effects_observed",
+          "stdout": [],
+          "stderr": []
+        },
+        "expected_stdout_bytes": [],
+        "expected_stderr_bytes": [],
+        "facts": {
+          "classified_operation_candidates": 1952,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 4,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 961,
+          "vm_outcomes": 961
+        },
+        "terminal": {
+          "installed_lrir_bytes": 4237298,
+          "installed_recipes": 388,
+          "live_edition": 2018,
+          "opcode_counters": {
+            "backedge_polls": 0,
+            "backedges_completed": 0,
+            "cleanup_elements_completed": 170,
+            "exits_completed": 394,
+            "fuel_used": 1126,
+            "operations_completed": 562,
+            "operations_started": 562,
+            "panic_scopes_cleaned": 0,
+            "return_scopes_cleaned": 3,
+            "started_by_opcode": [
+              14,
+              12,
+              35,
+              39,
+              81,
+              78,
+              0,
+              3,
+              0,
+              22,
+              8,
+              8,
+              0,
+              63,
+              0,
+              0,
+              0,
+              8,
+              0,
+              4,
+              2,
+              2,
+              4,
+              4,
+              0,
+              0,
+              0,
+              11,
+              22,
+              11,
+              27,
+              18,
+              16,
+              0,
+              0,
+              0,
+              0,
+              0,
+              2,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              44,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              16,
+              0,
+              8,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "schema": "lrr/v2/development-run",
+          "semantics_profile": "lrr-2024-v2",
+          "status": "completed",
+          "value": {
+            "kind": "unit"
+          }
+        },
+        "stdout_sha256": "5a4f7ed571316d11c0051fe701c57b4b680bf21d8440a904f7cd763fd67104a4",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "tests/ui/structs-enums/struct-aliases.rs",
+        "edition": 2021,
+        "sha256": "8da894106e96817d0e10bea2b1668090bd62f661804742b32ff0d474ccb59ab3",
+        "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+        "directives": [
+          "//@ run-pass"
+        ],
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2021",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/structs-enums/struct-aliases.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "8eb2513b785f694f5f6d2ddf421b41324c2531d634564b0d03227951a11fe3d4"
+        ],
+        "environment": {
+          "LRR_EMBEDDED_FACADE": "1"
+        },
+        "exit": 0,
+        "seconds": 5.994,
+        "inputs_unchanged": true,
+        "runtime_contract_pass": true,
+        "capture_complete": true,
+        "guest": {
+          "status": "closed_no_external_effects_observed",
+          "stdout": [],
+          "stderr": []
+        },
+        "expected_stdout_bytes": [],
+        "expected_stderr_bytes": [],
+        "facts": {
+          "classified_operation_candidates": 1952,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 4,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 961,
+          "vm_outcomes": 961
+        },
+        "terminal": {
+          "installed_lrir_bytes": 4257426,
+          "installed_recipes": 388,
+          "live_edition": 2021,
+          "opcode_counters": {
+            "backedge_polls": 0,
+            "backedges_completed": 0,
+            "cleanup_elements_completed": 170,
+            "exits_completed": 394,
+            "fuel_used": 1126,
+            "operations_completed": 562,
+            "operations_started": 562,
+            "panic_scopes_cleaned": 0,
+            "return_scopes_cleaned": 3,
+            "started_by_opcode": [
+              14,
+              12,
+              35,
+              39,
+              81,
+              78,
+              0,
+              3,
+              0,
+              22,
+              8,
+              8,
+              0,
+              63,
+              0,
+              0,
+              0,
+              8,
+              0,
+              4,
+              2,
+              2,
+              4,
+              4,
+              0,
+              0,
+              0,
+              11,
+              22,
+              11,
+              27,
+              18,
+              16,
+              0,
+              0,
+              0,
+              0,
+              0,
+              2,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              44,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              16,
+              0,
+              8,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "schema": "lrr/v2/development-run",
+          "semantics_profile": "lrr-2024-v2",
+          "status": "completed",
+          "value": {
+            "kind": "unit"
+          }
+        },
+        "stdout_sha256": "684e18a708da9f1a01fcb2a70233f42da887cbdc2d15ee474140cbb2e6cd44b0",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "tests/ui/structs-enums/struct-aliases.rs",
+        "edition": 2024,
+        "sha256": "8da894106e96817d0e10bea2b1668090bd62f661804742b32ff0d474ccb59ab3",
+        "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+        "directives": [
+          "//@ run-pass"
+        ],
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2024",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/structs-enums/struct-aliases.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "e0c1bd45ea6aaad6f7ea706f92bea4004cbb39c412eb4dbc7bd9733388009c73"
+        ],
+        "environment": {
+          "LRR_EMBEDDED_FACADE": "1"
+        },
+        "exit": 0,
+        "seconds": 5.882,
+        "inputs_unchanged": true,
+        "runtime_contract_pass": true,
+        "capture_complete": true,
+        "guest": {
+          "status": "closed_no_external_effects_observed",
+          "stdout": [],
+          "stderr": []
+        },
+        "expected_stdout_bytes": [],
+        "expected_stderr_bytes": [],
+        "facts": {
+          "classified_operation_candidates": 1952,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 4,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 961,
+          "vm_outcomes": 961
+        },
+        "terminal": {
+          "installed_lrir_bytes": 4257426,
+          "installed_recipes": 388,
+          "live_edition": 2024,
+          "opcode_counters": {
+            "backedge_polls": 0,
+            "backedges_completed": 0,
+            "cleanup_elements_completed": 170,
+            "exits_completed": 394,
+            "fuel_used": 1126,
+            "operations_completed": 562,
+            "operations_started": 562,
+            "panic_scopes_cleaned": 0,
+            "return_scopes_cleaned": 3,
+            "started_by_opcode": [
+              14,
+              12,
+              35,
+              39,
+              81,
+              78,
+              0,
+              3,
+              0,
+              22,
+              8,
+              8,
+              0,
+              63,
+              0,
+              0,
+              0,
+              8,
+              0,
+              4,
+              2,
+              2,
+              4,
+              4,
+              0,
+              0,
+              0,
+              11,
+              22,
+              11,
+              27,
+              18,
+              16,
+              0,
+              0,
+              0,
+              0,
+              0,
+              2,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              44,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              16,
+              0,
+              8,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "schema": "lrr/v2/development-run",
+          "semantics_profile": "lrr-2024-v2",
+          "status": "completed",
+          "value": {
+            "kind": "unit"
+          }
+        },
+        "stdout_sha256": "da1a316a99fee983263f68699cb75afa7a6c2453f4d029306aa4fb9104a1a397",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ]
+  },
+  "comparison": {
+    "parent_evidence": "worktracks/evidence/2026-10-19-v402-v405-pattern-alias-applications.json",
+    "parent_source_sha256": "00ba39daeff77500f520bfd89ccded384a09983dfe80d470735e33d4173ba5af",
+    "unchanged_fixture": "tests/ui/structs-enums/struct-aliases.rs",
+    "parent_runtime_contract_passes": 0,
+    "current_runtime_contract_passes": 4,
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "new_distinct_runtime_contract_cases": 1,
+    "suite_total_refreshed": false
+  },
+  "acceptance_reports": {
+    "upstream_runtime_acceptance": {
+      "status": "incomplete",
+      "scope": "targeted2case/8edition-row sample",
+      "passes": 4,
+      "failures": 4
+    },
+    "diagnostic_compatibility": {
+      "status": "not_executed"
+    },
+    "compiler_tooling_compatibility": {
+      "status": "not_executed"
+    },
+    "full_suite_compatibility": {
+      "status": "incomplete",
+      "full_fixture_passes_asserted": 0
+    }
+  },
+  "architecture_review": "worktracks/04-calls-source-views/2026-10-19-open-alias-review.md",
+  "reproduction": {
+    "platform": "aarch64-apple-darwin",
+    "toolchain": "1.99.0",
+    "cwd": "/Users/avi/Code/rust-jit",
+    "selection": "worktracks/04-calls-source-views/2026-10-19-pattern-alias-controls.json",
+    "runtime_runner": "worktracks/04-calls-source-views/2026-10-19-alias-runtime.py",
+    "runtime_runner_sha256": "8f1a8ffda130f8fe47a2d2c290371c52530a05b8c00d02973fbfaa2563370bf7",
+    "commands": [
+      "python3.12 tools/validation/source_manifest.py NEW_DIRECTORY before",
+      "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json > NEW_DIRECTORY/lib-build.jsonl 2> NEW_DIRECTORY/lib-build.log",
+      "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json > NEW_DIRECTORY/cli-build.jsonl 2> NEW_DIRECTORY/cli-build.log",
+      "python3.12 tools/validation/source_manifest.py NEW_DIRECTORY after-build --cargo-messages NEW_DIRECTORY/lib-build.jsonl --cli-binary target/debug/lrr",
+      "python3.12 tools/validation/run_controls.py NEW_DIRECTORY worktracks/04-calls-source-views/2026-10-19-pattern-alias-controls.json",
+      "python3.12 worktracks/04-calls-source-views/2026-10-19-alias-runtime.py NEW_DIRECTORY",
+      "python3.12 tools/validation/source_manifest.py NEW_DIRECTORY after-runtime"
+    ],
+    "workflow": "Launch long commands asynchronously; collect dependent Cargo phases; preserve source/HEAD/binaries until both runtime users terminate. Outputs are disposable."
+  }
+}

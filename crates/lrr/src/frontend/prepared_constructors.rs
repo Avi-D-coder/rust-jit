@@ -33,6 +33,7 @@ pub struct PreparedRecordConstructor {
     /// Actual nominal target Type arguments after source alias application.
     /// Runtime parameter descriptors are read only by the owning activation.
     arguments: Box<[Option<super::explicit_type_arguments::ExplicitType>]>,
+    application: Option<super::source_types::SourceTypeApplication>,
 }
 impl PreparedRecordConstructor {
     pub(crate) fn key(&self) -> &PcKey {
@@ -70,6 +71,7 @@ impl PreparedRecordConstructor {
             _ => None,
         }
     }
+    pub(crate) fn application(&self) -> Option<&super::source_types::SourceTypeApplication> {self.application.as_ref()}
     pub(crate) fn arguments(&self) -> &[Option<super::explicit_type_arguments::ExplicitType>] {
         &self.arguments
     }
@@ -121,7 +123,7 @@ impl PreparedRecordConstructor {
     }
 }
 impl StableEncode for PreparedRecordConstructor {
-    const DOMAIN: &'static str = "lrr/v6/prepared-record-constructor";
+    const DOMAIN: &'static str = "lrr/v7/prepared-record-constructor";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.record(&self.plan);
@@ -146,6 +148,7 @@ impl StableEncode for PreparedRecordConstructor {
                 });
             }
         }
+        e.option(&self.application,|e,application|e.record(application));
         e.sequence(&self.arguments, |e, argument| {
             e.option(argument, |e, argument| e.record(argument))
         });
@@ -340,6 +343,7 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedRecor
         plan_identity: plan.fingerprint(),
         binding,
         arguments,
+        application:selected.application,
     }))
 }
 

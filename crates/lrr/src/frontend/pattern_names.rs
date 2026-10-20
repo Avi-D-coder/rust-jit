@@ -37,7 +37,7 @@ pub(crate) enum PatternSelection {
         identity: Digest,
         variant: Option<EnumVariantDefinition>,
         /// Exact source application when the written name is an applied alias.
-        application: Option<crate::traits::term::TyTerm>,
+        application: Option<super::source_types::SourceTypeApplication>,
     },
 }
 
@@ -296,7 +296,7 @@ impl PreparedSourcePatternName {
     pub(crate) fn selection(&self) -> &PatternSelection { &self.selection }
 }
 impl crate::core::digest::StableEncode for PreparedSourcePatternName {
-    const DOMAIN: &'static str = "lrr/v1/source-pattern-name";
+    const DOMAIN: &'static str = "lrr/v2/source-pattern-name";
     fn encode_fields(&self,e: &mut crate::core::digest::StableEncoder) {
         e.record(&self.key); self.name.encode(e);
         match &self.selection {
@@ -358,7 +358,7 @@ fn finish_pattern_declaration(
     identity: Digest,kind: Option<ItemKind>,at: Option<&crate::ir::pc::PcKey>,
 ) -> QueryPoll<PatternSelection> {
     use crate::{db::{key::QueryKey,provider::SyntaxProvider,value::QueryValue},
-        frontend::{source_types::NamedTypePreparation,type_aliases::AliasTarget},traits::term::{GenericArg,TyTerm}};
+        traits::term::TyTerm};
     if kind!=Some(ItemKind::TypeAlias) {return QueryPoll::Ready(pattern_declaration(graph,name,identity,kind));}
     let (Some(at),Some(node))=(at,name.source) else {return QueryPoll::Ready(Err(unsupported("pattern alias requires its actual source occurrence".into())));};
     let site=crate::ir::pc::PcKey {body:at.body.clone(),node:node.0,phase:0};
@@ -369,18 +369,12 @@ fn finish_pattern_declaration(
     let mut arguments=Vec::new();
     if let Some(selected)=selected {
         for guard in &selected.guards {if let Err(error)=guard.require_current(db) {return QueryPoll::Ready(Err(error));}}
-        for argument in selected.arguments {
-            let Some(argument)=argument else {return QueryPoll::Ready(Err(unsupported("pattern alias argument requires inference".into())));};
-            arguments.push(GenericArg::Type(argument.source().clone()));
-        }
+        arguments.extend(selected.arguments.iter().map(|argument|argument.as_ref().map(|argument|argument.source().clone())));
     }
-    let source=ready_name!(super::source_types::prepare_selected_definition_with_arguments(db,graph,sources,identity,&arguments));
-    let application=match source {
-        NamedTypePreparation::Ready(source)=>source.source().clone(),
-        NamedTypePreparation::Alias(AliasTarget::Type(term))=>term,
-        _=>return QueryPoll::Ready(Err(unsupported("pattern alias requires its source target application".into()))),
+    let Some(application)=ready_name!(super::source_types::prepare_alias_application(db,graph,sources,identity,&arguments))else{
+        return QueryPoll::Ready(Err(unsupported("pattern alias requires its source target application".into())));
     };
-    let TyTerm::Nominal(target,_)=&application else {return QueryPoll::Ready(Err(unsupported("pattern alias target is not nominal".into())));};
+    let TyTerm::Nominal(target,_)=&application.term else {return QueryPoll::Ready(Err(unsupported("pattern alias target is not nominal".into())));};
     let definition=match super::source_types::nominal_definition(db,sources,*target) {Ok(definition)=>definition,Err(error)=>return QueryPoll::Ready(Err(error))};
     if definition.item_kind!=ItemKind::Struct {return QueryPoll::Ready(Err(unsupported("pattern alias target requires variant selection".into())));}
     QueryPoll::Ready(Ok(PatternSelection::Constructor {identity:*target,variant:None,application:Some(application)}))

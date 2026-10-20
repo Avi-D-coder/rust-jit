@@ -56,6 +56,7 @@ fn deferred(demand: RecordConstructorDemand) -> QueryPoll<RecordConstructorBindi
 pub(crate) struct PreparedRecordSelection {
     pub(crate) binding: RecordConstructorBinding,
     pub(crate) arguments: Vec<Option<crate::traits::term::TyTerm>>,
+    pub(crate) application: Option<super::source_types::SourceTypeApplication>,
 }
 /// Reached preparation from the memoized owning source environment. Local
 /// declaration authority is supplied by the same indexed Type occurrence used
@@ -70,8 +71,9 @@ pub(crate) fn bind_prepared_record_constructor(
     members: Option<&super::member_index::MemberIndex>,
 ) -> QueryPoll<PreparedRecordSelection> {
     let mut normalized = arguments.to_vec();
-    bind_prepared_record_inner(db, graph, sources, body, plan, &mut normalized, members)
-        .map(|binding| PreparedRecordSelection { binding, arguments: normalized })
+    let mut application=None;
+    bind_prepared_record_inner(db, graph, sources, body, plan, &mut normalized, &mut application, members)
+        .map(|binding| PreparedRecordSelection { binding, arguments: normalized, application })
 }
 fn bind_prepared_record_inner(
     db: &mut Database,
@@ -80,6 +82,7 @@ fn bind_prepared_record_inner(
     body: &BodyIndex,
     plan: &ConstructorPlan,
     arguments: &mut Vec<Option<crate::traits::term::TyTerm>>,
+    application: &mut Option<super::source_types::SourceTypeApplication>,
     members: Option<&super::member_index::MemberIndex>,
 ) -> QueryPoll<RecordConstructorBinding> {
     use super::source_locals::owned_plan::type_declarations::BodyTypeOutcome;
@@ -113,29 +116,17 @@ fn bind_prepared_record_inner(
         QueryPoll::Ready(Ok(BodyTypeOutcome::Ready(selected))) => selected,
         QueryPoll::Ready(Ok(BodyTypeOutcome::Pending(demand))) => {
             if let super::source_locals::owned_plan::type_declarations::BodyTypeDemand::AliasContext(identity) = demand {
-                use super::{source_types::NamedTypePreparation, type_aliases::AliasTarget};
                 use crate::traits::term::{GenericArg, TyTerm};
-                let Some(supplied) = arguments.iter().map(|argument|
-                    argument.clone().map(GenericArg::Type)).collect::<Option<Vec<_>>>() else {
-                    return deferred(RecordConstructorDemand::AliasApplication(identity));
+                let selected = match super::source_types::prepare_alias_application(db,graph,sources,identity,arguments) {
+                    QueryPoll::Ready(Ok(Some(value)))=>value,
+                    QueryPoll::Ready(Ok(None))=>return deferred(RecordConstructorDemand::AliasApplication(identity)),
+                    QueryPoll::Ready(Err(error))=>return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input)=>return QueryPoll::NeedInput(input),
                 };
-                let selected = match super::source_types::prepare_selected_definition_with_arguments(
-                    db, graph, sources, identity, &supplied,
-                ) {
-                    QueryPoll::Ready(Ok(value)) => value,
-                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-                };
-                let term = match selected {
-                    NamedTypePreparation::Ready(source) => source.source().clone(),
-                    NamedTypePreparation::Alias(AliasTarget::Type(term)) => term,
-                    // An uninstantiated generic target is not a nominal
-                    // application; ordinary inference must supply it first.
-                    _ => return deferred(RecordConstructorDemand::AliasApplication(identity)),
-                };
-                let TyTerm::Nominal(target, target_arguments) = term else {
+                let TyTerm::Nominal(target, target_arguments) = &selected.term else {
                     return deferred(RecordConstructorDemand::TypeContext);
                 };
+                let target=*target;
                 let definition = match super::source_types::nominal_definition(db, sources, target) {
                     Ok(value) => value, Err(error) => return QueryPoll::Ready(Err(error)),
                 };
@@ -145,12 +136,16 @@ fn bind_prepared_record_inner(
                 let mut applied = Vec::new();
                 for argument in target_arguments {
                     match argument {
-                        GenericArg::Type(term) => applied.push(Some(term)),
+                        GenericArg::Type(term) => applied.push(Some(term.clone())),
                         GenericArg::Region(_) => {}, // runtime-erased metadata
                         GenericArg::Const(_) => return deferred(RecordConstructorDemand::TypeContext),
                     }
                 }
-                *arguments = applied;
+                // Open applications retain their entire relationship graph
+                // separately; a generic target schema is not an activation
+                // binding for the alias's own source parameters.
+                *arguments = if selected.is_open() {Vec::new()}else{applied};
+                *application=Some(selected);
                 let target_members = if members.is_none() && !arguments.is_empty() {
                     match locals.environment().expect("checked constructor environment")
                         .macros().source_environment().member_index() {

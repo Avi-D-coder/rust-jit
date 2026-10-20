@@ -2052,6 +2052,64 @@ pub(super) fn deferred_alias_type(
     };
     QueryPoll::Ready(substitution.apply(&term).map(Some))
 }
+/// One actual source Type application and the declaration parameters whose
+/// values this occurrence still needs. It is metadata, not an inference engine
+/// or a calling-frame parameter binding. Repeated/compound occurrences stay in
+/// `term`; consumers must never replace them with independent target holes.
+#[derive(Debug, Clone)]
+pub(crate) struct SourceTypeApplication {
+    pub(crate) term: TyTerm,
+    pub(crate) parameters: Vec<crate::traits::term::ParamKey>,
+}
+impl SourceTypeApplication {
+    pub(crate) fn is_open(&self) -> bool { !self.parameters.is_empty() }
+}
+impl crate::core::digest::StableEncode for SourceTypeApplication {
+    const DOMAIN: &'static str = "lrr/v1/source-type-application";
+    fn encode_fields(&self, e: &mut crate::core::digest::StableEncoder) {
+        e.record(&self.term);e.sequence(&self.parameters,|e,key|e.record(key));
+    }
+}
+/// Complete an admitted alias's supplied Type arguments with its own actual
+/// source parameter keys. The same finalizer performs declaration selection,
+/// retained target walking and simultaneous substitution; no target is parsed
+/// or inferred here. Defaults/const inputs lacking that source application stay
+/// explicit missing metadata rather than receiving a guessed fallback.
+pub(crate) fn prepare_alias_application(
+    db: &mut Database, graph: &NameNamespaces, sources: &[&PreparedSourceView],
+    identity: crate::core::digest::Digest, arguments: &[Option<TyTerm>],
+) -> QueryPoll<Option<SourceTypeApplication>> {
+    macro_rules! ready {($value:expr)=>{match $value {QueryPoll::Ready(Ok(value))=>value,
+        QueryPoll::Ready(Err(error))=>return QueryPoll::Ready(Err(error)),QueryPoll::NeedInput(input)=>return QueryPoll::NeedInput(input)}};}
+    use crate::{syntax::signatures::GenericKind,traits::term::{GenericArg,ParamKey}};
+    let alias=ready!(db.fetch(&SyntaxProvider,QueryKey::TypeAlias(identity)));
+    let QueryValue::TypeAlias(alias)=alias.value.as_ref()else{return QueryPoll::Ready(Err(fault("source application alias result differs")));};
+    let mut supplied=arguments.iter();let mut actual=Vec::new();let mut parameters=Vec::new();
+    for parameter in &alias.generics {
+        match parameter.kind {
+            GenericKind::Lifetime=>{}, // existing finalizer retains its real erased source region
+            GenericKind::Const=>return QueryPoll::Ready(Ok(None)),
+            GenericKind::Type=>{
+                let term=match supplied.next().and_then(Option::as_ref) {
+                    Some(term)=>term.clone(),
+                    None=>{
+                        if !parameter.default.is_empty() {return QueryPoll::Ready(Ok(None));}
+                        let key=ParamKey {definition:identity,ordinal:parameter.ordinal};parameters.push(key);TyTerm::Param(key)
+                    }
+                };
+                actual.push(GenericArg::Type(term));
+            }
+        }
+    }
+    if supplied.next().is_some() {return QueryPoll::Ready(Ok(None));}
+    let selected=ready!(prepare_selected_definition_with_arguments(db,graph,sources,identity,&actual));
+    let term=match selected {
+        NamedTypePreparation::Ready(source)=>source.source().clone(),
+        NamedTypePreparation::Alias(AliasTarget::Type(term))=>term,
+        _=>return QueryPoll::Ready(Ok(None)),
+    };
+    QueryPoll::Ready(Ok(Some(SourceTypeApplication {term,parameters})))
+}
 /// Caller already holds ordinary source-name selection. This supplies no
 /// namespace grant from a descriptor or arbitrary spelling.
 pub(super) fn prepare_selected_definition(

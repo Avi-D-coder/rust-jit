@@ -313,7 +313,7 @@ pub(super) struct Constructed {
     /// Actual declaration keys in Type-argument order. Region/const ordinal
     /// positions are not fabricated into Type parameter identities.
     type_parameters: Vec<crate::traits::term::ParamKey>,
-    application: Option<TyTerm>,
+    application: Option<crate::frontend::source_types::SourceTypeApplication>,
 }
 impl Constructed {
     pub(super) fn arity(&self) -> usize {
@@ -674,11 +674,14 @@ impl<'a> Component<'a> {
         let QueryValue::BoundRecordConstructor(prepared) = prepared.value.as_ref() else {
             return QueryPoll::Ready(Err(fault("constraint record constructor differs")));
         };
-        let Some(bound) = prepared.bound() else {
-            return self.pending_record_shape(db, prepared);
-        };
-        let variant = bound.variant().clone();
-        self.constructed(db, &variant)
+        let result=if let Some(bound)=prepared.bound() {
+            self.constructed(db,bound.variant())
+        }else{self.pending_record_shape(db,prepared)};
+        let result=ready!(result);
+        QueryPoll::Ready(Ok(result.map(|mut constructed| {
+            if let Some(application)=prepared.application() {Arc::make_mut(&mut constructed).application=Some(application.clone());}
+            constructed
+        })))
     }
     /// Source constraint shape only: a pending runtime binding still has its
     /// exact schema, selected variant and actual field Type occurrences.
@@ -977,6 +980,40 @@ impl<'a> Component<'a> {
             .collect()
     }
 
+    /// Feed a retained source application into the existing structural
+    /// relation component. A declaration variable relates every actual
+    /// occurrence of that same key, including compound/permuted arguments;
+    /// concrete parts constrain through the ordinary projection service.
+    fn application_relations(
+        &mut self, db:&mut Database, node:NodeId,
+        application:&crate::frontend::source_types::SourceTypeApplication,
+        pattern:bool,
+    )->QueryPoll<()> {
+        let via=self.via.clone();
+        match ready!(self.project_parametric(db,&application.term,&via.steps)) {
+            super::generics::TermProjection::Parameter(key,rest) if application.parameters.contains(&key)=>{
+                let prefix=if pattern {
+                    let Some(root)=self.root_via.as_ref()else{self.defer(node,ConstraintDemand::Binding);return QueryPoll::Ready(Ok(()));};
+                    if !root.steps.ends_with(&via.steps) {self.defer(node,ConstraintDemand::Binding);return QueryPoll::Ready(Ok(()));}
+                    root.steps[..root.steps.len()-via.steps.len()].to_vec()
+                }else{Vec::new()};
+                for mut path in super::generics::parameter_paths(&application.term,&key) {
+                    path.extend_from_slice(&rest);
+                    if path==via.steps {continue;}
+                    let mut steps=prefix.clone();steps.extend(path);
+                    let linked=super::Via {steps,strict:false};
+                    if pattern {self.pattern_via(Some(node),linked);}else{self.expression_via(Some(node),linked);}
+                }
+            }
+            // An open aggregate is represented by the component's own
+            // dependent arguments; solving those projections consults this
+            // same application again. Do not manufacture a numeric refusal.
+            super::generics::TermProjection::Leaf(_) if via.steps.is_empty() && application.is_open()=>{},
+            _=>{ready!(self.constrain_term(db,node,&application.term,ConstraintDemand::SelectedDeclaration));}
+        }
+        QueryPoll::Ready(Ok(()))
+    }
+
     /// `node` constructs `constructed` from `operands` (declaration field,
     /// operand expression) and the current member is `node` itself: the
     /// selected field's operand and its declared Type relate to the rest of
@@ -989,6 +1026,9 @@ impl<'a> Component<'a> {
         constructed: &Constructed,
         operands: &[(u32, NodeId)],
     ) -> QueryPoll<()> {
+        if let Some(application)=&constructed.application {
+            ready!(self.application_relations(db,node,application,false));
+        }
         // The written constructor application constrains its fields before
         // numeric fallback, using the SAME indexed Type arguments call entry
         // consumes. No constructor/macro spelling chooses numeric semantics.
@@ -1503,7 +1543,7 @@ impl<'a> Component<'a> {
             return QueryPoll::Ready(Ok(()));
         };
         if let Some(application)=&constructed.application {
-            ready!(self.constrain_term(db,root,application,ConstraintDemand::SelectedDeclaration));
+            ready!(self.application_relations(db,root,application,true));
         }
         // The variable is one of the matched Type's own type arguments: every
         // field pattern whose declared Type names that parameter matches it.

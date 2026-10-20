@@ -171,6 +171,11 @@ impl<'a> Component<'a> {
                 let QueryValue::BoundRecordConstructor(prepared) = prepared.value.as_ref() else {
                     return QueryPoll::Ready(Err(fault("open record source query differs")));
                 };
+                if let Some(application)=prepared.application().filter(|application|application.is_open()) {
+                    return QueryPoll::Ready(Ok(Some(OpenShape {
+                        term:application.term.clone(),keys:application.parameters.clone(),callee:None,
+                    })));
+                }
                 // Explicit arguments already own this application's context;
                 // an open goal must not replace them with literal fallback.
                 if !prepared.arguments().is_empty() {

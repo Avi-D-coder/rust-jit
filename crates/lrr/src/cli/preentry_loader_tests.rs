@@ -3110,7 +3110,7 @@ fn unchanged_record_aliases_retain_actual_target_arguments_all_editions_and_orig
             let header=ready(db.fetch(&SyntaxProvider,QueryKey::PreparedScopeImplHeaders(discovery.key().clone()))).value;let QueryValue::PreparedScopeImplHeaders(header)=header.as_ref()else{panic!()};
             let environment=header.inventory_root().environment().unwrap();let sources=environment.sources().iter().collect::<Vec<_>>();
             let lookup=|namespace,name:&str| {let found=environment.names().lookup_source_path(namespace,&[ImportSegment::Name(name.into())],false,&scope,edition).unwrap();let crate::frontend::names::NameLookup::Defined(found)=found else {panic!("actual source lookup {name}: {found:?}")};found.identity};
-            let main=lookup(Namespace::Value,"main");let target=[lookup(Namespace::Type,"S"),lookup(Namespace::Type,"S3")];
+            let main=lookup(Namespace::Value,"main");let target=[lookup(Namespace::Type,"S"),lookup(Namespace::Type,"S3")];let alias=lookup(Namespace::Type,"S4");
             let body=db.input(&InputKey::DefinitionBody(main)).unwrap();let InputValue::DefinitionBody(body)=body.as_ref()else{panic!()};let plan=ready(db.prepare_source_local_plan(&discovery,&sources,&body.key()));
             let owner=plan.context().source();let mut nodes=Vec::new();
             for node in owner.index().nodes() {
@@ -3120,11 +3120,16 @@ fn unchanged_record_aliases_retain_actual_target_arguments_all_editions_and_orig
             assert_eq!(nodes.len(),3);db.trace.detailed=true;let start=db.trace.events.len();
             for (ordinal,node) in nodes.iter().enumerate() {
                 let key=owner.index().pc(*node,Phase::Entry).unwrap();let result=db.fetch(&SyntaxProvider,QueryKey::BoundRecordConstructor(key));
-                if ordinal==1 {assert!(matches!(result,QueryPoll::Ready(Err(ref error))if error.code=="LRR-E-UNSUPPORTED"&&error.message.contains("complete source argument application")),"unsupplied alias U remains an explicit runtime blocker: {result:?}");continue;}
                 let value=ready(result).value;let QueryValue::BoundRecordConstructor(prepared)=value.as_ref()else{panic!()};
-                let bound=prepared.bound().expect("closed source record target binds the ordinary schema");assert_eq!(bound.mapping().definition(),target[usize::from(ordinal==2)]);
+                let bound=prepared.bound().expect("closed source record target binds the ordinary schema");assert_eq!(bound.mapping().definition(),target[usize::from(ordinal>0)]);
                 let actual=prepared.arguments().iter().map(|argument|argument.as_ref().unwrap().source().clone()).collect::<Vec<_>>();
-                let expected=if ordinal==0 {vec![]}else{vec![TyTerm::Primitive(crate::ir::op::PrimitiveType::U16),TyTerm::Primitive(crate::ir::op::PrimitiveType::Char)]};assert_eq!(actual,expected);assert_eq!(bound.variant().type_parameters()as usize,actual.len());records+=1;
+                let expected=if ordinal!=2 {vec![]}else{vec![TyTerm::Primitive(crate::ir::op::PrimitiveType::U16),TyTerm::Primitive(crate::ir::op::PrimitiveType::Char)]};assert_eq!(actual,expected);assert_eq!(bound.variant().type_parameters(),if ordinal==0 {0}else{2});
+                let application=prepared.application().expect("actual alias source application");
+                if ordinal==1 {
+                    let parameter=crate::traits::term::ParamKey {definition:alias,ordinal:0};
+                    assert_eq!(application.parameters,vec![parameter]);assert_eq!(application.term,TyTerm::Nominal(target[1],vec![crate::traits::term::GenericArg::Type(TyTerm::Param(parameter)),crate::traits::term::GenericArg::Type(TyTerm::Primitive(crate::ir::op::PrimitiveType::Char))]));
+                }else{assert!(application.parameters.is_empty());}
+                records+=1;
             }
             let unwanted=db.trace.events[start..].iter().filter(|event|match &event.key {
                 QueryKey::BodyStructure(body)=>body!=owner.index().body() || event.action==crate::db::trace::Action::ProviderRun,
@@ -3132,11 +3137,15 @@ fn unchanged_record_aliases_retain_actual_target_arguments_all_editions_and_orig
                 _=>false,
             }).collect::<Vec<_>>();
             assert!(unwanted.is_empty(),"record target preparation must not enter executable planning or rebuild its cached owner: {unwanted:?}");
+            let inferred=ready(db.fetch(&SyntaxProvider,QueryKey::BindingConstraints(owner.index().pc(nodes[1],Phase::Entry).unwrap()))).value;
+            let QueryValue::BindingConstraints(inferred)=inferred.as_ref()else{panic!()};
+            assert_eq!(inferred.state(),crate::frontend::binding_constraints::BindingConstraintState::ResolvedType);
+            assert_eq!(inferred.written().and_then(|written|written.source()),Some(TyTerm::Nominal(target[1],vec![crate::traits::term::GenericArg::Type(TyTerm::Primitive(crate::ir::op::PrimitiveType::U8)),crate::traits::term::GenericArg::Type(TyTerm::Primitive(crate::ir::op::PrimitiveType::Char))])));
             let saved=owner.index().pc(NodeId(nodes[0].0),Phase::Entry).unwrap();db.publish_inputs(std::collections::BTreeMap::new()).unwrap();assert!(!matches!(db.fetch(&SyntaxProvider,QueryKey::BoundRecordConstructor(saved)),QueryPoll::Ready(Ok(_))));
-            eprintln!("actual record alias targets edition{edition},origin{origin}:2ordinary bindings;1inference hold;no guest execution");
+            eprintln!("actual record alias targets edition{edition},origin{origin}:3ordinary bindings;actual open template infers u8,char;no guest execution");
         }
     }
-    assert_eq!(records,24);
+    assert_eq!(records,36);
 }
 
 #[test]
@@ -3160,17 +3169,19 @@ fn unchanged_pattern_aliases_share_actual_source_selection_all_editions_and_orig
             let header=ready(db.fetch(&SyntaxProvider,QueryKey::PreparedScopeImplHeaders(discovery.key().clone()))).value;let QueryValue::PreparedScopeImplHeaders(header)=header.as_ref()else{panic!()};
             let environment=header.inventory_root().environment().unwrap();let sources=environment.sources().iter().collect::<Vec<_>>();
             let lookup=|namespace,name:&str| {let found=environment.names().lookup_source_path(namespace,&[ImportSegment::Name(name.into())],false,&scope,edition).unwrap();let crate::frontend::names::NameLookup::Defined(found)=found else {panic!("actual source lookup {name}: {found:?}")};found.identity};
-            let main=lookup(Namespace::Value,"main");let target=[lookup(Namespace::Type,"S"),lookup(Namespace::Type,"S3")];
+            let main=lookup(Namespace::Value,"main");let target=[lookup(Namespace::Type,"S"),lookup(Namespace::Type,"S3")];let alias=lookup(Namespace::Type,"S4");
             let body=db.input(&InputKey::DefinitionBody(main)).unwrap();let InputValue::DefinitionBody(body)=body.as_ref()else{panic!()};let plan=ready(db.prepare_source_local_plan(&discovery,&sources,&body.key()));
             let owner=plan.context().source();let nodes=owner.index().nodes().iter().filter(|node|node.role==crate::syntax::body_index::NodeRole::Pattern)
                 .filter(|node|owner.parsed().entered_node_syntax(owner.body(),owner.index(),node.id).unwrap().and_then(ast::RecordPat::cast).is_some()).map(|node|node.id).collect::<Vec<_>>();
             assert_eq!(nodes.len(),3);db.trace.detailed=true;let start=db.trace.events.len();let mut guards=Vec::new();
             for (ordinal,node) in nodes.iter().enumerate() {
                 let key=QueryKey::SourcePatternName(owner.index().pc(*node,Phase::Entry).unwrap());let result=db.fetch(&SyntaxProvider,key.clone());
-                if ordinal==2 {assert!(matches!(result,QueryPoll::Ready(Err(ref error))if error.code=="LRR-E-UNSUPPORTED"&&error.message.contains("source target application")),"unsupplied alias U retains its explicit inference hold: {result:?}");continue;}
                 let fetched=ready(result);assert!(fetched.cacheable);let value=&fetched.value;let QueryValue::SourcePatternName(selected)=value.as_ref()else{panic!()};
                 assert_eq!(selected.name().source,Some(*node));let PatternSelection::Constructor {identity,variant,application:Some(application)}=selected.selection()else{panic!("actual constructor selection: {selected:?}")};
-                assert_eq!(*identity,target[ordinal]);assert!(variant.is_none());let arguments=if ordinal==0 {vec![]}else{vec![GenericArg::Type(TyTerm::Primitive(crate::ir::op::PrimitiveType::U8)),GenericArg::Type(TyTerm::Primitive(crate::ir::op::PrimitiveType::Char))]};assert_eq!(*application,TyTerm::Nominal(target[ordinal],arguments));
+                let target=target[usize::from(ordinal>0)];assert_eq!(*identity,target);assert!(variant.is_none());
+                let parameter=crate::traits::term::ParamKey {definition:alias,ordinal:0};
+                let arguments=match ordinal {0=>vec![],1=>vec![GenericArg::Type(TyTerm::Primitive(crate::ir::op::PrimitiveType::U8)),GenericArg::Type(TyTerm::Primitive(crate::ir::op::PrimitiveType::Char))],_=>vec![GenericArg::Type(TyTerm::Param(parameter)),GenericArg::Type(TyTerm::Primitive(crate::ir::op::PrimitiveType::Char))]};
+                assert_eq!(application.term,TyTerm::Nominal(target,arguments));assert_eq!(application.parameters,if ordinal==2 {vec![parameter]}else{vec![]});
                 let guard=ready(db.prepare_input_guard(&SyntaxProvider,&key,fetched.fingerprint));guard.require_current(&db).unwrap();guards.push(guard);
                 let second=ready(db.fetch(&SyntaxProvider,key));assert!(std::sync::Arc::ptr_eq(value,&second.value));selected_count+=1;
             }
@@ -3181,8 +3192,8 @@ fn unchanged_pattern_aliases_share_actual_source_selection_all_editions_and_orig
             }).collect::<Vec<_>>();assert!(unwanted.is_empty(),"pattern name selection must stay metadata-only: {unwanted:?}");
             db.publish_inputs(std::collections::BTreeMap::new()).unwrap();for guard in guards {assert!(guard.require_current(&db).is_err());}
             assert!(!matches!(db.fetch(&SyntaxProvider,QueryKey::SourcePatternName(owner.index().pc(nodes[0],Phase::Entry).unwrap())),QueryPoll::Ready(Ok(_))));
-            eprintln!("actual pattern alias targets edition{edition},origin{origin}:2shared selections;1inference hold;memo reused;source withdrawal revokes guards");
+            eprintln!("actual pattern alias targets edition{edition},origin{origin}:3shared selections;actual open template;memo reused;source withdrawal revokes guards");
         }
     }
-    assert_eq!(selected_count,24);
+    assert_eq!(selected_count,36);
 }
