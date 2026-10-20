@@ -10,6 +10,7 @@ use rustc_type_ir::solve::{
     VisibleForLeakCheck,
 };
 use rustc_type_ir::{self as ty, TypeFoldable, inherent::*};
+use rustc_type_ir::{MayBeErased, TypeVisitableExt, TypingMode};
 use std::{fmt::Debug, ops::Deref};
 type GenericArg<'db> = model::Arg<'db, PreparedProvider<'db>>;
 type ParamEnv<'db> = model::ParamEnv<'db, PreparedProvider<'db>>;
@@ -37,12 +38,6 @@ pub(crate) struct SolverClients<'db> {
         ParamEnv<'db>,
         Term<'db>,
     ) -> Option<Vec<Goal<DbInterner<'db>, Predicate<'db>>>>,
-    pub(crate) eligible_assoc_item: fn(
-        &InferenceContext<'db>,
-        ty::TraitRef<DbInterner<'db>>,
-        DefinitionId,
-        DefinitionId,
-    ) -> FetchEligibleAssocItemResponse<DbInterner<'db>>,
     pub(crate) transmutable:
         fn(&InferenceContext<'db>, Ty<'db>, Ty<'db>, Const<'db>) -> Result<Certainty, NoSolution>,
 }
@@ -124,6 +119,56 @@ impl<'db> SolverDelegate for SolverContext<'db> {
         self.0
             .instantiate_canonical_var(span, kind, var_values, universe_map)
     }
+    fn fetch_eligible_assoc_item(
+        &self,
+        goal_trait_ref: ty::TraitRef<Self::Interner>,
+        trait_assoc_def_id: DefinitionId,
+        impl_def_id: DefinitionId,
+    ) -> FetchEligibleAssocItemResponse<Self::Interner> {
+        let node_item = match self
+            .interner
+            .services()
+            .associated_leaf(impl_def_id, trait_assoc_def_id)
+        {
+            Ok(i) => i,
+            Err(guar) => return FetchEligibleAssocItemResponse::Err(guar),
+        };
+
+        let typing_mode = self.typing_mode_raw();
+
+        let eligible = if node_item.is_final() {
+            // Non-specializable items are always projectable.
+            true
+        } else {
+            // Only reveal a specializable default if we're past type-checking
+            // and the obligation is monomorphic, otherwise passes such as
+            // transmute checking and polymorphic MIR optimizations could
+            // get a result which isn't correct for all monomorphizations.
+            match typing_mode {
+                TypingMode::Coherence
+                | TypingMode::Typeck { .. }
+                | TypingMode::PostTypeckUntilBorrowck { .. }
+                | TypingMode::Reflection
+                | TypingMode::PostBorrowck { .. } => false,
+                TypingMode::PostAnalysis | TypingMode::Codegen => {
+                    let poly_trait_ref = self.deeply_resolve_ignoring_regions(goal_trait_ref);
+                    !poly_trait_ref.still_further_specializable()
+                }
+                TypingMode::ErasedNotCoherence(MayBeErased) => {
+                    return FetchEligibleAssocItemResponse::NotFoundBecauseErased;
+                }
+            }
+        };
+
+        // FIXME: Check for defaultness here may cause diagnostics problems.
+        if eligible {
+            FetchEligibleAssocItemResponse::Found(node_item.item)
+        } else {
+            // We know it's not erased since then we'd have returned in the match above,
+            // or node_item.final() was true and eligible is always true.
+            FetchEligibleAssocItemResponse::NotFound(typing_mode.assert_not_erased())
+        }
+    }
 
     fn evaluate_const<E: Debug>(
         &self,
@@ -183,18 +228,6 @@ impl<'db> SolverDelegate for SolverContext<'db> {
     ) {
         self.0
             .add_item_bounds_for_hidden_type(id, args, env, hidden, goals)
-    }
-    fn fetch_eligible_assoc_item(
-        &self,
-        goal: ty::TraitRef<Self::Interner>,
-        item: DefinitionId,
-        implementation: DefinitionId,
-    ) -> FetchEligibleAssocItemResponse<Self::Interner> {
-        (self
-            .interner
-            .services()
-            .solver_clients()
-            .eligible_assoc_item)(&self.0, goal, item, implementation)
     }
     fn is_transmutable(
         &self,

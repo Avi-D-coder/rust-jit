@@ -30,11 +30,23 @@ def extend_solver_delegate(outputs, header, rustfmt):
     methods = methods.replace('self.next_region_var_in_universe(span, universe)', 'self.next_region_var_in_universe(universe, span)')
     methods = methods.replace('self.next_ty_var_in_universe(span, universe)', 'self.next_ty_var_in_universe(universe, span)')
     methods = methods.replace('self.next_const_var_in_universe(span, universe)', 'self.next_const_var_in_universe(universe, span)')
+    # Full pinned projection eligibility policy. Its graph query reads actual
+    # immutable prepared leaves; unavailable source is never semantic NotFound.
+    eligibility = adapt(selected(original, 'fetch_eligible_assoc_item'))
+    eligibility = eligibility.replace('    pub fn ', '    fn ')
+    eligibility = eligibility.replace("ty::TraitRef<'db>", "ty::TraitRef<Self::Interner>")
+    eligibility = eligibility.replace('DefId', 'DefinitionId')
+    eligibility = eligibility.replace("FetchEligibleAssocItemResponse<'db>", 'FetchEligibleAssocItemResponse<Self::Interner>')
+    eligibility = eligibility.replace('specialization_graph::assoc_def(self.interner, impl_def_id, trait_assoc_def_id)',
+        'self.interner.services().associated_leaf(impl_def_id, trait_assoc_def_id)')
+    eligibility = eligibility.replace('node_item.item.def_id', 'node_item.item')
+    methods += eligibility
     imports = '''use super::{InferenceContext, DbInterner, PreparedProvider, Span, Ty, Const};
 use super::canonical::CanonicalExt;
 use crate::traits::upstream::{identity::DefinitionId, model};
 use rustc_next_trait_solver::delegate::SolverDelegate;
 use rustc_type_ir::{self as ty, TypeFoldable, inherent::*};
+use rustc_type_ir::{MayBeErased, TypingMode, TypeVisitableExt};
 use rustc_type_ir::solve::{Goal, ComputeGoalFastPathOutcome, FetchEligibleAssocItemResponse, Certainty, NoSolution, VisibleForLeakCheck};
 use std::{fmt::Debug, ops::Deref};
 type GenericArg<'db> = model::Arg<'db,PreparedProvider<'db>>;
@@ -55,7 +67,6 @@ pub(crate) struct SolverClients<'db> {
     pub(crate) evaluate_const: fn(&InferenceContext<'db>, ParamEnv<'db>, ty::AliasConst<DbInterner<'db>>,
         &mut dyn FnMut(ty::Unnormalized<DbInterner<'db>,Ty<'db>>) -> Option<Ty<'db>>) -> Result<Option<Const<'db>>,()>,
     pub(crate) well_formed_goals: fn(&InferenceContext<'db>,ParamEnv<'db>,Term<'db>) -> Option<Vec<Goal<DbInterner<'db>,Predicate<'db>>>>,
-    pub(crate) eligible_assoc_item: fn(&InferenceContext<'db>,ty::TraitRef<DbInterner<'db>>,DefinitionId,DefinitionId) -> FetchEligibleAssocItemResponse<DbInterner<'db>>,
     pub(crate) transmutable: fn(&InferenceContext<'db>,Ty<'db>,Ty<'db>,Const<'db>) -> Result<Certainty,NoSolution>,
 }
 
@@ -104,9 +115,6 @@ impl<'db> SolverDelegate for SolverContext<'db> {
     }
     fn add_item_bounds_for_hidden_type(&self,id:DefinitionId,args:Args<'db>,env:ParamEnv<'db>,hidden:Ty<'db>,goals:&mut Vec<Goal<Self::Interner,Predicate<'db>>>) {
         self.0.add_item_bounds_for_hidden_type(id,args,env,hidden,goals)
-    }
-    fn fetch_eligible_assoc_item(&self,goal:ty::TraitRef<Self::Interner>,item:DefinitionId,implementation:DefinitionId) -> FetchEligibleAssocItemResponse<Self::Interner> {
-        (self.interner.services().solver_clients().eligible_assoc_item)(&self.0,goal,item,implementation)
     }
     fn is_transmutable(&self,src:Ty<'db>,dst:Ty<'db>,assume:Const<'db>) -> Result<Certainty,NoSolution> {
         (self.interner.services().solver_clients().transmutable)(&self.0,src,dst,assume)

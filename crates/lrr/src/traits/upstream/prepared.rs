@@ -251,6 +251,8 @@ pub(super) struct TraitFacts<'cx> {
     pub(super) default_trait: bool,
     pub(super) sizedness_trait: bool,
     pub(super) associated_types: &'cx [DefinitionId],
+    /// Complete actual associated members, including constants and functions.
+    pub(super) associated_items: &'cx [DefinitionId],
     pub(super) supertraits: &'cx [DefinitionId],
     /// Complete relevant trait bucket; no caller-selected scope subset.
     pub(super) implementations: &'cx [DefinitionId],
@@ -265,6 +267,20 @@ pub(super) struct ImplFacts<'cx> {
     pub(super) super_outlives: ClauseList<'cx>,
     /// Complete specialization ancestry prepared by the actual client.
     pub(super) specializes: BTreeSet<DefinitionId>,
+}
+/// Actual graph leaf result, supplied by source specialization preparation.
+/// No Default: missing data must suspend preparation before shared solver entry.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct AssociatedLeaf {
+    pub(super) item: DefinitionId,
+    pub(super) defining_node: DefinitionId,
+    pub(super) finalizing_node: Option<DefinitionId>,
+}
+impl AssociatedLeaf {
+    /// Pinned rustc_middle::traits::specialization_graph::LeafDef::is_final.
+    pub(super) fn is_final(self) -> bool {
+        self.finalizing_node.is_some()
+    }
 }
 pub(super) struct AdtFacts<'cx> {
     pub(super) info: AdtInfo<'cx, PreparedProvider<'cx>>,
@@ -311,6 +327,7 @@ pub(super) struct PreparedFacts<'cx> {
     pub(super) definitions: BTreeMap<DefinitionId, DefinitionFacts<'cx>>,
     pub(super) traits: BTreeMap<DefinitionId, TraitFacts<'cx>>,
     pub(super) implementations: BTreeMap<DefinitionId, ImplFacts<'cx>>,
+    pub(super) associated_leaves: BTreeMap<(DefinitionId, DefinitionId), Result<AssociatedLeaf, ErrorToken>>,
     /// Demand-prepared impls, each joined to its actual raw/canonical header.
     pub(super) impl_declarations: BTreeMap<Digest, DefinitionId>,
     pub(super) adts: BTreeMap<DefinitionId, AdtFacts<'cx>>,
@@ -349,6 +366,7 @@ impl<'cx> PreparedFacts<'cx> {
         definitions: BTreeMap<DefinitionId, DefinitionFacts<'cx>>,
         traits: BTreeMap<DefinitionId, TraitFacts<'cx>>,
         implementations: BTreeMap<DefinitionId, ImplFacts<'cx>>,
+        associated_leaves: BTreeMap<(DefinitionId, DefinitionId), Result<AssociatedLeaf, ErrorToken>>,
         impl_declarations: BTreeMap<Digest, DefinitionId>,
         adts: BTreeMap<DefinitionId, AdtFacts<'cx>>,
         parameters: BTreeMap<(ParamKey, BoundKind), DefinitionId>,
@@ -363,6 +381,7 @@ impl<'cx> PreparedFacts<'cx> {
             definitions,
             traits,
             implementations,
+            associated_leaves,
             impl_declarations,
             adts,
             parameters,
@@ -473,6 +492,12 @@ pub(super) fn with_provider<R>(
 impl<'cx> PreparedProvider<'cx> {
     pub(super) fn solver_clients(self) -> &'cx super::infer::delegate::SolverClients<'cx> {
         &self.data().clients.solver
+    }
+    pub(super) fn associated_leaf(
+        self, implementation: DefinitionId, item: DefinitionId,
+    ) -> Result<AssociatedLeaf, ErrorToken> {
+        *self.data().associated_leaves.get(&(implementation, item))
+            .expect("actual specialization leaf was not prepared before solver entry")
     }
     pub(super) fn record_solver_overflow(self, span: Span, message: String) {
         // Diagnostic evidence only; this is not a lint/static rejection.
@@ -642,6 +667,62 @@ impl<'cx> PreparedProvider<'cx> {
                 };
                 if trait_data.implementations.binary_search(id).is_err() {
                     return Err(fault("prepared trait bucket omits an actual trait impl"));
+                }
+                for member in trait_data.associated_items {
+                    if !facts.associated_leaves.contains_key(&(*id, *member)) {
+                        return Err(fault("actual associated leaf preparation is incomplete"));
+                    }
+                }
+            }
+        }
+        for (id, row) in &facts.traits {
+            let items: BTreeSet<_> = row.associated_items.iter().copied().collect();
+            if items.len() != row.associated_items.len()
+                || row.associated_types.iter().any(|item| !items.contains(item))
+                || items.iter().any(|item| facts.definitions.get(item).is_none_or(|item| item.parent != Some(*id)))
+            {
+                return Err(fault("associated member coverage differs from its prepared trait"));
+            }
+        }
+        for ((implementation, member), outcome) in &facts.associated_leaves {
+            let implementation_data = facts.implementations.get(implementation)
+                .ok_or_else(|| fault("associated leaf impl metadata is absent"))?;
+            let trait_id = implementation_data.trait_ref
+                .ok_or_else(|| fault("associated leaf requires an actual trait impl"))?.def_id();
+            let trait_data = facts.traits.get(&trait_id)
+                .ok_or_else(|| fault("associated leaf trait metadata is absent"))?;
+            if !trait_data.associated_items.contains(member) {
+                return Err(fault("associated leaf key belongs to another trait"));
+            }
+            if let Ok(leaf) = outcome {
+                let ancestor = |node| node == *implementation || node == trait_id
+                    || implementation_data.specializes.contains(&node);
+                if !ancestor(leaf.defining_node)
+                    || leaf.finalizing_node.is_some_and(|node| !ancestor(node))
+                    || [Some(leaf.item), Some(leaf.defining_node), leaf.finalizing_node].into_iter()
+                        .flatten().any(|node| node.world() != world || !facts.definitions.contains_key(&node))
+                {
+                    return Err(fault("associated leaf nodes differ from their prepared source ancestry"));
+                }
+                if [Some(leaf.defining_node), leaf.finalizing_node].into_iter().flatten()
+                    .any(|node| node != trait_id && facts.implementations.get(&node)
+                        .is_none_or(|row| row.trait_ref.map(|reference| reference.def_id()) != Some(trait_id)))
+                {
+                    return Err(fault("associated leaf container is not an impl of its actual trait"));
+                }
+                let item = &facts.definitions[&leaf.item];
+                let declared = &facts.definitions[member];
+                if item.parent != Some(leaf.defining_node) || item.name != declared.name
+                    || (leaf.defining_node == trait_id && leaf.item != *member)
+                {
+                    return Err(fault("associated leaf item differs from its prepared container/member"));
+                }
+                if let Some(finalizing) = leaf.finalizing_node
+                    && finalizing != leaf.defining_node && leaf.defining_node != trait_id
+                    && !facts.implementations.get(&finalizing)
+                        .is_some_and(|row| row.specializes.contains(&leaf.defining_node))
+                {
+                    return Err(fault("associated leaf finalizer is outside its source ancestry segment"));
                 }
             }
         }
