@@ -1024,9 +1024,9 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
-            QueryKey::InitializerOwnerTemplate(key) => {
-                return match crate::frontend::initializer_owner_templates::prepare(db, key) {
-                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::InitializerOwnerTemplate(Box::new(value))),
+            QueryKey::DeclarationOwnerTemplate(key) => {
+                return match crate::frontend::declaration_owner_templates::prepare(db, key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::DeclarationOwnerTemplate(Box::new(value))),
                     QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };

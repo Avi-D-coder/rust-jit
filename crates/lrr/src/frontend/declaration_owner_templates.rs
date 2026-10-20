@@ -1,4 +1,4 @@
-//! Actual declaration-owner templates for reached item applications. This is
+//! Actual declaration-owner templates shared by body Type and item applications. This is
 //! source metadata, not an applicable-provider or initializer-entry proof.
 use crate::{
     core::{
@@ -30,12 +30,12 @@ use ra_ap_syntax::{AstNode, SyntaxNode, ast};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
-pub struct InitializerOwnerTemplateKey {
+pub struct DeclarationOwnerTemplateKey {
     pub caller_path: PcKey,
     pub definition: Digest,
 }
-impl StableEncode for InitializerOwnerTemplateKey {
-    const DOMAIN: &'static str = "lrr/v1/initializer-owner-template-key";
+impl StableEncode for DeclarationOwnerTemplateKey {
+    const DOMAIN: &'static str = "lrr/v2/declaration-owner-template-key";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.caller_path);
         e.digest(self.definition);
@@ -43,15 +43,15 @@ impl StableEncode for InitializerOwnerTemplateKey {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(crate) enum InitializerOwnerDemand {
+pub(crate) enum DeclarationOwnerDemand {
     ConfiguredSource,
     OwnerContext,
     OwnerType,
 }
 /// Real declaration ownership. `Impl.self_type` is expressed over the selected
-/// constant signature's own ParamKeys, not impl/caller ordinals or descriptors.
+/// member signature's own ParamKeys, not impl/caller ordinals or descriptors.
 #[derive(Debug)]
-pub(crate) enum InitializerOwner {
+pub(crate) enum DeclarationOwner {
     Unowned,
     Impl {
         identity: Digest,
@@ -63,29 +63,29 @@ pub(crate) enum InitializerOwner {
     },
 }
 
-pub struct PreparedInitializerOwnerTemplate {
-    key: InitializerOwnerTemplateKey,
+pub struct PreparedDeclarationOwnerTemplate {
+    key: DeclarationOwnerTemplateKey,
     plan: Arc<PreparedSourceLocalPlan>,
     signature: Arc<QueryValue>,
     signature_fingerprint: Digest,
     source: ParseKey,
     context: DeclarationContext,
     cfg: Option<Digest>,
-    owner: Option<InitializerOwner>,
+    owner: Option<DeclarationOwner>,
     owner_syntax: Option<SyntaxNode>,
-    demand: Option<InitializerOwnerDemand>,
+    demand: Option<DeclarationOwnerDemand>,
 }
-impl std::fmt::Debug for PreparedInitializerOwnerTemplate {
+impl std::fmt::Debug for PreparedDeclarationOwnerTemplate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PreparedInitializerOwnerTemplate")
+        f.debug_struct("PreparedDeclarationOwnerTemplate")
             .field("key", &self.key)
             .field("owner", &self.owner)
             .field("demand", &self.demand)
             .finish_non_exhaustive()
     }
 }
-impl PreparedInitializerOwnerTemplate {
-    pub(crate) fn key(&self) -> &InitializerOwnerTemplateKey {
+impl PreparedDeclarationOwnerTemplate {
+    pub(crate) fn key(&self) -> &DeclarationOwnerTemplateKey {
         &self.key
     }
     pub(crate) fn retained_plan(&self) -> &Arc<PreparedSourceLocalPlan> {
@@ -97,15 +97,15 @@ impl PreparedInitializerOwnerTemplate {
         };
         signature
     }
-    pub(crate) fn owner(&self) -> Option<&InitializerOwner> {
+    pub(crate) fn owner(&self) -> Option<&DeclarationOwner> {
         self.owner.as_ref()
     }
-    pub(crate) fn demand(&self) -> Option<InitializerOwnerDemand> {
+    pub(crate) fn demand(&self) -> Option<DeclarationOwnerDemand> {
         self.demand
     }
 }
-impl StableEncode for PreparedInitializerOwnerTemplate {
-    const DOMAIN: &'static str = "lrr/v1/prepared-initializer-owner-template";
+impl StableEncode for PreparedDeclarationOwnerTemplate {
+    const DOMAIN: &'static str = "lrr/v2/prepared-declaration-owner-template";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.digest(self.plan.source_identity());
@@ -121,8 +121,8 @@ impl StableEncode for PreparedInitializerOwnerTemplate {
             e.u32(at.end);
         });
         e.option(&self.owner, |e, owner| match owner {
-            InitializerOwner::Unowned => e.u8(0),
-            InitializerOwner::Impl {
+            DeclarationOwner::Unowned => e.u8(0),
+            DeclarationOwner::Impl {
                 identity,
                 self_type,
             } => {
@@ -130,7 +130,7 @@ impl StableEncode for PreparedInitializerOwnerTemplate {
                 e.digest(*identity);
                 e.option(self_type, |e, ty| e.record(ty));
             }
-            InitializerOwner::Trait {
+            DeclarationOwner::Trait {
                 identity,
                 self_parameter,
             } => {
@@ -141,9 +141,9 @@ impl StableEncode for PreparedInitializerOwnerTemplate {
         });
         e.option(&self.demand, |e, demand| {
             e.u8(match demand {
-                InitializerOwnerDemand::ConfiguredSource => 0,
-                InitializerOwnerDemand::OwnerContext => 1,
-                InitializerOwnerDemand::OwnerType => 2,
+                DeclarationOwnerDemand::ConfiguredSource => 0,
+                DeclarationOwnerDemand::OwnerContext => 1,
+                DeclarationOwnerDemand::OwnerType => 2,
             })
         });
     }
@@ -171,33 +171,35 @@ macro_rules! checked {
 
 pub(crate) fn prepare(
     db: &mut Database,
-    key: &InitializerOwnerTemplateKey,
-) -> QueryPoll<PreparedInitializerOwnerTemplate> {
+    key: &DeclarationOwnerTemplateKey,
+) -> QueryPoll<PreparedDeclarationOwnerTemplate> {
     if key.caller_path.phase != 0 {
-        return QueryPoll::Ready(Err(fault("initializer owner caller path phase differs")));
+        return QueryPoll::Ready(Err(fault("declaration owner caller path phase differs")));
     }
     let caller = ready!(db.fetch(
         &SyntaxProvider,
-        QueryKey::EnteredValue(key.caller_path.clone())
+        QueryKey::SourceLocalPlan(key.caller_path.body.clone())
     ));
-    let QueryValue::EnteredValue(caller_goal) = caller.value.as_ref() else {
-        return QueryPoll::Ready(Err(fault("initializer owner caller Value variant differs")));
+    let QueryValue::SourceLocalPlan(plan) = caller.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("declaration owner caller source variant differs")));
     };
-    if !caller.cacheable || caller_goal.key() != &key.caller_path {
-        return QueryPoll::Ready(Err(fault(
-            "initializer owner caller source is not retained",
-        )));
+    let source = plan.context().source();
+    if !caller.cacheable || source.index().body() != &key.caller_path.body
+        || source.index().nodes().get(key.caller_path.node as usize)
+            .is_none_or(|node| node.id.0 != key.caller_path.node)
+    {
+        return QueryPoll::Ready(Err(fault("declaration owner actual source site differs")));
     }
-    let plan = Arc::clone(caller_goal.retained_plan());
+    let plan = Arc::clone(plan);
     ready!(plan.require_current(db));
     let Some(environment) = plan.environment() else {
-        return QueryPoll::Ready(Err(fault("initializer owner caller environment absent")));
+        return QueryPoll::Ready(Err(fault("declaration owner caller environment absent")));
     };
     let completed = Arc::clone(environment.macros().source_environment());
 
     let selected = ready!(db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(key.definition)));
     let QueryValue::FunctionSignature(signature) = selected.value.as_ref() else {
-        return QueryPoll::Ready(Err(fault("initializer owner signature variant differs")));
+        return QueryPoll::Ready(Err(fault("declaration owner signature variant differs")));
     };
     let source = db.input(&InputKey::DefinitionSource(key.definition));
     let header = db.input(&InputKey::DefinitionHeader(key.definition));
@@ -209,7 +211,7 @@ pub(crate) fn prepare(
     ) = (source.as_deref(), header.as_deref(), context.as_deref())
     else {
         return QueryPoll::Ready(Err(fault(
-            "initializer owner actual declaration inputs absent",
+            "declaration owner actual declaration inputs absent",
         )));
     };
     if !selected.cacheable
@@ -218,7 +220,7 @@ pub(crate) fn prepare(
         || signature.scope != context.scope
         || source.profile != signature.header.profile
     {
-        return QueryPoll::Ready(Err(fault("initializer owner source signature differs")));
+        return QueryPoll::Ready(Err(fault("declaration owner source signature differs")));
     }
     let source = source.clone();
     let context = context.clone();
@@ -226,47 +228,47 @@ pub(crate) fn prepare(
     let cfg = match configured.as_deref() {
         Some(InputValue::CrateCfg(cfg)) => Some(cfg.fingerprint()),
         None => None,
-        _ => return QueryPoll::Ready(Err(fault("initializer owner cfg input variant differs"))),
+        _ => return QueryPoll::Ready(Err(fault("declaration owner cfg input variant differs"))),
     };
     let parsed = ready!(db.fetch(&SyntaxProvider, QueryKey::ParseFile(source.clone())));
     if !parsed.cacheable {
-        return QueryPoll::Ready(Err(fault("initializer owner parse is not retained")));
+        return QueryPoll::Ready(Err(fault("declaration owner parse is not retained")));
     }
     let QueryValue::ParseFile(parsed) = parsed.value.as_ref() else {
-        return QueryPoll::Ready(Err(fault("initializer owner parse variant differs")));
+        return QueryPoll::Ready(Err(fault("declaration owner parse variant differs")));
     };
     if parsed.key() != source {
         return QueryPoll::Ready(Err(fault(
-            "initializer owner parse source identity differs",
+            "declaration owner parse source identity differs",
         )));
     }
-    let syntax = checked!(parsed.syntax_at(context.range, |node| ast::Const::can_cast(
-        node.kind()
-    ) || ast::Static::can_cast(
-        node.kind()
-    )));
+    let syntax = checked!(parsed.syntax_at(context.range, |node|
+        ast::Fn::can_cast(node.kind()) || ast::Const::can_cast(node.kind())
+            || ast::Static::can_cast(node.kind())));
     let Some(syntax) = syntax else {
-        return QueryPoll::Ready(Err(fault(
-            "initializer owner actual const/static declaration absent",
-        )));
+        return QueryPoll::Ready(Err(fault("declaration owner actual member syntax absent")));
     };
-    let excluded = match ast::Const::cast(syntax.clone()) {
-        Some(item) => item.body().map(|body| body.syntax().text_range()),
-        None => ast::Static::cast(syntax.clone())
-            .and_then(|item| item.body())
-            .map(|body| body.syntax().text_range()),
-    };
-    if range(syntax.text_range()) != context.range || tokens(&syntax, excluded) != header.tokens {
-        return QueryPoll::Ready(Err(fault(
-            "initializer owner actual declaration/header differs",
-        )));
+    if ast::Fn::can_cast(syntax.kind()) {
+        // This shared direct header locator validates only the actual function
+        // declaration; it does not prepare or enter its executable body.
+        checked!(parsed.function_header(key.definition, header, &context, None));
+    } else {
+        let excluded = match ast::Const::cast(syntax.clone()) {
+            Some(item) => item.body().map(|body| body.syntax().text_range()),
+            None => ast::Static::cast(syntax.clone())
+                .and_then(|item| item.body())
+                .map(|body| body.syntax().text_range()),
+        };
+        if range(syntax.text_range()) != context.range || tokens(&syntax, excluded) != header.tokens {
+            return QueryPoll::Ready(Err(fault("declaration owner actual member/header differs")));
+        }
     }
     let actual_owner = syntax
         .parent()
         .filter(|node| ast::AssocItemList::can_cast(node.kind()))
         .and_then(|items| items.parent())
         .filter(|node| ast::Impl::can_cast(node.kind()) || ast::Trait::can_cast(node.kind()));
-    let mut output = PreparedInitializerOwnerTemplate {
+    let mut output = PreparedDeclarationOwnerTemplate {
         key: key.clone(),
         plan,
         signature: Arc::clone(&selected.value),
@@ -278,7 +280,7 @@ pub(crate) fn prepare(
         owner_syntax: actual_owner.clone(),
         demand: cfg
             .is_none()
-            .then_some(InitializerOwnerDemand::ConfiguredSource),
+            .then_some(DeclarationOwnerDemand::ConfiguredSource),
     };
     if let Some(owner) = actual_owner {
         let items = owner
@@ -287,10 +289,10 @@ pub(crate) fn prepare(
         if tokens(&owner, items.as_ref().map(|items| items.text_range()))
             != signature.header.context
         {
-            return QueryPoll::Ready(Err(fault("initializer owner actual parent header differs")));
+            return QueryPoll::Ready(Err(fault("declaration owner actual parent header differs")));
         }
         let Some(identity) = signature.scope.owner else {
-            output.demand = Some(InitializerOwnerDemand::OwnerContext);
+            output.demand = Some(DeclarationOwnerDemand::OwnerContext);
             return QueryPoll::Ready(Ok(output));
         };
         if let Some(implementation) = ast::Impl::cast(owner) {
@@ -308,10 +310,10 @@ pub(crate) fn prepare(
                     ));
                 }
                 if self_type.is_none() {
-                    output.demand = Some(InitializerOwnerDemand::OwnerType);
+                    output.demand = Some(DeclarationOwnerDemand::OwnerType);
                 }
             }
-            output.owner = Some(InitializerOwner::Impl {
+            output.owner = Some(DeclarationOwner::Impl {
                 identity,
                 self_type,
             });
@@ -321,7 +323,7 @@ pub(crate) fn prepare(
                 parameter.kind == GenericKind::Type && parameter.name == "Self"
             });
             if let Some(parameter) = parameter {
-                output.owner = Some(InitializerOwner::Trait {
+                output.owner = Some(DeclarationOwner::Trait {
                     identity,
                     self_parameter: ParamKey {
                         definition: signature.definition,
@@ -329,7 +331,7 @@ pub(crate) fn prepare(
                     },
                 });
             } else {
-                output.demand = Some(InitializerOwnerDemand::OwnerContext);
+                output.demand = Some(DeclarationOwnerDemand::OwnerContext);
             }
         }
     } else {
@@ -343,11 +345,11 @@ pub(crate) fn prepare(
                     function.body().map(|body| body.syntax().text_range()),
                 ) != signature.header.context
             }) {
-                output.demand = Some(InitializerOwnerDemand::OwnerContext);
+                output.demand = Some(DeclarationOwnerDemand::OwnerContext);
                 return QueryPoll::Ready(Ok(output));
             }
         }
-        output.owner = Some(InitializerOwner::Unowned);
+        output.owner = Some(DeclarationOwner::Unowned);
     }
     QueryPoll::Ready(Ok(output))
 }

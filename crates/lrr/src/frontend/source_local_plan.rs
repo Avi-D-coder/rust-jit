@@ -121,6 +121,7 @@ impl LocalTypeUse {
 pub(crate) enum LocalTypePrefixSelection {
     Lookup(NameLookup),
     Parameter(crate::traits::term::ParamKey),
+    AppliedSelf(crate::traits::term::TyTerm),
     ModuleTail,
     NeedImport(Digest),
     NeedDeclarationOccurrence(Digest),
@@ -224,7 +225,7 @@ impl LocalTypePrefix {
     }
 }
 impl StableEncode for LocalTypePrefix {
-    const DOMAIN: &'static str = "lrr/v6/local-type-prefix-source-proof";
+    const DOMAIN: &'static str = "lrr/v7/local-type-prefix-source-proof";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.plan.source_identity());
         e.option(&self.node, |e, node| e.u32(node.0));
@@ -271,6 +272,7 @@ impl StableEncode for LocalTypePrefix {
                 e.digest(parameter.definition);
                 e.u32(parameter.ordinal);
             }
+            LocalTypePrefixSelection::AppliedSelf(term) => { e.u8(13); e.record(term); }
             LocalTypePrefixSelection::ModuleTail => e.u8(2),
             LocalTypePrefixSelection::NeedImport(identity) => {
                 e.u8(3);
@@ -637,35 +639,43 @@ impl PreparedSourceLocalPlan {
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
-        // `Self` is a reserved Type keyword, not a module spelling or a
-        // fabricated generic declaration. Its implicit binder is captured by
-        // the current genuine trait member signature. Impl Self needs its
-        // actual applied self template and remains pending here.
-        let self_parameter = if matches!(occurrence.segments(), [BodyTypeSegment::SelfType(_)])
+        // Reserved `Self` obtains the actual enclosing declaration template,
+        // shared with associated initializers. No module spelling or runtime
+        // descriptor can replace the real parent impl/trait and member binder.
+        let self_selection = if matches!(occurrence.segments(), [BodyTypeSegment::SelfType(_)])
             && !occurrence.absolute()
             && !matches!(occurrence.origin(), BodyTypeOrigin::NeedGeneratedBoundary | BodyTypeOrigin::NeedRetainedOccurrence)
         {
-            let selected = match db.fetch(&crate::db::provider::SyntaxProvider,
-                crate::db::key::QueryKey::FunctionSignature(self.context.source().body().def_key)) {
-                QueryPoll::Ready(Ok(value)) => value,
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            use crate::{db::{key::QueryKey,provider::SyntaxProvider,value::QueryValue},
+                frontend::declaration_owner_templates::{DeclarationOwner,DeclarationOwnerTemplateKey}};
+            let key=DeclarationOwnerTemplateKey {
+                caller_path: match self.context.source().index().pc(node,crate::ir::pc::Phase::Entry) { Ok(key)=>key,Err(error)=>return QueryPoll::Ready(Err(error)) },
+                definition: self.context.source().body().def_key,
             };
-            let crate::db::value::QueryValue::FunctionSignature(signature) = selected.value.as_ref() else {
-                return QueryPoll::Ready(Err(error("Self Type signature query variant differs")));
+            let selected=match db.fetch(&SyntaxProvider,QueryKey::DeclarationOwnerTemplate(key.clone())) {
+                QueryPoll::Ready(Ok(value))=>value,
+                QueryPoll::Ready(Err(error))=>return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input)=>return QueryPoll::NeedInput(input),
             };
-            if signature.definition != self.context.source().body().def_key
-                || signature.header != *self.context.source().header()
-                || signature.scope != self.context.source().context().scope {
-                return QueryPoll::Ready(Err(error("Self Type actual owner signature differs")));
+            let QueryValue::DeclarationOwnerTemplate(template)=selected.value.as_ref() else {
+                return QueryPoll::Ready(Err(error("Self Type declaration template variant differs")));
+            };
+            if template.key()!=&key || !Arc::ptr_eq(template.retained_plan().context(), self.context())
+                || template.signature().header!=*self.context.source().header()
+                || template.signature().scope!=self.context.source().context().scope {
+                return QueryPoll::Ready(Err(error("Self Type actual declaration template differs")));
             }
-            signature.scope.owner.and_then(|_| signature.generics.iter().find(|parameter|
-                parameter.kind == crate::syntax::signatures::GenericKind::Type && parameter.name == "Self"))
-                .map(|parameter| crate::traits::term::ParamKey { definition: signature.definition, ordinal: parameter.ordinal })
+            if template.demand().is_some() { None } else {
+                match template.owner() {
+                    Some(DeclarationOwner::Trait {self_parameter,..})=>Some(LocalTypePrefixSelection::Parameter(*self_parameter)),
+                    Some(DeclarationOwner::Impl {self_type:Some(term),..})=>Some(LocalTypePrefixSelection::AppliedSelf(term.clone())),
+                    _=>None,
+                }
+            }
         } else { None };
         let mut module_selector = None;
         let answer = (|| -> Result<LocalTypePrefixSelection, Diagnostic> {
-            if let Some(parameter) = self_parameter { return Ok(LocalTypePrefixSelection::Parameter(parameter)); }
+            if let Some(selection) = self_selection { return Ok(selection); }
             if matches!(
                 occurrence.origin(),
                 BodyTypeOrigin::NeedGeneratedBoundary | BodyTypeOrigin::NeedRetainedOccurrence
@@ -1006,6 +1016,11 @@ impl LocalTypePrefix {
         let plan = Arc::clone(self.retained_plan());
         if let LocalTypePrefixSelection::Parameter(parameter) = self.selection() {
             return QueryPoll::Ready(Ok(NamedTypeOutcome::Ready(NamedTypePreparation::Parameter(*parameter))));
+        }
+        if let LocalTypePrefixSelection::AppliedSelf(term) = self.selection() {
+            return QueryPoll::Ready(Ok(NamedTypeOutcome::Ready(NamedTypePreparation::Alias(
+                crate::frontend::type_aliases::AliasTarget::Type(term.clone())
+            ))));
         }
         if matches!(self.selection(), LocalTypePrefixSelection::ModuleTail) {
             if let Some(observation) = ready!(self.module_name(db)) {

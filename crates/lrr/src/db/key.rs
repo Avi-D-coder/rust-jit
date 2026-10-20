@@ -153,7 +153,7 @@ pub enum QueryKey {
     ArrayRepeatPlan(crate::source::manifest::PcKey),
     PreparedArrayRepeat(crate::source::manifest::PcKey),
     AssociatedItemQualifier(crate::source::manifest::PcKey),
-    InitializerOwnerTemplate(crate::frontend::initializer_owner_templates::InitializerOwnerTemplateKey),
+    DeclarationOwnerTemplate(crate::frontend::declaration_owner_templates::DeclarationOwnerTemplateKey),
     AssociatedEquations(Box<crate::frontend::associated_equations::AssociatedEquationsKey>),
     NominalMember(Box<crate::frontend::nominal_member_goals::NominalMemberKey>),
     PreparedExplicitTypeArguments(crate::source::manifest::PcKey),
@@ -235,7 +235,7 @@ impl QueryKey {
             }
             Self::ScopeBucket(k) => k.scope.heap_bytes() + k.name.capacity(),
             Self::ArrayRepeatPlan(_) | Self::PreparedArrayRepeat(_)
-            | Self::InitializerOwnerTemplate(_)
+            | Self::DeclarationOwnerTemplate(_)
             | Self::AssociatedItemQualifier(_)
             | Self::PreparedExplicitTypeArguments(_)
             | Self::SourcePatternName(_)
@@ -272,7 +272,7 @@ impl QueryKey {
         match self {
             Self::ArrayRepeatPlan(_) => "ArrayRepeatPlan",
             Self::PreparedArrayRepeat(_) => "PreparedArrayRepeat",
-            Self::InitializerOwnerTemplate(_) => "InitializerOwnerTemplate",
+            Self::DeclarationOwnerTemplate(_) => "DeclarationOwnerTemplate",
             Self::PreparedScopeImplHeaders(_) => "PreparedScopeImplHeaders",
             Self::ImplHeaderSyntax(_) => "ImplHeaderSyntax",
             Self::ImplHeadTypes(_) => "ImplHeadTypes",
@@ -336,7 +336,7 @@ impl StableEncode for QueryKey {
         match self {
             Self::ArrayRepeatPlan(key) => { e.u32(54); e.record(key); }
             Self::PreparedArrayRepeat(key) => { e.u32(55); e.record(key); }
-            Self::InitializerOwnerTemplate(key) => { e.u32(53); e.record(key); }
+            Self::DeclarationOwnerTemplate(key) => { e.u32(53); e.record(key); }
             Self::PreparedScopeImplHeaders(key) => { e.u32(56); e.record(key); }
             Self::ImplHeaderSyntax(key) => { e.u32(57); e.record(key.as_ref()); }
             Self::ImplHeadTypes(key) => { e.u32(58); e.record(key.as_ref()); }

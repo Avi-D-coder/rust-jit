@@ -3254,3 +3254,55 @@ fn unchanged_static_alias_qualifiers_retain_closed_source_applications_all_editi
     }
     assert_eq!(count,36);
 }
+
+#[test]
+fn unchanged_impl_self_uses_actual_member_owner_template_all_editions_and_origins() {
+    use crate::{
+        db::{dependency::{InputKey,InputValue},key::QueryKey,poll::QueryPoll,provider::SyntaxProvider,value::QueryValue},
+        frontend::{declaration_owner_templates::{DeclarationOwner,DeclarationOwnerTemplateKey},
+            source_body_context::type_occurrences::BodyTypeSegment,source_types::NamedTypePreparation,
+            source_locals::owned_plan::NamedTypeOutcome,type_aliases::AliasTarget},
+        ir::pc::Phase,source::manifest::Namespace,syntax::imports::ImportSegment,
+        traits::term::{GenericArg,ParamKey,TyTerm},
+    };
+    fn ready<T:std::fmt::Debug>(poll:QueryPoll<T>)->T {match poll {QueryPoll::Ready(Ok(value))=>value,other=>panic!("actual member Self: {other:?}")}}
+    let mut count=0;
+    for(case,nominal,method,generic)in [
+        ("tests/ui/self/self-impl-2.rs","Foo","baz",false),
+        ("tests/ui/consts/issue-58435-ice-with-assoc-const.rs","S","id",true),
+    ] {
+        let original=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout").join(case);
+        let text=std::fs::read_to_string(&original).unwrap();
+        // Keep original directives/inner attributes outside the supplemental
+        // wrapper. The complete unchanged item stream remains the witness.
+        let split=if generic{text.find("\nstruct S").unwrap()}else{text.find("\nstruct Foo").unwrap()};
+        let(prefix,items)=text.split_at(split);
+        for edition in [2015,2018,2021,2024] {
+            let mut paths=vec![original.clone()];
+            for wrapper in [false,true] {let outer=if wrapper{"macro_rules! outer {($($t:tt)*)=>{emit!{$($t)*}}}"}else{""};let invoke=if wrapper{"outer"}else{"emit"};paths.push(temporary_source(&format!("member-self-{nominal}-{edition}-{wrapper}"),&format!("{prefix}\nmacro_rules! emit {{($($t:tt)*)=>{{$($t)*}}}} {outer} {invoke}!{{{items}}}")));}
+            for(origin,path)in paths.iter().enumerate() {
+                let(mut db,discovery,scope)=configured_impl_catalog_discovery(path,edition).unwrap();discovery.publish(&mut db).unwrap();
+                let header=ready(db.fetch(&SyntaxProvider,QueryKey::PreparedScopeImplHeaders(discovery.key().clone()))).value;let QueryValue::PreparedScopeImplHeaders(headers)=header.as_ref()else{panic!()};let environment=headers.inventory_root().environment().unwrap();let views=environment.sources().iter().collect::<Vec<_>>();
+                let found=environment.names().lookup_source_path(Namespace::Type,&[ImportSegment::Name(nominal.into())],false,&scope,edition).unwrap();let crate::frontend::names::NameLookup::Defined(found)=found else{panic!("actual target missing: {found:?}")};
+                let functions=environment.member_index().unwrap().inherent(found.identity,method);assert_eq!(functions.len(),1);let definition=functions[0];
+                let body=db.input(&InputKey::DefinitionBody(definition)).unwrap();let InputValue::DefinitionBody(body)=body.as_ref()else{panic!()};let plan=ready(db.prepare_source_local_plan(&discovery,&views,&body.key()));let owner=plan.context().source();
+                let signature=ready(db.fetch(&SyntaxProvider,QueryKey::FunctionSignature(definition))).value;let QueryValue::FunctionSignature(signature)=signature.as_ref()else{panic!()};
+                let arguments=if generic {let parameter=signature.generics.iter().find(|p|p.name=="T").unwrap();vec![GenericArg::Type(TyTerm::Param(ParamKey{definition,ordinal:parameter.ordinal}))]}else{Vec::new()};let expected=TyTerm::Nominal(found.identity,arguments);
+                db.trace.detailed=true;let start=db.trace.events.len();let mut guards=Vec::new();let before=count;
+                for node in owner.index().nodes() {
+                    let Some(occurrence)=ready(plan.context().body_type_occurrence(&mut db,node.id))else{continue};
+                    if !matches!(occurrence.segments(),[BodyTypeSegment::SelfType(_)]){continue}
+                    let result=match plan.prepare_named_body_type_outcome(&mut db,node.id) {QueryPoll::Ready(Ok(result))=>result,QueryPoll::Ready(Err(error))=>panic!("Self source error: {error:?}"),QueryPoll::NeedInput(input)=>panic!("Self source input: {input:?}")};
+                    let NamedTypeOutcome::Ready(NamedTypePreparation::Alias(AliasTarget::Type(actual)))=result else{panic!("actual applied Self missing: {nominal},{edition},{origin}")};assert_eq!(actual,expected);
+                    let key=QueryKey::DeclarationOwnerTemplate(DeclarationOwnerTemplateKey{caller_path:owner.index().pc(node.id,Phase::Entry).unwrap(),definition});let selected=ready(db.fetch(&SyntaxProvider,key.clone()));let QueryValue::DeclarationOwnerTemplate(template)=selected.value.as_ref()else{panic!()};assert!(template.demand().is_none());assert!(matches!(template.owner(),Some(DeclarationOwner::Impl{self_type:Some(actual),..})if actual==&expected));
+                    let guard=ready(db.prepare_input_guard(&SyntaxProvider,&key,selected.fingerprint));guard.require_current(&db).unwrap();guards.push(guard);let second=ready(db.fetch(&SyntaxProvider,key));assert!(std::sync::Arc::ptr_eq(&selected.value,&second.value));count+=1;
+                }
+                assert_eq!(count-before,if generic{1}else{2},"all actual unchanged member Self sites: {nominal}");
+                assert!(!db.trace.events[start..].iter().any(|event|match &event.key {QueryKey::Thunk(_)|QueryKey::BindingConstraints(_)=>true,QueryKey::BodyStructure(body)=>body!=owner.index().body()||event.action==crate::db::trace::Action::ProviderRun,_=>false}),"Self source context cannot prepare executable callees");
+                db.publish_inputs(std::collections::BTreeMap::new()).unwrap();for guard in guards{assert!(guard.require_current(&db).is_err());}
+                eprintln!("actual member Self {nominal}::{method},edition{edition},origin{origin}: {} source sites, exact declaration parameters, cached/revoked; no guest entry",count-before);
+            }
+        }
+    }
+    assert_eq!(count,36);
+}

@@ -64,6 +64,7 @@ pub(crate) enum BodyTypeDemand {
     GenericArguments(Digest),
     CachedSchema(Digest),
     OwnerGeneric,
+    AppliedSelf,
     QualifiedNamespace(Digest),
     Parameter(crate::traits::term::ParamKey),
     Source(crate::frontend::source_body_context::type_occurrences::BodyTypeAuthorityDemand),
@@ -448,6 +449,7 @@ pub(super) fn prepare(db: &mut Database, prefix: LocalTypePrefix) -> QueryPoll<B
         LocalTypePrefixSelection::Lookup(_) => {
             return pending(BodyTypeDemand::ModuleCandidate(prefix.fingerprint()));
         }
+        LocalTypePrefixSelection::AppliedSelf(_) => return pending(BodyTypeDemand::AppliedSelf),
         LocalTypePrefixSelection::Parameter(parameter) => {
             return pending(BodyTypeDemand::Parameter(*parameter));
         }

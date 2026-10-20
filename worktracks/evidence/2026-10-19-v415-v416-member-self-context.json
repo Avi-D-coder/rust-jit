@@ -1,0 +1,697 @@
+{
+  "schema": "lrr/source-checkpoint-evidence/v1",
+  "recorded_at": "2026-10-20T02:19:48.342456+00:00",
+  "status": "held_component",
+  "claim": "LOCAL-049",
+  "tasks": [
+    "M018",
+    "M025"
+  ],
+  "baseline": "8f38932a995fead028ea16b54a001f3fa6c8d0c5",
+  "source_sha256": "420964858eb581d76c7d84f82ff51ad533e6d0c23d055068795e2c512e7052eb",
+  "source_files": {
+    "crates/lrr/src/cli/preentry_loader.rs": "a88ebb6aaf557f25411a0ccacbe5e492a5b84739a2c99eda9c4ac5c6a4b42c18",
+    "crates/lrr/src/cli/preentry_loader_tests.rs": "d1f5d5c8353726a9dec62bef5bfbf8a910868d1db8580dd5cd2d3defbc9832a8",
+    "crates/lrr/src/db/key.rs": "aa1d96016f45981b345f647a838fa40022ad3627b0b1b77ab06c9382528722b3",
+    "crates/lrr/src/db/provider.rs": "1cca9aab22651dde4fa2a5c0910091b652442449e760ab0d67bcd4a901600911",
+    "crates/lrr/src/db/value.rs": "3f956f88d7b9de19ec33e7a7289b703d1bc8c345d59847ee9a54c59420402a12",
+    "crates/lrr/src/frontend/body_type_declarations.rs": "3a1194087a3147fe1a14596fbbbe00d117abac34c2269cbbc385dafd28d07485",
+    "crates/lrr/src/frontend/mod.rs": "60e2b4332648b768a0e2fd554e9a123bc5be8ffb0e7b9ec803504c3ebab3ef6a",
+    "crates/lrr/src/frontend/source_local_plan.rs": "319ed42ee40ec7e42cd880b6ac038ef44606c81b8e158c2b5de7c72f9d947eaf",
+    "crates/lrr/src/service/expansion.rs": "6c634c2fefe1a4278b6f7a3a26976f6024d61d3b89f62004ac2ea1daa28d98af",
+    "crates/lrr/src/frontend/declaration_owner_templates.rs": "d22655524ba1f2e6104e1ee06a6554318c449eb0d79ccae83345e6d376d7be2a"
+  },
+  "summary": "V415/V416 HELD M018/M025 actual declaration-owner Self. The existing initializer owner template becomes shared DeclarationOwnerTemplate(tag53,domainsv2), admitting actual Fn/Const/Static source declarations and indexed Type/Value sites through retained SourceLocalPlan, FunctionSignature, direct parser/header and real Impl/Trait parent evidence. The ordinary Self prefix retains actual trait parameters or applied impl terms over the member binder; named Type finalization uses existing AliasTarget::Type. Old initializer-only module/query routes are removed. Final V416 fixes a review-caught fresh-tag collision and requires exactly36 Self sites across24 unchanged-fixture/edition/original-emit-wrapper worlds. Both builds pass; final source matrix passes with memo/withdrawal/no-callee-execution controls. The combined constant runtime control remains failed but advances past inherent Self::BAR and explicit trait-impl constants in2015 to the third provided-default case requiring a source generic argument packet. V415 source also passes the existing36closed-alias source matrix and16world trait-Self interpreter regression. Whole self-impl-2 still fails at81dispatches/closed parameter source mismatch and issue58435 at12dispatches/callee classification, all4 editions. Zero new distinct upstream runtime gains or refreshed suite total; no feature/card/solver/interpreter/JIT closure. Legacy signature header reparsing, open ExplicitType applications and complete generic initializer provider/cache packets remain explicit debt.",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "Rust1.99.0",
+  "unchanged_upstream": {
+    "commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "license": "MIT OR Apache-2.0",
+    "files": [
+      {
+        "path": "tests/ui/consts/issue-58435-ice-with-assoc-const.rs",
+        "git_blob": "6b4722d349e3b6fc829433bc84dfddca06af307a",
+        "sha256": "6f8bfb0cfedae59905cb01fb2657af92d95ff7c0e1cbae86d9520b5fd1878040",
+        "bytes": 461
+      },
+      {
+        "path": "tests/ui/self/self-impl-2.rs",
+        "git_blob": "7316adfde1a62b42e009130b430d831d878725d9",
+        "sha256": "3d373b66c5ca698a52bb706be42ef4c426270aa02af1a6a7f4f3bffb95aaf559",
+        "bytes": 1480
+      }
+    ]
+  },
+  "attempts": [
+    {
+      "version": 415,
+      "source_sha256": "0ff49a5f1f6392d78d49dbbc49923d351fbc75ff6144d77bda8c5186bf42521f",
+      "head": "8f38932a995fead028ea16b54a001f3fa6c8d0c5",
+      "local_outputs": "artifacts/validation-current-v415",
+      "binaries": {
+        "test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+          "sha256": "3bbfce204dac8c146a0d4d901d0525c35379881001cb37fbff81d50ae1bac86b"
+        },
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "34404b10a4044ade923bffed3c9d1c5cfbcfe97501714b2060b7d9d286629c5f"
+        }
+      },
+      "builds": {
+        "lib": {
+          "exit": 0,
+          "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json"
+        },
+        "cli": {
+          "exit": 0,
+          "command": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json"
+        }
+      },
+      "controls_exit": 1,
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_impl_self_uses_actual_member_owner_template_all_editions_and_origins",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+            "cli::preentry_loader_tests::unchanged_impl_self_uses_actual_member_owner_template_all_editions_and_origins",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 61.93,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::value_scope_tests::associated_constants_select_through_the_member_index",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+            "cli::value_scope_tests::associated_constants_select_through_the_member_index",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 101,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": false,
+          "seconds": 0.609,
+          "log": "control-1.log"
+        },
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_static_alias_qualifiers_retain_closed_source_applications_all_editions_and_origins",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+            "cli::preentry_loader_tests::unchanged_static_alias_qualifiers_retain_closed_source_applications_all_editions_and_origins",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 30.826,
+          "log": "control-2.log"
+        },
+        {
+          "selector": "cli::callable_value_tests::upstream_trait_self_arguments_share_declared_types_all_editions_and_origins",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+            "cli::callable_value_tests::upstream_trait_self_arguments_share_declared_types_all_editions_and_origins",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 94.352,
+          "log": "control-3.log"
+        }
+      ],
+      "guards": {
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "binaries_match_build": true
+      },
+      "manifests": {
+        "before": "ff3c746f76d09340b1332bdb10f94a52248c75803831f045a00cf48ff484e5e6",
+        "after-build": "8407beb360e179b404f1d3a4230ece8ba199b0b83bac263f2c21a80dc4495358",
+        "after-runtime": "2c94e4e6ec6f1a629e6d5984761d545da5845a4fa2fd8185df6a23deafc6ae04"
+      },
+      "raw_log_hashes": {
+        "controls.log": "fced154f549af2b0034a5ecec6e0d5363746583da8646819e4b12639f3f08619",
+        "control-3.log": "8254938439565dd90938070bb75d25d1de9c96e033ed5a0dd53c8fa379bbc02e",
+        "control-2.log": "e242de0741bec3b334d1d25d317c43cb328c5b6b777294c581bc2a85af9c3af5",
+        "control-0.log": "ae4cf9be558ea83ad2d64c6fcd1a166ad07b96a3ba1251ce08e0f41696759d14",
+        "control-1.log": "d209ea248faa5fc0a8ee181b151544bbdcb7776ed1c88fddfcd0161d93a56002",
+        "lib-build.log": "22cdf1b214a4a35aaa68a53103a84a70406fcbb825b0c65482b488ccf760efc4",
+        "cli-build.log": "61aa27fb3e4a8630c66ac7ef715c08ef78f41212eb289d8e73c8e07915b3e9fe"
+      },
+      "encoding_review_hold": "AppliedSelf used tag12 also assigned to QualifiedTail; source/value observations preserved, no valid encoding claim. Corrected to fresh13 in V416.",
+      "runtime_observer_exit": 0,
+      "runtime_rows": [
+        {
+          "path": "tests/ui/self/self-impl-2.rs",
+          "edition": 2015,
+          "sha256": "3d373b66c5ca698a52bb706be42ef4c426270aa02af1a6a7f4f3bffb95aaf559",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "--edition",
+            "2015",
+            "run",
+            "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/self/self-impl-2.rs",
+            "--runtime-capture",
+            "--capture-context",
+            "dd60a11341a3779eb9a77387f666c49270c579df5da9d9e007f43e9d49b2424c"
+          ],
+          "environment": {
+            "LRR_EMBEDDED_FACADE": "1"
+          },
+          "exit": 2,
+          "seconds": 6.023,
+          "inputs_unchanged": true,
+          "runtime_contract_pass": false,
+          "complete": false,
+          "facts": {
+            "classified_operation_candidates": 116,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 11,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 81,
+            "vm_outcomes": 81
+          },
+          "guest": {
+            "status": "unobserved",
+            "stdout": null,
+            "stderr": null
+          },
+          "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer",
+          "terminal_status": "fault",
+          "terminal_code": "LRR-E-CALL-ARG-TYPE",
+          "terminal_message": "argument source type differs from the closed parameter type",
+          "stdout_sha256": "0e03a31095b50c6dc92443312f4da3c3bba7ae0730f2ba6777db4ee36be9d43b",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "tests/ui/self/self-impl-2.rs",
+          "edition": 2018,
+          "sha256": "3d373b66c5ca698a52bb706be42ef4c426270aa02af1a6a7f4f3bffb95aaf559",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "--edition",
+            "2018",
+            "run",
+            "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/self/self-impl-2.rs",
+            "--runtime-capture",
+            "--capture-context",
+            "8c0067c22b17d4232522d9ccfbb2986329128961c48d31e3cd331f7049d0edec"
+          ],
+          "environment": {
+            "LRR_EMBEDDED_FACADE": "1"
+          },
+          "exit": 2,
+          "seconds": 5.019,
+          "inputs_unchanged": true,
+          "runtime_contract_pass": false,
+          "complete": false,
+          "facts": {
+            "classified_operation_candidates": 116,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 11,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 81,
+            "vm_outcomes": 81
+          },
+          "guest": {
+            "status": "unobserved",
+            "stdout": null,
+            "stderr": null
+          },
+          "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer",
+          "terminal_status": "fault",
+          "terminal_code": "LRR-E-CALL-ARG-TYPE",
+          "terminal_message": "argument source type differs from the closed parameter type",
+          "stdout_sha256": "7977cd94825697147a63628c6dd313e05fd7bfaf92e1b363dcdf280a550510c8",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "tests/ui/self/self-impl-2.rs",
+          "edition": 2021,
+          "sha256": "3d373b66c5ca698a52bb706be42ef4c426270aa02af1a6a7f4f3bffb95aaf559",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "--edition",
+            "2021",
+            "run",
+            "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/self/self-impl-2.rs",
+            "--runtime-capture",
+            "--capture-context",
+            "b3f70d172adda54464c6708c01e8961bce3fdbae9c841d43a2fd5b9f445b33c0"
+          ],
+          "environment": {
+            "LRR_EMBEDDED_FACADE": "1"
+          },
+          "exit": 2,
+          "seconds": 5.045,
+          "inputs_unchanged": true,
+          "runtime_contract_pass": false,
+          "complete": false,
+          "facts": {
+            "classified_operation_candidates": 116,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 11,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 81,
+            "vm_outcomes": 81
+          },
+          "guest": {
+            "status": "unobserved",
+            "stdout": null,
+            "stderr": null
+          },
+          "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer",
+          "terminal_status": "fault",
+          "terminal_code": "LRR-E-CALL-ARG-TYPE",
+          "terminal_message": "argument source type differs from the closed parameter type",
+          "stdout_sha256": "ee1cdc05eaf947207379ecfadfe004b1bad29910d5c2702603b7a51c9ed04b7c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "tests/ui/self/self-impl-2.rs",
+          "edition": 2024,
+          "sha256": "3d373b66c5ca698a52bb706be42ef4c426270aa02af1a6a7f4f3bffb95aaf559",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "--edition",
+            "2024",
+            "run",
+            "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/self/self-impl-2.rs",
+            "--runtime-capture",
+            "--capture-context",
+            "8bd93f88e5c89ae65d8333695822d8c749f0a1e79c9fe1053536949c418d59bb"
+          ],
+          "environment": {
+            "LRR_EMBEDDED_FACADE": "1"
+          },
+          "exit": 2,
+          "seconds": 5.124,
+          "inputs_unchanged": true,
+          "runtime_contract_pass": false,
+          "complete": false,
+          "facts": {
+            "classified_operation_candidates": 116,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 11,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 81,
+            "vm_outcomes": 81
+          },
+          "guest": {
+            "status": "unobserved",
+            "stdout": null,
+            "stderr": null
+          },
+          "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer",
+          "terminal_status": "fault",
+          "terminal_code": "LRR-E-CALL-ARG-TYPE",
+          "terminal_message": "argument source type differs from the closed parameter type",
+          "stdout_sha256": "e7c57183c303098927d0b1eefc261de51ead1cc9ed800cdb1f876bd7d618fa40",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "tests/ui/consts/issue-58435-ice-with-assoc-const.rs",
+          "edition": 2015,
+          "sha256": "6f8bfb0cfedae59905cb01fb2657af92d95ff7c0e1cbae86d9520b5fd1878040",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "--edition",
+            "2015",
+            "run",
+            "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-58435-ice-with-assoc-const.rs",
+            "--runtime-capture",
+            "--capture-context",
+            "4b12cdf1966b96842fe1947204466ff232578458e0ece14a20ea8aff2ae01d50"
+          ],
+          "environment": {
+            "LRR_EMBEDDED_FACADE": "1"
+          },
+          "exit": 2,
+          "seconds": 4.599,
+          "inputs_unchanged": true,
+          "runtime_contract_pass": false,
+          "complete": false,
+          "facts": {
+            "classified_operation_candidates": 17,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 12,
+            "vm_outcomes": 12
+          },
+          "guest": {
+            "status": "unobserved",
+            "stdout": null,
+            "stderr": null
+          },
+          "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer",
+          "terminal_status": "fault",
+          "terminal_code": "LRR-E-UNSUPPORTED",
+          "terminal_message": "callee classification requires later call context integration",
+          "stdout_sha256": "01427b16899743123ea3b65bdfd772f01eec3a311bb758a90de7ecbeaddf1bdb",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "tests/ui/consts/issue-58435-ice-with-assoc-const.rs",
+          "edition": 2018,
+          "sha256": "6f8bfb0cfedae59905cb01fb2657af92d95ff7c0e1cbae86d9520b5fd1878040",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "--edition",
+            "2018",
+            "run",
+            "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-58435-ice-with-assoc-const.rs",
+            "--runtime-capture",
+            "--capture-context",
+            "fc5e73face680a940cef8a7d1cc700313567cd32d71e4090047a35543afd9a3e"
+          ],
+          "environment": {
+            "LRR_EMBEDDED_FACADE": "1"
+          },
+          "exit": 2,
+          "seconds": 4.803,
+          "inputs_unchanged": true,
+          "runtime_contract_pass": false,
+          "complete": false,
+          "facts": {
+            "classified_operation_candidates": 17,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 12,
+            "vm_outcomes": 12
+          },
+          "guest": {
+            "status": "unobserved",
+            "stdout": null,
+            "stderr": null
+          },
+          "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer",
+          "terminal_status": "fault",
+          "terminal_code": "LRR-E-UNSUPPORTED",
+          "terminal_message": "callee classification requires later call context integration",
+          "stdout_sha256": "5ae3527660d65d39ff0c7c259d0162d077b3c2ee792d88ed8caedff3fd76a30c",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "tests/ui/consts/issue-58435-ice-with-assoc-const.rs",
+          "edition": 2021,
+          "sha256": "6f8bfb0cfedae59905cb01fb2657af92d95ff7c0e1cbae86d9520b5fd1878040",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "--edition",
+            "2021",
+            "run",
+            "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-58435-ice-with-assoc-const.rs",
+            "--runtime-capture",
+            "--capture-context",
+            "9c29371ef64be59dd20f3e3d638623f4a774e05785527695a6b3243ae880519f"
+          ],
+          "environment": {
+            "LRR_EMBEDDED_FACADE": "1"
+          },
+          "exit": 2,
+          "seconds": 4.502,
+          "inputs_unchanged": true,
+          "runtime_contract_pass": false,
+          "complete": false,
+          "facts": {
+            "classified_operation_candidates": 17,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 12,
+            "vm_outcomes": 12
+          },
+          "guest": {
+            "status": "unobserved",
+            "stdout": null,
+            "stderr": null
+          },
+          "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer",
+          "terminal_status": "fault",
+          "terminal_code": "LRR-E-UNSUPPORTED",
+          "terminal_message": "callee classification requires later call context integration",
+          "stdout_sha256": "fccace9074595c0c7c415ae35ca421a4cf768c7671f3cc09c315783f47889e92",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "tests/ui/consts/issue-58435-ice-with-assoc-const.rs",
+          "edition": 2024,
+          "sha256": "6f8bfb0cfedae59905cb01fb2657af92d95ff7c0e1cbae86d9520b5fd1878040",
+          "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+          "directives": [
+            "//@ run-pass"
+          ],
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/lrr",
+            "--edition",
+            "2024",
+            "run",
+            "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/consts/issue-58435-ice-with-assoc-const.rs",
+            "--runtime-capture",
+            "--capture-context",
+            "fd73b8c2e7629f38c142eebefbc565e0e3c6421380e993d3b82b3ec861ff195b"
+          ],
+          "environment": {
+            "LRR_EMBEDDED_FACADE": "1"
+          },
+          "exit": 2,
+          "seconds": 4.419,
+          "inputs_unchanged": true,
+          "runtime_contract_pass": false,
+          "complete": false,
+          "facts": {
+            "classified_operation_candidates": 17,
+            "cleanup_observed": false,
+            "closed_no_external_effects": false,
+            "effect_recipe_dispatch_attempts": 0,
+            "initializer_frames_entered": 0,
+            "observed_fault": true,
+            "observed_suspension": false,
+            "source_call_boundaries": 1,
+            "terminal": null,
+            "typed_fault_exit_candidates": 0,
+            "unsupported_operation_candidates": 0,
+            "vm_dispatches": 12,
+            "vm_outcomes": 12
+          },
+          "guest": {
+            "status": "unobserved",
+            "stdout": null,
+            "stderr": null
+          },
+          "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer",
+          "terminal_status": "fault",
+          "terminal_code": "LRR-E-UNSUPPORTED",
+          "terminal_message": "callee classification requires later call context integration",
+          "stdout_sha256": "31d75947d289b6348c7a6ab70034afdeede89620b4a78d0d31776f891bd1de00",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "version": 416,
+      "source_sha256": "420964858eb581d76c7d84f82ff51ad533e6d0c23d055068795e2c512e7052eb",
+      "head": "8f38932a995fead028ea16b54a001f3fa6c8d0c5",
+      "local_outputs": "artifacts/validation-current-v416",
+      "binaries": {
+        "test": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+          "sha256": "237d8974d8c367c076ce129353e11791e92ca322100e15ab79659f7ad88530ca"
+        },
+        "cli": {
+          "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "sha256": "069c4004ea0849041e27fddbabcef86880dcc4959694cd6cfab04b3e8583c5e3"
+        }
+      },
+      "builds": {
+        "lib": {
+          "exit": 0,
+          "command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json"
+        },
+        "cli": {
+          "exit": 0,
+          "command": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr --message-format=json"
+        }
+      },
+      "controls_exit": 1,
+      "controls": [
+        {
+          "selector": "cli::preentry_loader_tests::unchanged_impl_self_uses_actual_member_owner_template_all_editions_and_origins",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+            "cli::preentry_loader_tests::unchanged_impl_self_uses_actual_member_owner_template_all_editions_and_origins",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 0,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": true,
+          "seconds": 56.532,
+          "log": "control-0.log"
+        },
+        {
+          "selector": "cli::value_scope_tests::associated_constants_select_through_the_member_index",
+          "argv": [
+            "/Users/avi/Code/rust-jit/target/debug/deps/lrr-52b642b984e8f480",
+            "cli::value_scope_tests::associated_constants_select_through_the_member_index",
+            "--exact",
+            "--nocapture",
+            "--test-threads=1"
+          ],
+          "exit": 101,
+          "one_body": true,
+          "inputs_unchanged": true,
+          "pass": false,
+          "seconds": 0.536,
+          "log": "control-1.log"
+        }
+      ],
+      "guards": {
+        "source_matches_before": true,
+        "head_matches_before": true,
+        "binaries_match_build": true
+      },
+      "manifests": {
+        "before": "ea3a38b389c98fb2f040cda762cf10e678f423bdea1842b4f8fb0a3de83c33bc",
+        "after-build": "89532435a6530575a9f6cd159c243cfaff6337c5ffe0dde11254f8fda8b4b5ce",
+        "after-runtime": "698a303066b49619707ee2c9100509c0ce4100b03e205473aae2629765a91de2"
+      },
+      "raw_log_hashes": {
+        "controls.log": "f87d7550161fdeca7abed7166480cd6eed8619a89450a98b1f2168e51cf1fd98",
+        "control-0.log": "a2fee615d58f02be79001f7776b97e23bdb1fd21f6b47bd1b6ee610390a13452",
+        "control-1.log": "bd6a27d39f786b2b08e4c86d57cd6c2e109bfe5cedead90de036faf7e7be4ae1",
+        "lib-build.log": "1a957a4064c1567a28bdd1f3316dc96fd4b165c9bd5ee0352873b2361b157c55",
+        "cli-build.log": "f926683bbed69cd9edd3f11ef4851d9910e748a7cf68c870fc18337450b02f5b"
+      },
+      "unchanged_prior_evidence": "Only AppliedSelf tag13 and source-witness exact counts/error formatting changed; prior closed-alias/trait-Self and whole-main results remain at V415, not counted as V416 executions."
+    }
+  ],
+  "acceptance_reports": {
+    "upstream_runtime_acceptance": "incomplete; zero newly passing whole cases in this checkpoint",
+    "diagnostic_compatibility": "unassessed",
+    "compiler_tooling_compatibility": "unassessed",
+    "full_suite_compatibility": "incomplete",
+    "new_distinct_runtime_contract_gains": 0,
+    "refreshed_suite_total": false,
+    "specification_card_complete": false,
+    "guest_jit_allowed": false
+  },
+  "architecture_record": "worktracks/04-calls-source-views/2026-10-19-member-self-context.md",
+  "architecture_review": {
+    "path": "worktracks/04-calls-source-views/2026-10-19-member-self-review.md",
+    "final_source_sha256": "420964858eb581d76c7d84f82ff51ad533e6d0c23d055068795e2c512e7052eb",
+    "all_eight_modes_source_reviewed": true,
+    "full_runtime_origin_standard_macro_suspension_invalidation_matrix": "incomplete"
+  },
+  "remaining": [
+    "Provided generic trait constant full source application, provider dependency/currentness and initializer cache keys",
+    "Open member-owned Self/alias applications through common ExplicitType source/descriptor transport",
+    "Legacy source_types impl_self_type/generated_impl_self_type/impl_owned_name header reparsing for unmigrated signature consumers",
+    "Nominal-declaration-only body Type API retains AppliedSelf demand; named finalizer carries actual application",
+    "Actual upstream trait solver complete source/client/root/member/VM integration",
+    "Complete interpreter runtime/correctness prerequisite before guest JIT"
+  ],
+  "reproduction": {
+    "controls_v415": "python3.12 tools/validation/run_controls.py DIR worktracks/04-calls-source-views/2026-10-19-member-self-controls.json",
+    "controls_final": "python3.12 tools/validation/run_controls.py DIR worktracks/04-calls-source-views/2026-10-19-member-self-final-controls.json",
+    "runtime_v415": "Recorded argv/environment for each unchanged original/edition; require complete capture, empty guest streams, completed unit and observed cleanup for a pass. All8 recorded runs fail; no unsupported exemption. Guard source/HEAD/binary before and after every execution.",
+    "source_manifests": "tools/validation/source_manifest.py before / after-build --cargo-messages DIR/lib-build.jsonl --cli-binary target/debug/lrr / after-runtime"
+  }
+}

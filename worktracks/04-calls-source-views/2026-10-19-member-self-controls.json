@@ -1,0 +1,8 @@
+{
+  "controls": [
+    "cli::preentry_loader_tests::unchanged_impl_self_uses_actual_member_owner_template_all_editions_and_origins",
+    "cli::value_scope_tests::associated_constants_select_through_the_member_index",
+    "cli::preentry_loader_tests::unchanged_static_alias_qualifiers_retain_closed_source_applications_all_editions_and_origins",
+    "cli::callable_value_tests::upstream_trait_self_arguments_share_declared_types_all_editions_and_origins"
+  ]
+}

@@ -371,7 +371,7 @@ impl Packet {
                 | QueryKey::ExpansionInput(_)
                 | QueryKey::TypeSchema(_)
                 | QueryKey::ConstructorPlan(_)
-                | QueryKey::ArrayRepeatPlan(_) | QueryKey::PreparedArrayRepeat(_) | QueryKey::InitializerOwnerTemplate(_)
+                | QueryKey::ArrayRepeatPlan(_) | QueryKey::PreparedArrayRepeat(_) | QueryKey::DeclarationOwnerTemplate(_)
                 | QueryKey::AssociatedItemQualifier(_)
                 | QueryKey::AssociatedEquations(_)
                 | QueryKey::NominalMember(_)

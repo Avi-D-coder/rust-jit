@@ -135,7 +135,7 @@ pub enum QueryValue {
     AssociatedItemQualifier(Box<crate::frontend::associated_constant_applications::PreparedAssociatedItemQualifier>),
     ArrayRepeatPlan(Box<crate::frontend::array_repeats::ArrayRepeatPlan>),
     PreparedArrayRepeat(Box<crate::frontend::array_repeats::PreparedArrayRepeat>),
-    InitializerOwnerTemplate(Box<crate::frontend::initializer_owner_templates::PreparedInitializerOwnerTemplate>),
+    DeclarationOwnerTemplate(Box<crate::frontend::declaration_owner_templates::PreparedDeclarationOwnerTemplate>),
     AssociatedEquations(Box<crate::frontend::associated_equations::PreparedAssociatedEquations>),
     NominalMember(Box<crate::frontend::nominal_member_goals::PreparedNominalMember>),
     BoundRecordConstructor(Box<crate::frontend::prepared_constructors::PreparedRecordConstructor>),
@@ -179,7 +179,7 @@ impl QueryValue {
         let local = match self {
             Self::ArrayRepeatPlan(value) => value.parent().map(SourceArtifactRef::LocalPlan),
             Self::PreparedArrayRepeat(value) => value.plan().parent().map(SourceArtifactRef::LocalPlan),
-            Self::InitializerOwnerTemplate(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
+            Self::DeclarationOwnerTemplate(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::AssociatedItemQualifier(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::NominalMember(value) => Some(SourceArtifactRef::LocalPlan(value.retained_plan())),
             Self::PreparedBodySyntax(value) => Some(SourceArtifactRef::PreparedBodySyntax(value)),
@@ -254,7 +254,7 @@ impl QueryValue {
         if let (Self::TraitDeclaration(value), QueryKey::TraitDeclaration(key)) = (self, key) { return value.definition() == *key; }
         if let (Self::ArrayRepeatPlan(value), QueryKey::ArrayRepeatPlan(key)) = (self, key) { return value.key() == key; }
         if let (Self::PreparedArrayRepeat(value), QueryKey::PreparedArrayRepeat(key)) = (self, key) { return value.plan().key() == key; }
-        if let (Self::InitializerOwnerTemplate(value), QueryKey::InitializerOwnerTemplate(key)) = (self, key) { return value.key() == key; }
+        if let (Self::DeclarationOwnerTemplate(value), QueryKey::DeclarationOwnerTemplate(key)) = (self, key) { return value.key() == key; }
         if let (Self::AssociatedItemQualifier(value), QueryKey::AssociatedItemQualifier(key)) = (self, key) { return value.key() == key; }
         if let (Self::AssociatedEquations(value), QueryKey::AssociatedEquations(key)) = (self, key)
         {
@@ -460,7 +460,7 @@ impl QueryValue {
             }
             Self::ArrayRepeatPlan(value) => { e.u32(54); e.record(value.as_ref()); }
             Self::PreparedArrayRepeat(value) => { e.u32(55); e.record(value.as_ref()); }
-            Self::InitializerOwnerTemplate(value) => { e.u32(53); e.record(value.as_ref()); }
+            Self::DeclarationOwnerTemplate(value) => { e.u32(53); e.record(value.as_ref()); }
             Self::PreparedScopeImplHeaders(value) => { e.u32(56); e.digest(value.fingerprint()); }
             Self::ImplHeaderSyntax(value) => { e.u32(57); e.record(value.as_ref()); }
             Self::ImplHeadTypes(value) => { e.u32(58); e.record(value.as_ref()); }
@@ -661,7 +661,7 @@ impl QueryValue {
             Self::TypeSchema(v) => v.estimated_bytes(),
             Self::ConstructorPlan(v) => v.estimated_bytes().unwrap_or(usize::MAX),
             // E006: no new retained-admission memory accounting.
-            Self::ArrayRepeatPlan(_) | Self::PreparedArrayRepeat(_) | Self::InitializerOwnerTemplate(_)
+            Self::ArrayRepeatPlan(_) | Self::PreparedArrayRepeat(_) | Self::DeclarationOwnerTemplate(_)
             | Self::PreparedScopeImplHeaders(_) | Self::ImplHeaderSyntax(_) | Self::ImplHeadTypes(_) | Self::ImplPredicates(_) | Self::TraitDeclaration(_) | Self::DeclarationGenerics(_) | Self::DeclarationGenericTypes(_) | Self::ImplTraitIdentity(_) | Self::ImplTraitCatalog(_) | Self::SolverConfiguration(_) | Self::ImplSourceTypes(_) | Self::ImplSourcePredicates(_) => 0,
             Self::AssociatedItemQualifier(value) => value.metadata_bytes().unwrap_or(usize::MAX),
             Self::AssociatedEquations(value) => value.metadata_bytes().unwrap_or(usize::MAX),
