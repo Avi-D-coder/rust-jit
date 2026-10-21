@@ -232,6 +232,7 @@ impl StableEncode for EnteredSourceName {
 enum Selection {
     Local(Arc<OrdinaryLocalAdmission>),
     Module(Arc<EnteredModuleAdmission>),
+    Associated(Arc<EnteredAssociatedAdmission>),
     Binding {
         plan: Arc<PreparedSourceLocalPlan>,
         identity: Digest,
@@ -249,6 +250,7 @@ enum Selection {
 pub(crate) enum EnteredCallSelection<'a> {
     Local(&'a OrdinaryLocalAdmission),
     Module(&'a SelectedValueDeclaration),
+    Associated(&'a EnteredAssociatedAdmission),
     Binding(Digest),
     Value(Digest),
     Pending(ValueGoalDemand),
@@ -268,8 +270,53 @@ pub(crate) struct EnteredCallTarget {
 enum TargetAdmission {
     Local(Arc<OrdinaryLocalAdmission>),
     Module(Arc<EnteredModuleAdmission>),
+    Associated(Arc<EnteredAssociatedAdmission>),
+}
+
+/// A real source Type qualifier and the ordinary member service's selected
+/// callable. No executable body, runtime descriptor or replacement name proof.
+#[derive(Debug)]
+pub(crate) struct EnteredAssociatedAdmission {
+    qualifier: Arc<QueryValue>,
+    qualifier_guard: Arc<PreparedInputGuard>,
+    signature_guard: Arc<PreparedInputGuard>,
+    callable: crate::frontend::callables::SourceCallable,
+}
+impl EnteredAssociatedAdmission {
+    fn parent(&self) -> &Arc<PreparedSourceLocalPlan> { self.qualifier().retained_plan() }
+    fn qualifier(&self) -> &crate::frontend::associated_constant_applications::PreparedAssociatedItemQualifier {
+        let QueryValue::AssociatedItemQualifier(qualifier) = self.qualifier.as_ref() else {
+            unreachable!("retained actual associated qualifier")
+        }; qualifier
+    }
+    pub(crate) fn source(&self) -> &crate::frontend::explicit_type_arguments::ExplicitType {
+        self.qualifier().source().expect("authenticated actual Type qualifier")
+    }
+    fn require_current(&self, db: &Database) -> Result<(), Diagnostic> {
+        self.qualifier_guard.require_current(db)?;
+        self.signature_guard.require_current(db)
+    }
+    fn callable(&self, db: &mut Database) -> Result<Box<crate::frontend::callables::SourceCallable>, Diagnostic> {
+        self.require_current(db)?;
+        self.callable.revalidate(db)?;
+        Ok(Box::new(self.callable.clone()))
+    }
+}
+impl StableEncode for EnteredAssociatedAdmission {
+    const DOMAIN: &'static str = "lrr/v1/entered-associated-source-call";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        e.digest(self.parent().source_identity());
+        e.digest(self.qualifier_guard.fingerprint());
+        e.digest(self.signature_guard.fingerprint());
+        e.digest(self.callable.identity());
+        e.digest(self.callable.signature().fingerprint());
+        e.record(self.source().source());
+    }
 }
 impl EnteredCallTarget {
+    pub(crate) fn associated_source(&self) -> Option<&crate::frontend::explicit_type_arguments::ExplicitType> {
+        match &self.admission { TargetAdmission::Associated(proof) => Some(proof.source()), _ => None }
+    }
     pub(crate) fn metadata_bytes(&self) -> usize {
         self.bytes
     }
@@ -295,16 +342,18 @@ impl EnteredCallTarget {
                 proof.revalidate(db)?;
                 proof.callable_shared(db)
             }
+            TargetAdmission::Associated(proof) => proof.callable(db),
         }
     }
 }
 impl StableEncode for EnteredCallTarget {
-    const DOMAIN: &'static str = "lrr/v1/retained-entered-call-target";
+    const DOMAIN: &'static str = "lrr/v2/retained-entered-call-target";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.identity);
         e.u8(match &self.admission {
             TargetAdmission::Local(_) => 0,
             TargetAdmission::Module(_) => 1,
+            TargetAdmission::Associated(_) => 2,
         });
         e.string(&self.name);
         e.sequence(&self.explicit, |e, value| e.string(value));
@@ -370,6 +419,9 @@ impl EnteredCallGoal {
             Selection::Module(proof) => (
                 TargetAdmission::Module(Arc::clone(proof)),
                 proof.metadata_bytes(),
+            ),
+            Selection::Associated(proof) => (
+                TargetAdmission::Associated(Arc::clone(proof)), 0,
             ),
             Selection::Binding { .. } | Selection::Value { .. } | Selection::Pending { .. } => {
                 return Err(fault(
@@ -443,6 +495,7 @@ impl EnteredCallGoal {
         match &self.selection {
             Selection::Local(proof) => proof.parent(),
             Selection::Module(proof) => proof.parent(),
+            Selection::Associated(proof) => proof.parent(),
             Selection::Binding { plan, .. }
             | Selection::Value { plan, .. }
             | Selection::Pending { plan, .. } => plan,
@@ -452,6 +505,7 @@ impl EnteredCallGoal {
         match &self.selection {
             Selection::Local(proof) => EnteredCallSelection::Local(proof),
             Selection::Module(proof) => EnteredCallSelection::Module(proof.declaration()),
+            Selection::Associated(proof) => EnteredCallSelection::Associated(proof),
             Selection::Binding { identity, .. } => EnteredCallSelection::Binding(*identity),
             Selection::Value { identity, .. } => EnteredCallSelection::Value(*identity),
             Selection::Pending { demand, .. } => EnteredCallSelection::Pending(*demand),
@@ -463,6 +517,7 @@ impl EnteredCallGoal {
         match &self.selection {
             Selection::Local(proof) => Some(proof.signature()),
             Selection::Module(proof) => Some(proof.signature()),
+            Selection::Associated(proof) => Some(proof.callable.signature()),
             Selection::Binding { .. } | Selection::Value { .. } | Selection::Pending { .. } => None,
         }
     }
@@ -470,6 +525,9 @@ impl EnteredCallGoal {
         self.guard.require_current(db)?;
         if let Selection::Module(proof) = &self.selection {
             proof.revalidate(db)?;
+        }
+        if let Selection::Associated(proof) = &self.selection {
+            proof.require_current(db)?;
         }
         if let Selection::Value { syntax_guard, .. } = &self.selection {
             syntax_guard.require_current(db)?;
@@ -646,6 +704,7 @@ impl EnteredCallGoal {
             // Admission metadata includes its Arc header and selection guard;
             // self.guard aliases that allocation, never another parent handle.
             Selection::Module(proof) => bytes = add(bytes, proof.metadata_bytes())?,
+            Selection::Associated(_) => {}, // E006: no new resource accounting.
             Selection::Binding { .. } | Selection::Value { .. } | Selection::Pending { .. } => {
                 bytes = add(bytes, add(self.guard.metadata_bytes(), ARC_HEADER)?)?;
                 if let Selection::Value { syntax_guard, .. } = &self.selection {
@@ -707,7 +766,7 @@ fn encode_demand(demand: ValueGoalDemand, e: &mut StableEncoder) {
     }
 }
 impl StableEncode for EnteredCallGoal {
-    const DOMAIN: &'static str = "lrr/v5/entered-ordinary-source-call-goal";
+    const DOMAIN: &'static str = "lrr/v6/entered-ordinary-source-call-goal";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.digest(self.structure);
@@ -733,6 +792,7 @@ impl StableEncode for EnteredCallGoal {
                 e.u8(1);
                 e.record(proof.as_ref());
             }
+            Selection::Associated(proof) => { e.u8(5); e.record(proof.as_ref()); }
             Selection::Binding { identity, .. } => {
                 e.u8(2);
                 e.digest(*identity);
@@ -854,20 +914,23 @@ fn written_target(
     let Some(path_syntax) = expression.path() else {
         return Ok(None);
     };
-    if path_syntax.qualifier().is_some() || path_syntax.coloncolon_token().is_some() {
-        return Ok(None);
-    }
     let Some(segment) = path_syntax.segment() else {
         return Ok(None);
     };
-    let Some(name) = segment.name_ref() else {
+    if segment.name_ref().is_none() {
+        return Ok(None);
+    }
+    // Written metadata must describe the same complete callee path that the
+    // ordinary lowerer checks. Declaration selection remains with the retained
+    // Q44/Q51 proof; this pure spelling grants no name or owner authority.
+    let Some(name) = source.parsed().written_callee_spelling(&expression, source.index().cfg())? else {
         return Ok(None);
     };
     let count = segment
         .generic_arg_list()
         .map_or(0, |list| list.generic_args().count());
     let mut bytes = add(
-        name.text().len(),
+        name.len(),
         count
             .checked_mul(std::mem::size_of::<String>())
             .ok_or_else(crate::runtime::arena::resource)?,
@@ -923,7 +986,7 @@ fn written_target(
         node: path,
         range: actual_range,
         indexed_range,
-        name: name.text().to_string(),
+        name,
         explicit,
         arguments,
     };
@@ -964,6 +1027,67 @@ fn item_value_syntax_guard(
         &key,
         parsed.fingerprint
     ))))))
+}
+
+fn prepare_associated(
+    db: &mut Database,
+    parent: &Arc<PreparedSourceLocalPlan>,
+    path: NodeId,
+) -> QueryPoll<Option<Arc<EnteredAssociatedAdmission>>> {
+    use crate::frontend::callables::{CallResolver, CallSelection};
+    use crate::traits::term::TyTerm;
+    let qualifier_key = QueryKey::AssociatedItemQualifier(PcKey {
+        body: parent.context().source().index().body().clone(), node: path.0, phase: 0,
+    });
+    let selected = ready!(db.fetch(&SyntaxProvider, qualifier_key.clone()));
+    let QueryValue::AssociatedItemQualifier(qualifier) = selected.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("associated call qualifier variant differs")));
+    };
+    if !selected.cacheable || !parent.same_environment(qualifier.retained_plan()) {
+        return QueryPoll::Ready(Err(fault("associated call qualifier owner differs")));
+    }
+    // An explicit trait anchor or bound-provided member context cannot be
+    // replaced by a same-named inherent declaration of its nominal Self.
+    if qualifier.member_traits().is_some() || qualifier.permits_trait_self_inference() {
+        return QueryPoll::Ready(Ok(None));
+    }
+    let (Some(source), Some(member)) = (qualifier.source(), qualifier.member()) else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    // Source qualification selects a nominal identity; its complete actual
+    // application is retained below and never reconstructed from descriptors.
+    let TyTerm::Nominal(identity, _) = source.source() else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let Some(environment) = parent.environment() else { return QueryPoll::Ready(Ok(None)); };
+    let environment = environment.macros().source_environment();
+    let members = checked!(environment.member_index());
+    // This join admits an actual inherent declaration bucket. Trait-dependent
+    // applicability remains with the ordinary trait/upstream path; do not grow
+    // the legacy trait-candidate interpreter in source admission.
+    if members.inherent(*identity, member.text().as_ref()).is_empty() {
+        return QueryPoll::Ready(Ok(None));
+    }
+    let sources = environment.sources().iter().collect::<Vec<_>>();
+    let resolver = checked!(CallResolver::new(environment.names(), &sources));
+    let callable = match ready!(resolver.with_members(Some(&members)).associated_of(db, &members, Ok(*identity), member.text().as_ref())) {
+        Some(CallSelection::Source(callable)) => callable,
+        _ => return QueryPoll::Ready(Ok(None)),
+    };
+    checked!(callable.revalidate(db));
+    let signature_key = QueryKey::FunctionSignature(callable.identity());
+    let signature = ready!(db.fetch(&SyntaxProvider, signature_key.clone()));
+    let QueryValue::FunctionSignature(actual) = signature.value.as_ref() else {
+        return QueryPoll::Ready(Err(fault("associated call signature variant differs")));
+    };
+    if !signature.cacheable || actual.fingerprint() != callable.signature().fingerprint() {
+        return QueryPoll::Ready(Err(fault("associated call signature identity differs")));
+    }
+    let qualifier_guard = Arc::new(ready!(db.prepare_input_guard(&SyntaxProvider, &qualifier_key, selected.fingerprint)));
+    let signature_guard = Arc::new(ready!(db.prepare_input_guard(&SyntaxProvider, &signature_key, signature.fingerprint)));
+    QueryPoll::Ready(Ok(Some(Arc::new(EnteredAssociatedAdmission {
+        qualifier: selected.value, qualifier_guard, signature_guard, callable: *callable,
+    }))))
 }
 
 pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<EnteredCallGoal> {
@@ -1048,6 +1172,23 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<EnteredCallGo
                 }
                 .finish(),
             );
+        }
+    }
+    if let Some(path) = path {
+        if let Some(proof) = ready!(prepare_associated(db, &parent, path)) {
+            let target = checked!(written_target(&parent, path));
+            if target.is_none() {
+                return QueryPoll::Ready(Err(fault("entered associated call exact written name absent")));
+            }
+            let call_range = call.range;
+            let structure = index.semantic_identity();
+            let source = parent.context().source().identity();
+            let guard = Arc::clone(&proof.qualifier_guard);
+            return QueryPoll::Ready(EnteredCallGoal {
+                key: key.clone(), selection: Selection::Associated(proof), site: None,
+                target, call_range, structure, source, value: None, guard,
+                fingerprint: Digest([0; 32]), bytes: 0,
+            }.finish());
         }
     }
     let selected = ready!(prepare_entered_local_function(db, key));

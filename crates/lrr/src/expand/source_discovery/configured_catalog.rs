@@ -10,7 +10,7 @@ use crate::{
         dependency::{InputKey, InputValue},
         key::QueryKey,
         memo::Database,
-        seals::{DiscoveryInput, SealDomain, SealKey},
+        seals::{DiscoveryInput, Seal, SealDomain, SealKey},
     },
     expand::source_discovery::{SourceCompilerPreparation, SourceDiscovery},
     frontend::procedural_exports::PreparedProcCatalog,
@@ -20,6 +20,73 @@ use crate::{
 use std::{collections::BTreeMap, sync::Arc};
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-IMPL-CATALOG-WORLD", message.into())
+}
+
+/// Only the actual sealed catalog publisher can construct this borrowed scope
+/// receipt. It authorizes immutable derived metadata, never executable entry.
+pub(crate) struct CatalogDeclarationPublication<'a, 'source> {
+    discovery: &'a SourceDiscovery,
+    ordinal: usize,
+    scope: &'a crate::frontend::associated_declarations::CapturedDeclarationScope<'source>,
+    parent: &'a crate::frontend::impl_index::DeclarationMacroIndex,
+    seal: &'a Seal,
+    completions: &'a BTreeMap<Digest, Arc<crate::frontend::impl_index::CompletedOriginalAnnotation>>,
+}
+impl CatalogDeclarationPublication<'_, '_> {
+    pub(crate) fn scope(&self) -> &crate::frontend::associated_declarations::CapturedDeclarationScope<'_> { self.scope }
+    pub(crate) fn parent(&self) -> &crate::frontend::impl_index::DeclarationMacroIndex { self.parent }
+    pub(crate) fn seal(&self) -> &Seal { self.seal }
+    pub(crate) fn completions(&self) -> &BTreeMap<Digest, Arc<crate::frontend::impl_index::CompletedOriginalAnnotation>> { self.completions }
+    pub(crate) fn require_current(&self, db: &mut Database) -> Result<(), Diagnostic> {
+        db.require_coordinator()?;
+        let discovery = self.discovery;
+        let plan = discovery.impl_catalog_plan.as_ref()
+            .ok_or_else(|| fault("catalog metadata has no actual configured plan"))?;
+        let source = discovery.sources.get(self.ordinal)
+            .ok_or_else(|| fault("catalog metadata source ordinal is absent"))?;
+        let Some((environment, engine, _)) = &discovery.declarative else {
+            return Err(fault("catalog metadata compiler routes are absent"));
+        };
+        if !matches!(plan.key.domain, SealDomain::ImplCatalog { .. })
+            || discovery.key != plan.key || self.seal.key() != plan.key
+            || !discovery.seal.as_ref().is_some_and(|seal| std::ptr::eq(seal, self.seal))
+            || !discovery.nested_sources.get(&self.ordinal).is_some_and(|parent| std::ptr::eq(parent.as_ref(), self.parent))
+            || !source.same_publication(self.scope.source())
+            || discovery.macro_export_sources.contains_key(&self.ordinal)
+            || *environment != plan.environment || *engine != plan.engine
+            || discovery.dependencies.fingerprint() != plan.source_dependencies
+            || discovery.compiler_preparation.is_some() || discovery.compiler_profiles.is_none()
+            || !discovery.producers.is_empty() || !self.parent.is_complete()
+            || discovery.nested_sources.iter().any(|(ordinal, index)|
+                !discovery.macro_export_sources.contains_key(ordinal) && !index.is_complete())
+            || discovery.completed_argument_indexes.iter().any(|index| !index.is_complete())
+            || !discovery.imports.pending.is_empty() || !discovery.imports.missing.is_empty()
+            || !discovery.imports.inaccessible.is_empty() || !discovery.imports.ambiguous.is_empty()
+        {
+            return Err(fault("catalog metadata differs from its actual sealed source frontier"));
+        }
+        plan.key.validate()?;
+        if !matches!(db.published_input(&InputKey::ExpansionEpoch), Some((InputValue::ExpansionEpoch(epoch), _)) if *epoch == plan.key.epoch)
+            || !matches!(db.published_input(&InputKey::SourceDependencies), Some((InputValue::SourceDependencies(dependencies), _)) if dependencies.fingerprint() == plan.source_dependencies)
+            || !matches!(db.published_input(&InputKey::UnitCompileEnv(plan.root.outline.crate_key)), Some((InputValue::UnitCompileEnv(actual), _)) if actual.unit() == plan.root.outline.crate_key && actual.fingerprint() == plan.environment)
+        {
+            return Err(fault("catalog metadata source/epoch/compiler inputs changed"));
+        }
+        for (key, stamp) in &discovery.compiler_inputs {
+            if db.published_input(key).map(|(_, actual)| actual) != Some(*stamp) {
+                return Err(fault("catalog metadata observed compiler input changed"));
+            }
+        }
+        let catalogs = discovery.procedural_catalogs()?;
+        if match plan.procedural {
+            Some(expected) => !discovery.native_publication_certified
+                || !catalogs.iter().any(|catalog| catalog.fingerprint() == expected),
+            None => !catalogs.is_empty(),
+        } {
+            return Err(fault("catalog metadata procedural publication differs"));
+        }
+        self.scope.require_current(db)
+    }
 }
 
 #[derive(Debug)]
@@ -445,15 +512,18 @@ impl SourceDiscovery {
             // One actual plan per owning body. Its original named items and
             // associated declarations share the same metadata kernel as entry.
             for scope in prepared.declaration_scopes() {
-                match db.publish_captured_declarations(&scope, completions) {
+                let parent = self.nested_sources.get(&ordinal)
+                    .ok_or_else(|| fault("cold declaration namespace parent absent"))?;
+                let seal = self.seal.as_ref().ok_or_else(|| fault("cold declaration namespace seal absent"))?;
+                let publication = CatalogDeclarationPublication {
+                    discovery: self, ordinal, scope: &scope, parent, seal, completions,
+                };
+                match db.publish_catalog_declarations(&publication) {
                     QueryPoll::Ready(Ok(_)) => {}
                     QueryPoll::Ready(Err(error)) => return Err(error),
                     QueryPoll::NeedInput(_) => return Err(fault("cold catalog declaration input remains pending")),
                 }
-                let parent = self.nested_sources.get(&ordinal)
-                    .ok_or_else(|| fault("cold declaration namespace parent absent"))?;
-                let seal = self.seal.as_ref().ok_or_else(|| fault("cold declaration namespace seal absent"))?;
-                db.publish_cold_declaration_names(&scope, parent, seal, completions)?;
+                db.publish_catalog_declaration_names(&publication)?;
             }
         }
         Ok(())

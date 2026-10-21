@@ -8,9 +8,15 @@ pub(crate) mod macro_export_modules;
 mod probe;
 mod type_preparation;
 pub use compile_inputs::capture_macro_export_facet;
+#[cfg(test)]
+mod callable_value_tests;
+#[cfg(test)]
+mod drop_witness_tests;
 mod explain;
 #[cfg(test)]
 mod nested_operand_prefix;
+#[cfg(test)]
+mod nominal_value_tests;
 #[cfg(test)]
 mod panic_family_stock_tests;
 mod preentry_loader;
@@ -18,26 +24,20 @@ mod preentry_loader;
 mod preentry_loader_tests;
 mod proc_macros;
 #[cfg(test)]
-mod ref_pattern_tests;
-#[cfg(test)]
-mod nominal_value_tests;
-#[cfg(test)]
-mod reborrow_tests;
-#[cfg(test)]
-mod callable_value_tests;
-#[cfg(test)]
 mod reached_pattern_nominal_tests;
 #[cfg(test)]
 mod reached_record_update_tests;
 #[cfg(test)]
-mod value_scope_tests;
+mod reborrow_tests;
 #[cfg(test)]
-mod drop_witness_tests;
+mod ref_pattern_tests;
 mod render;
 pub(crate) mod retained_entry;
 mod runtime_capture;
 #[cfg(test)]
 mod runtime_capture_tests;
+#[cfg(test)]
+mod value_scope_tests;
 use crate::core::{diagnostic::Diagnostic, profile};
 use clap::Parser;
 #[derive(serde::Serialize)]
@@ -56,7 +56,10 @@ pub(crate) fn run_completed_source_control(
 ) -> Result<crate::engine::run::RunReport, Diagnostic> {
     match crate_graph::format_trait_facade_tests::run(label, source, edition)? {
         StandaloneOutcome::Completed(report) => Ok(report),
-        _ => Err(Diagnostic::new("LRR-E-TEST-CONTROL", "source control did not complete".into())),
+        _ => Err(Diagnostic::new(
+            "LRR-E-TEST-CONTROL",
+            "source control did not complete".into(),
+        )),
     }
 }
 #[cfg(test)]
@@ -206,6 +209,22 @@ fn standalone_captured(
         procedural.as_mut(),
     )?;
     drop(stage);
+    // A dormant source-only locator, not a prepared trait world. Execute its
+    // compiler/discovery closure only for this exact reached Discover demand.
+    let mut impl_catalog_demand = Some(
+        crate::expand::source_discovery::SourceDiscovery::prepare_impl_catalog_demand(
+            &compiler,
+            &view,
+            1,
+            procedural.as_ref().map(|run| run.source_catalog()),
+            &db,
+        )?,
+    );
+    let impl_catalog_key = impl_catalog_demand
+        .as_ref()
+        .expect("prepared dormant locator")
+        .key()
+        .clone();
     let discovery = crate::expand::source_discovery::SourceDiscovery::new_deferred_imports(
         sources,
         view.outline().root_scope.clone(),
@@ -228,8 +247,14 @@ fn standalone_captured(
         )?,
     };
     let stage = crate::core::timing::Span::enter(|| "stage discovery".into());
-    compiler.discover_diagnostic_with(&mut discovery, &mut db, snapshot,
-        procedural.as_mut().map(|run| run as &mut dyn crate::service::source_preparation::SourceExpansionExecutor))?;
+    compiler.discover_diagnostic_with(
+        &mut discovery,
+        &mut db,
+        snapshot,
+        procedural
+            .as_mut()
+            .map(|run| run as &mut dyn crate::service::source_preparation::SourceExpansionExecutor),
+    )?;
     drop(stage);
     let stage = crate::core::timing::Span::enter(|| "stage runtime macros+publish".into());
     let macros =
@@ -285,6 +310,7 @@ fn standalone_captured(
     db.begin_run()?;
     let result = match startup {
         QueryPoll::Ready(Ok(mut run)) => {
+            run.install_source_inference(std::sync::Arc::from(callable), impl_catalog_key)?;
             let enabled = if capture.enabled {
                 run.enable_runtime_capture()
             } else {
@@ -294,7 +320,62 @@ fn standalone_captured(
                 Err(error) => Err(error),
                 Ok(()) => {
                     let stage = crate::core::timing::Span::enter(|| "stage run poll".into());
-                    let polled = run.poll_with_runtime_macros(&mut db, &contexts);
+                    let polled = loop {
+                        let polled = run.poll_with_runtime_macros(&mut db, &contexts);
+                        let crate::engine::run::RunPoll::NeedInput(
+                            crate::db::poll::InputRequest::Discover { key },
+                        ) = &polled
+                        else {
+                            break polled;
+                        };
+                        if impl_catalog_demand
+                            .as_ref()
+                            .is_none_or(|demand| demand.key() != key)
+                        {
+                            break polled;
+                        }
+                        let prepared_catalog = (|| {
+                            let demand =
+                                impl_catalog_demand.take().expect("matching catalog demand");
+                            let discovery = demand.into_discovery(&compiler, &db)?;
+                            let preparation = match procedural.as_ref() {
+                                Some(procedural) => procedural.configure_prepared(
+                                    discovery,
+                                    compiler.environment_identity(),
+                                    compiler.catalog.clone(),
+                                )?,
+                                None => discovery.prepare_with_declarative_compiler(
+                                    compiler.environment_identity(),
+                                    crate::expand::source_declarative::engine_version(),
+                                    compiler.catalog.clone(),
+                                )?,
+                            };
+                            let prepared = compiler.discover_prepared_configuration(
+                                preparation, &mut db,
+                                procedural.as_mut().map(|run| run as &mut dyn crate::service::source_preparation::SourceExpansionExecutor),
+                            )?;
+                            let mut discovery = match prepared {
+                                crate::service::source_preparation::CompilerModulePreparation::Complete(discovery) => discovery,
+                                crate::service::source_preparation::CompilerModulePreparation::Held { continuation, reason } => {
+                                    return Err(Diagnostic::new("LRR-E-CATALOG-INCOMPLETE",
+                                        format!("reached catalog compiler preparation is held: {reason:?}; {}", continuation.diagnostic().message)));
+                                },
+                                crate::service::source_preparation::CompilerModulePreparation::NeedInput { continuation, input } => {
+                                    return Err(Diagnostic::new("LRR-E-CATALOG-INCOMPLETE",
+                                        format!("reached catalog compiler preparation needs {input:?}; {}", continuation.diagnostic().message)));
+                                },
+                            };
+                            match procedural.as_mut() {
+                                Some(procedural) => procedural.publish(&mut db, &mut discovery)?,
+                                None => discovery.publish(&mut db)?,
+                            }
+                            *snapshot = discovery.diagnostic_snapshot(&mut db, snapshot)?;
+                            Ok::<(), Diagnostic>(())
+                        })();
+                        if let Err(error) = prepared_catalog {
+                            break RunPoll::Fault(error);
+                        }
+                    };
                     drop(stage);
                     if capture.enabled {
                         if let RunPoll::Fault(error) = &polled
@@ -451,8 +532,14 @@ fn test_source_captured(
             compiler.catalog.clone(),
         )?,
     };
-    compiler.discover_diagnostic_with(&mut discovery, &mut db, snapshot,
-        procedural.as_mut().map(|run| run as &mut dyn crate::service::source_preparation::SourceExpansionExecutor))?;
+    compiler.discover_diagnostic_with(
+        &mut discovery,
+        &mut db,
+        snapshot,
+        procedural
+            .as_mut()
+            .map(|run| run as &mut dyn crate::service::source_preparation::SourceExpansionExecutor),
+    )?;
     match procedural.as_mut() {
         Some(run) => run.publish(&mut db, &mut discovery)?,
         None => discovery.publish(&mut db)?,
@@ -1213,7 +1300,9 @@ mod tests {
                         let detail = match &result {
                             RunPoll::Fault(error) => format!("{}: {}", error.code, error.message),
                             RunPoll::NeedInput(input) => format!("pending input: {input:?}"),
-                            RunPoll::Panicked(report) => format!("guest panic: {}", report.panic.description()),
+                            RunPoll::Panicked(report) => {
+                                format!("guest panic: {}", report.panic.description())
+                            }
                             RunPoll::Completed(_) => "unexpected completion".into(),
                         };
                         panic!("stock included foo/bar did not complete: {detail}");
@@ -1389,7 +1478,6 @@ mod tests {
             }
         }
     }
-
 
     #[test]
     fn rustc_original_println_facet_retains_std_world_and_refuses_core_selection() {

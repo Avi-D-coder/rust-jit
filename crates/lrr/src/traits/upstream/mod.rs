@@ -13,6 +13,8 @@ mod generic_clauses;
 mod root_variables;
 mod root_relations;
 mod root_response;
+mod reached_call;
+pub(crate) use reached_call::{poll_reached_call, ReachedCallOutcome, ReachedCallResponse, ReachedCallHold, ReachedGoalFailure, ReachedFailureKind};
 mod query_facts;
 mod source_fact_bundle;
 mod source_factory;

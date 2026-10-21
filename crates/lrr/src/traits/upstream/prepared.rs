@@ -890,7 +890,11 @@ pub(crate) struct PreparedProvider<'cx> {
     facts: &'cx OnceCell<PreparedFacts<'cx>>,
     generic_facts: &'cx ScopedCache<BTreeMap<DefinitionId, Generics<'cx, PreparedProvider<'cx>>>>,
     diagnostics: &'cx RefCell<Vec<(Span, String)>>,
-    root_active: &'cx Cell<bool>,
+    root_active: &'cx Cell<Option<Digest>>,
+}
+pub(super) struct SourceRootGuard<'cx> { provider: PreparedProvider<'cx> }
+impl Drop for SourceRootGuard<'_> {
+    fn drop(&mut self) { self.provider.root_active.set(None); }
 }
 impl fmt::Debug for PreparedProvider<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -951,7 +955,7 @@ pub(super) fn with_provider<R>(
 ) -> Result<R, Diagnostic> {
     let facts = OnceCell::new();
     let diagnostics = RefCell::new(Vec::new());
-    let root_active = Cell::new(false);
+    let root_active = Cell::new(None);
     let generic_facts = ScopedCache::empty();
     let elaboration = ScopedCache::empty();
     let candidate_classification = ScopedCache::empty();
@@ -1025,6 +1029,15 @@ impl<'cx> PreparedProvider<'cx> {
     pub(super) fn disable_trait_solver_fast_paths(self) -> bool {
         self.settings.disable_trait_solver_fast_paths
     }
+    pub(super) fn active_source_root(self) -> Option<Digest> { self.root_active.get() }
+    pub(super) fn enter_source_root(self, admission: &super::reached_call::SourceRootAdmission) -> Result<SourceRootGuard<'cx>, Diagnostic> {
+        if self.root_active.get().is_some() || self.facts.get().is_none()
+            || admission.world() != self.world || admission.configuration() != self.configuration {
+            return Err(fault("reached source root admission differs from prepared context"));
+        }
+        self.root_active.set(Some(admission.identity()));
+        Ok(SourceRootGuard { provider: self })
+    }
     pub(super) fn source_world(self) -> Digest {
         self.world
     }
@@ -1075,7 +1088,7 @@ impl<'cx> PreparedProvider<'cx> {
         elaboration: &'cx ScopedCache<ImplElaborationInputs<'cx>>,
         candidate_classification: &'cx ScopedCache<CandidateClassificationInputs<'cx>>,
         diagnostics: &'cx RefCell<Vec<(Span, String)>>,
-        root_active: &'cx Cell<bool>,
+        root_active: &'cx Cell<Option<Digest>>,
     ) -> Result<Self, Diagnostic> {
         let world = catalog_world(&settings.catalog)?;
         Ok(Self {
@@ -1098,7 +1111,7 @@ impl<'cx> PreparedProvider<'cx> {
         cx: Cx<'cx>,
         plan: &super::source_impl_outlives::PreparedSourceImplOutlives,
     ) -> Result<PreparedImplSuperOutlives<'cx>, Diagnostic> {
-        if cx.services() != self || self.facts.get().is_some() || self.root_active.get() {
+        if cx.services() != self || self.facts.get().is_some() || self.root_active.get().is_some() {
             return Err(fault(
                 "impl elaboration requires its unpublished preparation context",
             ));
@@ -1158,7 +1171,7 @@ impl<'cx> PreparedProvider<'cx> {
         })
     }
     pub(super) fn publish(self, facts: PreparedFacts<'cx>) -> Result<(), Diagnostic> {
-        if self.facts.get().is_some() || self.root_active.get() {
+        if self.facts.get().is_some() || self.root_active.get().is_some() {
             return Err(fault("source facts require their unpublished preparation context"));
         }
         if facts.context.services() != self {
@@ -1727,6 +1740,7 @@ fn alias_definition(kind: AliasTermKind<Cx<'_>>) -> DefinitionId {
 }
 
 impl<'cx> SourceFacts<'cx> for PreparedProvider<'cx> {
+    fn assert_normal_root_scope(self) { assert!(self.root_active.get().is_some(), "global cache requires admitted reached-call scope"); }
     fn abstract_const(
         self,
         _: Cx<'cx>,
@@ -2300,8 +2314,8 @@ impl<'cx> SourceFacts<'cx> for PreparedProvider<'cx> {
         depth: usize,
     ) -> ProofResult<'cx> {
         assert!(
-            self.root_active.get(),
-            "proof evaluation requires the actual source-bound root session"
+            false,
+            "raw proof entry is not authorized by an ordinary reached-call session"
         );
         assert_eq!(
             self.data().context,

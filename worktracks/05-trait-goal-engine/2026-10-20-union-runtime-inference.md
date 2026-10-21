@@ -114,3 +114,99 @@ application plan across phases and suspension (6); prepare only actual field/
 projection callback domains, no per-dispatch world scan (7); share original
 BodyIndex/source/query handles (8). Actual changed-source review and execution
 would still be required after implementation release; this record is diagnosis.
+
+## V535 frozen-source successor analysis (read only)
+
+The fresh V534 actual original-main baseline confirms this same blocker, rather
+than relying on the historical V477 receipt: edition 2015, unchanged SHA above,
+exit 2, 265 matched VM dispatches/outcomes and 16 actual source-call boundaries.
+The executor reports the exact nested-hole diagnostic above at source bytes
+518..597. Evidence is `worktracks/evidence/2026-10-20-v534-interpreter-runtime.json`.
+V535 is currently active; its new terminal has not been observed by this worker.
+Production/tools/fixtures/HEAD remain frozen; no execution was performed here.
+
+Current production still has the exact chain described above. No nested-hole
+transport or constructor root has landed, confirmed with the pinned-root owner.
+`SourceRootCallInput` and `PreparedRootRelations::prepare` authenticate an actual
+callable definition/signature; the active reached-call executor cannot admit this
+record by manufacturing a function or its signature. Its ordinary relation and
+fulfillment implementation is reusable, but its current call admission is not a
+constructor certificate.
+
+The minimum **connected** code boundary after the fresh terminal is:
+
+1. In `explicit_type_arguments::select_argument`, retain the actual composite
+   annotation together with distinct source sites for its `_` leaves, existing
+   named-leaf guards and caller definition. `SelectedPathArguments` and
+   `PreparedRecordConstructor` must transport this open application separately
+   from `ExplicitType`'s complete descriptor contract. Do not turn `Iter<_>` into
+   `None`, a caller `Param`, or `WrittenType::Infer` that binds any descriptor.
+   The source site can be the exact indexed owning PC plus original type range;
+   the current `AnnotationShape::Infer`/`WrittenType::Infer` alone loses the
+   individual occurrence identity. Preserve current complete argument behavior
+   for calls, owners, constructors and aliases through this one selector.
+2. In `engine/run_constructors.rs::prepare_installed_record_template`, retain
+   that actual open application with `PreparedRecordConstructorHandle`, its
+   actual variant and `BoundRecordFields::written_to_declaration` mapping.
+   Constructor admission must establish a real ADT subject in the same pinned
+   owner/RootVariables/caller ParamEnv route. Reuse the shared source bundle and
+   `PreparedAdtSourceFields::encode`/actual `AdtField` EarlyBinder instantiation.
+   Generalize the existing relation preparation below call-specific admission;
+   do not create a parallel unifier/root evaluator. The source relation for a
+   record operand is directed actual-to-declared-field coercion, retaining the
+   actual source field span, rather than blindly equating all record inputs.
+3. Where actual source signatures cannot settle before `ConstructStart`, the
+   existing constructor continuation must retain the open source state through
+   ordinary operand execution. `run.rs` currently has coordinator preflights
+   for ConstructStart and ConstructFinish only; the missing connected hook is
+   a coordinator preflight of the installed actual `ConstructField` immediately
+   before `vm::step` transfers that operand. Snapshot the actual source/bound
+   view, descriptor and ownership cell under the same constructor attempt; use
+   ordinary upstream relation/normalization/fulfillment, then recheck before
+   committing bindings and performing the existing ownership transfer. NeedInput
+   must resume this pending attempt without repeating `next`, `unwrap` or the
+   field expression. The existing construction guard owns transferred fields
+   and cleanup. No guessed field value or execution of a cold field/body is a
+   type answer. A later field may constrain earlier holes, so the retained
+   unresolved field relations must also survive until constructor completion.
+4. `Frame::prepare_installed_nominal_constructor` currently rejects every open
+   explicit argument and materializes all descriptors before start. Its genuine
+   successor must consume the settled owned constructor response; no guard is
+   simply deleted. `GuestStore::pending_nominal_args` remains a runtime schema
+   binder, not a projection engine. Do not add Item/Iterator/Iter/ManuallyDrop
+   recognition or extend `binding_constraint_nominal::constructed_inward`'s
+   legacy semantic candidate/fallback route to solve this program.
+
+Two exact prerequisites are still missing. The extracted immutable
+`SourceRelationPlan` explicitly marks Record/Call/Method/WrittenType as typed
+boundaries; it does not yet supply an unsolved record-field/call-result equation
+closure. `BindingConstraints`' existing `record_inward` and
+`constructed_inward` cannot be treated as pinned inference proof. Separately,
+`RootVariables` only transports Type/Integer/Float and `source_terms::region`
+holds `RegionTerm::Local`; actual omitted source lifetime slots in `Iter` must
+be represented as constructor-owned region inputs under the same inference
+owner. The pinned owner already has `next_region_var`; no static/erased region
+may be substituted to make source encoding pass. If the reached operand lacks
+a genuine source view, report that exact metadata hold rather than reconstructing
+source lifetimes from its erased runtime descriptor.
+
+This is a coupled ordinary constructor inference/continuation change, not a
+one-line nested-hole exception. It should be assigned with its actual existing
+entry/field/finish consumer modifications together and validated by the entire
+unchanged original main plus existing real regressions. No new isolated helper
+evaluation is an acceptance substitute. All eight architecture directions above
+still apply; no current production change or new pass is claimed.
+
+Inspected current SHA256 (V535 frozen candidate):
+```
+90543d1ec7bda5bc72f2eb8e32cf536547a1e08c4ee9c1eac08857d41c5e7004  frontend/explicit_type_arguments.rs
+6c715b4fde87ca0c17260850eda860bd18a59e5a5f8538f87f9b05d376e304f3  frontend/prepared_constructors.rs
+ccc8d27fcff62e67d94f1135f234ef2448dd80275ed35d05a6641048385b9ff1  frontend/binding_constraint_nominal.rs
+a1c2c41570003fa89a7e7b7212342f398d078ead03611a11162fdd4aa80e47bd  engine/run_constructors.rs
+6e1637d5a3217577c78217fa719136b3c5eb4e96fa4847963246b7d8ab3cb997  vm/frame.rs
+fd32e07167d8978724a9acd80a873a7d3a8c21693b601f053d341e76455095f3  traits/upstream/root_input.rs
+a167db0c8efe1f69b159fdadc8655ea8441a12602b4e9af310cf7a2c9344fd94  traits/upstream/root_relations.rs
+2b54ec89a46eee653cfaacb000669d96dc51096a56c78b74b3d8d3835bc5b8a7  traits/upstream/source_adt_fields.rs
+```
+Paths in this list are relative to `crates/lrr/src/`. No Cargo/Git or production
+edit was made; only this bounded existing record was appended.

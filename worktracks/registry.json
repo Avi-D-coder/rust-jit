@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-21T01:37:14.664721+00:00",
+  "updated_at": "2026-10-21T02:14:29.206166+00:00",
   "repository_url": "https://github.com/Avi-D-coder/rust-jit",
   "publication_status": "local_draft",
   "source_of_truth": {
@@ -424,10 +424,10 @@
           "id": "WT05-02",
           "title": "Pinned upstream solver bridge and transactions",
           "status": "in_progress",
-          "acceptance_scope": "V508 HELD T040/M020 common reached constructor/source namespace checkpoint. Source target classification precedes binding; indexed explicit source Types join actual frame bindings and cached field witnesses key actual generic applications. Empty Type lists preserve inferred context. Shared associated declaration proof authenticates actual original/generated child and trait/impl parent, preserves generic/Self priority and child hygiene, and selects the genuine enclosing namespace without flattening local ribs. Q82 output recipes use the common bound-row lowerer with actual projection/member/spans and explicit defaults/config/GAT holds. V506 compile failure and V507 selector preflight/Q82 local-owner failure are retained. V508 macOS1.99 lib/CLI/digester and3/3focused controls pass with all closing source/HEAD/test/CLI/digester guards:12constructor origin worlds,4activation worlds/1624completed operations and12Q82worlds/12output recipes. Selected unchanged runtime3/4pass13checks each: associated constructor, generic-derived and empty-generic-brackets; repr128 still LRR-E-OP-TYPE. Associated constructor is1measured new distinct pass against V505; no failing baseline for emptycase and its warning diagnostics remain outstanding. V507Q80pass remains evidence at its own source, not rerun. No refreshed suite total or morning delta. Existing legacy normalization is unchanged migration debt; complete upstream facts/provider/root, default/source item-bound families, negative/local scope/cleanup/suspension matrices, interpreter and JIT gates remain open. No task/milestone closed.",
+          "acceptance_scope": "V535-V537 connected production checkpoint: V535 lib101 pointer mismatch, no programs; V536 all3build0 and5/8runtime passes, zero gains, alias frontier regressed. V537 all3build0 and6/8 unchanged official whole-main runtime-contract passes, one new distinct gain static-method-type-alias-11047 (22dispatches/3calls/13checks/cleanup). Five prior passes retained. repr128 holds before solver execute at overbroad Copy callback closure (7/7/0); union remains nested Iter<_> inference failure (265/265/16). Source fingerprint4aad77b936cadd40051d71242d82681e9604a428e72360686551d4d081e6cec9 /8751 and all closing guards pass. No isolated tests selected. Production CallSeal/CLI/source-root/store/associated-call consumers are connected, but upstream root acceptance/future-use/constructor/architecture/interpreter/JIT/diagnostic/tooling/fullfixture gates remain incomplete. User-requested winddown; workers stopped, handoff docs/handoffs/2026-10-20-interpreter-winddown.md.",
           "historical_candidate": "artifacts/macos-first/sol-canonical-candidate-transactions-v1/HANDOFF.md",
           "historical_acceptance_scope": "frozen source-only exact replay/fmt/provenance;10 Rust controls uncompiled; actual source-goal and normalization prerequisites incomplete",
-          "candidate": "worktracks/05-trait-goal-engine/2026-10-20-impl-anonymous-regions-review.md",
+          "candidate": "docs/handoffs/2026-10-20-interpreter-winddown.md",
           "evidence": [
             "worktracks/evidence/2026-10-19-v217-v220-upstream-solver-trait-self.json",
             "worktracks/evidence/2026-10-19-v221-v224-upstream-parameters.json",
@@ -636,9 +636,12 @@
             "worktracks/evidence/2026-10-20-v531-full-impl-compile.json",
             "worktracks/evidence/2026-10-20-v532-source-factory-controls.json",
             "worktracks/evidence/2026-10-20-v533-interpreter-runtime.json",
-            "worktracks/evidence/2026-10-20-v534-interpreter-runtime.json"
+            "worktracks/evidence/2026-10-20-v534-interpreter-runtime.json",
+            "worktracks/evidence/2026-10-20-v535-interpreter-build.json",
+            "worktracks/evidence/2026-10-20-v536-interpreter-runtime.json",
+            "worktracks/evidence/2026-10-20-v537-interpreter-runtime.json"
           ],
-          "latest_component_scope": "V533-V534 real interpreter acceptance checkpoint: V533 lib101 E0596 in retained module coordinator; V534 only mutable Database signature correction, all3 macOS1.99 builds0. Eight unchanged owning2015 rustc programs executed through the same CLI/VM, not source-only helpers: five runtime-contract passes with complete unit/effects/cleanup capture (discriminant_size,discriminant_value,assoc-type-in-struct-constructor,generic-derived-type,struct-aliases); three genuine failures (repr128 OP-TYPE28/27,union-generic-rpass nested inference hole265/265,static-method-type-alias-11047 lexical callee9/8). Source/HEAD/test/CLI/digester closing guards pass at3924de4bdde042d68dbccaa8dbccd2502ad380a6a007a200e17da3241d616a19/8750inputs/HEADa7e64f338d2c23dde07383a2e730b8324cca4019. Zero measured new runtime gains and no comprehensive suite count. Shared SourceConstraints relation rows now feed ordinary Component; numeric-call occurrence capture and service continuation APIs are uncalled drafts, not working language features. User requires actual unchanged-program acceptance in one interpreter; internal component checks are diagnostic only. Upstream solver production root/response/VM join, open constructor inference and alias associated-call admission remain unfinished. No task/milestone/interpreter/JIT/fullfixture/Linux/performance closure."
+          "latest_component_scope": "V535-V537 connected production checkpoint: V535 lib101 pointer mismatch, no programs; V536 all3build0 and5/8runtime passes, zero gains, alias frontier regressed. V537 all3build0 and6/8 unchanged official whole-main runtime-contract passes, one new distinct gain static-method-type-alias-11047 (22dispatches/3calls/13checks/cleanup). Five prior passes retained. repr128 holds before solver execute at overbroad Copy callback closure (7/7/0); union remains nested Iter<_> inference failure (265/265/16). Source fingerprint4aad77b936cadd40051d71242d82681e9604a428e72360686551d4d081e6cec9 /8751 and all closing guards pass. No isolated tests selected. Production CallSeal/CLI/source-root/store/associated-call consumers are connected, but upstream root acceptance/future-use/constructor/architecture/interpreter/JIT/diagnostic/tooling/fullfixture gates remain incomplete. User-requested winddown; workers stopped, handoff docs/handoffs/2026-10-20-interpreter-winddown.md."
         },
         {
           "id": "WT05-03",
@@ -1592,5 +1595,18 @@
     "sha256": "0172529469f9cf0abbf61535310ba6a7319c8b76b49ffbf3ab9b26fc369a1674",
     "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
     "runtime_acceptance_changed": false
+  },
+  "latest_runtime_checkpoint": {
+    "at": "2026-10-21T02:14:29.206166+00:00",
+    "evidence": "worktracks/evidence/2026-10-20-v537-interpreter-runtime.json",
+    "handoff": "docs/handoffs/2026-10-20-interpreter-winddown.md",
+    "validated_baseline_head": "08c177d83dda20a283e06709c92cfffc19eee6be",
+    "source_sha256": "4aad77b936cadd40051d71242d82681e9604a428e72360686551d4d081e6cec9",
+    "runtime_contract_passes": 6,
+    "failures": 2,
+    "new_distinct_runtime_gains": 1,
+    "source_checkpoint": "containing commit; source fingerprint is authoritative",
+    "workers": "stopped at user-requested winddown",
+    "gates": "incomplete; no full-fixture or upstream-root acceptance"
   }
 }

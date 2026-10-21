@@ -166,6 +166,7 @@ impl Database {
             scope.require_current(self)?;
             let parsed = scope.parsed()?;
             let mut results = Vec::new();
+            let mut staged = BTreeMap::new();
             for (member, row) in scope
                 .facts()
                 .items
@@ -177,15 +178,44 @@ impl Database {
                 if let Some(completion) = completion {
                     completion.require_source(scope.source())?;
                 }
-                results.push(self.publish_declaration_row_metadata(
+                results.push(self.stage_declaration_row_metadata(
                     parsed,
                     scope.body(),
                     scope.scope(),
                     row,
                     member,
                     completion.map(|receipt| DeclarationAnnotationCompletion::Original(&**receipt)),
+                    &mut staged,
                 )?);
             }
+            self.commit_declaration_metadata(staged)?;
+            Ok(results)
+        })())
+    }
+    /// Reached coordinator only: the private receipt authenticates this exact
+    /// sealed catalog scope. It grants immutable metadata, never body entry.
+    pub(crate) fn publish_catalog_declarations(
+        &mut self,
+        publication: &crate::expand::source_discovery::impl_catalog::CatalogDeclarationPublication<'_, '_>,
+    ) -> QueryPoll<Vec<LocalDeclarationPublication>> {
+        QueryPoll::Ready((|| {
+            publication.require_current(self)?;
+            let scope = publication.scope();
+            let parsed = scope.parsed()?;
+            let mut staged = BTreeMap::new();
+            let mut results = Vec::new();
+            for (member, row) in scope.facts().items.iter().map(|row| (false, row))
+                .chain(scope.facts().members.iter().map(|row| (true, row))) {
+                let completion = publication.completions().get(&row.item.def_key.fingerprint());
+                if let Some(completion) = completion { completion.require_source(scope.source())?; }
+                let result = self.stage_declaration_row_metadata(parsed, scope.body(), scope.scope(), row,
+                    member, completion.map(|receipt| DeclarationAnnotationCompletion::Original(&**receipt)), &mut staged)?;
+                if matches!(result, LocalDeclarationPublication::NeedsProducer(_)) {
+                    return Err(fault("LRR-E-EXPANSION-INPUT", "completed catalog declaration still needs a producer"));
+                }
+                results.push(result);
+            }
+            self.commit_declaration_metadata(staged)?;
             Ok(results)
         })())
     }
@@ -223,6 +253,21 @@ impl Database {
         row: &crate::syntax::body_items::BodyItem,
         member: bool,
         completion: Option<DeclarationAnnotationCompletion<'_>>,
+    ) -> Result<LocalDeclarationPublication, Diagnostic> {
+        let mut staged = BTreeMap::new();
+        let result = self.stage_declaration_row_metadata(parsed, body, scope, row, member, completion, &mut staged)?;
+        self.commit_declaration_metadata(staged)?;
+        Ok(result)
+    }
+    fn stage_declaration_row_metadata(
+        &self,
+        parsed: &ParsedFile,
+        body: &BodyHandle,
+        scope: &ScopeKey,
+        row: &crate::syntax::body_items::BodyItem,
+        member: bool,
+        completion: Option<DeclarationAnnotationCompletion<'_>>,
+        staged: &mut BTreeMap<InputKey, InputRecord>,
     ) -> Result<LocalDeclarationPublication, Diagnostic> {
         let invalid = |message| fault("LRR-E-EXPANSION-INPUT", message);
         let definition = row.item.def_key.fingerprint();
@@ -304,9 +349,8 @@ impl Database {
                 InputValue::DefinitionBody(body.clone()),
             ));
         }
-        let mut staged = BTreeMap::new();
         for (key, value) in rows {
-            if let Some(current) = self.inputs.get(&key) {
+            if let Some(current) = staged.get(&key).or_else(|| self.inputs.get(&key)) {
                 // Semantic header hashes deliberately omit attachments.
                 // Compare the actual rows too; an equal hash cannot attach
                 // this declaration to another source location or scope.
@@ -339,8 +383,11 @@ impl Database {
                 },
             );
         }
+        Ok(LocalDeclarationPublication::Published(definition))
+    }
+    fn commit_declaration_metadata(&mut self, staged: BTreeMap<InputKey, InputRecord>) -> Result<(), Diagnostic> {
         if staged.is_empty() {
-            return Ok(LocalDeclarationPublication::Published(definition));
+            return Ok(());
         }
         let revision = self
             .revision
@@ -348,7 +395,7 @@ impl Database {
             .ok_or_else(|| fault("LRR-E-ID-EXHAUSTED", "local declaration revision exhausted"))?;
         self.inputs.extend(staged);
         self.revision = revision;
-        Ok(LocalDeclarationPublication::Published(definition))
+        Ok(())
     }
 }
 

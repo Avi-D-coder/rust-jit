@@ -40,6 +40,7 @@ impl<'db> rustc_type_ir::InferCtxtLike for InferenceContext<'db> {
     }
 
     fn disable_trait_solver_fast_paths(&self) -> bool {
+        self.require_source_root();
         self.interner.services().disable_trait_solver_fast_paths()
     }
 

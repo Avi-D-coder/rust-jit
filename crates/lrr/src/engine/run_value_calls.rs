@@ -457,6 +457,7 @@ impl RunMachine {
             structural_references: false,
         };
         self.prepared_call = Some(PreparedSourceCall {
+            source_response: None,
             context: None,
             callee: owner,
             contracts,

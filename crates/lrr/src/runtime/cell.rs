@@ -4242,6 +4242,58 @@ impl GuestStore {
         self.literals.get_mut(literal)?.binding = Some(ty);
         Ok(result)
     }
+    /// Bind reached numeric cells to already selected concrete primitives.
+    /// This is storage admission, not inference: every cell, conversion and
+    /// shared-record agreement is checked before changing the first binding.
+    pub(crate) fn bind_numeric_literals(
+        &mut self,
+        bindings: &[(CellId, TypeId)],
+    ) -> Result<(), Diagnostic> {
+        let mut records = Vec::new();
+        records
+            .try_reserve_exact(bindings.len())
+            .map_err(|_| resource())?;
+        for &(cell, expected) in bindings {
+            let value = self.admit_move(cell)?;
+            match (value.kind, super::shape::primitive(expected)?) {
+                (11, super::shape::Primitive::Signed(_) | super::shape::Primitive::Unsigned(_))
+                | (12, super::shape::Primitive::F32 | super::shape::Primitive::F64) => {}
+                _ => return Err(invalid()),
+            }
+            let literal = LiteralId::from_bits(value.payload);
+            if self
+                .literals
+                .get(literal)?
+                .binding
+                .is_some_and(|bound| bound != expected)
+            {
+                return Err(ownership());
+            }
+            // Reuse ordinary literal conversion, including full-width arena
+            // integers and existing float admission; no new numeric rule.
+            let concrete = self.literal_value(value, expected)?;
+            self.contract(self.cells.get(cell)?, concrete)?;
+            records.push((literal, expected));
+        }
+        records.sort_unstable_by_key(|(literal, _)| *literal);
+        if records
+            .windows(2)
+            .any(|pair| pair[0].0 == pair[1].0 && pair[0].1 != pair[1].1)
+        {
+            return Err(ownership());
+        }
+        records.dedup_by_key(|(literal, _)| *literal);
+        // Exclusive store ownership and the absence of callbacks/arena edits
+        // keep every preflighted handle live. Only binding fields change from
+        // here: no allocation or recoverable failure may split the commit.
+        for (literal, expected) in records {
+            self.literals
+                .get_mut(literal)
+                .expect("preflighted numeric record remains live during binding commit")
+                .binding = Some(expected);
+        }
+        Ok(())
+    }
     /// Bind an unconstrained numeric literal held in `id` to rustc's
     /// fallback type (`i32` / `f64`); a bound literal or non-literal is
     /// unchanged. Used where inference leaves a literal with no context.

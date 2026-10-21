@@ -507,11 +507,12 @@ impl<'owner, 'cx> RootRelationFulfillmentWork<'owner, 'cx> {
         Ok(self.fulfillment.as_ref())
     }
 
-    /// PRIVATE AND INACTIVE: only a future actual packet-bound runner in this
-    /// module may call this after source/query closure admission. Do not widen
-    /// visibility or add a ready/test token to bypass that missing prerequisite.
-    fn fulfill(mut self) -> RootRelationFulfillmentOutcome<'owner, 'cx> {
+    /// Only the private source-bound runner can construct the admission passed
+    /// here. Original application/variables remain attached to all outcomes.
+    pub(super) fn fulfill(mut self, admission: &super::reached_call::SourceRootAdmission) -> RootRelationFulfillmentOutcome<'owner, 'cx> {
         let owner = self.application.owner;
+        owner.require_source_root();
+        assert_eq!(owner.interner.services().active_source_root(), Some(admission.identity()));
         self.application
             .require_owner(owner)
             .expect("original relation fulfillment owner");

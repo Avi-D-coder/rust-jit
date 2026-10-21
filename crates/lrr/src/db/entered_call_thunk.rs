@@ -90,7 +90,7 @@ pub(super) fn thunk(
     // Qualified/value/pending paths retain their explicit safety boundaries.
     if !matches!(
         goal.selection(),
-        EnteredCallSelection::Local(_) | EnteredCallSelection::Module(_)
+        EnteredCallSelection::Local(_) | EnteredCallSelection::Module(_) | EnteredCallSelection::Associated(_)
     ) {
         return QueryPoll::Ready(Ok(None));
     }

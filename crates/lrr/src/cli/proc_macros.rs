@@ -499,13 +499,8 @@ impl<'a> ProceduralRun<'a> {
             native_generation: None,
             compile_environment: tools.root_environment()?.fingerprint(),
         };
-        let mut run = crate::service::run::MacroRun::begin(
-            db,
-            context,
-            &tools.manifest,
-            &tools.plan,
-            true,
-        )?;
+        let mut run =
+            crate::service::run::MacroRun::begin(db, context, &tools.manifest, &tools.plan, true)?;
         let catalog = run.catalog(db, tools.root)?;
         Ok(Self {
             tools,
@@ -516,6 +511,11 @@ impl<'a> ProceduralRun<'a> {
             pending: None,
             phase: 0,
         })
+    }
+    pub(crate) fn source_catalog(
+        &self,
+    ) -> std::sync::Arc<crate::frontend::procedural_exports::PreparedProcCatalog> {
+        std::sync::Arc::clone(&self.catalog)
     }
     /// The prepared unit graph every procedural discovery seal is keyed by.
     pub fn graph(&self) -> Digest {
@@ -537,6 +537,21 @@ impl<'a> ProceduralRun<'a> {
                 self.catalog.clone(),
             )?
             .with_expansion_budget(self.request, self.run.expansion_budget())
+    }
+    pub(crate) fn configure_prepared(
+        &self,
+        discovery: crate::expand::source_discovery::SourceDiscovery,
+        compile_env: Digest,
+        compiler: std::sync::Arc<crate::frontend::compile_input_catalog::CompileInputCatalog>,
+    ) -> Result<crate::expand::source_discovery::SourceCompilerPreparation, Diagnostic> {
+        discovery
+            .with_expansion_budget(self.request, self.run.expansion_budget())?
+            .prepare_with_declarative_compiler_procedural(
+                compile_env,
+                crate::expand::source_declarative::engine_version(),
+                compiler,
+                self.catalog.clone(),
+            )
     }
     fn phase(
         &mut self,
@@ -587,8 +602,13 @@ impl<'a> ProceduralRun<'a> {
             }
             Step::NeedGeneratedExpansion { request } if request.procedural_request().is_some() => {
                 let phase = self.phase(request.key())?;
-                self.run
-                    .fulfil_generated_discovery(db, discovery, phase, &request, &mut self.cache)?;
+                self.run.fulfil_generated_discovery(
+                    db,
+                    discovery,
+                    phase,
+                    &request,
+                    &mut self.cache,
+                )?;
             }
             Step::NeedSourceDeriveSelection { selection } => {
                 let request = self.run.prepare_source_derive_selection(db, &selection)?;

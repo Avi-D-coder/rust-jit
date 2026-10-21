@@ -20232,7 +20232,7 @@
       "title": "Impl and trait header lowering",
       "acceptance_contract": "TR006 and indexed-versus-full-catalog property model. Depends: M018.",
       "release_complete": false,
-      "latest_component_scope": "V533-V534 real interpreter acceptance checkpoint: V533 lib101 E0596 in retained module coordinator; V534 only mutable Database signature correction, all3 macOS1.99 builds0. Eight unchanged owning2015 rustc programs executed through the same CLI/VM, not source-only helpers: five runtime-contract passes with complete unit/effects/cleanup capture (discriminant_size,discriminant_value,assoc-type-in-struct-constructor,generic-derived-type,struct-aliases); three genuine failures (repr128 OP-TYPE28/27,union-generic-rpass nested inference hole265/265,static-method-type-alias-11047 lexical callee9/8). Source/HEAD/test/CLI/digester closing guards pass at3924de4bdde042d68dbccaa8dbccd2502ad380a6a007a200e17da3241d616a19/8750inputs/HEADa7e64f338d2c23dde07383a2e730b8324cca4019. Zero measured new runtime gains and no comprehensive suite count. Shared SourceConstraints relation rows now feed ordinary Component; numeric-call occurrence capture and service continuation APIs are uncalled drafts, not working language features. User requires actual unchanged-program acceptance in one interpreter; internal component checks are diagnostic only. Upstream solver production root/response/VM join, open constructor inference and alias associated-call admission remain unfinished. No task/milestone/interpreter/JIT/fullfixture/Linux/performance closure.",
+      "latest_component_scope": "V535-V537 connected production checkpoint: V535 lib101 pointer mismatch, no programs; V536 all3build0 and5/8runtime passes, zero gains, alias frontier regressed. V537 all3build0 and6/8 unchanged official whole-main runtime-contract passes, one new distinct gain static-method-type-alias-11047 (22dispatches/3calls/13checks/cleanup). Five prior passes retained. repr128 holds before solver execute at overbroad Copy callback closure (7/7/0); union remains nested Iter<_> inference failure (265/265/16). Source fingerprint4aad77b936cadd40051d71242d82681e9604a428e72360686551d4d081e6cec9 /8751 and all closing guards pass. No isolated tests selected. Production CallSeal/CLI/source-root/store/associated-call consumers are connected, but upstream root acceptance/future-use/constructor/architecture/interpreter/JIT/diagnostic/tooling/fullfixture gates remain incomplete. User-requested winddown; workers stopped, handoff docs/handoffs/2026-10-20-interpreter-winddown.md.",
       "source_baseline": "dcd056e542c86605f6a282470566952b2aea3c79",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
@@ -20333,7 +20333,10 @@
         "worktracks/evidence/2026-10-20-v531-full-impl-compile.json",
         "worktracks/evidence/2026-10-20-v532-source-factory-controls.json",
         "worktracks/evidence/2026-10-20-v533-interpreter-runtime.json",
-        "worktracks/evidence/2026-10-20-v534-interpreter-runtime.json"
+        "worktracks/evidence/2026-10-20-v534-interpreter-runtime.json",
+        "worktracks/evidence/2026-10-20-v535-interpreter-build.json",
+        "worktracks/evidence/2026-10-20-v536-interpreter-runtime.json",
+        "worktracks/evidence/2026-10-20-v537-interpreter-runtime.json"
       ]
     },
     {
@@ -20501,7 +20504,7 @@
       "implementation_contract": "Files: traits/upstream/, traits/term.rs, frontend/source_view.rs, Cargo.toml and provenance manifests. Build the pinned shared solver on macOS Rust1.99.0; adapt actual source Types/ParamEnv/headers, upstream inference transactions and canonical responses to LRR queries. Migrate custom inference/canonicalization consumers and remove superseded algorithms with explicit holds until verified.",
       "design_amendment": "docs/errata/revision5-upstream-trait-solver.md",
       "solver_policy": "Pinned rustc_next_trait_solver/rustc_type_ir through LRR source/demand/inference adapter. Upstream solving algorithms; no custom semantic fallback. Integration unimplemented; existing evidence retains its original scope.",
-      "latest_component_scope": "V533-V534 real interpreter acceptance checkpoint: V533 lib101 E0596 in retained module coordinator; V534 only mutable Database signature correction, all3 macOS1.99 builds0. Eight unchanged owning2015 rustc programs executed through the same CLI/VM, not source-only helpers: five runtime-contract passes with complete unit/effects/cleanup capture (discriminant_size,discriminant_value,assoc-type-in-struct-constructor,generic-derived-type,struct-aliases); three genuine failures (repr128 OP-TYPE28/27,union-generic-rpass nested inference hole265/265,static-method-type-alias-11047 lexical callee9/8). Source/HEAD/test/CLI/digester closing guards pass at3924de4bdde042d68dbccaa8dbccd2502ad380a6a007a200e17da3241d616a19/8750inputs/HEADa7e64f338d2c23dde07383a2e730b8324cca4019. Zero measured new runtime gains and no comprehensive suite count. Shared SourceConstraints relation rows now feed ordinary Component; numeric-call occurrence capture and service continuation APIs are uncalled drafts, not working language features. User requires actual unchanged-program acceptance in one interpreter; internal component checks are diagnostic only. Upstream solver production root/response/VM join, open constructor inference and alias associated-call admission remain unfinished. No task/milestone/interpreter/JIT/fullfixture/Linux/performance closure.",
+      "latest_component_scope": "V535-V537 connected production checkpoint: V535 lib101 pointer mismatch, no programs; V536 all3build0 and5/8runtime passes, zero gains, alias frontier regressed. V537 all3build0 and6/8 unchanged official whole-main runtime-contract passes, one new distinct gain static-method-type-alias-11047 (22dispatches/3calls/13checks/cleanup). Five prior passes retained. repr128 holds before solver execute at overbroad Copy callback closure (7/7/0); union remains nested Iter<_> inference failure (265/265/16). Source fingerprint4aad77b936cadd40051d71242d82681e9604a428e72360686551d4d081e6cec9 /8751 and all closing guards pass. No isolated tests selected. Production CallSeal/CLI/source-root/store/associated-call consumers are connected, but upstream root acceptance/future-use/constructor/architecture/interpreter/JIT/diagnostic/tooling/fullfixture gates remain incomplete. User-requested winddown; workers stopped, handoff docs/handoffs/2026-10-20-interpreter-winddown.md.",
       "artifacts": [
         "worktracks/evidence/2026-10-19-v230-v231-pinned-binder-client.json",
         "worktracks/evidence/2026-10-19-v234-v235-pinned-client-relations.json",
@@ -20728,7 +20731,10 @@
         "worktracks/evidence/2026-10-20-v531-full-impl-compile.json",
         "worktracks/evidence/2026-10-20-v532-source-factory-controls.json",
         "worktracks/evidence/2026-10-20-v533-interpreter-runtime.json",
-        "worktracks/evidence/2026-10-20-v534-interpreter-runtime.json"
+        "worktracks/evidence/2026-10-20-v534-interpreter-runtime.json",
+        "worktracks/evidence/2026-10-20-v535-interpreter-build.json",
+        "worktracks/evidence/2026-10-20-v536-interpreter-runtime.json",
+        "worktracks/evidence/2026-10-20-v537-interpreter-runtime.json"
       ]
     },
     {

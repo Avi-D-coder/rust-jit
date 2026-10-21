@@ -1,0 +1,156 @@
+{
+  "schema": "lrr/validation-evidence/v1",
+  "checkpoint": "V535",
+  "recorded_utc": "2026-10-21T01:57:36.423224+00:00",
+  "scope": "Actual eight-program interpreter validation attempt stopped after failed library build. No runtime or complete interpreter acceptance.",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "Rust1.99.0",
+  "head": "08c177d83dda20a283e06709c92cfffc19eee6be",
+  "source_sha256": "258bbde27b91716252fc52a89dc5265b892bdfa018e653ad8fb59e2fa137d1cc",
+  "source_file_count": 8751,
+  "selection": {
+    "path": "worktracks/05-trait-goal-engine/2026-10-20-interpreter-runtime-selection.json",
+    "sha256": "ef26eec88063b28dc83a17bf199b2d7d2812047f8bb3fe92853ddd16f29412ed",
+    "schema": "lrr/validation-selection/v1",
+    "scope": "Eight unchanged official rustc runtime programs through actual LRR main; preserve known failures. Runtime-contract evidence only, no full-fixture, complete interpreter, upstream solver, JIT, diagnostic or tooling acceptance. No isolated component controls selected.",
+    "controls": [],
+    "runtime_cases": [
+      "tests/ui/enum-discriminant/repr128.rs",
+      "tests/ui/union/union-generic-rpass.rs",
+      "tests/ui/enum-discriminant/discriminant_size.rs",
+      "tests/ui/enum-discriminant/discriminant_value.rs",
+      "tests/ui/associated-types/assoc-type-in-struct-constructor.rs",
+      "tests/ui/generics/generic-derived-type.rs",
+      "tests/ui/structs-enums/struct-aliases.rs",
+      "tests/ui/type-alias/static-method-type-alias-11047.rs"
+    ]
+  },
+  "commands": [
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v535",
+        "before"
+      ],
+      "session": 67071,
+      "exit_code": 0
+    },
+    {
+      "shell": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json > artifacts/validation-current-v535/lib-build.jsonl 2> artifacts/validation-current-v535/lib-build.log",
+      "session": 75067,
+      "exit_code": 101
+    }
+  ],
+  "compile_errors": [
+    {
+      "code": {
+        "code": "E0308",
+        "explanation": "Expected type did not match the received type.\n\nErroneous code examples:\n\n```compile_fail,E0308\nfn plus_one(x: i32) -> i32 {\n    x + 1\n}\n\nplus_one(\"Not a number\");\n//       ^^^^^^^^^^^^^^ expected `i32`, found `&str`\n\nif \"Not a bool\" {\n// ^^^^^^^^^^^^ expected `bool`, found `&str`\n}\n\nlet x: f32 = \"Not a float\";\n//     ---   ^^^^^^^^^^^^^ expected `f32`, found `&str`\n//     |\n//     expected due to this\n```\n\nThis error occurs when an expression was used in a place where the compiler\nexpected an expression of a different type. It can occur in several cases, the\nmost common being when calling a function and passing an argument which has a\ndifferent type than the matching type in the function declaration.\n"
+      },
+      "message": "mismatched types",
+      "rendered": "error[E0308]: mismatched types\n    --> crates/lrr/src/expand/source_discovery/configured_catalog.rs:53:103\n     |\n  53 |             || !discovery.nested_sources.get(&self.ordinal).is_some_and(|parent| std::ptr::eq(parent, self.parent))\n     |                                                                                  ------------         ^^^^^^^^^^^ expected `*const Arc<DeclarationMacroIndex>`, found `&DeclarationMacroIndex`\n     |                                                                                  |\n     |                                                                                  arguments to this function are incorrect\n     |\n     = note: expected raw pointer `*const std::sync::Arc<impl_index::DeclarationMacroIndex>`\n                  found reference `&impl_index::DeclarationMacroIndex`\nnote: function defined here\n    --> /Users/avi/.rustup/toolchains/1.99.0-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/ptr/mod.rs:2507:8\n     |\n2507 | pub fn eq<T: PointeeSized>(a: *const T, b: *const T) -> bool {\n     |        ^^\n\n",
+      "spans": [
+        {
+          "byte_end": 2891,
+          "byte_start": 2880,
+          "column_end": 114,
+          "column_start": 103,
+          "expansion": null,
+          "file_name": "crates/lrr/src/expand/source_discovery/configured_catalog.rs",
+          "is_primary": true,
+          "label": "expected `*const Arc<DeclarationMacroIndex>`, found `&DeclarationMacroIndex`",
+          "line_end": 53,
+          "line_start": 53,
+          "suggested_replacement": null,
+          "suggestion_applicability": null,
+          "text": [
+            {
+              "highlight_end": 114,
+              "highlight_start": 103,
+              "text": "            || !discovery.nested_sources.get(&self.ordinal).is_some_and(|parent| std::ptr::eq(parent, self.parent))"
+            }
+          ]
+        },
+        {
+          "byte_end": 2871,
+          "byte_start": 2859,
+          "column_end": 94,
+          "column_start": 82,
+          "expansion": null,
+          "file_name": "crates/lrr/src/expand/source_discovery/configured_catalog.rs",
+          "is_primary": false,
+          "label": "arguments to this function are incorrect",
+          "line_end": 53,
+          "line_start": 53,
+          "suggested_replacement": null,
+          "suggestion_applicability": null,
+          "text": [
+            {
+              "highlight_end": 94,
+              "highlight_start": 82,
+              "text": "            || !discovery.nested_sources.get(&self.ordinal).is_some_and(|parent| std::ptr::eq(parent, self.parent))"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "dependent_stages": {
+    "cli": "unbuilt; not started after lib failure",
+    "source_digester": "unbuilt; not started after lib failure",
+    "actual_runtime_eight_programs": "all unexecuted; dependency build failed"
+  },
+  "binary_evidence": "No binary is attributed to this failed build. Existing target binaries were neither selected nor executed.",
+  "closing_guard": {
+    "source_matches_before": true,
+    "head_matches_before": true,
+    "source_sha256": "258bbde27b91716252fc52a89dc5265b892bdfa018e653ad8fb59e2fa137d1cc",
+    "changed_sources": [],
+    "aggregate_passed": true
+  },
+  "logs": {
+    "artifacts/validation-current-v535/before.json": {
+      "bytes": 1283951,
+      "sha256": "543819ad484f42c629158fc5168e8c50be83601425d5bd335f172750c812e93b"
+    },
+    "artifacts/validation-current-v535/lib-build.jsonl": {
+      "bytes": 364402,
+      "sha256": "22ba701af29ca0603cb718e346647e7883db4e1149d52fe16aa6bfc68b787122"
+    },
+    "artifacts/validation-current-v535/lib-build.log": {
+      "bytes": 149,
+      "sha256": "c06660122a73aa422412b8e607742c8751fd926724f4521a600da1dc3fbd8119"
+    },
+    "artifacts/validation-current-v535/closing-source.json": {
+      "bytes": 1284022,
+      "sha256": "04e1f2cc1b2455eb862f3dc41d5ebc935bf5767d8f886e49f9176ea67adf2b99"
+    }
+  },
+  "source_review_after_launch": {
+    "scope": "PreparedSourceCall response retention and fatal pending/stall transport only; not a whole-source compile certificate",
+    "fingerprints": {
+      "crates/lrr/src/engine/run.rs": "d23bbf3ba343f865a4f6b2c92df7a0b6863263c8bca12729c207614f85f7c92e",
+      "crates/lrr/src/engine/run_value_calls.rs": "ca42ad953f6b262793839f69e7ce6b1205625cf0e1e25af9548264b7e0d7ea24",
+      "crates/lrr/src/engine/run_call_inputs.rs": "8ed92534e96537c3a2cee1037cd7fc3dd566fd41bedf1fcda03103e44b98142f",
+      "crates/lrr/src/traits/upstream/reached_call.rs": "a0a51772102f729bdeefa29ef4ab3da00684d1f59eae0697366faa595d7903fb",
+      "crates/lrr/src/traits/upstream/infer/fulfillment.rs": "e61a12aa5206f220c23dda64fe424c3a3ce0a5a0a874cc4bc657ac48998d2ee4",
+      "tools/upstream_fulfillment.py": "4cfffbb2d76478d89dd1e625af44817e2aed67809a1d30554ddd7bd4ba896e10"
+    },
+    "observations": "Actual response Arc retained through prepared call/CallExit/return; query guards rechecked before frame/delivery and on return. Value-call constructor None. Fatal overflow copies actual pending obligations and exact optional stalls into owned diagnostics before IR owner ends. No additional actionable finding in those bounded deltas. Actual catalog pointer mismatch retained as compiler failure."
+  },
+  "cleanup": {
+    "generated_fixture_projects": [],
+    "private_targets_or_source_copies": [],
+    "runtime_report_directory": "not created",
+    "action": "none required; compact raw compile logs retained"
+  },
+  "acceptance": {
+    "runtime_contract_passes": 0,
+    "runtime_executions": 0,
+    "full_fixture_passes": 0,
+    "interpreter_gate": "incomplete",
+    "guest_jit_gate": "unchanged/incomplete",
+    "prior_actual_baseline": "worktracks/evidence/2026-10-20-v534-interpreter-runtime.json"
+  }
+}

@@ -158,6 +158,24 @@ impl Span {
     outputs['transmute.rs'] = expected_transmute()
     outputs['fulfillment.rs'] = expected_fulfillment()
     outputs['mod.rs'] += b'\npub(crate) mod fulfillment;\n'
+    # Private LRR source admission wrappers; no upstream algorithm replacement.
+    text = outputs['client.rs'].decode().replace(
+        'fn disable_trait_solver_fast_paths(&self) -> bool {',
+        'fn disable_trait_solver_fast_paths(&self) -> bool {\n        self.require_source_root();')
+    outputs['client.rs'] = rustfmt(text)
+    text = outputs['delegate.rs'].decode().replace(
+        '(Self(context), value, variables)',
+        'context.inherit_canonical_source_root();\n        (Self(context), value, variables)').replace(
+        'self.0.compute_goal_fast_path(goal, span)',
+        'self.0.require_source_root();\n        self.0.compute_goal_fast_path(goal, span)')
+    outputs['delegate.rs'] = rustfmt(text)
+    text = outputs['fast_path.rs'].decode().replace(
+        '        use ComputeGoalFastPathOutcome as Outcome;',
+        '        self.require_source_root();\n        use ComputeGoalFastPathOutcome as Outcome;')
+    outputs['fast_path.rs'] = rustfmt(text)
+
+
+
     return outputs
 
 

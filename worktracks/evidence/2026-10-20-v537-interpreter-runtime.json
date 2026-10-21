@@ -1,0 +1,1732 @@
+{
+  "schema": "lrr/validation-evidence/v1",
+  "checkpoint": "V537",
+  "recorded_utc": "2026-10-21T02:11:26.826213+00:00",
+  "scope": "Actual unchanged eight-program interpreter batch; six runtime-contract passes and two actual failures. One newly passing original static-method alias main. No isolated controls.",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "Rust1.99.0",
+  "head": "08c177d83dda20a283e06709c92cfffc19eee6be",
+  "source_sha256": "4aad77b936cadd40051d71242d82681e9604a428e72360686551d4d081e6cec9",
+  "source_file_count": 8751,
+  "prior_actual_runtime_baseline": "worktracks/evidence/2026-10-20-v536-interpreter-runtime.json",
+  "selection": {
+    "path": "worktracks/05-trait-goal-engine/2026-10-20-interpreter-runtime-selection.json",
+    "sha256": "ef26eec88063b28dc83a17bf199b2d7d2812047f8bb3fe92853ddd16f29412ed",
+    "schema": "lrr/validation-selection/v1",
+    "scope": "Eight unchanged official rustc runtime programs through actual LRR main; preserve known failures. Runtime-contract evidence only, no full-fixture, complete interpreter, upstream solver, JIT, diagnostic or tooling acceptance. No isolated component controls selected.",
+    "controls": [],
+    "runtime_cases": [
+      "tests/ui/enum-discriminant/repr128.rs",
+      "tests/ui/union/union-generic-rpass.rs",
+      "tests/ui/enum-discriminant/discriminant_size.rs",
+      "tests/ui/enum-discriminant/discriminant_value.rs",
+      "tests/ui/associated-types/assoc-type-in-struct-constructor.rs",
+      "tests/ui/generics/generic-derived-type.rs",
+      "tests/ui/structs-enums/struct-aliases.rs",
+      "tests/ui/type-alias/static-method-type-alias-11047.rs"
+    ]
+  },
+  "commands": [
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v537",
+        "before"
+      ],
+      "session": 40968,
+      "exit_code": 0
+    },
+    {
+      "shell": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json > artifacts/validation-current-v537/lib-build.jsonl 2> artifacts/validation-current-v537/lib-build.log",
+      "session": 14570,
+      "exit_code": 0,
+      "cargo_seconds": 19.14
+    },
+    {
+      "shell": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr > artifacts/validation-current-v537/cli-build.log 2>&1",
+      "session": 12518,
+      "exit_code": 0,
+      "cargo_seconds": 12.95
+    },
+    {
+      "shell": "cargo +1.99.0 build --offline --locked -p xtask --example lrr_source_digests > artifacts/validation-current-v537/digester-build.log 2>&1",
+      "exit_code": 0
+    },
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v537",
+        "after-build",
+        "--cargo-messages",
+        "artifacts/validation-current-v537/lib-build.jsonl",
+        "--cli-binary",
+        "target/debug/lrr"
+      ],
+      "exit_code": 0
+    },
+    {
+      "shell": "LRR_EMBEDDED_FACADE=1 /opt/homebrew/bin/python3.12 tools/rustc_checkout_runtime.py --lrr target/debug/lrr --source-digester target/debug/examples/lrr_source_digests --report-dir /private/tmp/lrr-v537-interpreter-runtime --timeout 240 --case tests/ui/enum-discriminant/repr128.rs --case tests/ui/union/union-generic-rpass.rs --case tests/ui/enum-discriminant/discriminant_size.rs --case tests/ui/enum-discriminant/discriminant_value.rs --case tests/ui/associated-types/assoc-type-in-struct-constructor.rs --case tests/ui/generics/generic-derived-type.rs --case tests/ui/structs-enums/struct-aliases.rs --case tests/ui/type-alias/static-method-type-alias-11047.rs > artifacts/validation-current-v537/runtime.log 2>&1",
+      "session": 95730,
+      "exit_code": 1
+    },
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v537",
+        "after-runtime"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "binaries": {
+    "test": {
+      "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+      "sha256": "f82298497f653ecb0695b4a2e5803b434c14280e05c7bbfb2d34f34556bfacf8"
+    },
+    "cli": {
+      "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+      "sha256": "43834cd150cf627e45857eda06556f65d37abaa61694c3791ad15d95939aef50"
+    },
+    "source_digester": {
+      "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+      "sha256": "355c98a8de6671224cf264f780cd516aad7e85407ea267609a982851eb0e2e4d"
+    }
+  },
+  "runtime_harness": {
+    "path": "tools/rustc_checkout_runtime.py",
+    "sha256": "9916301416cb5784bbc40f72cfad18f61299a757acd2611691062d1884cb77b3",
+    "schema": "lrr/v5/selected-upstream-runtime/v1",
+    "upstream_commit": "ae0fe511b15ab760d7e963b13389d1bc2ab42b18",
+    "manifest_sha256": "4a32148142b0bb32ec1eb345874f5d0e72df3d3c51f0156a925be592318f8de4",
+    "native_execution": false,
+    "input_guard": "all_imported_originals_manifest_and_binary_unchanged",
+    "selected_batch_passed": false,
+    "source_digest_observation": {
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+        "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout"
+      ],
+      "timed_out": false,
+      "output_limited": false,
+      "exit_code": 0,
+      "pid": 52404,
+      "elapsed_seconds": 0.49912537499949394,
+      "stdout_bytes": 487798,
+      "stdout_sha256": "558c429846ebfda4c9ea610c0b325b2dc116ba34c8cacb0c0da84b48f01a13ee",
+      "stderr_bytes": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "counts": {
+      "interpreter_failure": 2,
+      "runtime_contract_pass": 6
+    }
+  },
+  "programs": [
+    {
+      "case": "tests/ui/enum-discriminant/repr128.rs",
+      "source_sha256": "66af2eb56be2026a744d2169f8467d11df4c75e8ea21d204f0948db2c8e445bc",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "auxiliary_flags": [],
+      "runtime_status": "interpreter_failure",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/enum-discriminant/repr128.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "5eba7414a7f2aa9017249cd5e28556163a12483708a086d4a7fe510e69ba6ea3"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 2,
+        "pid": 52405,
+        "elapsed_seconds": 26.53638804199909,
+        "stdout_bytes": 5885,
+        "stdout_sha256": "b7555c8602fbfbe5da509169cc73a573590c24c07fdc2bb03c3ddc5b1fd5e20b",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "checks": {},
+      "guest_output": null,
+      "terminal": {
+        "code": "LRR-E-TRAIT-INFERENCE",
+        "message": "reached upstream inference did not settle: Held(ReachedCallHold { stage: \"callback-domain\", reason: \"\\\"Copy (Digest(d1cbccf973e385bbcbe0f6699b377439493c7a649e78ad2b788591fd9c2fe39e)) at Span { origin: Digest(4b5490b6df25f03e4a444d0f9d33023d7e581fa1ef3283481010259257dd586f), start: 1110, end: 1134 }: builtin callback domain Copy is not prepared for this source scope; source_producer_holds=[UnpreparedSourceQuery { definition: Digest(d1cbccf973e385bbcbe0f6699b377439493c7a649e78ad2b788591fd9c2fe39e), query: \\\\\\\"parent\\\\\\\", reason: \\\\\\\"ParentIdentity\\\\\\\" }]\\\"\" })",
+        "phase": "executor",
+        "status": "fault"
+      },
+      "diagnostic_frames": [
+        {
+          "body": {
+            "body_key": {
+              "definition": "6044d27a5688091034a91f94cb4b25981261249a923a162e8749bdf0433fa561",
+              "exact_body_bytes": "98bc7e97873813c8be057143b8f709a60340495acea76d0cc2e5e2390a6bf400"
+            },
+            "relative_end": 22,
+            "relative_start": 1
+          },
+          "pc": "afec70fdf0c669b45660fe6ef3ad96133a9927a12d18b321011ab631bd6d131c",
+          "source_ranges": [
+            {
+              "path": "repr128.rs",
+              "start": 667,
+              "end": 689
+            }
+          ]
+        }
+      ],
+      "entry_body": {
+        "definition": "6044d27a5688091034a91f94cb4b25981261249a923a162e8749bdf0433fa561",
+        "exact_body_bytes": "98bc7e97873813c8be057143b8f709a60340495acea76d0cc2e5e2390a6bf400"
+      },
+      "source_snapshot": {
+        "identity": "f038f8383a036dfbc802816042656dda1a69240c833a50a02cd50e3f7ad4704d",
+        "owning_edition": 2015,
+        "root_source": "repr128.rs",
+        "root_crate": "17f292bd60a46427a69796489973d99442f9821f8ccf28e64be1323377740170",
+        "root_cfg": "5853d2daafff89af5a27c2142e6c8496753ce5da00e8f8d2c258383dba0a4561",
+        "files": [
+          {
+            "path": "repr128.rs",
+            "content": "9b7fea4748f6aa9c85eb14289f46e57f9b940c0238dba32f91551ff22df8b1ed",
+            "bytes": 1156
+          }
+        ]
+      },
+      "capture": {
+        "complete": false,
+        "scope": "dispatcher_external_effects_only_not_memory_trace",
+        "facts": {
+          "classified_operation_candidates": 7,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": true,
+          "observed_suspension": true,
+          "source_call_boundaries": 0,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 7,
+          "vm_outcomes": 7
+        },
+        "guest": {
+          "status": "unobserved",
+          "stdout": null,
+          "stderr": null
+        },
+        "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer"
+      },
+      "full_fixture": "unassessed; maintained runtime contract only",
+      "diagnostic_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      },
+      "compiler_tooling_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      }
+    },
+    {
+      "case": "tests/ui/union/union-generic-rpass.rs",
+      "source_sha256": "f59d90d6dad771e639a8ff498e0475e10e126c1b81342c3a14c08263458356b8",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "auxiliary_flags": [],
+      "runtime_status": "interpreter_failure",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/union/union-generic-rpass.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "1340e2259063e0fe66f7916cd3e3b70b0b29f60d6e67b125c52d471cc3d0130c"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 2,
+        "pid": 52412,
+        "elapsed_seconds": 4.890613042000041,
+        "stdout_bytes": 12047,
+        "stdout_sha256": "f76ff5762c74ef726dfa9b03310328ca9f76257d5a544b8aa230a4158528bf0c",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "checks": {},
+      "guest_output": null,
+      "terminal": {
+        "code": "LRR-E-UNSUPPORTED",
+        "message": "explicit Type argument with an inference hole requires inference",
+        "phase": "executor",
+        "status": "fault"
+      },
+      "diagnostic_frames": [
+        {
+          "body": {
+            "body_key": {
+              "definition": "cee76bbf71c1eaab72d3266a8653a84e4f65e30e5cbd72544161ce944cc0c417",
+              "exact_body_bytes": "0bd0d764cd11be81aebb41f083a1c02c8dfbb6f08f8cbbe2a0ecfe6c1def4c11"
+            },
+            "relative_end": 516,
+            "relative_start": 441
+          },
+          "pc": "6e16c748b267bf09bf3e80fb5ccaebaaab6057ed20e29225ee6f5b299ff605e3",
+          "source_ranges": [
+            {
+              "path": "union-generic-rpass.rs",
+              "start": 518,
+              "end": 597
+            }
+          ]
+        }
+      ],
+      "entry_body": {
+        "definition": "cee76bbf71c1eaab72d3266a8653a84e4f65e30e5cbd72544161ce944cc0c417",
+        "exact_body_bytes": "0bd0d764cd11be81aebb41f083a1c02c8dfbb6f08f8cbbe2a0ecfe6c1def4c11"
+      },
+      "source_snapshot": {
+        "identity": "f7409b805b4cfed2b6f732b0503316ffe0720c4c6a4a5734ee416f552ce16d53",
+        "owning_edition": 2015,
+        "root_source": "union-generic-rpass.rs",
+        "root_crate": "afcac255027da1d56f0831d675cbd4157ebeaa91b6f35a491c322ad871d341de",
+        "root_cfg": "5853d2daafff89af5a27c2142e6c8496753ce5da00e8f8d2c258383dba0a4561",
+        "files": [
+          {
+            "path": "union-generic-rpass.rs",
+            "content": "036aa717758b789045678a205d275fef3c660d79266d16d89f3a7b2724de2c23",
+            "bytes": 641
+          }
+        ]
+      },
+      "capture": {
+        "complete": false,
+        "scope": "dispatcher_external_effects_only_not_memory_trace",
+        "facts": {
+          "classified_operation_candidates": 404,
+          "cleanup_observed": false,
+          "closed_no_external_effects": false,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": true,
+          "observed_suspension": false,
+          "source_call_boundaries": 16,
+          "terminal": null,
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 265,
+          "vm_outcomes": 265
+        },
+        "guest": {
+          "status": "unobserved",
+          "stdout": null,
+          "stderr": null
+        },
+        "blocker": "fault_suspension_unhandled_boundary_or_missing_closed_producer"
+      },
+      "full_fixture": "unassessed; maintained runtime contract only",
+      "diagnostic_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      },
+      "compiler_tooling_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      }
+    },
+    {
+      "case": "tests/ui/enum-discriminant/discriminant_size.rs",
+      "source_sha256": "3188f517b24186d08376bd2eac494b4041ddcbb1d11c6de50186be1a1f4d1871",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "auxiliary_flags": [],
+      "runtime_status": "runtime_contract_pass",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/enum-discriminant/discriminant_size.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "e8892889bdb1d30f93e645eba9dafed875483b18c37583c3a3c485de346829ae"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 0,
+        "pid": 52419,
+        "elapsed_seconds": 11.271808916000737,
+        "stdout_bytes": 2173,
+        "stdout_sha256": "787b604d836ea85e30d291ba5bd353e83fcf07202b098a41f6604080a7e7e574",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "guest_output": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "terminal": {
+        "installed_lrir_bytes": 23683003,
+        "installed_recipes": 921,
+        "live_edition": 2015,
+        "opcode_counters": {
+          "backedge_polls": 30,
+          "backedges_completed": 30,
+          "cleanup_elements_completed": 991,
+          "exits_completed": 2610,
+          "fuel_used": 7376,
+          "operations_completed": 3775,
+          "operations_started": 3775,
+          "panic_scopes_cleaned": 0,
+          "return_scopes_cleaned": 65,
+          "started_by_opcode": [
+            109,
+            86,
+            397,
+            124,
+            548,
+            483,
+            0,
+            15,
+            90,
+            169,
+            114,
+            14,
+            1,
+            306,
+            0,
+            0,
+            30,
+            84,
+            30,
+            108,
+            60,
+            50,
+            100,
+            100,
+            0,
+            0,
+            0,
+            29,
+            73,
+            29,
+            88,
+            38,
+            28,
+            0,
+            10,
+            0,
+            70,
+            0,
+            15,
+            0,
+            30,
+            0,
+            0,
+            0,
+            100,
+            56,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            10,
+            0,
+            0,
+            40,
+            0,
+            0,
+            128,
+            0,
+            13,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "schema": "lrr/v2/development-run",
+        "semantics_profile": "lrr-2024-v2",
+        "status": "completed",
+        "value": {
+          "kind": "unit"
+        }
+      },
+      "diagnostic_frames": [],
+      "entry_body": {
+        "definition": "4d8f13b0c559bdc3211744c05137e123b70f5429284c66254cd84ef1caff42f3",
+        "exact_body_bytes": "5e5e77d209f8e8c0ed36785d7f90ac5198fc67e68014492d3dd97aa16f5e855f"
+      },
+      "source_snapshot": {
+        "identity": "24afe43013eaccb6af86b9d0358d1a8a4128061e53d7a7bdda73031e60707d20",
+        "owning_edition": 2015,
+        "root_source": "discriminant_size.rs",
+        "root_crate": "28a975f72815eaac097561b49675befadba8d8fb11abc6bab16af33bde10aa0b",
+        "root_cfg": "5853d2daafff89af5a27c2142e6c8496753ce5da00e8f8d2c258383dba0a4561",
+        "files": [
+          {
+            "path": "discriminant_size.rs",
+            "content": "569e977fdb50a9a7c464dc5b879a0404305e7f9dfa5bfde57b5d6c57d66703d4",
+            "bytes": 1945
+          }
+        ]
+      },
+      "capture": {
+        "complete": true,
+        "scope": "dispatcher_external_effects_only_not_memory_trace",
+        "facts": {
+          "classified_operation_candidates": 8819,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 108,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 4684,
+          "vm_outcomes": 4684
+        },
+        "guest": {
+          "status": "closed_no_external_effects_observed",
+          "stdout": [],
+          "stderr": []
+        },
+        "blocker": null
+      },
+      "full_fixture": "unassessed; maintained runtime contract only",
+      "diagnostic_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      },
+      "compiler_tooling_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      }
+    },
+    {
+      "case": "tests/ui/enum-discriminant/discriminant_value.rs",
+      "source_sha256": "2bd9fa7d77e4818c60a1493ee03a550c8d1f1ad0b251edf2aa9d9b18a01440a9",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "auxiliary_flags": [],
+      "runtime_status": "runtime_contract_pass",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/enum-discriminant/discriminant_value.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "fe8554991828be013b6ee5ba45b6e2e7eac4fec4d12ae8c04b2b29c49593ecda"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 0,
+        "pid": 52451,
+        "elapsed_seconds": 7.247668916999828,
+        "stdout_bytes": 2157,
+        "stdout_sha256": "7bbacf1696b4f412516f39e29c1a506211edfc7f1f83a1fe037bd23a2bebf57c",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "guest_output": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "terminal": {
+        "installed_lrir_bytes": 25259871,
+        "installed_recipes": 1057,
+        "live_edition": 2015,
+        "opcode_counters": {
+          "backedge_polls": 0,
+          "backedges_completed": 0,
+          "cleanup_elements_completed": 519,
+          "exits_completed": 1177,
+          "fuel_used": 3318,
+          "operations_completed": 1622,
+          "operations_started": 1622,
+          "panic_scopes_cleaned": 0,
+          "return_scopes_cleaned": 23,
+          "started_by_opcode": [
+            30,
+            23,
+            127,
+            126,
+            211,
+            189,
+            0,
+            0,
+            0,
+            42,
+            21,
+            21,
+            0,
+            189,
+            0,
+            0,
+            0,
+            21,
+            0,
+            46,
+            21,
+            21,
+            46,
+            47,
+            0,
+            0,
+            0,
+            22,
+            44,
+            22,
+            42,
+            64,
+            42,
+            0,
+            0,
+            0,
+            0,
+            0,
+            40,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            84,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            15,
+            0,
+            0,
+            0,
+            0,
+            0,
+            42,
+            0,
+            24,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "schema": "lrr/v2/development-run",
+        "semantics_profile": "lrr-2024-v2",
+        "status": "completed",
+        "value": {
+          "kind": "unit"
+        }
+      },
+      "diagnostic_frames": [],
+      "entry_body": {
+        "definition": "ce369d35809c7c767b2e225736bb86df58936429ac93129aadb7b7b95d52f6eb",
+        "exact_body_bytes": "c69455b704d352bb4821f66e3de78351debea94ab348f3ba150abc1b8c45a5e3"
+      },
+      "source_snapshot": {
+        "identity": "a057c66284736ef578df86a91eaeb2e4f17442ffc5c8905f307b25c33b2b8d00",
+        "owning_edition": 2015,
+        "root_source": "discriminant_value.rs",
+        "root_crate": "5d864abb2ba49f2174340ff764171e4527d866abcfb14f22df17d6c719b928b0",
+        "root_cfg": "5853d2daafff89af5a27c2142e6c8496753ce5da00e8f8d2c258383dba0a4561",
+        "files": [
+          {
+            "path": "discriminant_value.rs",
+            "content": "07521cd5dcc77ef23c6dc1249ff63b4fbede8ca08a8cddbaffb5c8b30eb44ef3",
+            "bytes": 1794
+          }
+        ]
+      },
+      "capture": {
+        "complete": true,
+        "scope": "dispatcher_external_effects_only_not_memory_trace",
+        "facts": {
+          "classified_operation_candidates": 10022,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 1,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 46,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 4537,
+          "vm_outcomes": 4537
+        },
+        "guest": {
+          "status": "closed_no_external_effects_observed",
+          "stdout": [],
+          "stderr": []
+        },
+        "blocker": null
+      },
+      "full_fixture": "unassessed; maintained runtime contract only",
+      "diagnostic_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      },
+      "compiler_tooling_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      }
+    },
+    {
+      "case": "tests/ui/associated-types/assoc-type-in-struct-constructor.rs",
+      "source_sha256": "8b7183304d6ee634fb3484db7aa3a00ece816496df723a904754198475de58b3",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "auxiliary_flags": [],
+      "runtime_status": "runtime_contract_pass",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/associated-types/assoc-type-in-struct-constructor.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "649808d83ad129f8cce87f23b08df22612e24a22af2f220f7e039e3fdb765d0f"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 0,
+        "pid": 52468,
+        "elapsed_seconds": 3.697764583001117,
+        "stdout_bytes": 2129,
+        "stdout_sha256": "ab3f6b85cc50de78586254acd7d2a06cdb57c2788dc441143664fb26f7f2f803",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "guest_output": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "terminal": {
+        "installed_lrir_bytes": 791826,
+        "installed_recipes": 15,
+        "live_edition": 2015,
+        "opcode_counters": {
+          "backedge_polls": 0,
+          "backedges_completed": 0,
+          "cleanup_elements_completed": 7,
+          "exits_completed": 15,
+          "fuel_used": 44,
+          "operations_completed": 22,
+          "operations_started": 22,
+          "panic_scopes_cleaned": 0,
+          "return_scopes_cleaned": 2,
+          "started_by_opcode": [
+            0,
+            2,
+            2,
+            0,
+            4,
+            2,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            1,
+            1,
+            2,
+            2,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "schema": "lrr/v2/development-run",
+        "semantics_profile": "lrr-2024-v2",
+        "status": "completed",
+        "value": {
+          "kind": "unit"
+        }
+      },
+      "diagnostic_frames": [],
+      "entry_body": {
+        "definition": "bd13b24e80220075a14abbed3c714d299296d0c20054b8476cf40d74f5123b14",
+        "exact_body_bytes": "bc92378176ad2b6f950824e41291ee573b4adc3f57680d8901d138db0022fa44"
+      },
+      "source_snapshot": {
+        "identity": "c2aa6d6fb3951b833b45dee96518d4b75d4521dcfbbeeb80e3d60ed2a13aa2e2",
+        "owning_edition": 2015,
+        "root_source": "assoc-type-in-struct-constructor.rs",
+        "root_crate": "76d02c55f74ecb2f2c9d65482cb660acc21dda42631fe6fb85e59d786f76178a",
+        "root_cfg": "5853d2daafff89af5a27c2142e6c8496753ce5da00e8f8d2c258383dba0a4561",
+        "files": [
+          {
+            "path": "assoc-type-in-struct-constructor.rs",
+            "content": "d251d24131de6b97a95d168aaeab83d2772af8eca11a23fcc6caaea862b407a8",
+            "bytes": 256
+          }
+        ]
+      },
+      "capture": {
+        "complete": true,
+        "scope": "dispatcher_external_effects_only_not_memory_trace",
+        "facts": {
+          "classified_operation_candidates": 22,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 2,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 15,
+          "vm_outcomes": 15
+        },
+        "guest": {
+          "status": "closed_no_external_effects_observed",
+          "stdout": [],
+          "stderr": []
+        },
+        "blocker": null
+      },
+      "full_fixture": "unassessed; maintained runtime contract only",
+      "diagnostic_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      },
+      "compiler_tooling_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      }
+    },
+    {
+      "case": "tests/ui/generics/generic-derived-type.rs",
+      "source_sha256": "59e07d17994d57e0175737319e69637680861a13e39a162cc2c12fe53e0ac06b",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "auxiliary_flags": [],
+      "runtime_status": "runtime_contract_pass",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/generics/generic-derived-type.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "43af397e44e0f6db1a419d3ccb1c73f012f43e4ea46f13f17cbffdf06d2c3c6b"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 0,
+        "pid": 52474,
+        "elapsed_seconds": 4.978552165999645,
+        "stdout_bytes": 2175,
+        "stdout_sha256": "5c2aca00a6fe4a426ca451046f2ce5c3918772d3b29f5ee30d398ca41a68ed78",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "guest_output": {
+        "stderr": "",
+        "stdout": "10\n10\n"
+      },
+      "terminal": {
+        "installed_lrir_bytes": 3752088,
+        "installed_recipes": 153,
+        "live_edition": 2015,
+        "opcode_counters": {
+          "backedge_polls": 0,
+          "backedges_completed": 0,
+          "cleanup_elements_completed": 57,
+          "exits_completed": 153,
+          "fuel_used": 414,
+          "operations_completed": 204,
+          "operations_started": 204,
+          "panic_scopes_cleaned": 0,
+          "return_scopes_cleaned": 6,
+          "started_by_opcode": [
+            3,
+            5,
+            18,
+            11,
+            31,
+            25,
+            0,
+            2,
+            1,
+            8,
+            2,
+            2,
+            0,
+            17,
+            0,
+            0,
+            0,
+            2,
+            0,
+            5,
+            3,
+            2,
+            5,
+            5,
+            0,
+            0,
+            0,
+            3,
+            6,
+            3,
+            8,
+            4,
+            5,
+            1,
+            0,
+            0,
+            0,
+            4,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            2,
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            1,
+            0,
+            0,
+            6,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "output": {
+          "stderr": "",
+          "stdout": "10\n10\n"
+        },
+        "schema": "lrr/v2/development-run",
+        "semantics_profile": "lrr-2024-v2",
+        "status": "completed",
+        "value": {
+          "kind": "unit"
+        }
+      },
+      "diagnostic_frames": [],
+      "entry_body": {
+        "definition": "2d7d6adfe9ce7ecf68787cc8b12fd5037d75cf106477062d2fd56bf2b1f6b614",
+        "exact_body_bytes": "aea8334907cb6147d1cb30c6fe680e43fcdaa816a047df055dbbdfddcbed12dd"
+      },
+      "source_snapshot": {
+        "identity": "c6381372ef63cd3859bfa22c65d2c2e6dcb1b89dbacffa964bddac95c27e5ea4",
+        "owning_edition": 2015,
+        "root_source": "generic-derived-type.rs",
+        "root_crate": "4dbff796883e559758797555e4702bbdefdd415d4cec4a54c949d6a83ec1f6e7",
+        "root_cfg": "5853d2daafff89af5a27c2142e6c8496753ce5da00e8f8d2c258383dba0a4561",
+        "files": [
+          {
+            "path": "generic-derived-type.rs",
+            "content": "28c05772c8e3ba0cb744aea3ed3b4759fca1abf749f6dd324412b162e80c9869",
+            "bytes": 361
+          }
+        ]
+      },
+      "capture": {
+        "complete": true,
+        "scope": "dispatcher_external_effects_only_not_memory_trace",
+        "facts": {
+          "classified_operation_candidates": 312,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 5,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 199,
+          "vm_outcomes": 199
+        },
+        "guest": {
+          "status": "closed_managed_output_observed",
+          "stdout": [
+            49,
+            48,
+            10,
+            49,
+            48,
+            10
+          ],
+          "stderr": []
+        },
+        "blocker": null
+      },
+      "full_fixture": "unassessed; maintained runtime contract only",
+      "diagnostic_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      },
+      "compiler_tooling_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      }
+    },
+    {
+      "case": "tests/ui/structs-enums/struct-aliases.rs",
+      "source_sha256": "8da894106e96817d0e10bea2b1668090bd62f661804742b32ff0d474ccb59ab3",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "auxiliary_flags": [],
+      "runtime_status": "runtime_contract_pass",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/structs-enums/struct-aliases.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "d5966d7b47fb64c4a61496af3377d4851c868548d703e629b10a981abd77f0e7"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 0,
+        "pid": 52505,
+        "elapsed_seconds": 4.9350298749996,
+        "stdout_bytes": 2123,
+        "stdout_sha256": "6c2d002e9a65644e678600b09322a7a67af84eb82965a23374b6e956161c039a",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "guest_output": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "terminal": {
+        "installed_lrir_bytes": 4299746,
+        "installed_recipes": 388,
+        "live_edition": 2015,
+        "opcode_counters": {
+          "backedge_polls": 0,
+          "backedges_completed": 0,
+          "cleanup_elements_completed": 170,
+          "exits_completed": 394,
+          "fuel_used": 1126,
+          "operations_completed": 562,
+          "operations_started": 562,
+          "panic_scopes_cleaned": 0,
+          "return_scopes_cleaned": 3,
+          "started_by_opcode": [
+            14,
+            12,
+            35,
+            39,
+            81,
+            78,
+            0,
+            3,
+            0,
+            22,
+            8,
+            8,
+            0,
+            63,
+            0,
+            0,
+            0,
+            8,
+            0,
+            4,
+            2,
+            2,
+            4,
+            4,
+            0,
+            0,
+            0,
+            11,
+            22,
+            11,
+            27,
+            18,
+            16,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            44,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            16,
+            0,
+            8,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "schema": "lrr/v2/development-run",
+        "semantics_profile": "lrr-2024-v2",
+        "status": "completed",
+        "value": {
+          "kind": "unit"
+        }
+      },
+      "diagnostic_frames": [],
+      "entry_body": {
+        "definition": "9591ff3de841542a787677a4042380bbd8d6f269c703810fd273805a94ace699",
+        "exact_body_bytes": "8ff30a697fe3aef11334a5853aeb10cfcef81b722148099bf1273e77bc238561"
+      },
+      "source_snapshot": {
+        "identity": "803a30d9c13dc56f6d62dfc994fa316ffe8e6bd50eb4347d21ab745ecc444e45",
+        "owning_edition": 2015,
+        "root_source": "struct-aliases.rs",
+        "root_crate": "a5f638248fd13150e98601b8fa77b50bc9722f1fa88849089643183c6f8117f5",
+        "root_cfg": "5853d2daafff89af5a27c2142e6c8496753ce5da00e8f8d2c258383dba0a4561",
+        "files": [
+          {
+            "path": "struct-aliases.rs",
+            "content": "0d330044c4d1efb687d4c84ccbfc3851f903a542f2d7967725d7eab74a9d6b71",
+            "bytes": 1065
+          }
+        ]
+      },
+      "capture": {
+        "complete": true,
+        "scope": "dispatcher_external_effects_only_not_memory_trace",
+        "facts": {
+          "classified_operation_candidates": 1952,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 4,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 961,
+          "vm_outcomes": 961
+        },
+        "guest": {
+          "status": "closed_no_external_effects_observed",
+          "stdout": [],
+          "stderr": []
+        },
+        "blocker": null
+      },
+      "full_fixture": "unassessed; maintained runtime contract only",
+      "diagnostic_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      },
+      "compiler_tooling_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      }
+    },
+    {
+      "case": "tests/ui/type-alias/static-method-type-alias-11047.rs",
+      "source_sha256": "bbd1a7b205e796bf377489b0c151ee14988c8beaac045d32c77f12403d9ff68b",
+      "edition": 2015,
+      "directives": [
+        "//@ run-pass"
+      ],
+      "auxiliary_flags": [],
+      "runtime_status": "runtime_contract_pass",
+      "observation": {
+        "argv": [
+          "/Users/avi/Code/rust-jit/target/debug/lrr",
+          "--edition",
+          "2015",
+          "run",
+          "/Users/avi/Code/rust-jit/fixtures/upstream/rustc-checkout/tests/ui/type-alias/static-method-type-alias-11047.rs",
+          "--runtime-capture",
+          "--capture-context",
+          "10a9d1bc624c07d2ef6419e15c0fbbf112a6ab87db6c02d295a121fcc60aa392"
+        ],
+        "timed_out": false,
+        "output_limited": false,
+        "exit_code": 0,
+        "pid": 52506,
+        "elapsed_seconds": 3.8310716249998222,
+        "stdout_bytes": 2126,
+        "stdout_sha256": "6a782222551daa6508ce195411d841637ff8b82d8abb5c60f7cde20b5568c66a",
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "checks": {
+        "clean_process_exit": true,
+        "protocol_not_guest_output": true,
+        "separate_host_preparation": true,
+        "owning_edition": true,
+        "completed_main": true,
+        "complete_capture": true,
+        "closed_guest_streams": true,
+        "actual_dispatch": true,
+        "terminal_and_cleanup": true,
+        "no_unobserved_boundaries": true,
+        "root_path": true,
+        "entry_identity": true,
+        "captured_originals": true
+      },
+      "guest_output": {
+        "stdout": "",
+        "stderr": ""
+      },
+      "terminal": {
+        "installed_lrir_bytes": 804261,
+        "installed_recipes": 20,
+        "live_edition": 2015,
+        "opcode_counters": {
+          "backedge_polls": 0,
+          "backedges_completed": 0,
+          "cleanup_elements_completed": 11,
+          "exits_completed": 22,
+          "fuel_used": 64,
+          "operations_completed": 31,
+          "operations_started": 31,
+          "panic_scopes_cleaned": 0,
+          "return_scopes_cleaned": 4,
+          "started_by_opcode": [
+            0,
+            3,
+            5,
+            1,
+            8,
+            4,
+            0,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            3,
+            0,
+            0,
+            0,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "schema": "lrr/v2/development-run",
+        "semantics_profile": "lrr-2024-v2",
+        "status": "completed",
+        "value": {
+          "kind": "unit"
+        }
+      },
+      "diagnostic_frames": [],
+      "entry_body": {
+        "definition": "db08754b34002aab5a83ce62976da4224bfed156660f25a5c9fa8b6ee104c8e9",
+        "exact_body_bytes": "ad99fdfe976ab61ed5014b9759639cad6474073309b192cd214e113fb8a27d96"
+      },
+      "source_snapshot": {
+        "identity": "9947df4e8eaec7164ebc693e8ca4221bf349e88de33074e04fe8c1939a50be9d",
+        "owning_edition": 2015,
+        "root_source": "static-method-type-alias-11047.rs",
+        "root_crate": "265af8d9352f2a5d911751a6bc20b82ff2c73f262fcd78519f9838b2ead63a68",
+        "root_cfg": "5853d2daafff89af5a27c2142e6c8496753ce5da00e8f8d2c258383dba0a4561",
+        "files": [
+          {
+            "path": "static-method-type-alias-11047.rs",
+            "content": "53d00fabc6b784d3c8a2c60ade5f9d183834447e74ea7144ec13d9f428ee85d0",
+            "bytes": 599
+          }
+        ]
+      },
+      "capture": {
+        "complete": true,
+        "scope": "dispatcher_external_effects_only_not_memory_trace",
+        "facts": {
+          "classified_operation_candidates": 31,
+          "cleanup_observed": true,
+          "closed_no_external_effects": true,
+          "effect_recipe_dispatch_attempts": 0,
+          "initializer_frames_entered": 0,
+          "observed_fault": false,
+          "observed_suspension": false,
+          "source_call_boundaries": 3,
+          "terminal": {
+            "kind": "completed",
+            "unit": true
+          },
+          "typed_fault_exit_candidates": 0,
+          "unsupported_operation_candidates": 0,
+          "vm_dispatches": 22,
+          "vm_outcomes": 22
+        },
+        "guest": {
+          "status": "closed_no_external_effects_observed",
+          "stdout": [],
+          "stderr": []
+        },
+        "blocker": null
+      },
+      "full_fixture": "unassessed; maintained runtime contract only",
+      "diagnostic_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      },
+      "compiler_tooling_compatibility": {
+        "status": "unassessed",
+        "expected_files": []
+      }
+    }
+  ],
+  "baseline_comparison": {
+    "new_distinct_runtime_gains": 1,
+    "newly_passing_originals": [
+      "tests/ui/type-alias/static-method-type-alias-11047.rs"
+    ],
+    "five_retained_passes": "unchanged statuses, dispatch/outcome/call counts, cleanup and guest streams; generic-derived-type stdout10\\n10\\n, others empty",
+    "repr128": "previous explicit-super producer hold passed, but still held before pinned execute at Copy callback-domain:7/7/0; actual owner digest/name/span and ParentIdentity producer hold retained in terminal",
+    "generic_union": "same explicit Type argument inference hole,265/265/16calls",
+    "static_method_alias": "full unchanged main now runtime-contract pass,22/22/3calls,13/13checks,cleanuptrue,empty guest streams; V536 was3/3/0 missing written target"
+  },
+  "source_review": {
+    "scope": "Independent narrow source review, no actionable defect in source transport deltas; actual acceptance remains per-case",
+    "aggregate_sha256": "4aad77b936cadd40051d71242d82681e9604a428e72360686551d4d081e6cec9",
+    "files": {
+      "crates/lrr/src/frontend/entered_call_goals.rs": "85be7ceea526aeb848362ae8a6c1ccb26b04e82888fd3656e79bee36797470b3",
+      "crates/lrr/src/frontend/source_predicates.rs": "676f4e485caab159fe4c94385985fd12ecfbbf3b4aabf479711f8c99ec2ca5fb",
+      "crates/lrr/src/traits/upstream/reached_call.rs": "09807a7fba29e3336e876b5daa65ad3a2255806d2b86dbc7647c64f944dbe498"
+    },
+    "records": [
+      "worktracks/04-calls-source-views/2026-10-20-static-alias-call-production.md",
+      "worktracks/05-trait-goal-engine/2026-10-20-reached-root-executor.md"
+    ],
+    "pin": "hir_ty_lowering/mod.rs1051-1071,1110-1126,1136-1146; RA parser generic_params.rs200-212",
+    "remaining": "owner-segment generic spelling refusal, conditional const effect transport, callback families and future-use source-constraint closure remain held/unaccepted"
+  },
+  "closing_guard": {
+    "source_matches_before": true,
+    "head_matches_before": true,
+    "binaries_match_build": true,
+    "source_digester_matches_build_and_harness": true,
+    "changed_sources": [],
+    "aggregate_passed": true
+  },
+  "logs": {
+    "artifacts/validation-current-v537/after-build.json": {
+      "bytes": 1284389,
+      "sha256": "7edea845b5992cc7cf38cadb9dcb7e6aa932285c34ed6c5b210e3edddd34a611"
+    },
+    "artifacts/validation-current-v537/after-runtime.json": {
+      "bytes": 1284421,
+      "sha256": "4d1e8cf6022bb1dcdd8a2ece5d5cc999935104930c551333a639df035845c588"
+    },
+    "artifacts/validation-current-v537/before.json": {
+      "bytes": 1283951,
+      "sha256": "877a67ecc2dc3335e021cda8e9ae3d6f851f6493270b5c2cceb3dc004e800dcc"
+    },
+    "artifacts/validation-current-v537/cli-build.log": {
+      "bytes": 203678,
+      "sha256": "96c59e60b32c279407fbc29f3a1cda8ca1c109e404941942013cf3872ce8ede6"
+    },
+    "artifacts/validation-current-v537/digester-build.log": {
+      "bytes": 203674,
+      "sha256": "72e6c4f732069b21de196d090561eb685b388e6de33f3866bef22ec2e37a7c08"
+    },
+    "artifacts/validation-current-v537/lib-build.jsonl": {
+      "bytes": 845955,
+      "sha256": "1feedbf94c0f6f5af8afe11beda6c26814443430f57e79c5182dfd94b633432f"
+    },
+    "artifacts/validation-current-v537/lib-build.log": {
+      "bytes": 136,
+      "sha256": "b74f6e956c7ab9507d4e1571e27cb891dc1d3af4e676e5406adbbc54dd6396b1"
+    },
+    "artifacts/validation-current-v537/runtime.log": {
+      "bytes": 54,
+      "sha256": "5963930e7056c03c7cc652bd0e938f2ebebd146d9c70e948214f241a77ab54c7"
+    }
+  },
+  "raw_runtime_logs": {
+    "original_report_directory": "/private/tmp/lrr-v537-interpreter-runtime",
+    "retained_directory": "artifacts/validation-current-v537/runtime-observations",
+    "files": {
+      "0/host.stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "0/transport.stdout": {
+        "bytes": 5885,
+        "sha256": "b7555c8602fbfbe5da509169cc73a573590c24c07fdc2bb03c3ddc5b1fd5e20b"
+      },
+      "1/host.stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "1/transport.stdout": {
+        "bytes": 12047,
+        "sha256": "f76ff5762c74ef726dfa9b03310328ca9f76257d5a544b8aa230a4158528bf0c"
+      },
+      "2/host.stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "2/transport.stdout": {
+        "bytes": 2173,
+        "sha256": "787b604d836ea85e30d291ba5bd353e83fcf07202b098a41f6604080a7e7e574"
+      },
+      "3/host.stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "3/transport.stdout": {
+        "bytes": 2157,
+        "sha256": "7bbacf1696b4f412516f39e29c1a506211edfc7f1f83a1fe037bd23a2bebf57c"
+      },
+      "4/host.stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "4/transport.stdout": {
+        "bytes": 2129,
+        "sha256": "ab3f6b85cc50de78586254acd7d2a06cdb57c2788dc441143664fb26f7f2f803"
+      },
+      "5/host.stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "5/transport.stdout": {
+        "bytes": 2175,
+        "sha256": "5c2aca00a6fe4a426ca451046f2ce5c3918772d3b29f5ee30d398ca41a68ed78"
+      },
+      "6/host.stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "6/transport.stdout": {
+        "bytes": 2123,
+        "sha256": "6c2d002e9a65644e678600b09322a7a67af84eb82965a23374b6e956161c039a"
+      },
+      "7/host.stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "7/transport.stdout": {
+        "bytes": 2126,
+        "sha256": "6a782222551daa6508ce195411d841637ff8b82d8abb5c60f7cde20b5568c66a"
+      },
+      "report.json": {
+        "bytes": 106628,
+        "sha256": "7ec0b8617f7b49af13757cd37f48cee70228046ae56c320b66c368ecbcef1452"
+      },
+      "source-digests/host.stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "source-digests/transport.stdout": {
+        "bytes": 487798,
+        "sha256": "558c429846ebfda4c9ea610c0b325b2dc116ba34c8cacb0c0da84b48f01a13ee"
+      }
+    }
+  },
+  "cleanup": {
+    "status": "complete; terminal external report moved without copying after compact capsule saved; retained file hashes verified; no generated fixture projects/private targets/source copies",
+    "generated_fixture_projects": [],
+    "private_cargo_targets_or_source_copies": []
+  },
+  "acceptance": {
+    "runtime_contract_passes": 6,
+    "interpreter_failures": 2,
+    "new_distinct_runtime_gains": 1,
+    "full_fixture": "unassessed",
+    "diagnostic_and_tooling": "unassessed",
+    "complete_interpreter_gate": "incomplete",
+    "upstream_solver_root": "repr128 held at source callback preflight before execute; no root acceptance inferred",
+    "guest_jit_gate": "unchanged/incomplete"
+  }
+}

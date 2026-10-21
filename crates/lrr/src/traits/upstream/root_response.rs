@@ -42,6 +42,9 @@ pub(super) struct OwnedRootResponse {
     unresolved: BTreeMap<InferVarKey, SourceVariableFamily>,
 }
 impl OwnedRootResponse {
+    pub(super) fn into_parts(self) -> (Digest, BTreeMap<InferVarKey, TyTerm>, BTreeMap<InferVarKey, SourceVariableFamily>) {
+        (self.world, self.values, self.unresolved)
+    }
     pub(super) fn world(&self) -> Digest {
         self.world
     }

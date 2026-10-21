@@ -97,6 +97,7 @@ impl<'db> InferenceContext<'db> {
         goal: Goal<'db, Predicate<'db>>,
         span: Span,
     ) -> ComputeGoalFastPathOutcome<'db> {
+        self.require_source_root();
         use ComputeGoalFastPathOutcome as Outcome;
 
         // FIXME(-Zassumptions-on-binders): actually handle fast path

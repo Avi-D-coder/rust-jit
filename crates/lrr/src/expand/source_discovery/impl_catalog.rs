@@ -20,7 +20,7 @@ pub(crate) use trait_facade_sources::CapturedTraitFacadeSources;
 
 #[path = "configured_catalog.rs"]
 mod configured_catalog;
-pub(crate) use configured_catalog::{ImplCatalogCompletion, PreparedImplCatalogDemand};
+pub(crate) use configured_catalog::{CatalogDeclarationPublication, ImplCatalogCompletion, PreparedImplCatalogDemand};
 pub(super) use configured_catalog::ImplCatalogPlan;
 
 /// Missing contributions are preparation demands, never complete empty catalogs.

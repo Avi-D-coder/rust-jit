@@ -367,7 +367,7 @@ fn language_items(bundle: &SourceFactBundle) -> Result<LangItems, Diagnostic> {
 // through the compiler's actual lang-item vocabulary (lang_names is audited).
 macro_rules! roles {
     ($function:ident, $kind:ident, [$($variant:ident),+ $(,)?]) => {
-        fn $function(name: Option<&str>) -> Option<$kind> {
+        pub(super) fn $function(name: Option<&str>) -> Option<$kind> {
             let name = name?;
             $(if Some(name) == lang_names::compiler_name(stringify!($variant)) {
                 return Some($kind::$variant);

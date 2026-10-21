@@ -37,8 +37,6 @@ use serde::Serialize;
 use std::{collections::BTreeMap, sync::Arc};
 #[path = "run_argument_hints.rs"]
 mod argument_hints;
-#[path = "run_call_inputs.rs"]
-mod call_inputs;
 #[cfg(test)]
 #[path = "run_body_lease_tests.rs"]
 mod body_lease_tests;
@@ -48,6 +46,8 @@ mod body_sharing_tests;
 #[cfg(test)]
 #[path = "run_borrows.rs"]
 mod borrows;
+#[path = "run_call_inputs.rs"]
+mod call_inputs;
 #[cfg(test)]
 pub(crate) use borrows::tests::start_discovered_body;
 #[path = "run_constructors.rs"]
@@ -98,10 +98,10 @@ mod owner_arguments;
 #[cfg(test)]
 #[path = "run_panic_tests.rs"]
 mod panic_tests;
-#[path = "run_pattern_names.rs"]
-mod pattern_names;
 #[path = "run_pattern_access.rs"]
 mod pattern_access;
+#[path = "run_pattern_names.rs"]
+mod pattern_names;
 #[cfg(test)]
 #[path = "run_pattern_tests.rs"]
 mod pattern_tests;
@@ -232,6 +232,7 @@ pub(crate) struct TerminalFacts {
     pub cleanup_ran: Option<bool>,
 }
 struct PreparedSourceCall {
+    source_response: Option<Arc<crate::traits::upstream::ReachedCallResponse>>,
     context: Option<crate::vm::context::GenericEnv>,
     /// Shared with a selection cache (operator methods); never deep-copied.
     callee: Arc<SourceCallable>,
@@ -258,6 +259,10 @@ struct SelectedArgumentCall {
     /// Allocated lazily only when source inference captures this actual
     /// pending selection. Clones/suspension retain its same attempt identity.
     source_input_attempt: Option<Arc<call_inputs::ReachedCallAttempt>>,
+    source_inputs: Option<Arc<call_inputs::ReachedCallInputs>>,
+    source_response: Option<Arc<crate::traits::upstream::ReachedCallResponse>>,
+    source_input_bindings:
+        Option<Arc<[(crate::runtime::cell::CellId, crate::runtime::shape::TypeId)]>>,
     /// Callee type parameters the reached result context fixes through the
     /// declared result: the expectation its arguments evaluate under.
     expected: BTreeMap<crate::traits::term::ParamKey, crate::runtime::shape::TypeId>,
@@ -387,6 +392,8 @@ pub struct RunMachine {
     installed: InstalledRecipes,
     terminal: bool,
     root_body: BodyKey,
+    root_source: Option<Arc<SourceCallable>>,
+    impl_catalog: Option<crate::db::seals::SealKey>,
     query_trace_start: usize,
     terminal_facts: Option<TerminalFacts>,
     runtime_capture: Option<capture::RunCapture>,
@@ -562,6 +569,8 @@ impl RunMachine {
                 installed,
                 terminal: false,
                 root_body: index.body().clone(),
+                root_source: None,
+                impl_catalog: None,
                 query_trace_start,
                 terminal_facts: None,
                 runtime_capture: None,
@@ -729,6 +738,23 @@ impl RunMachine {
             QueryPoll::NeedInput(i) => QueryPoll::NeedInput(i),
         }
     }
+    /// Retain actual coordinator-owned locators and the selected root callable.
+    /// The locator is not an impl catalog completion or solver-entry proof.
+    pub(crate) fn install_source_inference(
+        &mut self,
+        root: Arc<SourceCallable>,
+        inventory: crate::db::seals::SealKey,
+    ) -> Result<(), Diagnostic> {
+        if root.identity() != self.root_body.definition || self.root_source.is_some() {
+            return Err(call_fault(
+                "source inference root differs from selected entry",
+            ));
+        }
+        inventory.validate()?;
+        self.root_source = Some(root);
+        self.impl_catalog = Some(inventory);
+        Ok(())
+    }
     fn select_argument_call(
         &mut self,
         db: &mut Database,
@@ -809,6 +835,13 @@ impl RunMachine {
                     descriptor,
                 },
             ));
+        }
+        if let Some(qualifier) = typed.associated_source() {
+            match self.associated_owner_bindings(db, &callee, qualifier) {
+                QueryPoll::Ready(Ok(bindings)) => explicit.extend(bindings),
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
         }
         self.finish_selected_argument_call(db, Arc::from(callee), explicit, Some(typed), arguments)
             .map(Some)
@@ -1113,40 +1146,93 @@ impl RunMachine {
         // selected at this call's source occurrence, even with no value args.
         // Method receivers and already-bound applications retain their normal
         // argument/contract inference; only an actual Path callee uses this.
-        if let Some(parameter) = callee.signature().generics.iter().find(|parameter|
-            parameter.kind == crate::syntax::signatures::GenericKind::Type && parameter.name == "Self")
-            .filter(|parameter| !explicit.iter().any(|(ordinal, _)| *ordinal == parameter.ordinal))
+        if let Some(parameter) = callee
+            .signature()
+            .generics
+            .iter()
+            .find(|parameter| {
+                parameter.kind == crate::syntax::signatures::GenericKind::Type
+                    && parameter.name == "Self"
+            })
+            .filter(|parameter| {
+                !explicit
+                    .iter()
+                    .any(|(ordinal, _)| *ordinal == parameter.ordinal)
+            })
         {
-            let path = self.frame.body.nodes().get(self.frame.pc().node as usize)
-                .filter(|node| node.role == crate::syntax::body_index::NodeRole::Expression(crate::syntax::body_index::ExpressionKind::Call))
-                .and_then(|node| node.operands.first()).copied()
-                .filter(|path| self.frame.body.nodes().get(path.0 as usize).is_some_and(|node|
-                    node.role == crate::syntax::body_index::NodeRole::Expression(crate::syntax::body_index::ExpressionKind::Path)));
+            let path = self
+                .frame
+                .body
+                .nodes()
+                .get(self.frame.pc().node as usize)
+                .filter(|node| {
+                    node.role
+                        == crate::syntax::body_index::NodeRole::Expression(
+                            crate::syntax::body_index::ExpressionKind::Call,
+                        )
+                })
+                .and_then(|node| node.operands.first())
+                .copied()
+                .filter(|path| {
+                    self.frame
+                        .body
+                        .nodes()
+                        .get(path.0 as usize)
+                        .is_some_and(|node| {
+                            node.role
+                                == crate::syntax::body_index::NodeRole::Expression(
+                                    crate::syntax::body_index::ExpressionKind::Path,
+                                )
+                        })
+                });
             if let Some(path) = path {
-                let qualifier_key = QueryKey::AssociatedItemQualifier(PcKey { body: self.frame.pc().body.clone(), node: path.0, phase: 0 });
+                let qualifier_key = QueryKey::AssociatedItemQualifier(PcKey {
+                    body: self.frame.pc().body.clone(),
+                    node: path.0,
+                    phase: 0,
+                });
                 let selected = match db.fetch(&SyntaxProvider, qualifier_key.clone()) {
                     QueryPoll::Ready(Ok(value)) => value,
                     QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                     QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
                 };
                 let QueryValue::AssociatedItemQualifier(qualifier) = selected.value.as_ref() else {
-                    return QueryPoll::Ready(Err(call_fault("associated qualifier query variant differs")));
+                    return QueryPoll::Ready(Err(call_fault(
+                        "associated qualifier query variant differs",
+                    )));
                 };
-                if !selected.cacheable { return QueryPoll::Ready(Err(call_fault("associated qualifier Type is not retained"))); }
+                if !selected.cacheable {
+                    return QueryPoll::Ready(Err(call_fault(
+                        "associated qualifier Type is not retained",
+                    )));
+                }
                 if let Some(source) = qualifier.source() {
                     let descriptor = match source.descriptor(&self.frame, &mut self.store) {
                         Ok(descriptor) => descriptor,
                         Err(error) => return QueryPoll::Ready(Err(error)),
                     };
-                    explicit.push((parameter.ordinal, ArgumentType { source: self.frame.bound_view(source.source(), &self.store), descriptor }));
-                } else if qualifier.pending().is_some() && !qualifier.permits_trait_self_inference() {
-                    return QueryPoll::Ready(Err(call_fault("associated call qualifier requires its actual source Type application")));
+                    explicit.push((
+                        parameter.ordinal,
+                        ArgumentType {
+                            source: self.frame.bound_view(source.source(), &self.store),
+                            descriptor,
+                        },
+                    ));
+                } else if qualifier.pending().is_some() && !qualifier.permits_trait_self_inference()
+                {
+                    return QueryPoll::Ready(Err(call_fault(
+                        "associated call qualifier requires its actual source Type application",
+                    )));
                 }
                 // Both a selected Type and a positively selected trait use
                 // this retained query authority through argument effects.
                 // Only the latter may defer Self to ordinary call inference.
                 if qualifier.source().is_some() || qualifier.permits_trait_self_inference() {
-                    let guard = match db.prepare_input_guard(&SyntaxProvider, &qualifier_key, selected.fingerprint) {
+                    let guard = match db.prepare_input_guard(
+                        &SyntaxProvider,
+                        &qualifier_key,
+                        selected.fingerprint,
+                    ) {
                         QueryPoll::Ready(Ok(guard)) => Arc::new(guard),
                         QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                         QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
@@ -1154,7 +1240,6 @@ impl RunMachine {
                     if let Err(error) = guard.require_current(db) { return QueryPoll::Ready(Err(error)); }
                     owner_application = Some((Arc::clone(&selected.value), guard));
                 }
-
             }
         }
         // Generic arguments later code decided for this call, when the
@@ -1302,6 +1387,9 @@ impl RunMachine {
             argument_slots: slots,
             result_hint,
             source_input_attempt: None,
+            source_inputs: None,
+            source_response: None,
+            source_input_bindings: None,
             expected,
             bytes,
         }))
@@ -1469,11 +1557,7 @@ impl RunMachine {
                             "reference source argument slot absent",
                         )));
                     };
-                    match ClosedReferenceArgument::capture(
-                        &self.frame,
-                        *slot,
-                        &self.store,
-                    ) {
+                    match ClosedReferenceArgument::capture(&self.frame, *slot, &self.store) {
                         Ok(evidence) => Some(evidence),
                         Err(error) => return QueryPoll::Ready(Err(error)),
                     }
@@ -1484,16 +1568,22 @@ impl RunMachine {
             }
         }
         let SelectedArgumentCall {
-            callee, explicit, ..
+            callee, explicit, source_response, ..
         } = selected;
-        self.prepare_selected_source_call(
-            db,
-            callee,
-            &explicit,
-            result_hint,
-            arguments,
-            &references,
-        )
+        match self.prepare_selected_source_call(
+            db, callee, &explicit, result_hint, arguments, &references,
+        ) {
+            QueryPoll::Ready(Ok(mut call)) => {
+                if let Some(response) = &source_response {
+                    if let Err(error) = response.require_current(db) {
+                        return QueryPoll::Ready(Err(error));
+                    }
+                }
+                call.source_response = source_response;
+                QueryPoll::Ready(Ok(call))
+            }
+            other => other,
+        }
     }
     /// Shared entry preparation of a selected source callee for already
     /// evaluated arguments: owner environment, contracts (closed reference
@@ -1620,7 +1710,7 @@ impl RunMachine {
             QueryPoll::NeedInput(i) => return QueryPoll::NeedInput(i),
         };
         match contracts.require_inference_current(db) {
-            QueryPoll::Ready(Ok(())) => {},
+            QueryPoll::Ready(Ok(())) => {}
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         }
@@ -1787,8 +1877,14 @@ impl RunMachine {
                         .checked_mul(std::mem::size_of::<crate::traits::term::TyTerm>())
                         .and_then(|size| n.checked_add(size))
                 })
-                .and_then(|n| n.checked_add(contracts.inferred_equations.as_ref()
-                    .map_or(0, |guard| guard.metadata_bytes())))
+                .and_then(|n| {
+                    n.checked_add(
+                        contracts
+                            .inferred_equations
+                            .as_ref()
+                            .map_or(0, |guard| guard.metadata_bytes()),
+                    )
+                })
                 .and_then(|n| n.checked_add(context_bytes))
                 .and_then(|n| n.checked_add(4096));
             let Some(retained_bytes) = bytes else {
@@ -1803,9 +1899,11 @@ impl RunMachine {
             // this call's actual generic descriptors. Closing its source term
             // first can erase a binding's runtime representation (for example
             // a closure capture tuple nested under a nominal result).
-            let context = match contracts.source_result.as_ref().filter(|term| {
-                crate::frontend::call_contracts::closed_term(term)
-            }) {
+            let context = match contracts
+                .source_result
+                .as_ref()
+                .filter(|term| crate::frontend::call_contracts::closed_term(term))
+            {
                 Some(term) => {
                     let mut written = match crate::frontend::written_terms::closed_written_type(
                         db, &sources, term,
@@ -1890,7 +1988,9 @@ impl RunMachine {
             {
                 Some(bytes) => bytes,
                 None => {
-                    return QueryPoll::Ready(Err(call_fault("declared result retention size overflow")));
+                    return QueryPoll::Ready(Err(call_fault(
+                        "declared result retention size overflow",
+                    )));
                 }
             };
             let body_lease = match db.pin_guest_body(body.body()) {
@@ -1899,6 +1999,7 @@ impl RunMachine {
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             };
             QueryPoll::Ready(Ok(PreparedSourceCall {
+                source_response: None,
                 context: Some(context),
                 callee,
                 contracts,
@@ -2011,10 +2112,15 @@ impl RunMachine {
         actual: crate::runtime::shape::TypeId,
     ) -> Result<(), Diagnostic> {
         call.callee.revalidate(db)?;
+        if let Some(response) = &call.source_response { response.require_current(db)?; }
         match call.contracts.require_inference_current(db) {
-            QueryPoll::Ready(Ok(())) => {},
+            QueryPoll::Ready(Ok(())) => {}
             QueryPoll::Ready(Err(error)) => return Err(error),
-            QueryPoll::NeedInput(_) => return Err(call_fault("inferred call dependencies require source preparation")),
+            QueryPoll::NeedInput(_) => {
+                return Err(call_fault(
+                    "inferred call dependencies require source preparation",
+                ));
+            }
         }
         // A closure's result is its body's reached value; no declared
         // result constrains it here.
@@ -2932,14 +3038,28 @@ impl RunMachine {
                 }
             }
             let image_finish = match self.installed.get_current(db, id) {
-                Ok(recipe) => recipe.recipe().operations.iter().skip(self.frame.resume_operation_index()).find_map(|op|match op {Op::ConstructFinish {guard,..}=>Some(*guard),_=>None}),
-                Err(error) => { self.terminal=true; return RunPoll::Fault(error); }
+                Ok(recipe) => recipe
+                    .recipe()
+                    .operations
+                    .iter()
+                    .skip(self.frame.resume_operation_index())
+                    .find_map(|op| match op {
+                        Op::ConstructFinish { guard, .. } => Some(*guard),
+                        _ => None,
+                    }),
+                Err(error) => {
+                    self.terminal = true;
+                    return RunPoll::Fault(error);
+                }
             };
-            if let Some(guard)=image_finish {
-                match self.prepare_constructor_image_layout(db,guard) {
-                    QueryPoll::Ready(Ok(()))=>{},
-                    QueryPoll::Ready(Err(error))=>{self.terminal=true;return RunPoll::Fault(error)},
-                    QueryPoll::NeedInput(input)=>return RunPoll::NeedInput(input),
+            if let Some(guard) = image_finish {
+                match self.prepare_constructor_image_layout(db, guard) {
+                    QueryPoll::Ready(Ok(())) => {}
+                    QueryPoll::Ready(Err(error)) => {
+                        self.terminal = true;
+                        return RunPoll::Fault(error);
+                    }
+                    QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
                 }
             }
             // A place operation whose base needs an overloaded `Deref` step
@@ -3025,10 +3145,13 @@ impl RunMachine {
                 }
                 QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
             }
-            match self.prepare_closure_pattern_access(db,id) {
-                QueryPoll::Ready(Ok(()))=>{},
-                QueryPoll::Ready(Err(error))=>{self.terminal=true;return RunPoll::Fault(error);},
-                QueryPoll::NeedInput(input)=>return RunPoll::NeedInput(input),
+            match self.prepare_closure_pattern_access(db, id) {
+                QueryPoll::Ready(Ok(())) => {}
+                QueryPoll::Ready(Err(error)) => {
+                    self.terminal = true;
+                    return RunPoll::Fault(error);
+                }
+                QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
             }
             if let Err(error) = self.register_closures(db, id) {
                 self.terminal = true;
@@ -3512,12 +3635,14 @@ impl RunMachine {
                                     }
                                 }
                                 match self.prepare_facade_discriminants(db, site.0, &arguments) {
-                                    QueryPoll::Ready(Ok(())) => {},
+                                    QueryPoll::Ready(Ok(())) => {}
                                     QueryPoll::Ready(Err(error)) => {
                                         self.terminal = true;
                                         return RunPoll::Fault(error);
                                     }
-                                    QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                                    QueryPoll::NeedInput(input) => {
+                                        return RunPoll::NeedInput(input);
+                                    }
                                 }
                                 if self.initializer_demand.is_some() {
                                     continue 'dispatch;
@@ -3658,52 +3783,6 @@ impl RunMachine {
                                 return RunPoll::Fault(error);
                             }
                         }
-                        // An actual upstream consumer can request
-                        // capture_reached_call_inputs here, before fallback.
-                        // The held consumer is not installed: legacy calls
-                        // allocate no packet and keep their existing behavior.
-                        let mut types = Vec::new();
-                        let mut cells = Vec::new();
-                        for slot in arguments {
-                            let argument = (|| {
-                                let cell = self.frame.cell(slot)?;
-                                // A literal argument inference left unconstrained
-                                // (e.g. to a generic parameter) takes rustc's
-                                // integer/float fallback.
-                                self.store.bind_literal_fallback(cell)?;
-                                let value = self.store.admit_move(cell)?;
-                                let descriptor =
-                                    self.store.effective_type(value)?.ok_or_else(|| {
-                                        Diagnostic::new(
-                                            "LRR-E-TYPE-CONTEXT",
-                                            "call argument requires a reached concrete type".into(),
-                                        )
-                                    })?;
-                                let view = self.frame.argument_source_view(
-                                    slot,
-                                    descriptor,
-                                    &self.store,
-                                )?;
-                                // The caller's own generic parameters are
-                                // its runtime instantiation at the boundary:
-                                // a callee contract never sees them rigid.
-                                let view =
-                                    view.map(|view| self.frame.bound_view(&view, &self.store));
-                                let argument = reached_argument_type(descriptor, view)?;
-                                Ok((cell, argument))
-                            })();
-                            match argument {
-                                Ok((cell, ty)) => {
-                                    cells.push(cell);
-                                    types.push(ty);
-                                }
-                                Err(e) => {
-                                    self.terminal = true;
-                                    return RunPoll::Fault(e);
-                                }
-                            }
-                        }
-                        let selected = self.pending.get(&self.frame.call_identity(site.0)).cloned();
                         // A selected packet may belong to a surrounding macro,
                         // whose expression value is not the predicate call result.
                         // Retain its source hint only for that exact result slot;
@@ -3777,6 +3856,61 @@ impl RunMachine {
                             hint.source = self.frame.bound_view(&hint.source, &self.store);
                             hint
                         });
+                        match self.solve_reached_call_inputs(
+                            db,
+                            NodeId(site.0),
+                            &arguments,
+                            result_hint.as_ref(),
+                        ) {
+                            QueryPoll::Ready(Ok(())) => {}
+                            QueryPoll::Ready(Err(error)) => {
+                                self.terminal = true;
+                                return RunPoll::Fault(error);
+                            }
+                            QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                        }
+                        let mut types = Vec::new();
+                        let mut cells = Vec::new();
+                        for slot in arguments {
+                            let argument = (|| {
+                                let cell = self.frame.cell(slot)?;
+                                // A literal argument inference left unconstrained
+                                // (e.g. to a generic parameter) takes rustc's
+                                // integer/float fallback.
+                                self.store.bind_literal_fallback(cell)?;
+                                let value = self.store.admit_move(cell)?;
+                                let descriptor =
+                                    self.store.effective_type(value)?.ok_or_else(|| {
+                                        Diagnostic::new(
+                                            "LRR-E-TYPE-CONTEXT",
+                                            "call argument requires a reached concrete type".into(),
+                                        )
+                                    })?;
+                                let view = self.frame.argument_source_view(
+                                    slot,
+                                    descriptor,
+                                    &self.store,
+                                )?;
+                                // The caller's own generic parameters are
+                                // its runtime instantiation at the boundary:
+                                // a callee contract never sees them rigid.
+                                let view =
+                                    view.map(|view| self.frame.bound_view(&view, &self.store));
+                                let argument = reached_argument_type(descriptor, view)?;
+                                Ok((cell, argument))
+                            })();
+                            match argument {
+                                Ok((cell, ty)) => {
+                                    cells.push(cell);
+                                    types.push(ty);
+                                }
+                                Err(e) => {
+                                    self.terminal = true;
+                                    return RunPoll::Fault(e);
+                                }
+                            }
+                        }
+                        let selected = self.pending.get(&self.frame.call_identity(site.0)).cloned();
                         match self.prepare_source_call(
                             db,
                             &name,
@@ -3831,6 +3965,14 @@ impl RunMachine {
                                 return RunPoll::Fault(e);
                             }
                             QueryPoll::NeedInput(i) => return RunPoll::NeedInput(i),
+                        }
+                    }
+                    Op::CallSeal { .. } => {
+                        if let Some(response) = self.prepared_call.as_ref().and_then(|call| call.source_response.as_ref()) {
+                            if let Err(error) = response.require_current(db) {
+                                self.terminal = true;
+                                return RunPoll::Fault(error);
+                            }
                         }
                     }
                     _ => {}
@@ -3963,10 +4105,15 @@ impl RunMachine {
                             call_fault("Call exit has no selected source context")
                         })?;
                         call.callee.revalidate(db)?;
+                        if let Some(response) = &call.source_response { response.require_current(db)?; }
                         match call.contracts.require_inference_current(db) {
-                            QueryPoll::Ready(Ok(())) => {},
+                            QueryPoll::Ready(Ok(())) => {}
                             QueryPoll::Ready(Err(error)) => return Err(error),
-                            QueryPoll::NeedInput(_) => return Err(call_fault("inferred call dependencies require source preparation")),
+                            QueryPoll::NeedInput(_) => {
+                                return Err(call_fault(
+                                    "inferred call dependencies require source preparation",
+                                ));
+                            }
                         }
                         let entry = match &call.closure {
                             Some(closure) => closure.entry.clone(),

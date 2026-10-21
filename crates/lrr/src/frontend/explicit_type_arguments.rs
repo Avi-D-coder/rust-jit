@@ -92,6 +92,29 @@ pub(crate) enum ExplicitType {
     },
 }
 impl ExplicitType {
+    /// Decompose the actual retained nominal application, preserving each
+    /// written argument's source/schema proof. This is positional source
+    /// transport, not impl matching or runtime descriptor inference.
+    pub(crate) fn nominal_arguments(&self) -> Option<Vec<Self>> {
+        use crate::traits::term::GenericArg;
+        let TyTerm::Nominal(identity, terms) = self.source() else { return None; };
+        if terms.is_empty() { return Some(Vec::new()); }
+        let (written, definition) = match self {
+            Self::Written { written, .. } => (written, None),
+            Self::FrameTemplate { definition, written, .. } => (written, Some(*definition)),
+            _ => return None,
+        };
+        let WrittenType::Generic { identity: actual, args, .. } = written.as_ref() else { return None; };
+        if identity != actual || terms.len() != args.len() { return None; }
+        terms.iter().zip(args).map(|(term, written)| {
+            let GenericArg::Type(term) = term else { return None; };
+            let written = Arc::new(written.clone());
+            Some(match definition {
+                Some(definition) => Self::FrameTemplate { definition, term: term.clone(), written },
+                None => Self::Written { term: term.clone(), written },
+            })
+        }).collect()
+    }
     pub(crate) fn source(&self) -> &TyTerm {
         match self {
             Self::Selected(source) => source.source(),
@@ -265,6 +288,11 @@ pub struct PreparedExplicitTypeArguments {
     fingerprint: Digest,
 }
 impl PreparedExplicitTypeArguments {
+    /// The actual complete Type qualifier selected by the same Q44 target.
+    /// Generic owner transport consumes this before ordinary call admission.
+    pub(crate) fn associated_source(&self) -> Option<&ExplicitType> {
+        self.target.associated_source()
+    }
     /// The call result's Type decided from the value's later uses, stated
     /// first by the call's recipe as a parent's `SetHint` would.
     pub(crate) fn inferred_result(&self) -> Option<&Arc<WrittenType>> {

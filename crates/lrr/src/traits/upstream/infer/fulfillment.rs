@@ -114,6 +114,7 @@ pub(crate) struct FulfillmentContext<'a, 'db, C> {
 }
 impl<'a, 'db, C: Clone> FulfillmentContext<'a, 'db, C> {
     pub(crate) fn new(owner: &'a SolverContext<'db>) -> Self {
+        owner.require_source_root();
         assert!(
             owner.next_trait_solver(),
             "next-solver fulfillment requires the next solver"
@@ -345,5 +346,11 @@ impl<'a, 'db, C: Clone> FulfillmentContext<'a, 'db, C> {
                 .filter_map(|arg| arg.as_type(infcx.interner))
                 .any(|ty| matches!(infcx.shallow_resolve(ty).kind(), ty::Infer(ty::FloatVar(_))))
         })
+    }
+}
+
+impl<'a, 'db, C: Clone> FulfillmentContext<'a, 'db, C> {
+    pub(crate) fn pending_with_stall(&self) -> PendingObligations<'db, C> {
+        self.obligations.pending.clone()
     }
 }

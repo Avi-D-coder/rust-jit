@@ -223,6 +223,16 @@ impl<'a,'db,C:Clone> FulfillmentContext<'a,'db,C> {
     }
 '''
     result = header + obligation + storage + interface + registration + evaluate + simple + pending + '}\n'
+    # Read-only, lossless error transport across the nonescaping IR owner.
+    result += """
+impl<'a, 'db, C: Clone> FulfillmentContext<'a, 'db, C> {
+    pub(crate) fn pending_with_stall(&self) -> PendingObligations<'db, C> {
+        self.obligations.pending.clone()
+    }
+}
+"""
+
+    result = result.replace("pub(crate) fn new(owner: &'a SolverContext<'db>) -> Self {", "pub(crate) fn new(owner: &'a SolverContext<'db>) -> Self {\n        owner.require_source_root();")
     return subprocess.run(['rustfmt', '+1.99.0', '--edition', '2024'],
                           input=result.encode(), stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE, check=True).stdout

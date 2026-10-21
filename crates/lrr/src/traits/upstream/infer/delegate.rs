@@ -47,6 +47,7 @@ impl<'db> SolverDelegate for SolverContext<'db> {
     {
         let span = <Span as ty::inherent::Span<Self::Interner>>::dummy();
         let (context, value, variables) = InferenceContext::build_with_canonical(cx, span, input);
+        context.inherit_canonical_source_root();
         (Self(context), value, variables)
     }
     fn compute_goal_fast_path(
@@ -54,6 +55,7 @@ impl<'db> SolverDelegate for SolverContext<'db> {
         goal: Goal<Self::Interner, Predicate<'db>>,
         span: Span,
     ) -> ComputeGoalFastPathOutcome<Self::Interner> {
+        self.0.require_source_root();
         self.0.compute_goal_fast_path(goal, span)
     }
     fn fresh_var_for_kind(

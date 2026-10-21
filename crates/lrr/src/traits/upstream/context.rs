@@ -923,6 +923,7 @@ impl<'cx, F: SourceFacts<'cx>> ty::Interner for Context<'cx, F> {
         self,
         f: impl FnOnce(&mut ty::search_graph::GlobalCache<Self>) -> R,
     ) -> R {
+        self.services().assert_normal_root_scope();
         f(&mut self.state.global.borrow_mut())
     }
     fn with_canonical_param_env_cache<R>(

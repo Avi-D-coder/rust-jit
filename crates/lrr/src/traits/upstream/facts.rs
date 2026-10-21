@@ -16,6 +16,7 @@ use std::fmt::Debug;
 pub(crate) trait SourceFacts<'cx>:
     Sized + Copy + Debug + Eq + std::hash::Hash + 'cx
 {
+    fn assert_normal_root_scope(self);
     /// Prepared abstract expression, if this actual declaration has one.
     /// Missing source must suspend before context entry, never become Ok(None).
     /// This callback performs no THIR/body inference or initializer execution.

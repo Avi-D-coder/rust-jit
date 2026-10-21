@@ -16,7 +16,11 @@ use crate::{
         shape::TypeId,
         value::ValueRepr,
     },
-    syntax::{body_index::{BodyIndex, ExpressionKind, NodeRole}, signatures::GenericKind, spans::BodySpan},
+    syntax::{
+        body_index::{BodyIndex, ExpressionKind, NodeRole},
+        signatures::GenericKind,
+        spans::BodySpan,
+    },
     traits::{
         term::{InferVarKey, ParamKey, TyTerm},
         upstream::root_input::{
@@ -26,7 +30,10 @@ use crate::{
     },
     vm::{call::CallIdentity, context::GenericEnv},
 };
-use std::{collections::{BTreeMap, BTreeSet}, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(super) enum ReachedCallInputPending {
@@ -77,6 +84,7 @@ pub(super) struct ReachedCallInputs {
     typed: Option<crate::frontend::explicit_type_arguments::PreparedExplicitTypeArguments>,
     owner_application: Option<Arc<PreparedInputGuard>>,
     caller_environment: Option<Arc<GenericEnv>>,
+    caller_callable: Option<Arc<SourceCallable>>,
     caller_source: Option<Arc<InputValue>>,
     caller_body: Option<Arc<InputValue>>,
     span: BodySpan,
@@ -91,6 +99,15 @@ pub(super) struct ReachedCallInputs {
     pending: Option<ReachedCallInputPending>,
 }
 impl ReachedCallInputs {
+    pub(super) fn caller_environment(&self) -> Option<&Arc<GenericEnv>> {
+        self.caller_environment.as_ref()
+    }
+    pub(super) fn caller_callable(&self) -> Option<&Arc<SourceCallable>> {
+        self.caller_callable.as_ref()
+    }
+    pub(super) fn callee_callable(&self) -> &Arc<SourceCallable> {
+        &self.callee
+    }
     pub(super) fn pending(&self) -> Option<ReachedCallInputPending> {
         self.pending
     }
@@ -116,9 +133,65 @@ impl ReachedCallInputs {
     /// Borrow retained source occurrences after the same packet's ordinary
     /// currentness guard. An empty map does not manufacture a constraint
     /// closure; method rows still require their actual adjustment boundary.
-    pub(super) fn numeric_sources(&self) -> Result<&BTreeMap<InferVarKey, Vec<NumericSourceOccurrence>>, ReachedCallInputPending> {
-        if let Some(why) = self.pending { return Err(why); }
+    pub(super) fn numeric_sources(
+        &self,
+    ) -> Result<&BTreeMap<InferVarKey, Vec<NumericSourceOccurrence>>, ReachedCallInputPending> {
+        if let Some(why) = self.pending {
+            return Err(why);
+        }
         Ok(&self.numeric_sources)
+    }
+    fn numeric_bindings(
+        &self,
+        values: &BTreeMap<InferVarKey, TyTerm>,
+        unresolved: &BTreeMap<InferVarKey, SourceVariableFamily>,
+    ) -> Result<Vec<(CellId, TypeId)>, Diagnostic> {
+        let mut bindings = Vec::new();
+        for (key, occurrences) in &self.numeric_sources {
+            let value = values.get(key).ok_or_else(|| {
+                call_fault("upstream response omitted an original numeric variable")
+            })?;
+            let primitive = match value {
+                TyTerm::Primitive(primitive) => *primitive,
+                TyTerm::Infer(representative)
+                    if unresolved.get(representative) == self.variables.get(key) =>
+                {
+                    return Err(Diagnostic::new(
+                        "LRR-E-UNSUPPORTED",
+                        "numeric fallback requires complete ordinary source constraint closure"
+                            .into(),
+                    ));
+                }
+                _ => {
+                    return Err(call_fault(
+                        "upstream numeric answer is neither a primitive nor an original unresolved family",
+                    ));
+                }
+            };
+            let descriptor = crate::frontend::call_contracts::primitive_runtime_id(primitive)?;
+            for occurrence in occurrences {
+                if occurrence.kind != NumericSourceKind::WrittenArgument {
+                    return Err(Diagnostic::new(
+                        "LRR-E-UNSUPPORTED",
+                        "numeric receiver inference requires its retained source adjustment".into(),
+                    ));
+                }
+                let argument = self
+                    .arguments
+                    .get(occurrence.argument as usize)
+                    .filter(|argument| argument.slot == occurrence.slot)
+                    .ok_or_else(|| {
+                        call_fault("numeric answer occurrence lost its actual argument cell")
+                    })?;
+                if !matches!(argument.value.kind, 11 | 12) || argument.effective_type.is_some() {
+                    return Err(call_fault(
+                        "numeric answer target differs from original unbound literal",
+                    ));
+                }
+                bindings.push((argument.cell, descriptor));
+            }
+        }
+        Ok(bindings)
     }
     /// Checks read the actual active caller/store and retained source inputs.
     /// PC/call/cell identities can recur; the attempt must also be the actual
@@ -130,6 +203,15 @@ impl ReachedCallInputs {
         machine: &RunMachine,
         db: &mut Database,
         result_hint: Option<&ArgumentType>,
+    ) -> Result<(), Diagnostic> {
+        self.require_current_with_bindings(machine, db, result_hint, &[])
+    }
+    fn require_current_with_bindings(
+        &self,
+        machine: &RunMachine,
+        db: &mut Database,
+        result_hint: Option<&ArgumentType>,
+        bindings: &[(CellId, TypeId)],
     ) -> Result<(), Diagnostic> {
         if machine.frame.pc() != &self.pc
             || machine.frame.call_identity(self.identity.0) != self.identity
@@ -157,17 +239,39 @@ impl ReachedCallInputs {
         }
         if match (&self.result_hint, result_hint) {
             (None, None) => false,
-            (Some(previous), Some(current)) => previous.descriptor != current.descriptor || previous.source != current.source,
+            (Some(previous), Some(current)) => {
+                previous.descriptor != current.descriptor || previous.source != current.source
+            }
             _ => true,
         } {
-            return Err(call_fault("reached call result expectation changed before input commit"));
+            return Err(call_fault(
+                "reached call result expectation changed before input commit",
+            ));
         }
         self.callee.revalidate(db)?;
+        if let Some(caller) = &self.caller_callable {
+            caller.revalidate(db)?;
+            if let Some(environment) = &self.caller_environment {
+                environment.require_current(db, caller)?;
+            }
+        }
         if let Some(typed) = &self.typed {
             typed.require_current(db, &machine.frame.body, machine.frame.pc())?;
         }
         if let Some(guard) = &self.owner_application {
             guard.require_current(db)?;
+        }
+        let current_callable = machine
+            .calls
+            .last()
+            .map(|call| &call.call.callee)
+            .or(machine.root_source.as_ref());
+        if match (self.caller_callable.as_ref(), current_callable) {
+            (None, None) => false,
+            (Some(old), Some(current)) => !Arc::ptr_eq(old, current),
+            _ => true,
+        } {
+            return Err(call_fault("reached caller callable changed"));
         }
         let environment = machine.frame.shared_generic_context();
         if match (&self.caller_environment, &environment) {
@@ -200,7 +304,13 @@ impl ReachedCallInputs {
             if machine.frame.cell(argument.slot)? != argument.cell
                 || machine.store.state(argument.cell)? != argument.state
                 || machine.store.admit_move(argument.cell)? != argument.value
-                || machine.store.effective_type(argument.value)? != argument.effective_type
+                || machine.store.effective_type(argument.value)?
+                    != argument.effective_type.or_else(|| {
+                        bindings
+                            .iter()
+                            .find(|(cell, _)| *cell == argument.cell)
+                            .map(|(_, ty)| *ty)
+                    })
             {
                 return Err(call_fault(
                     "reached call argument changed before input commit",
@@ -212,6 +322,161 @@ impl ReachedCallInputs {
 }
 
 impl RunMachine {
+    /// Fulfill the selected call's actual numeric source constraints before
+    /// ordinary literal fallback. Retain the packet across real NeedInput;
+    /// argument operations and effects are never repeated here.
+    pub(super) fn solve_reached_call_inputs(
+        &mut self,
+        db: &mut Database,
+        site: NodeId,
+        arguments: &[SlotId],
+        result_hint: Option<&ArgumentType>,
+    ) -> crate::db::poll::QueryPoll<()> {
+        use crate::db::poll::QueryPoll;
+        macro_rules! ready {
+            ($value:expr) => {
+                match $value {
+                    QueryPoll::Ready(Ok(value)) => value,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            };
+        }
+        let identity = self.frame.call_identity(site.0);
+        let selected = match self.pending.get(&identity) {
+            Some(selected) => selected,
+            None => {
+                return QueryPoll::Ready(Err(call_fault("numeric inference has no selected call")));
+            }
+        };
+        if let Some(bindings) = &selected.source_input_bindings {
+            let packet = Arc::clone(
+                selected
+                    .source_inputs
+                    .as_ref()
+                    .expect("applied inputs retained"),
+            );
+            let bindings = Arc::clone(bindings);
+            let response = Arc::clone(
+                selected
+                    .source_response
+                    .as_ref()
+                    .expect("applied response retained"),
+            );
+            if let Err(error) = response.require_current(db) {
+                return QueryPoll::Ready(Err(error));
+            }
+            return QueryPoll::Ready(packet.require_current_with_bindings(
+                self,
+                db,
+                result_hint,
+                &bindings,
+            ));
+        }
+        if selected.source_inputs.is_none() {
+            // A concrete or nongeneric call has no open numeric source goal.
+            // This is a demand predicate, not an inference/candidate algorithm.
+            if !selected
+                .callee
+                .signature()
+                .generics
+                .iter()
+                .any(|g| g.kind == GenericKind::Type)
+            {
+                return QueryPoll::Ready(Ok(()));
+            }
+            let needed = arguments.iter().try_fold(false, |found, slot| {
+                let value = self.store.admit_move(self.frame.cell(*slot)?)?;
+                Ok::<_, Diagnostic>(
+                    found
+                        || (matches!(value.kind, 11 | 12)
+                            && self.store.effective_type(value)?.is_none()),
+                )
+            });
+            match needed {
+                Ok(false) => return QueryPoll::Ready(Ok(())),
+                Err(error) => return QueryPoll::Ready(Err(error)),
+                Ok(true) => {}
+            }
+            let packet = match self.capture_reached_call_inputs(db, site, arguments, result_hint) {
+                Ok(packet) => Arc::new(packet),
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            };
+            self.pending
+                .get_mut(&identity)
+                .expect("retained selected call")
+                .source_inputs = Some(packet);
+        }
+        let packet = Arc::clone(
+            self.pending[&identity]
+                .source_inputs
+                .as_ref()
+                .expect("captured call inputs"),
+        );
+        if let Err(error) = packet.require_current(self, db, result_hint) {
+            return QueryPoll::Ready(Err(error));
+        }
+        let source = match packet.source() {
+            Ok(source) => source,
+            Err(why) => {
+                return QueryPoll::Ready(Err(Diagnostic::new(
+                    "LRR-E-UNSUPPORTED",
+                    format!("reached source inference input is incomplete: {why:?}"),
+                )));
+            }
+        };
+        let Some(inventory) = self.impl_catalog.clone() else {
+            return QueryPoll::Ready(Err(Diagnostic::new("LRR-E-CATALOG-INCOMPLETE",
+                "reached generic numeric call requires its coordinator-owned source catalog locator".into())));
+        };
+        let Some(caller) = packet.caller_callable() else {
+            return QueryPoll::Ready(Err(call_fault("reached caller source callable is absent")));
+        };
+        let outcome = ready!(crate::traits::upstream::poll_reached_call(
+            db,
+            &inventory,
+            &source,
+            packet.caller_environment(),
+            caller,
+            packet.callee_callable(),
+        ));
+        match outcome {
+            crate::traits::upstream::ReachedCallOutcome::Solved(response) => {
+                // The upstream entry has exported original variables only after
+                // its actual source/root/constraint guards. No DB/source mutation
+                // intervenes before this final active-attempt/store preflight.
+                if let Err(error) = packet.require_current(self, db, result_hint) {
+                    return QueryPoll::Ready(Err(error));
+                }
+                if let Err(error) = response.require_current(db) {
+                    return QueryPoll::Ready(Err(error));
+                }
+                let bindings = match packet.numeric_bindings(&response.values, &response.unresolved)
+                {
+                    Ok(bindings) => bindings,
+                    Err(error) => return QueryPoll::Ready(Err(error)),
+                };
+                // Allocate the retained committed snapshot before the first store
+                // write. Retry guards use these exact post-commit descriptors.
+                let bindings: Arc<[(CellId, TypeId)]> = Arc::from(bindings);
+                let response = Arc::new(response);
+                if let Err(error) = self.store.bind_numeric_literals(&bindings) {
+                    return QueryPoll::Ready(Err(error));
+                }
+                let selected = self
+                    .pending
+                    .get_mut(&identity)
+                    .expect("same selected numeric call");
+                selected.source_response = Some(response);
+                selected.source_input_bindings = Some(bindings);
+                QueryPoll::Ready(Ok(()))
+            }
+            other => QueryPoll::Ready(Err(Diagnostic::new(
+                "LRR-E-TRAIT-INFERENCE",
+                format!("reached upstream inference did not settle: {other:?}"),
+            ))),
+        }
+    }
     /// Explicit pre-fallback integration point. Only an actual upstream input
     /// consumer requests capture; legacy CallSeal never allocates this packet.
     /// `result_hint` must be the existing call contract's actual expectation.
@@ -252,7 +517,11 @@ impl RunMachine {
             .as_ref()
             .map(|(_, guard)| Arc::clone(guard));
         let explicit = selected.explicit.clone();
-        let attempt = Arc::clone(selected.source_input_attempt.get_or_insert_with(|| Arc::new(ReachedCallAttempt)));
+        let attempt = Arc::clone(
+            selected
+                .source_input_attempt
+                .get_or_insert_with(|| Arc::new(ReachedCallAttempt)),
+        );
         let signature = callee.signature().fingerprint();
         let span = if let Some(call) = &self.frame.runtime_call {
             call.require(
@@ -273,6 +542,11 @@ impl RunMachine {
             ));
         }
         let caller_environment = self.frame.shared_generic_context();
+        let caller_callable = self
+            .calls
+            .last()
+            .map(|call| Arc::clone(&call.call.callee))
+            .or_else(|| self.root_source.as_ref().map(Arc::clone));
         let mut caller = CallerSourceContext {
             body_definition: pc.body.definition,
             generic_definition: None,
@@ -437,9 +711,19 @@ impl RunMachine {
                         );
                         key
                     };
-                    match indexed_argument_occurrence(&self.frame.body, site, &source_operands, ordinal, *slot) {
+                    match indexed_argument_occurrence(
+                        &self.frame.body,
+                        site,
+                        &source_operands,
+                        ordinal,
+                        *slot,
+                    ) {
                         Some(source) => numeric_sources.entry(key).or_default().push(source),
-                        None => { pending.get_or_insert(ReachedCallInputPending::ArgumentOccurrence(ordinal)); }
+                        None => {
+                            pending.get_or_insert(ReachedCallInputPending::ArgumentOccurrence(
+                                ordinal,
+                            ));
+                        }
                     }
                     Some(TyTerm::Infer(key))
                 }
@@ -493,6 +777,7 @@ impl RunMachine {
             typed,
             owner_application,
             caller_environment,
+            caller_callable,
             caller_source,
             caller_body,
             span,
@@ -528,10 +813,24 @@ fn indexed_argument_occurrence(
     if call.role == NodeRole::Expression(ExpressionKind::MethodCall)
         && argument == 0 && call.runtime_temporaries[0] == Some(slot) {
         let receiver = *call.operands.first()?;
-        body.nodes().get(receiver.0 as usize).filter(|node| node.id == receiver)?;
-        return Some(NumericSourceOccurrence { argument, slot, node: receiver, kind: NumericSourceKind::MethodReceiver });
+        body.nodes()
+            .get(receiver.0 as usize)
+            .filter(|node| node.id == receiver)?;
+        return Some(NumericSourceOccurrence {
+            argument,
+            slot,
+            node: receiver,
+            kind: NumericSourceKind::MethodReceiver,
+        });
     }
     let source = body.value_node(slot)?;
-    if !operands.contains(&source.id) { return None; }
-    Some(NumericSourceOccurrence { argument, slot, node: source.id, kind: NumericSourceKind::WrittenArgument })
+    if !operands.contains(&source.id) {
+        return None;
+    }
+    Some(NumericSourceOccurrence {
+        argument,
+        slot,
+        node: source.id,
+        kind: NumericSourceKind::WrittenArgument,
+    })
 }

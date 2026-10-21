@@ -35,7 +35,7 @@ pub(crate) struct SourceCallRelation {
 }
 
 /// These source substitutions do not certify the caller's clauses or ParamEnv.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct CallerSourceContext {
     pub(crate) body_definition: Digest,
     pub(crate) generic_definition: Option<Digest>,

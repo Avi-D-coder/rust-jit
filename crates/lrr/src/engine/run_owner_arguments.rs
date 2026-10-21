@@ -145,6 +145,25 @@ fn match_owner(
 }
 
 impl RunMachine {
+    /// The same ordinary owner transport, supplied by the retained source
+    /// qualifier rather than reparsed owner-segment tokens. Its argument
+    /// proofs retain alias normalization and actual nominal schemas.
+    pub(super) fn associated_owner_bindings(
+        &mut self,
+        db: &mut Database,
+        callee: &SourceCallable,
+        source: &ExplicitType,
+    ) -> QueryPoll<Vec<(u32, ArgumentType)>> {
+        let Some(arguments) = source.nominal_arguments() else {
+            return QueryPoll::Ready(Err(call_fault("associated owner application requires its actual source argument proofs")));
+        };
+        if arguments.is_empty() { return QueryPoll::Ready(Ok(Vec::new())); }
+        let owner = OwnerArguments {
+            arguments: arguments.into_iter().map(|argument| Some(OwnerArgument::Entered(argument))).collect(),
+            guards: Vec::new(), // Q47 retains the complete actual qualifier guard.
+        };
+        self.owner_bindings(db, callee, &owner)
+    }
     /// The owner-segment Type arguments of the call at the frame's PC, or
     /// `None` when its path writes none. Selected once per call site; later
     /// uses check the selection's certified inputs.

@@ -22,6 +22,24 @@ impl Database {
                 "cold declaration names require a completed source catalog",
             ));
         }
+        self.publish_declaration_names_checked(scope, parent, seal, completions)
+    }
+    /// Reached metadata publication is restricted to an actual sealed catalog.
+    pub(crate) fn publish_catalog_declaration_names(
+        &mut self,
+        publication: &crate::expand::source_discovery::impl_catalog::CatalogDeclarationPublication<'_, '_>,
+    ) -> Result<(), Diagnostic> {
+        publication.require_current(self)?;
+        self.publish_declaration_names_checked(publication.scope(), publication.parent(),
+            publication.seal(), publication.completions())
+    }
+    fn publish_declaration_names_checked(
+        &mut self,
+        scope: &CapturedDeclarationScope<'_>,
+        parent: &DeclarationMacroIndex,
+        seal: &Seal,
+        completions: &BTreeMap<Digest, Arc<crate::frontend::impl_index::CompletedOriginalAnnotation>>,
+    ) -> Result<(), Diagnostic> {
         scope.require_current(self)?;
         if !matches!(self.input(&InputKey::ExpansionEpoch).as_deref(),
             Some(InputValue::ExpansionEpoch(epoch)) if *epoch == seal.key().epoch)
@@ -61,12 +79,17 @@ impl Database {
             let key = InputKey::DeclarationNames(scope.clone());
             let value = InputValue::DeclarationNames(Arc::clone(&prepared));
             let fingerprint = value.fingerprint();
-            if self
-                .inputs
-                .get(&key)
-                .is_some_and(|old| old.fingerprint == fingerprint)
-            {
-                continue;
+            if let Some(old) = self.inputs.get(&key) {
+                let identical = old.fingerprint == fingerprint && (!self.run_active
+                    || matches!(old.value.as_ref(), InputValue::DeclarationNames(input)
+                        if Arc::ptr_eq(input, &prepared)));
+                if identical { continue; }
+                if self.run_active {
+                    return Err(fault(
+                        "LRR-E-EXPANSION-CONFLICT",
+                        "reached catalog cannot replace an existing declaration name publication",
+                    ));
+                }
             }
             staged.insert(
                 key,

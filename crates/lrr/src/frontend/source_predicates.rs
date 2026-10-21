@@ -613,8 +613,23 @@ fn prepare_bound_rows(
         if row.where_binder.is_some() || row.bound.for_binder().is_some() {
             pending!(HigherRanked);
         }
-        if row.bound.const_token().is_some()
-            || row.bound.tilde_token().is_some()
+        // Pinned hir_ty_lowering/mod.rs:1051-1071,1110-1126: a Maybe
+        // const bound still emits its ordinary Trait clause. Its conditional
+        // effect is owned by const_conditions, not this clause query. Always
+        // const bounds additionally need HostEffect transport and stay held.
+        let has_const = row.bound.const_token().is_some();
+        let brackets = (
+            row.bound.l_brack_token().is_some(),
+            row.bound.r_brack_token().is_some(),
+        );
+        let maybe_const = has_const
+            && match brackets {
+                (true, true) => row.bound.tilde_token().is_none(),
+                (false, false) => row.bound.tilde_token().is_some(),
+                _ => false,
+            };
+        if ((has_const || row.bound.tilde_token().is_some() || brackets != (false, false))
+            && !maybe_const)
             || row.bound.async_token().is_some()
             || row.bound.use_token().is_some()
             || crate::syntax::source_bound_polarity::polarity(&row.bound)
@@ -694,7 +709,10 @@ fn prepare_bound_rows(
         if missing_self && has_self(&ast::Type::PathType(ty.clone())) {
             pending!(SymbolicType);
         }
-        if declaration.symbolic_type_pending(&ast::Type::PathType(ty.clone())).is_some() {
+        if declaration
+            .symbolic_type_pending(&ast::Type::PathType(ty.clone()))
+            .is_some()
+        {
             pending!(SymbolicType);
         }
         let Some(path) = ty.path() else {
