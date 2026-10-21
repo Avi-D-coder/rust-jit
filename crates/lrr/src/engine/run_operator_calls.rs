@@ -190,7 +190,7 @@ impl RunMachine {
                             _ => ClosedReferenceArgument::capture_formed(
                                 &self.store,
                                 argument.cell,
-                                &argument.source,
+                                &arguments[ordinal].source,
                             ),
                         }))
                     } else {

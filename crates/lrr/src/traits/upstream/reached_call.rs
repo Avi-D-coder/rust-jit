@@ -9,6 +9,7 @@ use super::{
     },
     model::Span,
     prepared::{Cx, PreparedFacts},
+    relevant_candidates::{bucket_clause_traits, relevant_candidate_traits},
     root_input::{SourceCallRelationKind, SourceRootCallInput, SourceVariableFamily},
     root_relations::{PreparedRootRelations, RootRelationFulfillmentOutcome},
     root_response::export_root_response,
@@ -279,100 +280,111 @@ pub(crate) fn poll_reached_call(
         return QueryPoll::Ready(Ok(held("callee-source", why)));
     }
     let mut demanded = potential_numeric_traits(packet, &clauses);
-    // Finite immutable metadata dependency closure. This never evaluates a
-    // clause, rejects an impl, normalizes an alias or retries a solver answer.
-    // All complete bucket members are retained, including pending producers.
-    let bundle = loop {
-        let bundle = ready!(SourceFactBundle::prepare(
+    let mut seeds = BTreeSet::new();
+    loop {
+        let mut promote = BTreeSet::new();
+        // Finite immutable metadata dependency closure. This never evaluates a
+        // clause, rejects an impl, normalizes an alias or retries a solver answer.
+        // The root's own candidate traits come from pinned relevance (`execute`);
+        // only seeds promoted from relevant impls keep complete-bucket propagation
+        // because their child goals are not known before the solver runs.
+        let mut closing = seeds.clone();
+        let bundle = loop {
+            let bundle = ready!(SourceFactBundle::prepare(
+                db,
+                Arc::clone(&catalog),
+                SourceFactRequest {
+                    caller: packet.caller.body_definition,
+                    callee: packet.callee,
+                    traits: demanded.clone(),
+                    input_types: input_types.clone(),
+                }
+            ));
+            let mut next = demanded.clone();
+            for trait_definition in closing.clone() {
+                for source in bucket_clause_traits(&bundle, trait_definition) {
+                    next.insert(source);
+                    closing.insert(source);
+                }
+            }
+            next.extend(bundle.request().traits.iter().copied());
+            if next == demanded {
+                break bundle;
+            }
+            demanded = next;
+        };
+        if let Err(error) = bundle
+            .require_current(db)
+            .and_then(|()| caller.require_current(db))
+        {
+            return QueryPoll::Ready(Err(error));
+        }
+        if let Some(application) = &application {
+            if let Err(why) = application.require_current(
+                db,
+                caller_environment.expect("verified environment"),
+                caller_callable,
+                packet.caller,
+            ) {
+                return QueryPoll::Ready(Ok(held("caller-currentness", why)));
+            }
+        }
+        let layouts = match bundle.generic_layouts() {
+            Ok(layouts) => layouts,
+            Err(why) => return QueryPoll::Ready(Ok(held("generic-layouts", why))),
+        };
+        let bundle = Arc::new(bundle);
+        let current = Arc::new(ReachedCallCurrent {
+            bundle: Arc::clone(&bundle),
+            caller: Arc::clone(&caller),
+            application: application.clone(),
+            environment: caller_environment.cloned(),
+            caller_callable: Arc::clone(caller_callable),
+            callee_callable: Arc::clone(callee_callable),
+            descriptor: packet.caller.clone(),
+        });
+        let output = configuration.with_source_context(
             db,
             Arc::clone(&catalog),
-            SourceFactRequest {
-                caller: packet.caller.body_definition,
-                callee: packet.callee,
-                traits: demanded.clone(),
-                input_types: input_types.clone(),
-            }
-        ));
-        let mut next = demanded.clone();
-        // Only candidate requirements can produce solver children. A trait
-        // present merely as unrelated source metadata is not a root demand.
-        for facts in bundle.implementations().values() {
-            if let Ok(bindings) = facts.semantics().full_clause_bindings() {
-                next.extend(bindings.definitions.keys().filter(|source| bundle.definitions().get(*source)
-                    .is_some_and(|facts| facts.header().role() == super::source_definition_headers::DefinitionHeaderRole::Trait)).copied());
-            }
+            Some(&layouts),
+            |cx, provider| {
+                let materialized =
+                    match source_factory::materialize(cx, &bundle, &layouts, configuration) {
+                        Ok(facts) => facts,
+                        Err(error) => return Err(error),
+                    };
+                if let Err((source, why)) = require_callback_domains(&materialized.facts, &bundle) {
+                    let reasons: Vec<_> = materialized
+                        .unprepared
+                        .iter()
+                        .filter(|hold| hold.definition == source)
+                        .collect();
+                    return Ok(held(
+                        "callback-domain",
+                        format!("{why}; source_producer_holds={reasons:?}"),
+                    ));
+                }
+                provider.publish(materialized.facts)?;
+                execute(
+                    cx,
+                    packet,
+                    &caller,
+                    application.as_deref(),
+                    &bundle,
+                    &layouts,
+                    configuration,
+                    &current,
+                    &mut promote,
+                )
+            },
+        );
+        if !promote.is_empty() {
+            demanded.extend(promote.iter().copied());
+            seeds.extend(promote);
+            continue;
         }
-        next.extend(bundle.request().traits.iter().copied());
-        if next == demanded {
-            break bundle;
-        }
-        demanded = next;
-    };
-    if let Err(error) = bundle
-        .require_current(db)
-        .and_then(|()| caller.require_current(db))
-    {
-        return QueryPoll::Ready(Err(error));
+        return QueryPoll::Ready(output.and_then(|value| value));
     }
-    if let Some(application) = &application {
-        if let Err(why) = application.require_current(
-            db,
-            caller_environment.expect("verified environment"),
-            caller_callable,
-            packet.caller,
-        ) {
-            return QueryPoll::Ready(Ok(held("caller-currentness", why)));
-        }
-    }
-    let layouts = match bundle.generic_layouts() {
-        Ok(layouts) => layouts,
-        Err(why) => return QueryPoll::Ready(Ok(held("generic-layouts", why))),
-    };
-    let bundle = Arc::new(bundle);
-    let current = Arc::new(ReachedCallCurrent {
-        bundle: Arc::clone(&bundle),
-        caller: Arc::clone(&caller),
-        application: application.clone(),
-        environment: caller_environment.cloned(),
-        caller_callable: Arc::clone(caller_callable),
-        callee_callable: Arc::clone(callee_callable),
-        descriptor: packet.caller.clone(),
-    });
-    let output = configuration.with_source_context(
-        db,
-        Arc::clone(&catalog),
-        Some(&layouts),
-        |cx, provider| {
-            let materialized =
-                match source_factory::materialize(cx, &bundle, &layouts, configuration) {
-                    Ok(facts) => facts,
-                    Err(error) => return Err(error),
-                };
-            if let Err((source, why)) = require_callback_domains(&materialized.facts, &bundle) {
-                let reasons: Vec<_> = materialized
-                    .unprepared
-                    .iter()
-                    .filter(|hold| hold.definition == source)
-                    .collect();
-                return Ok(held(
-                    "callback-domain",
-                    format!("{why}; source_producer_holds={reasons:?}"),
-                ));
-            }
-            provider.publish(materialized.facts)?;
-            execute(
-                cx,
-                packet,
-                &caller,
-                application.as_deref(),
-                &bundle,
-                &layouts,
-                configuration,
-                &current,
-            )
-        },
-    );
-    QueryPoll::Ready(output.and_then(|value| value))
 }
 
 /// Check actual compiler-query slots for the bounded normal source profile.
@@ -473,6 +485,7 @@ fn execute(
     layouts: &SourceGenericLayouts,
     configuration: &PreparedSolverConfiguration,
     current: &Arc<ReachedCallCurrent>,
+    promote: &mut BTreeSet<Digest>,
 ) -> Result<ReachedCallOutcome, Diagnostic> {
     let Some(source) = bundle.own_clauses(packet.callee) else {
         return Ok(held("callee-clauses", "actual Q80 unavailable"));
@@ -586,15 +599,33 @@ fn execute(
             Ok(value) => value,
             Err(why) => return Ok(held("numeric-source-incidence", why)),
         };
-    if let Ok(traits) = demands.candidate_traits(&owner) {
-        if !traits.is_subset(&bundle.request().traits) {
-            return Ok(held("numeric-candidate-closure", traits));
+    // Selected clauses name their own parent traits; any not yet demanded are
+    // requested and the whole attempt repeats over the larger immutable bundle.
+    match demands.candidate_traits(&owner) {
+        Ok(traits) => {
+            promote.extend(traits.difference(&bundle.request().traits).copied());
+            if !promote.is_empty() {
+                return Ok(held("numeric-candidate-closure", &*promote));
+            }
         }
-    } else {
-        return Ok(held(
-            "numeric-candidate-closure",
-            "actual source demand owner unavailable",
-        ));
+        Err(_) => {
+            return Ok(held(
+                "numeric-candidate-closure",
+                "actual source demand owner unavailable",
+            ));
+        }
+    }
+    // Pinned selection reads only the relevant impls of each selected goal, after
+    // the solver's own alias normalization. Their child traits are the candidate
+    // dependencies still to request; nothing else in a complete bucket is.
+    match relevant_candidate_traits(cx, &admission, &owner, &demands, bundle, span) {
+        Ok(traits) => {
+            promote.extend(traits.difference(&bundle.request().traits).copied());
+            if !promote.is_empty() {
+                return Ok(held("relevant-candidate-closure", &*promote));
+            }
+        }
+        Err(why) => return Ok(held("relevant-candidates", why)),
     }
     let mut fulfillment = FulfillmentContext::new(&owner);
     for clause in demands.clauses() {

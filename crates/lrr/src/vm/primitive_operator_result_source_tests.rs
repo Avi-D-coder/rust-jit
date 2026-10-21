@@ -226,7 +226,9 @@ fn arithmetic_unary_forward_only_actual_written_source_and_source_less_arithmeti
 }
 #[test]
 fn rigid_or_wrong_operand_source_and_rigid_result_refuse_before_fuel_or_owning_change() {
-    for bad in 0..3 {
+    // Case 0 (a rigid operand on a primitive value) dispatches the operator's
+    // trait method instead; see the next test.
+    for bad in 1..3 {
         let mut c = reached("fn main(){1_i64==2_i64;}", 2024);
         let operand = left(&c);
         let rigid = TyTerm::Param(ParamKey {
@@ -249,6 +251,19 @@ fn rigid_or_wrong_operand_source_and_rigid_result_refuse_before_fuel_or_owning_c
         assert_eq!(c.frame.source_view(slot).unwrap(), Some(source));
         assert!(c.frame.cell(c.destination).is_err());
     }
+}
+#[test]
+fn rigid_operand_source_on_a_primitive_value_dispatches_the_operator_trait_method() {
+    let mut c = reached("fn main(){1_i64==2_i64;}", 2024);
+    let operand = left(&c);
+    let rigid = TyTerm::Param(ParamKey {
+        definition: c.frame.body.body().definition,
+        ordinal: 0,
+    });
+    c.frame.set_source_view(operand, Some(rigid.clone())).unwrap();
+    let outcome = step(&mut c.frame, &mut c.store, &c.recipe).unwrap();
+    assert!(matches!(outcome, StepOutcome::Dispatch));
+    assert_eq!(c.frame.source_view(operand).unwrap(), Some(rigid));
 }
 #[test]
 fn unchanged_runtime_comparison_main_executes_three_original_assertions_all_explicit_editions() {

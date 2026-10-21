@@ -68,6 +68,7 @@ pub(crate) mod parameters;
 pub(crate) use prepared::{check_scope_receipts, check_completed_source_catalog, check_opaque_return_receipt};
 mod prepared;
 mod candidates;
+mod relevant_candidates;
 pub(crate) use prepared::PreparedProvider;
 mod predicates;
 mod predicate_emission;

@@ -320,6 +320,18 @@ impl Frame {
         let CellState::Live(value) = store.state(self.cell(slot)?)? else {
             return Err(invalid("operator operand not live"));
         };
+        // rustc types an operator on a rigid operand (`T`, `<T as Tr>::Assoc`,
+        // an opaque type) as the lang-item trait call; monomorphization only
+        // picks the impl. The operand's static source decides, not the primitive
+        // value it happens to hold in this instantiation.
+        if let Some(
+            crate::traits::term::TyTerm::Param(_)
+            | crate::traits::term::TyTerm::Projection(_)
+            | crate::traits::term::TyTerm::Opaque(..),
+        ) = self.source_view_ref(slot)?
+        {
+            return Ok(true);
+        }
         if (1..=7).contains(&value.kind) || matches!(value.kind, 11 | 12 | 17) {
             return Ok(false);
         }
