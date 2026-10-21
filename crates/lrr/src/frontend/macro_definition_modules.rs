@@ -67,6 +67,10 @@ pub(crate) struct SelectedMacroDefinitionModule {
 struct SelectedExpansion {
     expansion: Key,
     definition: Digest,
+    /// The expansion came from a compiler `#[rustc_builtin_macro]` expander
+    /// (`MacroIdentity::BuiltinDerive`), not from macro syntax in a program
+    /// source.
+    builtin: bool,
     edition: u16,
     mark_unit: Digest,
     mark_edition: u16,
@@ -441,9 +445,9 @@ fn select_context(
         if records.any(|(other, _)| !record.same_record(other)) {
             return Err(fault("opaque module expansion record conflicts"));
         }
-        let definition = match record.key().macro_identity {
-            MacroIdentity::Declaration { definition }
-            | MacroIdentity::BuiltinDerive { definition } => definition,
+        let (definition, builtin) = match record.key().macro_identity {
+            MacroIdentity::Declaration { definition } => (definition, false),
+            MacroIdentity::BuiltinDerive { definition } => (definition, true),
             _ => return Ok(Err(DefinitionModuleDemand::CurrentExpansion(expansion))),
         };
         let seal = db
@@ -468,6 +472,7 @@ fn select_context(
             SelectedExpansion {
                 expansion,
                 definition,
+                builtin,
                 edition: record.key().definition_edition,
                 mark_unit: Digest(mark.defining_unit.0),
                 mark_edition: match mark.edition {
@@ -512,6 +517,11 @@ pub(crate) struct PreparedDefinitionModule {
     plan: Arc<PreparedSourceLocalPlan>,
     context: Key,
     outcome: DefinitionModuleOutcome,
+    /// The compiler builtin expander definition that produced the selected
+    /// expansion. Its definition site is the library's own declaration of the
+    /// builtin (`core::cmp::PartialEq`), not a source module of the program,
+    /// so `outcome` stays pending; see `compiler_owned`.
+    builtin: Option<Digest>,
 }
 impl std::fmt::Debug for PreparedDefinitionModule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -533,6 +543,14 @@ impl PreparedDefinitionModule {
     }
     pub(crate) fn retained_plan(&self) -> &Arc<PreparedSourceLocalPlan> {
         &self.plan
+    }
+    /// The selected expansion is a compiler builtin expander's output
+    /// (rustc `#[rustc_builtin_macro]` derives): the library definition that
+    /// produced it, whose def-site module holds no program source. The
+    /// expander (compiler-owned, as in rustc's `rustc_builtin_macros`) alone
+    /// chooses the identifiers it introduces at that def site.
+    pub(crate) fn compiler_owned(&self) -> Option<Digest> {
+        self.builtin
     }
     pub(crate) fn matches(&self, body: &crate::source::manifest::BodyKey, context: Key) -> bool {
         self.plan.context().source().index().body() == body && self.context == context
@@ -570,7 +588,7 @@ impl PreparedDefinitionModule {
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
-        let outcome = match Self::select_owner(db, &plan, context) {
+        let (outcome, builtin) = match Self::select_owner(db, &plan, context) {
             QueryPoll::Ready(Ok(outcome)) => outcome,
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
@@ -579,19 +597,43 @@ impl PreparedDefinitionModule {
             plan,
             context,
             outcome,
+            builtin,
         }))
     }
     fn select_owner(
         db: &mut Database,
         plan: &Arc<PreparedSourceLocalPlan>,
         context: Key,
-    ) -> QueryPoll<DefinitionModuleOutcome> {
+    ) -> QueryPoll<(DefinitionModuleOutcome, Option<Digest>)> {
         let selected = match select_context(db, plan, context) {
             QueryPoll::Ready(Ok(Ok(value))) => value,
-            QueryPoll::Ready(Ok(Err(demand))) => return pending(demand),
+            QueryPoll::Ready(Ok(Err(demand))) => {
+                return QueryPoll::Ready(Ok((DefinitionModuleOutcome::Pending(demand), None)));
+            }
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
+        let id = selected.definition;
+        if selected.builtin {
+            // No program source declares a compiler builtin: the receipt
+            // names its library definition and stays source-pending.
+            return QueryPoll::Ready(Ok((
+                DefinitionModuleOutcome::Pending(DefinitionModuleDemand::SourceDeclaration(id)),
+                Some(id),
+            )));
+        }
+        match Self::select_source_owner(db, plan, context, selected) {
+            QueryPoll::Ready(Ok(outcome)) => QueryPoll::Ready(Ok((outcome, None))),
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
+    }
+    fn select_source_owner(
+        db: &mut Database,
+        plan: &Arc<PreparedSourceLocalPlan>,
+        context: Key,
+        selected: SelectedExpansion,
+    ) -> QueryPoll<DefinitionModuleOutcome> {
         let id = selected.definition;
         let Some(environment) = plan.environment() else {
             return pending(DefinitionModuleDemand::OwningSource(id));
@@ -642,6 +684,7 @@ impl StableEncode for PreparedDefinitionModule {
         e.record(self.plan.context().source().index().body());
         e.digest(self.plan.source_identity());
         e.digest(Digest(self.context.0));
+        e.option(&self.builtin, |e, definition| e.digest(*definition));
         match &self.outcome {
             DefinitionModuleOutcome::Ready(module) => {
                 e.u32(0);

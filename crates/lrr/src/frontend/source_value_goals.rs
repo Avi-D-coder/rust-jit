@@ -1090,6 +1090,32 @@ fn complete_module(
             let Some(request) =
                 polled!(plan.definition_module_request(db, raw, &name, edition, namespace))
             else {
+                // A pattern name written by a compiler builtin expander
+                // (rustc `#[rustc_builtin_macro]` derives) at its def site:
+                // the expander's own library definition site holds no
+                // program module, and the identifiers the compiler-owned
+                // expander introduces there (`__self_discr`, `__self_0`,
+                // `cmp`) are fresh bindings, never items of that module.
+                // The decision depends only on the selected expansion.
+                if goal.target.is_some()
+                    && namespace == Namespace::Value
+                    && let Some(definition) =
+                        polled!(plan.definition_module_compiler_owned(db, raw))
+                {
+                    let mut identity =
+                        StableEncoder::new("lrr/v1/entered-pattern-compiler-definition-site");
+                    identity.digest(goal.reads);
+                    identity.digest(definition);
+                    identity.digest(Digest(expansion.0));
+                    goal.reads = identity.finish();
+                    return complete_lexical_lookup(
+                        db,
+                        goal,
+                        NameLookup::Absent,
+                        false,
+                        name_range,
+                    );
+                }
                 return goal.needs(ValueGoalDemand::DefinitionModule(expansion));
             };
             Some(request)

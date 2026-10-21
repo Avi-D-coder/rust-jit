@@ -779,6 +779,32 @@ impl PreparedSourceLocalPlan {
         }
         QueryPoll::Ready(module.request(name, edition, namespace))
     }
+    /// The compiler builtin expander definition behind an opaque (def-site)
+    /// context, when the selected expansion is one: its definition site is
+    /// library-owned, so `definition_module_request` has no program module to
+    /// answer with. Shares the memoized `MacroDefinitionModule` selection.
+    pub(crate) fn definition_module_compiler_owned(
+        &self, db: &mut Database, raw: Key,
+    ) -> QueryPoll<Option<Digest>> {
+        let context = match self.allocation_roots().hygiene().item(raw) {
+            Ok(context) => context,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let body = self.context().source().index().body();
+        let answer = match db.fetch(&crate::db::provider::SyntaxProvider,
+            crate::db::key::QueryKey::MacroDefinitionModule { body: body.clone(), context }) {
+            QueryPoll::Ready(Ok(answer)) => answer,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let crate::db::value::QueryValue::MacroDefinitionModule(module) = answer.value.as_ref() else {
+            return QueryPoll::Ready(Err(error("definition module query variant differs")));
+        };
+        if !module.matches(body, context) || !Arc::ptr_eq(module.retained_plan().context(), self.context()) {
+            return QueryPoll::Ready(Err(error("definition module actual body/context differs")));
+        }
+        QueryPoll::Ready(Ok(module.compiler_owned()))
+    }
     pub(crate) fn module_scope(&self) -> Option<&crate::syntax::outline::ScopeKey> {
         // Membership only. A use must consume type_prefix/module_selector,
         // not turn this retained module row into a hygienic lookup decision.

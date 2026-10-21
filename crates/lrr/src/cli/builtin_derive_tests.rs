@@ -177,6 +177,63 @@ fn main() {
     );
 }
 
+// Identifier patterns a builtin expander writes at its def site (`let
+// __self_discr`, `E::B(__self_0)`, `cmp => cmp`) are fresh bindings through
+// the same pattern-name selection and local lookup as the handwritten and
+// user-macro spellings, in every owning edition.
+#[test]
+fn derived_enum_def_site_bindings_run_like_handwritten_and_user_macro_code() {
+    prints(
+        "def-site-bindings",
+        "#[derive(PartialEq, PartialOrd, Clone, Debug)]
+enum D { A, B(i32, u8), C { x: i64 } }
+#[derive(PartialEq, PartialOrd)]
+struct S { a: i32, b: i32 }
+enum H { A, B(i32) }
+impl PartialEq for H {
+    fn eq(&self, other: &H) -> bool {
+        let __self_discr: isize = match self { H::A => 0, H::B(..) => 1, };
+        let __arg1_discr: isize = match other { H::A => 0, H::B(..) => 1, };
+        __self_discr == __arg1_discr
+            && match (self, other) {
+                (H::B(__self_0), H::B(__arg1_0)) => *__self_0 == *__arg1_0,
+                _ => true,
+            }
+    }
+}
+enum M { A, B(i32) }
+macro_rules! eq_like {
+    ($t:ident) => {
+        impl PartialEq for $t {
+            fn eq(&self, other: &$t) -> bool {
+                let __self_discr: isize = match self { $t::A => 0, $t::B(..) => 1, };
+                let __arg1_discr: isize = match other { $t::A => 0, $t::B(..) => 1, };
+                __self_discr == __arg1_discr
+                    && match (self, other) {
+                        ($t::B(__self_0), $t::B(__arg1_0)) => *__self_0 == *__arg1_0,
+                        _ => true,
+                    }
+            }
+        }
+    };
+}
+eq_like!(M);
+fn main() {
+    assert!(D::A == D::A && D::A != D::B(0, 0) && D::B(0, 0) != D::C { x: 0 });
+    assert!(D::B(1, 2) == D::B(1, 2) && D::B(1, 2) != D::B(1, 3));
+    assert!(D::C { x: -1 } == D::C { x: -1 }.clone());
+    assert!(D::A < D::B(0, 0) && D::B(1, 2) < D::B(1, 3) && D::B(9, 9) < D::C { x: 0 });
+    assert!(S { a: 0, b: 9 } < S { a: 1, b: 0 } && S { a: 1, b: 0 } < S { a: 1, b: 1 });
+    assert!(H::A == H::A && H::B(1) == H::B(1) && H::B(1) != H::B(2) && H::A != H::B(0));
+    assert!(M::A == M::A && M::B(1) == M::B(1) && M::B(1) != M::B(2) && M::A != M::B(0));
+    println!(\"ok\");
+}
+",
+        &[2015, 2018, 2021, 2024],
+        "ok\n",
+    );
+}
+
 #[test]
 fn unchanged_copy_contract_survives_generated_derives_all_origins_and_editions() {
     const ORIGINAL: &str =
