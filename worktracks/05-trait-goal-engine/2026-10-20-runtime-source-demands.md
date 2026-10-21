@@ -1,5 +1,152 @@
 # M020 / LOCAL-049: numeric-connected source clause demand metadata
 
+## V531 read-only handoff: common future-use metadata prerequisite
+
+This is an implementability analysis during the V531 production freeze, not an
+implementation or runtime result. M020 / LOCAL049, Sections 11, 52.2 and 53,
+unchanged owning-2015 `repr128.rs` remain the task/invariant/witness. The concrete
+next boundary is a source-relation producer shared with BindingConstraints;
+another primitive or candidate inference algorithm is prohibited.
+
+Actual APIs already available:
+
+- `db::source_constraint_provider::prepare` / `QueryKey::SourceConstraints(body)`
+  fetch retained `BodyStructure`, actual DefinitionBody/DefinitionSource and
+  ParseFile, then produce `SourceConstraintPlan`. `fact(node)`, `uses(node)`
+  (sorted reverse child edges), `name_of(node)`, source annotations/type shapes,
+  path argument nodes and pattern occurrences are available without guest thunk
+  preparation. `SourceName::{paths,bindings,hidden}` are candidate filters only.
+- `binding_constraints::{selected_local,pattern_binding,binding_pattern,
+  declaring_let}` join those candidates through actual `EnteredValue(PcKey)`
+  hygienic binding identities. `Component::declared` visits all same-binding
+  uses, including later uses, after this join; hidden/unrecorded uses are held.
+- `Component::{inward,outward}` and `Via/Step` describe source connections.
+  `binding_constraint_generics::relate_signature_type` relates the actual
+  selected declaration's parameter/result occurrences, using declared terms;
+  `source_parameter_goals` / `source_return_goals` produce genuine definition,
+  signature and ordinal-checked terms. Existing query variants include
+  DeclaredParameterGoal, ContextParameterGoal and DeclaredReturnGoal. None needs
+  a selected callee's executable body.
+- `PreparedBindingPlan` shows the existing memo+PreparedInputGuard retention
+  pattern, but its payload is a solved legacy result, not a reusable unsolved
+  relation plan. `PreparedBindingConstraints` exposes primitive/written/inferred
+  answers and scalar member patterns; it does not expose the complete source
+  relation component.
+
+Do not call `BindingConstraints` merely to obtain this graph. `Component::solve`
+interleaves discovery with `constrain`, candidate collection and fallback.
+`relate_parameter` reaches `parameter_bounds` / `trait_bound`, which enumerate
+MemberIndex primitive candidates and recursively interpret blanket bounds.
+Those historical semantic paths are migration debt. `RelatedNumericPlan` is
+also insufficient: it is made only on certain unresolved literal outcomes,
+omits named/variant/Item projections, and describes related reached runtime
+descriptor observations rather than complete authentic source obligations.
+
+Smallest shared producer change (proposed API, not present): factor a retained
+`PreparedNumericSourceRelations` out of the existing Component source discovery,
+keyed by phase-zero source occurrence `PcKey`, with `relations()` and explicit
+`pending_leaves()` plus actual query guard. It records indexed endpoints,
+source spans, hygienic bindings, declared signature IDs/ordinals and source
+operation/structural-projection requirements. It returns no primitive, inferred
+argument, candidate set, default or solved flag. Both the old BindingConstraints
+consumer and the new upstream adapter must use that one retained producer;
+copying Component into another visitor is not the repair. Discovery must not
+convert an overloaded operator, coercion or projected field into a proved
+equality: retain the authentic requirement for the pinned relation/trait owner,
+or a typed missing common-source leaf. Existing source relation forms must be
+ported incrementally with their holds; no universal graph-closure claim follows
+from the scalar subset. Arbitrary nonnumeric open-type future-use inference is
+outside this Section52.2 numeric exception.
+
+Actual reached packet gap: `run_call_inputs::capture_reached_call_inputs` maps
+live `(ValueRepr.kind,payload)` LiteralRecord handles to private original numeric
+InferVarKeys, and retains slots/cells/value snapshots, actual PC/body/callee,
+attempt Arc and result expectation. It does not retain numeric-key -> indexed
+source-expression occurrences. `LiteralRecord` has number/spelling/binding only,
+so source identity cannot be recovered from its spelling or handle payload.
+Extend the same capture with authenticated argument-expression nodes from the
+actual call's BodyIndex/SourceConstraints operands (Call has callee offset;
+MethodCall/LangCall use their genuine parameter order), joined to the exact
+observed slots/ordinal and retained body/attempt. A local path argument can then
+join its declaration/later uses through EnteredValue, rather than needing the
+original literal's allocation site. Actual generated-call inputs require their
+same ordinary indexed occurrence join; the legacy runtime-call argument slot
+array or borrow-only span helper does not certify arbitrary argument nodes.
+Missing join remains typed pending, not an original-only exception. Keep this
+mapping in the private packet/currentness owner, separate from pure memo keys;
+revalidate the new source guard alongside existing `require_current` checks.
+
+Separate Q80 fragment prerequisite: `SourceDeclarationClauses::prepare` demands
+every recipe's SourceBindings and PreparedClauseEmission, and its whole pending
+gate also guards `encode_recipe_at`. Therefore merely choosing ordinals before
+calling that accessor does not avoid an unrelated unsupported bound. The common
+collector already has `ActualBoundSite`, actual syntax locations and the owning
+WrittenTypeDeclaration, but `PreparedWrittenBounds` does not expose a retained
+pre-name-resolution parameter-use index. Extend that collector with authenticated
+fragment identities and source ParamKey incidence, using actual binder-aware
+parameter resolution rather than spelling. Resolve each possible connected
+fragment through the same `prepare_written_rows`, Q84 defaults, SourceBindings,
+PreparedClauseEmission and `encode_owned_recipe` policy; retain real source
+ordinal/site and per-fragment pending. Do not feed a caller-supplied recipe
+subset into a fake complete SourceDeclarationClauses value. A selected Type
+parameter default needs its actual relaxation/default context, not an assumed
+Sized row. Unknown dependency incidence cannot certify disconnection.
+
+The current same-owner actual callee Args and original numeric family keys can
+identify which retained source parameter occurrences may contain a still-open
+numeric root, using pinned instantiation/resolution. This is source-demand
+selection only. A source parameter that instantiates to a ground nonnumeric Type
+does not make all its other bounds necessary merely because it occurs beside U
+in one selected clause. Semantic inference/normalization/fulfillment remains
+exclusively in the existing pinned root owner; no primitive enumeration or
+independent candidate/constraint solver belongs in the collector.
+
+For actual repr128, the reached second argument at `discr(Signed::Zero, 0)`
+provides the original Integer key; the authentic `v:T,value:U` signature relates
+U to that key through upstream coercion fulfillment. The actual Q80 row
+`<T as DiscriminantKind>::Discriminant: PartialEq<U>` is connected by U and must
+be transported with exact caller ParamEnv/callee Args/source span. T remains the
+actual Signed source Type. The clause's complete parent/outer candidate buckets
+are metadata prerequisites, not an inferred width. No body call to
+discriminant_value or assertion identity is needed to select this source demand.
+
+Cold cost is retained indexed source discovery and relevant hygienic/signature
+queries; read each connected source occurrence/fragment once behind memo guards.
+Subsequent phases select from immutable handles. No guest thunk, branch execution,
+full-world dispatch map, body clone or repeated parser plan is authorized.
+Eight-mode source assessment: (1) no expression evaluator; (2) ordinary indexed
+generated/original join; (3) no method/numeric selection in metadata producer;
+(4) missing generated joins typed; (5) numeric metadata may read cold syntax but
+must not prepare its executable arms; (6) one retained source plan; (7) relevant
+name/query dependencies only; (8) shared Arc indexes/direct NodeIds. The existing
+Component semantic/deep projection routes remain explicitly held migration work,
+not endorsed by this design.
+
+Recommended existing source controls to preserve: unchanged
+`integer-literal-suffix-inference.rs` via
+`unchanged_suffix_shadowed_bindings_use_actual_later_parameter_source_goals`
+already checks actual later parameter Types, memo reuse and no Thunk/PatternPlan
+or foreign callee BodyStructure queries. Retain the existing
+`unanswerable_numeric_relations_stay_explicit_and_never_guess` distinctions.
+Add new producer/consumer assertions outside imported originals for unused
+unsupported callee bounds, connected later uses, shadowing, cold branch
+literal-to-source-call changes, genuine generated/wrapper source identities and
+NeedInput/currentness; runtime exact-once/VM commit remain separate. No control
+was run here. No production/source/Cargo/Git edit occurred during this analysis.
+
+Inspected source SHA256: `binding_constraints.rs`
+`008f5da74ae56faf1a14231f576408b02c21875dfc546c2a31db369280aa8eb3`;
+`binding_constraint_generics.rs`
+`410279d968022da849d2b87db4626dd18e310f4bed470bcb07e83936d1d7a5e4`;
+`syntax/source_constraints.rs`
+`73d88ea7e0aea13aa79249ede1724b17e4040e663d6419b773a25c2553d74991`;
+`run_call_inputs.rs`
+`7f464692a29479941f5dde1c4d39d67c2957e7cb94a73a64473eba8da75778be`;
+`source_declaration_clauses.rs`
+`cd801eae04fb7eae8daed1ff7ee870abd0e294b59e903ba97ce56852eefe0513`;
+`declaration_source_predicates.rs`
+`98ebf0ee045f29de94fda295a5b3d379a432ad36e3661622ad4d597039486fe4`.
+
 Bounded precode reservation: new `traits/upstream/source_runtime_demands.rs`
 and this record only. Parent owns registration, source factory/root/engine
 integration; the assigned fulfillment worker owns the applied root application

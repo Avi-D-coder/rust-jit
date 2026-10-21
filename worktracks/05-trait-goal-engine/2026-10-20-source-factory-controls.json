@@ -1,10 +1,14 @@
 {
   "schema": "lrr/validation-selection/v1",
-  "scope": "Three exact actual-source component controls. The unchanged repr128 factory world in owning Rust 2015 exercises complete demanded PartialEq membership, same-context materialization/publication, retained guards, memo/cold behavior and direct source withdrawal. The existing four-edition unsafe function alias control uses unchanged fn-ptr-comparisons-some.rs plus an external appended trait witness; it requires actual unsafe C source qualifier encoding and a separate erased-header FunctionMetadata hold. Original main execution and lint/compiler outputs are unexecuted. No solver root, fake WellFormed goal, response consumption, runtime gain or full origin/edition matrix claim. Runtime replay remains held until the reached-call consumer is installed. The third observes three unchanged owning-2015 impl sources for distinct anonymous source sites, actual lifetime-first IR parameter order and associated method inheritance; the mixed type/const ordering original is a diagnostic delegation fixture, with diagnostic/delegation/runtime execution unexecuted.",
+  "scope": "Seven exact source component controls: actual repr128 factory successor with genuine Q80 projected input and exact outer/projection-parent complete Q65 membership, full nonempty impl clauses, enum facts/guards/memo/cold/withdrawal; four-edition unsafe C source function alias positive and erased-header hold; unchanged anonymous impl control retaining its known mixed-fixture delegation parse failure; actual projected source predicates in four editions and original/user/wrapper origins; two unchanged owning-2015 const impl clause-order worlds; repeatable typed missing physical module demand and unchanged complete auxiliary ready/strict parity. No solver root, response/activation/VM consumption, original main, diagnostic compatibility, runtime gain or full fixture acceptance. Runtime replay remains excluded until the real consumer is installed.",
   "controls": [
     "cli::preentry_loader_tests::upstream_projection_types::unchanged_repr128_source_factory_publishes_actual_query_domains",
     "cli::preentry_loader_tests::unchanged_unsafe_function_alias_requires_full_source_signature_before_shared_ir",
-    "cli::preentry_loader_tests::upstream_projection_types::unchanged_impl_anonymous_regions_retain_sites_order_and_associated_inheritance"
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_impl_anonymous_regions_retain_sites_order_and_associated_inheritance",
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_const_generic_impls_encode_full_clauses_in_compiler_order",
+    "expand::source_declarative::macro_exports::tests::original_module_discovery_tests::compiler_module_preparation_tests::actual_core_missing_module_is_a_repeatable_declaration_demand_before_installation",
+    "expand::source_declarative::macro_exports::tests::original_module_discovery_tests::compiler_module_preparation_tests::unchanged_complete_auxiliary_uses_same_ready_graph_as_strict_constructor"
   ],
   "runtime_cases": [
     "tests/ui/enum-discriminant/repr128.rs"

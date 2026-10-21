@@ -670,3 +670,77 @@ V530 fingerprint `7b65f28a6a654849285a6ea5514101e2901d46ed4f2a085a60fc2dff3fbbe3
 Separate read-only source audits all terminate0: tools/bootstrap_trait_solver.py (9crates,238files,4197357source bytes,14registered Rust changes,0retained-original changes,9transmute adaptations; upstream Git object verification=false), tools/sync_upstream_inference.py (exact originals/registered storage port, no local unification algorithm), tools/upstream_fulfillment.py (pinned fulfillment projection matches). These audits do not certify source query closure or runtime integration.
 
 Eight-mode review: (1–4) source signatures, anonymous generics and ordinary source Type walks supply the same source-bound metadata, no assertion/macro identity switch, second parser/evaluator or generated exclusion added. (5) no pattern engine or executable-arm preparation added. (6) layouts and metadata use existing pure memo queries and retained immutable source handles; no installed execution path invokes the new factory or catalog preparation. (7) candidate index construction is cold publication work over demanded complete buckets, not ordinary dispatch; exact dependencies/positive classifications retained and unknown domains held. (8) Arc source/index metadata are retained, no frame BodyIndex cloning or whole-file phase search introduced. The dormant catalog constructor and relation fulfillment are source components only; their runtime/continuation/currentness matrix remains unexecuted. Existing legacy routes and all activation/closure gaps remain held.
+
+Post-V530 read-only projection candidate-demand review: source_fact_bundle
+`edc99df1829ea5d38b9cba3972eec1c275f425bf8bbd523f7c21d8e036a4caae`,
+source_bindings `8edb31e89378e36a681898a17417b06d2ea41579d0312b0d3091252fb1bd249d`,
+pinned normalizes_to `449ae192803d0bac928e7b1e52465e5063ab692cf94f1d48da2c74454fb8a1e1`.
+The original bundle transported input projection declaration identities into
+pending_definitions but seeded candidate reads only from explicit request.traits.
+The bounded successor extends that read set from input_bindings.projections
+keys after the genuine Q77 parent/member join. This occurs before definitions/
+candidates are captured. It does not promote all traits found in metadata,
+associated definitions, clause closure or unrelated candidate heads. Pending
+input bindings still fail generic_layouts before publication; partial projection
+maps cannot become a ready certificate. Each demanded parent uses existing
+complete Q65 membership: every actual candidate stays retained, Some(empty)
+is known empty, and absent/pending membership remains held.
+
+The pinned compute_normalizes_to_goal at normalizes_to.rs31..49 constructs
+the projection's parent TraitRef and calls compute_trait_goal before choosing
+a normalization candidate. assembly/mod.rs594 reads for_each_relevant_impl.
+Therefore even a builtin DiscriminantKind projection requires its actual
+complete source candidate bucket, possibly empty. The builtin branch at
+normalizes_to.rs1000..1035 later uses the actual discriminant Type; this does
+not bypass the initial parent trait goal or justify fabricating no impls.
+General projection support additionally reads actual impl polarity/default,
+fresh generic args, clauses_of, own associated clauses, eligible specialization
+leaf/has_item_definition, owning container/translated args, and associated
+type_of or const_of/evaluation (256..470). The current source factory does not
+materialize all these domains or complete root admission. The new read-demand
+propagation supplies one real dependency only; it is not full projection closure.
+
+require_type already traverses raw-pointer pointees, nominal Type arguments,
+tuples, array/slice/reference children, function parameters AND result, and
+projection Self/trait/GAT Type arguments, recursively. ConstTerm has no nested
+Type/projection constructor; actual const-parameter Types are separately added
+by SourceBindings::prepare. Opaque/Dyn/projection-const representations remain
+typed unsupported and cannot be advertised as covered. A future actual root
+may discover normalization from formal result/result-hint, caller environment
+or demanded instantiated clause recipes beyond this input list. Those require
+actual admitted read dependencies; whole-Q80 forcing remains an activation hold.
+
+Required component control evidence: retain existing nominal repr128 coverage1;
+add a genuine reached source projection and independently compare effective
+parent demand IDs and every bucket member (including actual empty) against Q65;
+deduplicate repeated/nested parents; keep metadata-only trait candidate domains
+unprepared; preserve unknown-member/pending holds and source guard revocation.
+Actual nested source plans should cover projection Self/trait/GAT arguments and
+ref/pointer/tuple/array/nominal/function-result positions. No synthetic semantic
+result, candidate filtering or fake WF root substitutes for these controls.
+All-eight review finds no new evaluator, context/origin method/numeric rule,
+eager executable/pattern route, installed parse/plan, namespace census or body
+copy: this is one cold input-dependency set extension using existing retained
+source identities. No Cargo/control execution occurred for this successor.
+The unchanged failed delegation original/control remains selected and failed.
+
+The lead's projection-input control successor was separately inspected at
+source_factory `223eb4b433558d0f84a3b89e078f6a21affde620ac469200468a597068a8253e`,
+upstream_projection_types
+`c22036260e95f0ed7fd57215738e75b6a63c6d1ef2cd44221ca6a1d2efe43a54`.
+It retains both actual Signed/Unsigned inputs and appends exactly one projected
+subject cloned from the callee's genuine Q80 Explicit/Implemented recipe. It
+asserts actual outer PartialEq and projection-parent DiscriminantKind identities
+from independent source inventory, then compares exact Known bucket maps against
+independent complete Q65 canonical membership, including a genuinely empty
+bucket. Full union implementation count and exact two-map equality prevent
+filtered actual candidates or unrelated metadata traits acquiring Known buckets.
+The observer adds only a readout of actual materialized facts before normal
+provider.publish; it neither synthesizes facts nor invokes a replacement goal.
+DefinitionId ordering is world/source/local, so sorted same-world source digest
+vector comparison is stable. Original exact enum identity/currentness/memo/cold/
+withdrawal/coarse-root-hold guards remain. This is a three-input/two-bucket
+successor: V530 remains the earlier nominal-only/one-bucket success, while the
+new control has no terminal evidence yet. Nested structural/dedup/unknown-member
+matrices and actual normalization/root/runtime remain unexecuted. No Cargo ran
+for this separate source review; all-eight bounded conclusions above apply.

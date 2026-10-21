@@ -20,7 +20,7 @@ use crate::{
     traits::term::InferVarKey,
 };
 use rustc_type_ir::{self as ty, TypeSuperVisitable, TypeVisitable, TypeVisitor, inherent::*};
-use std::collections::{BTreeSet, HashMap};
+use std::{collections::{BTreeSet, HashMap}, ops::ControlFlow};
 
 type SourceClause<'cx> = Clause<'cx, PreparedProvider<'cx>>;
 type RootTy<'cx> = Ty<'cx, PreparedProvider<'cx>>;
@@ -35,6 +35,7 @@ pub(super) enum SourceRuntimeDemandPending {
     SourceWorld,
     Callee,
     NumericSpecification(InferVarKey),
+    ProjectionParent(DefinitionId),
 }
 
 /// The only constructor encodes the actual retained Q80 plan once. A raw
@@ -119,6 +120,7 @@ pub(super) struct SourceRuntimeDemands<'source, 'owner, 'cx> {
     signature: Digest,
     param_env: model::ParamEnv<'cx, PreparedProvider<'cx>>,
     clauses: Vec<NumericSourceClause<'cx>>,
+    candidate_traits: BTreeSet<Digest>,
 }
 impl<'source, 'owner, 'cx> SourceRuntimeDemands<'source, 'owner, 'cx> {
     pub(super) fn after_relations(
@@ -233,6 +235,10 @@ impl<'source, 'owner, 'cx> SourceRuntimeDemands<'source, 'owner, 'cx> {
                 }
             }
         }
+        let mut candidate_traits = BTreeSet::new();
+        for source in &clauses {
+            candidate_traits.extend(clause_candidate_traits(cx, source.clause)?);
+        }
         Ok(Self {
             source,
             owner,
@@ -241,6 +247,7 @@ impl<'source, 'owner, 'cx> SourceRuntimeDemands<'source, 'owner, 'cx> {
             signature: application.signature(),
             param_env: application.param_env(),
             clauses,
+            candidate_traits,
         })
     }
     pub(super) fn require_owner(
@@ -270,6 +277,61 @@ impl<'source, 'owner, 'cx> SourceRuntimeDemands<'source, 'owner, 'cx> {
     }
     pub(super) fn clauses(&self) -> &[NumericSourceClause<'cx>] {
         &self.clauses
+    }
+    /// Export only structural candidate-read identities from genuinely selected
+    /// source clauses. The coordinator can prepare these buckets before entry;
+    /// this is not a complete callback closure, a solved goal or root admission.
+    pub(super) fn candidate_traits(
+        &self,
+        owner: &SolverContext<'cx>,
+    ) -> Result<&BTreeSet<Digest>, SourceRuntimeDemandPending> {
+        self.require_owner(owner).map_err(SourceRuntimeDemandPending::Owner)?;
+        Ok(&self.candidate_traits)
+    }
+}
+
+/// Actual selected TypeIR supplies identities, not implementations. In
+/// particular an alias is visited unchanged: no normalization or local solver
+/// is used to discover the associated item's genuine source parent.
+pub(super) fn clause_candidate_traits<'cx>(
+    cx: Cx<'cx>,
+    clause: SourceClause<'cx>,
+) -> Result<BTreeSet<Digest>, SourceRuntimeDemandPending> {
+    let mut reads = CandidateReads { cx, traits: BTreeSet::new() };
+    if let ty::ClauseKind::Trait(bound) = clause.kind().skip_binder() {
+        reads.retain(bound.trait_ref.def_id)?;
+    }
+    if let ControlFlow::Break(pending) = clause.visit_with(&mut reads) {
+        return Err(pending);
+    }
+    Ok(reads.traits)
+}
+struct CandidateReads<'cx> {
+    cx: Cx<'cx>,
+    traits: BTreeSet<Digest>,
+}
+impl CandidateReads<'_> {
+    fn retain(&mut self, definition: DefinitionId) -> Result<(), SourceRuntimeDemandPending> {
+        if definition.world() != self.cx.services().source_world() {
+            return Err(SourceRuntimeDemandPending::SourceWorld);
+        }
+        self.traits.insert(definition.source());
+        Ok(())
+    }
+}
+impl<'cx> TypeVisitor<Cx<'cx>> for CandidateReads<'cx> {
+    type Result = ControlFlow<SourceRuntimeDemandPending>;
+    fn visit_ty(&mut self, value: RootTy<'cx>) -> Self::Result {
+        if let ty::Alias(_, alias) = value.kind()
+            && let ty::AliasTyKind::Projection { def_id } = alias.kind {
+            let Some(parent) = self.cx.services().source_projection_parent(def_id) else {
+                return ControlFlow::Break(SourceRuntimeDemandPending::ProjectionParent(def_id));
+            };
+            if let Err(pending) = self.retain(parent) {
+                return ControlFlow::Break(pending);
+            }
+        }
+        value.super_visit_with(self)
     }
 }
 

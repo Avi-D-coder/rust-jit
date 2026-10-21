@@ -92,3 +92,9 @@ slot vector would fix it. No native rustc compile or diagnostic-compatibility
 pass was run. The common parser/AST/source declaration prerequisite remains
 open; ignoring this error, stripping reuse items or replacing the original with
 a synthetic miniature would not establish the missing metadata assertion.
+
+V532 retains the exact known unsupported original/control. The first two
+anonymous worlds still pass; the third fails unchanged reuse grammar at353..353
+before mixed-order helper execution. The 12-world projected-predicate source
+control and new2world const-clause control pass independently; neither result
+is a pass of this third anonymous world. [V532 evidence](../evidence/2026-10-20-v532-source-factory-controls.json).

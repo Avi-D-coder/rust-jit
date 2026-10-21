@@ -124,7 +124,7 @@ fn capture(db: &mut Database, retained: &mut BTreeMap<QueryKey, RetainedQuery>, 
     QueryPoll::Ready(Ok(value))
 }
 impl SourceFactBundle {
-    pub(super) fn prepare(db: &mut Database, catalog: Arc<InputValue>, request: SourceFactRequest) -> QueryPoll<Self> {
+    pub(super) fn prepare(db: &mut Database, catalog: Arc<InputValue>, mut request: SourceFactRequest) -> QueryPoll<Self> {
         let InputValue::DiscoverySeal(publication) = catalog.as_ref() else {
             return QueryPoll::Ready(Err(fault("source bundle catalog input differs")));
         };
@@ -148,6 +148,12 @@ impl SourceFactBundle {
         let mut required = SourceRequirements::new();
         for ty in &request.input_types { require_type(&mut required, ty); }
         let input_bindings = ready!(SourceBindings::prepare(db, Arc::clone(&catalog), required));
+        // Pinned normalization first probes the projected item's actual parent
+        // trait, including its complete relevant-impl bucket. A declaration
+        // identity alone cannot certify that bucket, even when it is empty.
+        // These keys came from the demanded input Types' ordinary Q77 join;
+        // do not promote traits from unrelated metadata into candidate demands.
+        request.traits.extend(input_bindings.projections.keys().map(|(parent, _)| *parent));
         let mut pending_definitions = BTreeSet::from([request.caller, request.callee]);
         pending_definitions.extend(request.traits.iter().copied());
         pending_definitions.extend(input_bindings.definitions.keys().copied());
@@ -182,6 +188,9 @@ impl SourceFactBundle {
                 pending_definitions.insert(canonical);
                 pending_definitions.extend(facts.types().bindings().definitions.keys().copied());
                 pending_definitions.extend(facts.predicates().bindings().definitions.keys().copied());
+                if let Ok(bindings) = facts.semantics().full_clause_bindings() {
+                    pending_definitions.extend(bindings.definitions.keys().copied());
+                }
                 // Q89 retains its exact implied-query inputs. Keeping those
                 // source keys is not a claim about their elaborated values.
                 for plan in facts.outlives().trait_plans() {
@@ -341,6 +350,9 @@ impl SourceFactBundle {
         for facts in self.implementations.values() {
             bindings.push(facts.types().bindings());
             bindings.push(facts.predicates().bindings());
+            if let Ok(actual) = facts.semantics().full_clause_bindings() {
+                bindings.push(actual);
+            }
         }
         for value in self.clauses.values() {
             let QueryValue::SourceTraitClauses(plan) = value.as_ref() else { unreachable!("retained trait clauses") };

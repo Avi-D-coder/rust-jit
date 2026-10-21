@@ -1,0 +1,244 @@
+{
+  "schema": "lrr/source-checkpoint-evidence/v1",
+  "recorded_at": "2026-10-21T01:14:19.634739+00:00",
+  "source_baseline": "680653d11761587c878b368d6b95f9879b1ee5ca",
+  "source_sha256": "5978864c4b77fb5b0581f88cffd0d8bfe5b5edd8ba93aa20a7ba908f01a8dc0f",
+  "input_count": 8749,
+  "scope": "V531 full impl clauses/source candidate demands and typed module compiler preparation continuation. Library build fails with one missing AST trait import; dependent CLI/DG/all7 exact controls remain unexecuted. No runtime acceptance.",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-20-projection-candidate-demands.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-20-source-factory-controls.json",
+  "selection_sha256": "63531d8b14b5662bf30d5ea78b7b236b4840d73f20beb3ba20fd5ffee114a2c4",
+  "commands": [
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v531",
+        "before"
+      ],
+      "session": 93205,
+      "exit": 0
+    },
+    {
+      "shell_command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json > artifacts/validation-current-v531/lib-build.jsonl 2> artifacts/validation-current-v531/lib-build.log",
+      "session": 44017,
+      "exit": 101
+    },
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v531",
+        "after-build"
+      ],
+      "exit": 0,
+      "scope": "source-only terminal closing guard after library failure"
+    }
+  ],
+  "errors": [
+    {
+      "rendered": "error[E0599]: no method named `type_bound_list` found for struct `WherePred` in the current scope\n   --> crates/lrr/src/traits/upstream/source_impl_clauses.rs:148:26\n    |\n147 | /                     predicate\n148 | |                         .type_bound_list()\n    | |                         -^^^^^^^^^^^^^^^ method not found in `WherePred`\n    | |_________________________|\n    |\n    |\n   ::: /Users/avi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ra_ap_syntax-0.0.356/src/ast/traits.rs:62:8\n    |\n 62 |       fn type_bound_list(&self) -> Option<ast::TypeBoundList> {\n    |          --------------- the method is available for `WherePred` here\n    |\n    = help: items from traits can only be used if the trait is in scope\nhelp: trait `HasTypeBounds` which provides `type_bound_list` is implemented but not in scope; perhaps you want to import it\n    |\n  3 + use ra_ap_syntax::ast::HasTypeBounds;\n    |\n\n",
+      "$message_type": "diagnostic",
+      "children": [
+        {
+          "children": [],
+          "code": null,
+          "level": "help",
+          "message": "items from traits can only be used if the trait is in scope",
+          "rendered": null,
+          "spans": []
+        },
+        {
+          "children": [],
+          "code": null,
+          "level": "help",
+          "message": "trait `HasTypeBounds` which provides `type_bound_list` is implemented but not in scope; perhaps you want to import it",
+          "rendered": null,
+          "spans": [
+            {
+              "byte_end": 154,
+              "byte_start": 154,
+              "column_end": 1,
+              "column_start": 1,
+              "expansion": null,
+              "file_name": "crates/lrr/src/traits/upstream/source_impl_clauses.rs",
+              "is_primary": true,
+              "label": null,
+              "line_end": 3,
+              "line_start": 3,
+              "suggested_replacement": "use ra_ap_syntax::ast::HasTypeBounds;\n",
+              "suggestion_applicability": "MaybeIncorrect",
+              "text": [
+                {
+                  "highlight_end": 1,
+                  "highlight_start": 1,
+                  "text": "use crate::{"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "level": "error",
+      "message": "no method named `type_bound_list` found for struct `WherePred` in the current scope",
+      "spans": [
+        {
+          "byte_end": 5378,
+          "byte_start": 5343,
+          "column_end": 26,
+          "column_start": 21,
+          "expansion": null,
+          "file_name": "crates/lrr/src/traits/upstream/source_impl_clauses.rs",
+          "is_primary": false,
+          "label": "",
+          "line_end": 148,
+          "line_start": 147,
+          "suggested_replacement": null,
+          "suggestion_applicability": null,
+          "text": [
+            {
+              "highlight_end": 30,
+              "highlight_start": 21,
+              "text": "                    predicate"
+            },
+            {
+              "highlight_end": 26,
+              "highlight_start": 1,
+              "text": "                        .type_bound_list()"
+            }
+          ]
+        },
+        {
+          "byte_end": 5393,
+          "byte_start": 5378,
+          "column_end": 41,
+          "column_start": 26,
+          "expansion": null,
+          "file_name": "crates/lrr/src/traits/upstream/source_impl_clauses.rs",
+          "is_primary": true,
+          "label": "method not found in `WherePred`",
+          "line_end": 148,
+          "line_start": 148,
+          "suggested_replacement": null,
+          "suggestion_applicability": null,
+          "text": [
+            {
+              "highlight_end": 41,
+              "highlight_start": 26,
+              "text": "                        .type_bound_list()"
+            }
+          ]
+        },
+        {
+          "byte_end": 1455,
+          "byte_start": 1440,
+          "column_end": 23,
+          "column_start": 8,
+          "expansion": null,
+          "file_name": "/Users/avi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ra_ap_syntax-0.0.356/src/ast/traits.rs",
+          "is_primary": false,
+          "label": "the method is available for `WherePred` here",
+          "line_end": 62,
+          "line_start": 62,
+          "suggested_replacement": null,
+          "suggestion_applicability": null,
+          "text": [
+            {
+              "highlight_end": 23,
+              "highlight_start": 8,
+              "text": "    fn type_bound_list(&self) -> Option<ast::TypeBoundList> {"
+            }
+          ]
+        }
+      ],
+      "code": {
+        "code": "E0599",
+        "explanation": "This error occurs when a method is used on a type which doesn't implement it:\n\nErroneous code example:\n\n```compile_fail,E0599\nstruct Mouth;\n\nlet x = Mouth;\nx.chocolate(); // error: no method named `chocolate` found for type `Mouth`\n               //        in the current scope\n```\n\nIn this case, you need to implement the `chocolate` method to fix the error:\n\n```\nstruct Mouth;\n\nimpl Mouth {\n    fn chocolate(&self) { // We implement the `chocolate` method here.\n        println!(\"Hmmm! I love chocolate!\");\n    }\n}\n\nlet x = Mouth;\nx.chocolate(); // ok!\n```\n"
+      }
+    }
+  ],
+  "actual_failure": {
+    "code": "E0599",
+    "file": "crates/lrr/src/traits/upstream/source_impl_clauses.rs",
+    "line": 148,
+    "message": "WherePred.type_bound_list requires ra_ap_syntax::ast::HasTypeBounds import",
+    "count": 1
+  },
+  "fresh_binaries": false,
+  "binaries": {
+    "test": "not successfully rebuilt; no fresh V531 executable receipt/hash",
+    "cli": "unbuilt for V531",
+    "digester": "unbuilt for V531"
+  },
+  "unexecuted": [
+    "CLI build",
+    "digest helper build",
+    "fresh binary receipt",
+    "current binary list verification",
+    "all7 selected controls",
+    "unchanged repr128 runtime",
+    "source root/query closure",
+    "response/activation/VM commit"
+  ],
+  "guards": {
+    "source_only_after_build_exit": 0,
+    "source_matches": true,
+    "head_matches": true,
+    "changed_sources": [],
+    "binary_guard": "not applicable: no fresh binary receipt after failed library build"
+  },
+  "raw_outputs": {
+    "directory": "artifacts/validation-current-v531",
+    "retention": "retained at capsule creation; no selected control bodies executed",
+    "files": {
+      "after-build.json": {
+        "sha256": "5c365554c208e6b58e75bacf71300b0d7a29e7b1259e33a679e6c6478d5f3510",
+        "bytes": 1283790
+      },
+      "before.json": {
+        "sha256": "e17bc56cdd185a81a1cd840954928e45c5fffff1af8787566d3dd4a2775c98e2",
+        "bytes": 1283701
+      },
+      "lib-build.jsonl": {
+        "sha256": "403ff974136c09a4ddf1d826ee80dddbd03fed22d9fdef5bcdff9fb238bfe363",
+        "bytes": 358280
+      },
+      "lib-build.log": {
+        "sha256": "31634d1c26530916a751ff933007c214dda5e22721ddd010fec0bb52a63d6db3",
+        "bytes": 149
+      },
+      "temp-before.json": {
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "bytes": 3
+      }
+    }
+  },
+  "cleanup": {
+    "generated_fixtures": "none created; controls unexecuted",
+    "private_targets_or_source_snapshots_created": false,
+    "action": "no run-owned private fixture projects to remove"
+  },
+  "terminal_status": "all launched commands terminal; source-only closing guard passed; source/HEAD/Cargo/shared-target ownership released after capsule",
+  "acceptance": {
+    "component_controls_passed": 0,
+    "component_controls_failed": 0,
+    "component_controls_unexecuted": 7,
+    "runtime_contract_passes": 0,
+    "new_distinct_runtime_gains": 0,
+    "full_fixture": "unexecuted",
+    "root_activation": "held",
+    "guest_jit_allowed": false,
+    "linux": "unexecuted",
+    "performance": "unassessed"
+  },
+  "reproduction": "Add the mechanical missing HasTypeBounds import without changing assertions/semantics. Fresh freeze, fresh manifest, direct sequential Rust1.99 offline3builds then exact7 maintained controls. Preserve known failed delegation control; no runtime replay until actual consumer exists.",
+  "selected_controls": [
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_repr128_source_factory_publishes_actual_query_domains",
+    "cli::preentry_loader_tests::unchanged_unsafe_function_alias_requires_full_source_signature_before_shared_ir",
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_impl_anonymous_regions_retain_sites_order_and_associated_inheritance",
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_editions_and_origins",
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_const_generic_impls_encode_full_clauses_in_compiler_order",
+    "expand::source_declarative::macro_exports::tests::original_module_discovery_tests::compiler_module_preparation_tests::actual_core_missing_module_is_a_repeatable_declaration_demand_before_installation",
+    "expand::source_declarative::macro_exports::tests::original_module_discovery_tests::compiler_module_preparation_tests::unchanged_complete_auxiliary_uses_same_ready_graph_as_strict_constructor"
+  ]
+}

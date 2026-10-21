@@ -212,15 +212,18 @@ pub(super) fn materialize<'cx>(
                 QueryFact::Unprepared
             }
         };
-        if let ImplSemantic::Known(_) = semantics.complete_clauses_of() {
-            // Q86's source-proven complete null branch excludes every clause
-            // producer, including defaults, inferred outlives and attributes.
-            let empty: List<'cx, C<'cx>> = cx.list(Vec::new());
-            let definition = definitions.get_mut(&id).ok_or_else(|| fault("impl metadata absent"))?;
-            definition.predicates.all = QueryFact::Known(EarlyBinder::bind(cx, empty));
-            definition.predicates.own = QueryFact::Known(EarlyBinder::bind(cx, empty));
-        } else {
-            hold(&mut unprepared, source.canonical(), "clauses_of", semantics.complete_clauses_of());
+        match semantics.encode_complete_clauses(cx, configuration) {
+            Ok((actual, clauses)) if actual == id => {
+                // Impl generics have no parent. Both query families retain
+                // the same complete compiler-ordered, source-derived clauses;
+                // explicit source rows alone never certify these domains.
+                let retained: List<'cx, C<'cx>> = cx.list(clauses.into_iter().map(|(clause, _)| clause).collect());
+                let definition = definitions.get_mut(&id).ok_or_else(|| fault("impl metadata absent"))?;
+                definition.predicates.all = QueryFact::Known(EarlyBinder::bind(cx, retained));
+                definition.predicates.own = QueryFact::Known(EarlyBinder::bind(cx, retained));
+            }
+            Ok(_) => return Err(fault("complete impl clauses belong to another definition")),
+            Err(why) => hold(&mut unprepared, source.canonical(), "clauses_of", why),
         }
         row.super_outlives = match cx.services().prepare_impl_super_outlives(cx, source.outlives()) {
             Ok(actual) if actual.implementation == id => QueryFact::Known(actual.clauses),
@@ -404,7 +407,9 @@ pub(crate) struct SourceFactoryObservation {
     pub(crate) traits: usize,
     pub(crate) implementations: usize,
     pub(crate) covered_buckets: usize,
+    pub(crate) candidate_buckets: BTreeMap<Digest, Vec<Digest>>,
     pub(crate) impl_empty_clauses: usize,
+    pub(crate) impl_complete_clauses: usize,
     pub(crate) impl_super_outlives: usize,
     pub(crate) adts: usize,
     pub(crate) enum_reprs: usize,
@@ -475,7 +480,13 @@ pub(crate) fn check_source_factory(
             traits: facts.traits.len(),
             implementations: facts.implementations.len(),
             covered_buckets: facts.traits.values().filter(|row| row.implementations.known().is_some()).count(),
-            impl_empty_clauses: facts.implementations.keys().filter(|id| facts.definitions[id].predicates.all.known().is_some()).count(),
+            candidate_buckets: facts.traits.iter().filter_map(|(id, row)| {
+                row.implementations.known().map(|members| (id.source(),
+                    members.iter().map(|member| member.source()).collect()))
+            }).collect(),
+            impl_empty_clauses: facts.implementations.keys().filter(|id| facts.definitions[id].predicates.all.known()
+                .is_some_and(|clauses| clauses.as_ref().skip_binder().items().is_empty())).count(),
+            impl_complete_clauses: facts.implementations.keys().filter(|id| facts.definitions[id].predicates.all.known().is_some()).count(),
             impl_super_outlives: facts.implementations.values().filter(|row| row.super_outlives.known().is_some()).count(),
             adts: facts.adts.len(),
             enum_reprs: facts.adts.values().filter(|row| matches!(row.info.discriminant.known(), Some(Some(_)))).count(),

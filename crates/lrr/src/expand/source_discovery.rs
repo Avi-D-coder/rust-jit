@@ -688,6 +688,8 @@ pub struct SourceDiscovery {
         Vec<super::source_declarative::SourceDeclarative>,
     )>,
     compiler_profiles: Option<compiler_profiles::PreparedSourceCompilerFacets>,
+    /// Retained actual compiler context is not runnable until routes are ready.
+    compiler_preparation: Option<compiler_preparation::PendingCompilerConfiguration>,
     impl_catalog_plan: Option<std::sync::Arc<impl_catalog::ImplCatalogPlan>>,
     calls: BTreeMap<Digest, (usize, crate::syntax::outline::ItemInvocation)>,
     frontier_producers: BTreeMap<(ScopeKey, Digest), BTreeSet<Digest>>,
@@ -1329,6 +1331,7 @@ impl SourceDiscovery {
             started: false,
             declarative: None,
             compiler_profiles: None,
+            compiler_preparation: None,
             impl_catalog_plan: None,
             calls,
             frontier_producers,
@@ -1429,7 +1432,8 @@ impl SourceDiscovery {
         mut self,
         catalog: std::sync::Arc<crate::frontend::procedural_exports::PreparedProcCatalog>,
     ) -> Result<Self, Diagnostic> {
-        if self.started || catalog.graph() != self.key.unit_graph || catalog.epoch() != self.epoch {
+        if self.started || self.compiler_preparation.is_some()
+            || catalog.graph() != self.key.unit_graph || catalog.epoch() != self.epoch {
             return Err(fault(
                 "procedural catalog graph/epoch/configuration differs",
             ));
@@ -1565,6 +1569,15 @@ impl SourceDiscovery {
     ) -> Result<SourceCompilerPreparation, Diagnostic> {
         self.prepare_declarative(compile_env, engine, Some(catalog), None)
     }
+    pub(crate) fn prepare_with_declarative_compiler_procedural(
+        self,
+        compile_env: Digest,
+        engine: Digest,
+        compiler: std::sync::Arc<crate::frontend::compile_input_catalog::CompileInputCatalog>,
+        procedural: std::sync::Arc<crate::frontend::procedural_exports::PreparedProcCatalog>,
+    ) -> Result<SourceCompilerPreparation, Diagnostic> {
+        self.prepare_declarative(compile_env, engine, Some(compiler), Some(procedural))
+    }
     fn configure_declarative(
         self,
         compile_env: Digest,
@@ -1647,6 +1660,10 @@ impl SourceDiscovery {
             std::sync::Arc<crate::frontend::procedural_exports::PreparedProcCatalog>,
         >,
     ) -> Result<SourceCompilerPreparation, Diagnostic> {
+        if self.compiler_preparation.is_some() {
+            self.require_same_compiler_preparation(compile_env, engine, &compiler, &procedural)?;
+            return self.resume_compiler_preparation();
+        }
         if self.started || self.declarative.is_some() {
             return Err(fault(
                 "declarative discovery configuration is already frozen",
@@ -1661,7 +1678,6 @@ impl SourceDiscovery {
                 "configured macro-export source-currentness and SDK export graph publication is required before discovery installation".into(),
             ));
         }
-        let procedural_consumer = procedural.as_ref().map(|catalog| catalog.consumer());
         let compiler_attributes = compiler
             .as_ref()
             .is_some_and(|catalog| catalog.attribute_catalog().is_some());
@@ -1682,7 +1698,7 @@ impl SourceDiscovery {
                 .ok_or_else(|| fault("macro-export adopted module owner is absent"))?
                 .bind_macro_export_module(module.clone())?;
         }
-        if let Some(catalog) = procedural {
+        if let Some(catalog) = &procedural {
             if catalog.graph() != self.key.unit_graph
                 || catalog.epoch() != self.epoch
                 || catalog.environment() != compile_env
@@ -1728,99 +1744,21 @@ impl SourceDiscovery {
                     .ok_or_else(|| fault("compiler attribute preparation metadata limit"))?;
             }
         }
-        let configured_key = self.configured_graph_key(
-            compile_env,
-            engine,
-            compiler.as_ref(),
-            procedural_consumer.is_some(),
-            compiler_attributes,
-        )?;
-        if let Some(key) = configured_key
-            && let Some(hit) = self.sources[0].publication_prepared(key)
-            && let Ok(hit) = hit.downcast::<ConfiguredGraph>()
-        {
-            self.graph = std::sync::Arc::new(hit.graph.clone());
-            self.graph_deferred = false;
-            self.route_install = RouteInstallMemo {
-                providers: providers.iter().map(RouteInstallProvider::of).collect(),
-                sources: RouteInstallMemo::source_rows(&self.nested_sources),
-                inert: RouteInstallMemo::inert_rows(&self.nested_inert_proofs),
-                routes: hit.routes.clone(),
-                namespaces: Some(hit.namespaces.clone()),
-            };
-            self.nested_bytes = prepared_nested_bytes;
-            self.compiler_profiles = prepared_profiles;
-            self.imports = hit.imports.clone();
-            self.imports_deferred = false;
-            self.declarative = Some((compile_env, engine, providers));
-            if let Some(consumer) = procedural_consumer {
-                self.reserve_test_attribute_candidates(Some(consumer), false)?;
-            }
-            if compiler_attributes {
-                self.reserve_compiler_test_attribute_candidates()?;
-            }
-            return Ok(SourceCompilerPreparation::Ready(self));
-        }
-        self.build_deferred_graph()?;
-        let routes = Self::completed_macro_routes(&providers, &self.module_routes)?;
-        let namespaces = match Self::prepare_compiler_import_graph(&routes, &providers)? {
-            crate::frontend::source_macro_routes::ModuleGraphPreparation::Ready(namespaces) => {
-                namespaces
-            }
-            crate::frontend::source_macro_routes::ModuleGraphPreparation::NeedModule(demand) => {
-                return Ok(SourceCompilerPreparation::NeedModule {
-                    discovery: self,
-                    demand,
-                });
-            }
-        };
-        let namespaces = Self::install_prepared_macro_routes(
-            unique_graph(&mut self.graph)?,
-            &providers,
-            &self.nested_sources,
-            &self.nested_inert_proofs,
-            &routes,
-            namespaces,
-        )?;
-        self.route_install = RouteInstallMemo {
-            providers: providers.iter().map(RouteInstallProvider::of).collect(),
-            sources: RouteInstallMemo::source_rows(&self.nested_sources),
-            inert: RouteInstallMemo::inert_rows(&self.nested_inert_proofs),
-            routes,
-            namespaces: Some(std::sync::Arc::new(namespaces)),
-        };
+        // Retain the actual prepared context before yielding a module demand.
+        // The private phase guard, not tuple presence, controls readiness.
         self.nested_bytes = prepared_nested_bytes;
         self.compiler_profiles = prepared_profiles;
-        self.imports = unique_graph(&mut self.graph)?.resolve_imports()?;
-        self.imports_deferred = false;
-        if let Some(key) = configured_key
-            && let Some(namespaces) = &self.route_install.namespaces
-        {
-            self.sources[0].retain_publication_prepared(
-                key,
-                std::sync::Arc::new(ConfiguredGraph {
-                    graph: (*self.graph).clone(),
-                    imports: self.imports.clone(),
-                    routes: self.route_install.routes.clone(),
-                    namespaces: namespaces.clone(),
-                    _catalog: compiler.clone(),
-                }),
-            );
-        }
         self.declarative = Some((compile_env, engine, providers));
-        if let Some(consumer) = procedural_consumer {
-            self.reserve_test_attribute_candidates(Some(consumer), false)?;
-        }
-        if compiler_attributes {
-            self.reserve_compiler_test_attribute_candidates()?;
-        }
-        Ok(SourceCompilerPreparation::Ready(self))
+        self.compiler_preparation = Some(compiler_preparation::PendingCompilerConfiguration::new(
+            compiler, procedural, compiler_attributes,
+        ));
+        self.resume_compiler_preparation()
     }
     pub fn with_compiler(
         mut self,
         catalog: std::sync::Arc<crate::frontend::compile_input_catalog::CompileInputCatalog>,
     ) -> Result<Self, Diagnostic> {
-        if self.started || catalog.definitions().next().is_none() {
+        if self.started || self.compiler_preparation.is_some() || catalog.definitions().next().is_none() {
             return Err(fault("compiler discovery configuration is late or empty"));
         }
         let compiler_attributes = catalog.attribute_catalog().is_some();
@@ -4872,23 +4810,38 @@ impl SourceDiscovery {
         inert: &BTreeMap<Digest, super::nested_inert::NestedInertProof>,
         memo: &mut RouteInstallMemo,
     ) -> Result<std::sync::Arc<crate::frontend::macro_names::MacroNamespaces>, Diagnostic> {
-        let _span = crate::core::timing::Span::enter(|| "discovery install_macro_routes".into());
         let routes = Self::completed_macro_routes(providers, modules)?;
-        if let Some(namespaces) = memo.hit(providers, &routes, sources, inert) {
-            return Ok(namespaces);
+        Self::prepare_install_macro_routes(graph, providers, &routes, sources, inert, memo)?.require_ready()
+    }
+    fn prepare_install_macro_routes(
+        graph: &mut NameNamespaces,
+        providers: &[super::source_declarative::SourceDeclarative],
+        routes: &[std::sync::Arc<crate::frontend::source_macro_routes::SourceMacroRoutes>],
+        sources: &BTreeMap<usize, std::sync::Arc<crate::frontend::impl_index::DeclarationMacroIndex>>,
+        inert: &BTreeMap<Digest, super::nested_inert::NestedInertProof>,
+        memo: &mut RouteInstallMemo,
+    ) -> Result<compiler_preparation::RouteInstallPreparation, Diagnostic> {
+        use compiler_preparation::RouteInstallPreparation;
+        let _span = crate::core::timing::Span::enter(|| "discovery install_macro_routes".into());
+        if let Some(namespaces) = memo.hit(providers, routes, sources, inert) {
+            return Ok(RouteInstallPreparation::Ready(namespaces));
         }
-        let namespaces = Self::compiler_import_graph(&routes, providers)?;
+        let namespaces = match Self::prepare_compiler_import_graph(routes, providers)? {
+            crate::frontend::source_macro_routes::ModuleGraphPreparation::Ready(namespaces) => namespaces,
+            crate::frontend::source_macro_routes::ModuleGraphPreparation::NeedModule(demand) =>
+                return Ok(RouteInstallPreparation::NeedModule(demand)),
+        };
         let namespaces = std::sync::Arc::new(Self::install_prepared_macro_routes(
-            graph, providers, sources, inert, &routes, namespaces,
+            graph, providers, sources, inert, routes, namespaces,
         )?);
         *memo = RouteInstallMemo {
             providers: providers.iter().map(RouteInstallProvider::of).collect(),
             sources: RouteInstallMemo::source_rows(sources),
             inert: RouteInstallMemo::inert_rows(inert),
-            routes,
+            routes: routes.to_vec(),
             namespaces: Some(namespaces.clone()),
         };
-        Ok(namespaces)
+        Ok(RouteInstallPreparation::Ready(namespaces))
     }
     fn install_prepared_macro_routes(
         graph: &mut NameNamespaces,
@@ -6697,18 +6650,7 @@ impl SourceDiscovery {
                 syntax.prepared_source().outline(),
             )?;
             self.module_routes.insert(producer, routes);
-            Self::install_macro_routes_with_modules(
-                unique_graph(&mut self.graph)?,
-                &self
-                    .declarative
-                    .as_ref()
-                    .ok_or_else(|| fault("staged module providers absent"))?
-                    .2,
-                &self.module_routes,
-                &self.nested_sources,
-                &self.nested_inert_proofs,
-                &mut self.route_install,
-            )?;
+            self.install_module_routes_for_preparation()?;
             self.imports = unique_graph(&mut self.graph)?.resolve_imports()?;
             self.work.enqueue_batch(jobs)?;
             self.work.namespace_changed()?;
@@ -7582,18 +7524,7 @@ impl SourceDiscovery {
                     .ok_or_else(|| fault("ordinary completion original owner ordinal absent"))?
                     .retain_source_module_owner(producer, child)?;
                 self.module_routes.insert(producer, routes);
-                Self::install_macro_routes_with_modules(
-                    unique_graph(&mut self.graph)?,
-                    &self
-                        .declarative
-                        .as_ref()
-                        .ok_or_else(|| fault("ordinary completion indexes absent"))?
-                        .2,
-                    &self.module_routes,
-                    &self.nested_sources,
-                    &self.nested_inert_proofs,
-                    &mut self.route_install,
-                )?;
+                self.install_module_routes_for_preparation()?;
                 unique_graph(&mut self.graph)?.release_generated_frontier(
                     ready.syntax.origin().declaration().scope(),
                     producer,
@@ -8757,6 +8688,9 @@ impl SourceDiscovery {
     /// Append the complete input set as one derived revision, never during a provider.
     pub fn publish(&self, db: &mut crate::db::memo::Database) -> Result<(), Diagnostic> {
         db.require_coordinator()?;
+        if self.compiler_preparation.is_some() {
+            return Err(fault("compiler route preparation is incomplete before publication"));
+        }
         if !self.native_publication_certified
             && (self
                 .declarative
@@ -10215,6 +10149,9 @@ impl SourceDiscovery {
         }
     }
     pub fn poll(&mut self) -> Result<SourceDiscoveryStep, Diagnostic> {
+        if self.compiler_preparation.is_some() {
+            return Err(fault("compiler route preparation must resume before discovery polling"));
+        }
         self.resolve_deferred_imports()?;
         let step = self.poll_inner()?;
         match &step {

@@ -154,6 +154,39 @@ impl PreparedSourceDeclarationClauses {
         Vec<(Clause<'cx, prepared::PreparedProvider<'cx>>, Span)>,
         SourceDeclarationClausesPending,
     > {
+        self.require_encoding_context(cx, configuration)?;
+        let mut clauses = Vec::new();
+        for ordinal in 0..self
+            .source()
+            .recipes()
+            .map_err(SourceDeclarationClausesPending::Source)?
+            .len()
+        {
+            if let Some(clause) = self.encode_owned_recipe(cx, configuration, ordinal)? {
+                clauses.push(clause);
+            }
+        }
+        Ok(clauses)
+    }
+    /// Encode exactly one ordinal owned by this retained source plan. External
+    /// recipes and replacement source origins cannot enter this transport.
+    pub(super) fn encode_recipe_at<'cx>(
+        &self,
+        cx: Cx<'cx>,
+        configuration: &PreparedSolverConfiguration,
+        ordinal: usize,
+    ) -> Result<
+        Option<(Clause<'cx, prepared::PreparedProvider<'cx>>, Span)>,
+        SourceDeclarationClausesPending,
+    > {
+        self.require_encoding_context(cx, configuration)?;
+        self.encode_owned_recipe(cx, configuration, ordinal)
+    }
+    pub(super) fn require_encoding_context(
+        &self,
+        cx: Cx<'_>,
+        configuration: &PreparedSolverConfiguration,
+    ) -> Result<(), SourceDeclarationClausesPending> {
         self.bindings()?;
         let InputValue::DiscoverySeal(catalog) = self.bindings.catalog.as_ref() else {
             unreachable!("retained actual catalog")
@@ -189,28 +222,44 @@ impl PreparedSourceDeclarationClauses {
                 SourcePredicatePending::Source(SourceTypePending::ParameterLayout),
             ));
         }
-        let recipes = source
+        Ok(())
+    }
+    fn encode_owned_recipe<'cx>(
+        &self,
+        cx: Cx<'cx>,
+        configuration: &PreparedSolverConfiguration,
+        ordinal: usize,
+    ) -> Result<
+        Option<(Clause<'cx, prepared::PreparedProvider<'cx>>, Span)>,
+        SourceDeclarationClausesPending,
+    > {
+        let source = self.source();
+        let recipe = source
             .recipes()
-            .map_err(SourceDeclarationClausesPending::Source)?;
-        let mut clauses = Vec::new();
-        for recipe in recipes {
-            if let Some(clause) = encode_recipe(
-                cx,
-                configuration,
-                self.bindings.type_bindings(),
-                self.emission
-                    .as_ref()
-                    .expect("ready source plan retains emission inputs"),
-                recipe,
-                parse.content,
-                |parameter| source.parameter_range(parameter),
-            )
-            .map_err(SourceDeclarationClausesPending::Recipe)?
-            {
-                clauses.push(clause);
-            }
-        }
-        Ok(clauses)
+            .map_err(SourceDeclarationClausesPending::Source)?
+            .get(ordinal)
+            .ok_or(SourceDeclarationClausesPending::Recipe(
+                SourcePredicatePending::Source(SourceTypePending::SourceDefinition),
+            ))?;
+        let (parse, _, _, _) =
+            source
+                .declaration()
+                .source_parts()
+                .ok_or(SourceDeclarationClausesPending::Recipe(
+                    SourcePredicatePending::Source(SourceTypePending::SourceDefinition),
+                ))?;
+        encode_recipe(
+            cx,
+            configuration,
+            self.bindings.type_bindings(),
+            self.emission
+                .as_ref()
+                .expect("ready source plan retains emission inputs"),
+            recipe,
+            parse.content,
+            |parameter| source.parameter_range(parameter),
+        )
+        .map_err(SourceDeclarationClausesPending::Recipe)
     }
     pub(super) fn generic_layouts(&self) -> Result<SourceGenericLayouts, Diagnostic> {
         let bindings = self

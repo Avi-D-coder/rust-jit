@@ -437,6 +437,9 @@ pub(crate) fn check_actual_projected_source_predicates(
                 assert_eq!(bindings.projections[&(expected_trait, projection.item)].associated_definition.source(), expected_item);
                 let ty::ClauseKind::Trait(encoded) = clause.kind().skip_binder() else { panic!("actual projected bound lost its trait clause") };
                 assert_eq!(encoded.trait_ref.def_id.source(), expected_bound_trait);
+                assert_eq!(super::source_runtime_demands::clause_candidate_traits(cx, *clause).unwrap(),
+                    std::collections::BTreeSet::from([expected_bound_trait, expected_trait]),
+                    "actual source bound retains outer and projection-parent candidate reads");
                 assert_eq!(encoded.polarity, ty::ClausePolarity::Positive);
                 assert_eq!(encoded.trait_ref.args.items().len(), 2);
                 let [super::model::Arg::Type(self_ty), super::model::Arg::Type(argument)] = encoded.trait_ref.args.items() else { panic!("actual projected PartialEq arguments lost") };

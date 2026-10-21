@@ -535,6 +535,7 @@ fn unchanged_iterator_projection_fields_encode_actual_associated_declaration_all
 #[test]
 fn unchanged_repr128_source_factory_publishes_actual_query_domains() {
     use crate::traits::{
+        predicate::{PredicateResult, SourcePredicateRecipe},
         term::TyTerm,
         upstream::{check_source_factory, source_definition_headers::DefinitionHeaderKey},
     };
@@ -562,6 +563,7 @@ fn unchanged_repr128_source_factory_publishes_actual_query_domains() {
         "core",
     );
     let partial_eq = actual_named(&rows, core, &["cmp"], "PartialEq", ItemKind::Trait);
+    let discriminant_kind = actual_named(&rows, core, &["marker"], "DiscriminantKind", ItemKind::Trait);
     let membership_key = QueryKey::ImplTraitCatalog(seal.clone());
     let membership = ready(db.fetch(&SyntaxProvider, membership_key.clone()));
     let QueryValue::ImplTraitCatalog(catalog) = membership.value.as_ref() else {
@@ -572,6 +574,13 @@ fn unchanged_repr128_source_factory_publishes_actual_query_domains() {
         .expect("complete actual PartialEq source membership")
         .len();
     assert!(expected_candidates >= 2);
+    let expected_buckets: BTreeMap<_, _> = [partial_eq, discriminant_kind].into_iter().map(|owner| {
+        let mut members: Vec<_> = catalog.candidates(owner)
+            .expect("complete actual outer/projection-parent membership")
+            .iter().map(|(_, canonical)| *canonical).collect();
+        members.sort_unstable();
+        (owner, members)
+    }).collect();
     let header_key = QueryKey::DefinitionHeaderPlan(Box::new(DefinitionHeaderKey {
         inventory: seal.clone(),
         definition: main,
@@ -579,10 +588,27 @@ fn unchanged_repr128_source_factory_publishes_actual_query_domains() {
     let header = ready(db.fetch(&SyntaxProvider, header_key.clone()));
     db.trace.detailed = true;
     let before = db.trace.events.len();
-    let input_types = [
+    let mut input_types = vec![
         TyTerm::Nominal(signed, Vec::new()),
         TyTerm::Nominal(unsigned, Vec::new()),
     ];
+    let clauses = ready(db.fetch(&SyntaxProvider, QueryKey::DeclarationSourcePredicates(Box::new(
+        crate::frontend::declaration_source_predicates::DeclarationSourcePredicatesKey {
+            inventory: seal.clone(), definition: discr,
+        },
+    )))).value;
+    let QueryValue::DeclarationSourcePredicates(clauses) = clauses.as_ref() else {
+        unreachable!("actual callee source predicate recipes")
+    };
+    for recipe in clauses.recipes().expect("actual callee source requirements") {
+        if let SourcePredicateRecipe::Explicit { result: PredicateResult::Implemented(bound), .. } = recipe
+            && let TyTerm::Projection(projected) = &bound.self_ty {
+            assert_eq!(bound.trait_key, partial_eq);
+            assert_eq!(projected.trait_ref.trait_key, discriminant_kind);
+            input_types.push(bound.self_ty.clone());
+        }
+    }
+    assert_eq!(input_types.len(), 3, "one genuine projected subject, never a fabricated goal");
     let (current, observed) = check_source_factory(
         &mut db,
         &seal,
@@ -595,9 +621,14 @@ fn unchanged_repr128_source_factory_publishes_actual_query_domains() {
     eprintln!("actual repr128 source factory observation before assertions: {observed:?}");
     assert!(observed.definitions >= 5);
     assert!(observed.traits >= 1);
-    assert_eq!(observed.implementations, expected_candidates);
-    assert_eq!(observed.covered_buckets, 1);
+    let expected_implementations: std::collections::BTreeSet<_> = expected_buckets.values()
+        .flatten().copied().collect();
+    assert_eq!(observed.implementations, expected_implementations.len());
+    assert_eq!(observed.covered_buckets, expected_buckets.len());
+    assert_eq!(observed.candidate_buckets, expected_buckets);
     assert!(observed.impl_empty_clauses >= 2);
+    assert!(observed.impl_complete_clauses > observed.impl_empty_clauses,
+        "actual generic source implementations publish nonempty complete clauses");
     assert!(observed.impl_super_outlives >= 2);
     assert!(observed.adts >= 2);
     assert!(observed.enum_reprs >= 2);
@@ -1159,6 +1190,76 @@ fn unchanged_impl_super_outlives_uses_pinned_elaborator_all_editions_and_origins
         (36, 36, 12, 12)
     );
     check_actual_clause_emission_all_editions_and_origins();
+}
+
+#[test]
+fn unchanged_const_generic_impls_encode_full_clauses_in_compiler_order() {
+    use crate::{
+        frontend::impl_trait_identity::ImplTraitIdentityResult,
+        ir::op::PrimitiveType,
+        traits::{header_syntax::ImplHeaderSyntaxKey, term::{ParamKey, TyTerm}, upstream::source_impl_semantics::{
+            CurrentSourceImplSemantics, ImplClauseKindObservation as Kind, check_actual_full_impl_clauses,
+        }},
+    };
+    for (case, first_item, inherent) in [
+        ("tests/ui/const-generics/broken-mir-1.rs", "pub trait Foo", false),
+        ("tests/ui/const-generics/issues/issue-69654-run-pass.rs", "trait Bar", true),
+    ] {
+        let (mut db, seal, root, temporary) = fixture_world(case, first_item, 2015, 0);
+        assert!(temporary.is_none());
+        let rows = actual_rows(&mut db, &seal);
+        let target = actual_named(&rows, root.crate_key, &[], if inherent { "Bar" } else { "Foo" }, ItemKind::Trait);
+        let headers = ready(db.fetch(&SyntaxProvider, QueryKey::PreparedScopeImplHeaders(seal.clone()))).value;
+        let QueryValue::PreparedScopeImplHeaders(headers) = headers.as_ref() else { unreachable!() };
+        let membership = ready(db.fetch(&SyntaxProvider, QueryKey::ImplTraitCatalog(seal.clone()))).value;
+        let QueryValue::ImplTraitCatalog(membership) = membership.as_ref() else { unreachable!() };
+        let mut selected = Vec::new();
+        for raw in headers.inventory_root().headers() {
+            let Some(owner) = headers.canonical_owner(raw.identity) else { continue; };
+            let canonical = owner.identity();
+            if !rows.get(&canonical).is_some_and(|row| row.scope.crate_key == root.crate_key) { continue; }
+            let actual = membership.classification(raw.identity).expect("actual complete impl classification");
+            if matches!((inherent, actual.result()), (true, ImplTraitIdentityResult::Inherent))
+                || matches!((inherent, actual.result()), (false, ImplTraitIdentityResult::Trait(id)) if id == target) {
+                selected.push((raw.identity, canonical));
+            }
+        }
+        assert_eq!(selected.len(), 1, "one actual selected local impl in unchanged source");
+        let (raw, canonical) = selected[0];
+        let key = ImplHeaderSyntaxKey { inventory: seal.clone(), implementation: raw };
+        let query = QueryKey::SourceImplSemantics(Box::new(key.clone()));
+        db.trace.detailed = true;
+        let before = db.trace.events.len();
+        let first = ready(db.fetch(&SyntaxProvider, query.clone()));
+        let current = ready(CurrentSourceImplSemantics::capture(&mut db, &key));
+        let observed = check_actual_full_impl_clauses(&mut db, &seal, canonical).unwrap();
+        assert_eq!(observed.implementation, canonical);
+        assert_eq!(observed.source, current.plan().fingerprint());
+        assert_eq!(observed.rows.len(), 2);
+        let n = ParamKey { definition: canonical, ordinal: if inherent { 0 } else { 1 } };
+        let constant = Kind::ConstArgHasType { parameter: n, declared_type: TyTerm::Primitive(PrimitiveType::Usize) };
+        if inherent {
+            assert_eq!(observed.rows[0].kind, constant);
+            assert_eq!(observed.rows[1].kind, Kind::Trait(target));
+            assert_eq!(observed.rows[0].parameters, vec![n]);
+            assert_eq!(observed.rows[1].parameters, vec![n], "same actual N occurs in Self and trait argument");
+        } else {
+            let core = crate::facade::unit(&ProfileIdentity { edition: 2015, ..ProfileIdentity::current() }, "core");
+            let sized = actual_named(&rows, core, &["marker"], "Sized", ItemKind::Trait);
+            assert_eq!(observed.rows[0].kind, Kind::Trait(sized));
+            assert_eq!(observed.rows[1].kind, constant);
+            assert_eq!(observed.rows[0].parameters, vec![ParamKey { definition: canonical, ordinal: 0 }]);
+            assert_eq!(observed.rows[1].parameters, vec![n]);
+        }
+        let again = ready(db.fetch(&SyntaxProvider, query));
+        assert!(first.cacheable && Arc::ptr_eq(&first.value, &again.value));
+        assert_eq!(first.fingerprint, again.fingerprint);
+        current.require_current(&db).unwrap();
+        assert_cold(&db, before);
+        db.publish_inputs(BTreeMap::new()).unwrap();
+        assert!(current.require_current(&db).is_err());
+        eprintln!("actual full impl clauses {case},edition2015,origin0: {observed:?}; compiler parameter/written ordering, genuine const Type/identity/span, memo/cold/withdrawal; mains/root held");
+    }
 }
 
 #[test]

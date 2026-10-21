@@ -29,6 +29,16 @@ use crate::{
 };
 use std::sync::Arc;
 
+#[path = "source_impl_clauses.rs"]
+mod full_clauses;
+use full_clauses::PreparedSourceImplClauses;
+pub(crate) use full_clauses::SourceImplClausesPending;
+#[cfg(test)]
+pub(crate) use full_clauses::{
+    ImplClauseKindObservation, ImplClauseRowObservation, ImplClausesObservation,
+    check_actual_full_impl_clauses,
+};
+
 pub type SourceImplSemanticsKey = ImplHeaderSyntaxKey;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum ImplSemantic<T> {
@@ -53,6 +63,8 @@ pub enum ImplSemanticsPending {
     ClauseAttributeEffects = 9,
     ClauseConfiguration = 10,
     ClauseGenericConstExpressions = 11,
+    ClauseSourceRows = 12,
+    ClauseEmptyWhere = 13,
 }
 /// Only the authenticated null branch of compiler `clauses_of(Impl)`.
 /// This says nothing about super/implied/item/self/const-bound query families.
@@ -110,6 +122,7 @@ pub struct PreparedSourceImplSemantics {
     environment: Option<Arc<QueryValue>>,
     configuration: Option<Arc<QueryValue>>,
     clauses: ImplSemantic<()>,
+    full_clauses: Option<PreparedSourceImplClauses>,
     implementation: Option<Digest>,
     modifiers: Option<SourceImplModifiers>,
     /// Capture/authentication only; other query-specific holds are independent.
@@ -185,10 +198,63 @@ impl PreparedSourceImplSemantics {
     }
     pub(crate) fn complete_clauses_of(&self) -> ImplSemantic<EmptyImplClauses> {
         match self.clauses {
-            ImplSemantic::Known(()) => ImplSemantic::Known(EmptyImplClauses(())),
+            ImplSemantic::Known(()) => match self
+                .full_clauses
+                .as_ref()
+                .map(PreparedSourceImplClauses::pending)
+            {
+                Some(None) => ImplSemantic::Known(EmptyImplClauses(())),
+                Some(Some(SourceImplClausesPending::EmptyWhere)) => {
+                    ImplSemantic::Pending(ImplSemanticsPending::ClauseEmptyWhere)
+                }
+                _ => ImplSemantic::Pending(ImplSemanticsPending::ClauseSourceRows),
+            },
             ImplSemantic::NotApplicable => ImplSemantic::NotApplicable,
             ImplSemantic::Pending(why) => ImplSemantic::Pending(why),
         }
+    }
+    /// Actual retained own clauses and constant-Type inputs. The old null-branch
+    /// API remains independent, so its consumers cannot publish an empty list
+    /// for this producer's nonempty result.
+    pub(super) fn full_clause_bindings(
+        &self,
+    ) -> Result<&super::source_bindings::SourceBindings, SourceImplClausesPending> {
+        self.full_clauses
+            .as_ref()
+            .ok_or_else(|| {
+                SourceImplClausesPending::Gate(match self.clauses {
+                    ImplSemantic::Pending(why) => why,
+                    _ => ImplSemanticsPending::Header,
+                })
+            })?
+            .bindings()
+    }
+    pub(super) fn encode_complete_clauses<'cx>(
+        &self,
+        cx: Cx<'cx>,
+        configuration: &PreparedSolverConfiguration,
+    ) -> Result<
+        (
+            super::identity::DefinitionId,
+            Vec<(
+                super::model::Clause<'cx, super::prepared::PreparedProvider<'cx>>,
+                super::model::Span,
+            )>,
+        ),
+        SourceImplClausesPending,
+    > {
+        if let Some(why) = self.pending {
+            return Err(SourceImplClausesPending::Gate(why));
+        }
+        self.full_clauses
+            .as_ref()
+            .ok_or_else(|| {
+                SourceImplClausesPending::Gate(match self.clauses {
+                    ImplSemantic::Pending(why) => why,
+                    _ => ImplSemanticsPending::Header,
+                })
+            })?
+            .encode(cx, configuration)
     }
     fn trait_modifier<T>(&self, select: impl FnOnce(SourceImplModifiers) -> T) -> ImplSemantic<T> {
         match self.trait_definition() {
@@ -329,6 +395,7 @@ impl PreparedSourceImplSemantics {
             environment: None,
             configuration: None,
             clauses: ImplSemantic::Pending(ImplSemanticsPending::Header),
+            full_clauses: None,
             implementation: None,
             modifiers: None,
             pending: Some(ImplSemanticsPending::Identity),
@@ -398,26 +465,20 @@ impl PreparedSourceImplSemantics {
             return QueryPoll::Ready(Err(fault("impl typed source memo key differs")));
         }
         result.types = Some(types);
-        // Null-branch proof, not a general predicate collector. Actual Impl
+        // Actual Impl
         // excludes RPITIT, delegated fn, Trait and OpaqueTy branches in pinned
         // collect/clauses_of.rs::gather_explicit_clauses_of. Impl generics_of
         // has no generic parent; inferred_outlives_of(Impl) is independently [].
-        // setup_constraining_clauses only permutes its input slice, so it
-        // cannot add a clause to this proven empty result.
-        match DeclarationParameters::prepare(header.declaration()) {
-            Ok(DeclaredParameterPreparation::Ready(parameters)) if parameters.count() == 0 => {}
-            Ok(DeclaredParameterPreparation::Ready(_)) => {
-                result.clauses = ImplSemantic::Pending(ImplSemanticsPending::ClauseParameters);
-                return QueryPoll::Ready(Ok(result));
-            }
+        let parameter_count = match DeclarationParameters::prepare(header.declaration()) {
+            Ok(DeclaredParameterPreparation::Ready(parameters)) => parameters.count(),
             Ok(DeclaredParameterPreparation::Pending(_)) => {
                 result.clauses = ImplSemantic::Pending(ImplSemanticsPending::ClauseParameterLayout);
                 return QueryPoll::Ready(Ok(result));
             }
             Err(error) => return QueryPoll::Ready(Err(error)),
-        }
+        };
         let syntax = result.identity().syntax();
-        if !syntax.generics().is_empty() {
+        if parameter_count == 0 && !syntax.generics().is_empty() {
             return QueryPoll::Ready(Err(fault(
                 "zero impl parameter count differs from written generics",
             )));
@@ -426,10 +487,7 @@ impl PreparedSourceImplSemantics {
             result.clauses = ImplSemantic::Pending(ImplSemanticsPending::ClauseDefaultImpl);
             return QueryPoll::Ready(Ok(result));
         }
-        if !syntax.predicates().is_empty() {
-            result.clauses = ImplSemantic::Pending(ImplSemanticsPending::ClauseWrittenPredicates);
-            return QueryPoll::Ready(Ok(result));
-        }
+        let has_written_predicates = !syntax.predicates().is_empty();
         if recipe.attributes.iter().any(|attribute| {
             attribute.name == "unstable_feature_bound"
                 || attribute.class == AttributeClass::TransformUnsupported
@@ -472,20 +530,43 @@ impl PreparedSourceImplSemantics {
         let QueryValue::SolverConfiguration(configuration_plan) = configuration.as_ref() else {
             return QueryPoll::Ready(Err(fault("impl clauses configuration differs")));
         };
-        result.clauses = if configuration_plan
+        if configuration_plan
             .features()
             .contains("generic_const_exprs")
         {
-            ImplSemantic::Pending(ImplSemanticsPending::ClauseGenericConstExpressions)
+            result.clauses =
+                ImplSemantic::Pending(ImplSemanticsPending::ClauseGenericConstExpressions);
+            result.configuration = Some(configuration);
+            return QueryPoll::Ready(Ok(result));
+        }
+        result.clauses = if parameter_count != 0 {
+            ImplSemantic::Pending(ImplSemanticsPending::ClauseParameters)
+        } else if has_written_predicates {
+            ImplSemantic::Pending(ImplSemanticsPending::ClauseWrittenPredicates)
         } else {
             ImplSemantic::Known(())
         };
         result.configuration = Some(configuration);
+        let full = ready!(PreparedSourceImplClauses::prepare(
+            db,
+            crate::frontend::declaration_source_predicates::DeclarationSourcePredicatesKey {
+                inventory: key.inventory.clone(),
+                definition: implementation,
+            }
+        ));
+        if !full
+            .source()
+            .declaration()
+            .matches_metadata(parse, recipe, context)
+        {
+            return QueryPoll::Ready(Err(fault("full impl clause source receipt differs")));
+        }
+        result.full_clauses = Some(full);
         QueryPoll::Ready(Ok(result))
     }
 }
 impl StableEncode for PreparedSourceImplSemantics {
-    const DOMAIN: &'static str = "lrr/v1/source-impl-semantics";
+    const DOMAIN: &'static str = "lrr/v2/source-impl-semantics";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.record(self.identity());
@@ -513,6 +594,7 @@ impl StableEncode for PreparedSourceImplSemantics {
             };
             e.record(configuration.as_ref());
         });
+        e.option(&self.full_clauses, |e, full| e.record(full));
         match self.clauses {
             ImplSemantic::Known(()) => e.u32(0),
             ImplSemantic::NotApplicable => e.u32(1),
