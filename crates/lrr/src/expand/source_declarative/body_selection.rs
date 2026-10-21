@@ -29,7 +29,9 @@ impl PreparedSourceSyntax {
             return Err(fault("local readiness retained tree/body differs"));
         }
         for call in &self.syntax.syntax().calls {
-            if item_owns_call(parsed, body, call)? {
+            if item_owns_call(parsed, body, call)?
+                && self.cfg_disabled.binary_search(&anchor(call)?).is_err()
+            {
                 return Err(fault("local body still has pending expansion calls"));
             }
         }
@@ -66,6 +68,10 @@ impl SourceSyntaxAssembly {
                 break;
             }
             if !body.contains(SourceRange::checked(call.start, call.end)?) {
+                continue;
+            }
+            if call.cfg_disabled {
+                // Stripped before expansion: nothing to expand or wait for.
                 continue;
             }
             if call.invocation.is_none() {

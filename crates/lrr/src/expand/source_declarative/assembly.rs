@@ -78,6 +78,11 @@ struct CallBinding {
     // cannot distinguish repeated copies of an invocation in one expansion.
     invocation: Option<Digest>,
     grammar: Option<GrammarSlot>,
+    /// The active cfg removed the code containing this call (the producer scan
+    /// proved it, which is why no producer exists). rustc strips such code
+    /// before expansion, so the call is no pending work for the body that
+    /// contains it. It stays a structural marker in the completeness result.
+    cfg_disabled: bool,
     parent: Arc<DeclarationScan>,
     parent_identity: Digest,
     anchor: Digest,
@@ -121,6 +126,9 @@ pub struct PreparedSourceSyntax {
     macro_definitions: Vec<MacroDefinitionAnchor>,
     expansion_definitions: BTreeMap<Digest, crate::expand::scopes::MacroDefinition>,
     pending: Vec<Digest>,
+    /// Structural anchors (sorted) of the pending calls inside cfg-removed
+    /// code: markers only, never work a body must finish before it is ready.
+    cfg_disabled: Vec<Digest>,
     // Only finish_for_body may mint a body-scoped readiness certificate.
     selected_body: Option<Digest>,
     // A selected macro-generated function: its exact producing record and
@@ -239,6 +247,7 @@ impl PreparedSourceSyntax {
                 std::mem::size_of::<Arc<GeneratedDeclarations>>(),
             ),
             (self.pending.capacity(), std::mem::size_of::<Digest>()),
+            (self.cfg_disabled.capacity(), std::mem::size_of::<Digest>()),
         ] {
             bytes = charge(
                 bytes,
@@ -338,6 +347,7 @@ impl SourceSyntaxAssembly {
             calls.push(CallBinding {
                 invocation: producer.map(|p| p.identity),
                 grammar: producer.map(|p| p.grammar),
+                cfg_disabled: producer.is_none() && scan.is_cfg_disabled(range),
                 parent: scan.clone(),
                 parent_identity,
                 anchor: anchor(call)?,
@@ -611,6 +621,13 @@ impl SourceSyntaxAssembly {
         // An unowned structural call must not vanish from the completeness
         // result. Its anchor records pending work; it grants no producer ID.
         pending.extend(self.calls.iter().map(|c| c.invocation.unwrap_or(c.anchor)));
+        let mut cfg_disabled = self
+            .calls
+            .iter()
+            .filter(|c| c.cfg_disabled)
+            .map(|c| c.anchor)
+            .collect::<Vec<_>>();
+        cfg_disabled.sort();
         let syntax = self.tree.snapshot().map_err(adapter)?;
         // The complete consistency check between the incrementally maintained
         // tables and the tree, once per assembly instead of once per edit.
@@ -678,6 +695,7 @@ impl SourceSyntaxAssembly {
             macro_definitions: self.macro_definitions,
             expansion_definitions: self.expansion_definitions,
             pending,
+            cfg_disabled,
             selected_body,
             selected_generated,
             identity: identity.finish(),
@@ -753,6 +771,8 @@ fn generated_calls(
         result.push(CallBinding {
             invocation: producer.map(|p| p.identity),
             grammar: producer.map(|p| p.grammar),
+            cfg_disabled: producer.is_none()
+                && scan.is_cfg_disabled(SourceRange::checked(call.start, call.end)?),
             parent: scan.clone(),
             parent_identity,
             anchor: anchor(&call)?,

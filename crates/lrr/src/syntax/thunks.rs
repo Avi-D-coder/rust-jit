@@ -2359,6 +2359,21 @@ impl ParsedFile {
         let (enabled, other_attributes) = statement_cfg(&syntax, index.cfg())?;
         Ok(enabled && !other_attributes)
     }
+    /// Whether the active cfg keeps this reached node. A removed node is never
+    /// resolved or prepared (macro statements and expressions included); it
+    /// takes the ordinary disabled-node recipe in `initial_thunk_admission`.
+    pub(crate) fn entered_node_cfg_enabled(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        key: &PcKey,
+    ) -> Result<bool, Diagnostic> {
+        match self.entered_node_syntax(body, index, NodeId(key.node))? {
+            Some(syntax) => Ok(statement_cfg(&syntax, index.cfg())?.0),
+            // No attached syntax carries no cfg attribute to apply.
+            None => Ok(true),
+        }
+    }
     pub(crate) fn entered_call_requires_goal(
         &self,
         body: &BodyHandle,

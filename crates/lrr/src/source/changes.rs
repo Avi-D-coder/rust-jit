@@ -732,6 +732,20 @@ impl PreparedSourceView {
         self.retained_declaration_parser()?
             .macro_prelude_policy(self.captured_macro_cfg()?)
     }
+    /// Whether the active cfg keeps the reached body node (syntax facts only).
+    pub(crate) fn entered_node_cfg_enabled(
+        &self,
+        body: &crate::syntax::outline::BodyHandle,
+        index: &crate::syntax::body_index::BodyIndex,
+        key: &crate::ir::pc::PcKey,
+    ) -> Result<bool, Diagnostic> {
+        let file = self
+            .state
+            .files
+            .get(&self.location)
+            .ok_or_else(|| publication_fault("selected node source missing"))?;
+        file.parsed.entered_node_cfg_enabled(body, index, key)
+    }
     pub(crate) fn require_module_predicate_call(
         &self,
         body: &crate::syntax::outline::BodyHandle,

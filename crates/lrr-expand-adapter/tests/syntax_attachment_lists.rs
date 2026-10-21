@@ -371,3 +371,113 @@ fn wrong_list_slots_or_malformed_outputs_leave_syntax_and_origins_unchanged() {
         assert_eq!(identity, source.syntax_identity().unwrap());
     }
 }
+
+// rustc drops builtin attributes on a macro statement once `cfg`/`cfg_attr`
+// are evaluated (rustc_expand `take_mac_call`/`check_attributes`). Attachment
+// shares one rule for every origin of the statement; it never inherits the
+// attributes into the expansion.
+#[test]
+fn inert_outer_attributes_leave_with_their_statement_macro() {
+    for caller in [
+        "fn main(){#[allow(unused)] selected!();let after=2_i32;}",
+        "fn main(){#[allow(unused)]#[cfg(all())]#[cfg_attr(all(),allow(dead_code))] selected!();let after=2_i32;}",
+        "fn main(){#[allow(unused)] selected!{}let after=2_i32;}",
+        "fn main(){/// doc\n#[warn(unused)] selected!();let after=2_i32;}",
+        "fn main(){#[rustfmt::skip] selected!();let after=2_i32;}",
+    ] {
+        for edition in EDITIONS {
+            let mut source =
+                SyntaxAttachment::parse(&input(caller, edition), DeclarationGrammar::Items)
+                    .unwrap();
+            let call = calls_named(&source, "selected").remove(0);
+            source
+                .attach_list(
+                    call.start,
+                    call.end,
+                    &input("let first=0_i32;", edition),
+                    ListSlot::Statements,
+                )
+                .unwrap();
+            let root = tree(&source.materialize().unwrap());
+            assert!(!root.descendants().any(|n| ast::Attr::can_cast(n.kind())));
+            let lets = root
+                .descendants()
+                .filter_map(ast::LetStmt::cast)
+                .map(|s| s.pat().unwrap().syntax().text().to_string())
+                .collect::<Vec<_>>();
+            assert_eq!(lets, ["first", "after"], "{caller}");
+        }
+    }
+}
+
+#[test]
+fn non_inert_attribute_on_a_statement_macro_is_never_discarded() {
+    for caller in [
+        "fn main(){#[unknown_attr] selected!();}",
+        "fn main(){#[allow(unused)]#[unknown_attr] selected!();}",
+        "fn main(){#[derive(Debug)] selected!();}",
+    ] {
+        let mut source =
+            SyntaxAttachment::parse(&input(caller, Edition::E2024), DeclarationGrammar::Items)
+                .unwrap();
+        let call = calls_named(&source, "selected").remove(0);
+        let before = source.materialize().unwrap();
+        let identity = source.syntax_identity().unwrap();
+        assert!(
+            source
+                .attach_list(
+                    call.start,
+                    call.end,
+                    &input("let first=0_i32;", Edition::E2024),
+                    ListSlot::Statements,
+                )
+                .is_err(),
+            "{caller}"
+        );
+        assert_eq!(before.text, source.materialize().unwrap().text);
+        assert_eq!(identity, source.syntax_identity().unwrap());
+    }
+}
+
+#[test]
+fn expression_macros_share_the_inert_attribute_rule_of_statement_macros() {
+    for edition in EDITIONS {
+        let caller = "fn f()->i32{#[allow(unused)]#[cfg(all())] selected!()}";
+        let mut source =
+            SyntaxAttachment::parse(&input(caller, edition), DeclarationGrammar::Items).unwrap();
+        let call = calls_named(&source, "selected").remove(0);
+        source
+            .attach(
+                call.start,
+                call.end,
+                &input("1_i32", edition),
+                FragmentSlot::Expression,
+            )
+            .unwrap();
+        let output = source.materialize().unwrap();
+        assert!(output.text.ends_with("{1_i32}") && !output.text.contains("allow"));
+        let root = tree(&output);
+        assert!(!root.descendants().any(|n| ast::Attr::can_cast(n.kind())));
+        assert_eq!(
+            output.origins.last().unwrap().end as usize,
+            output.text.len()
+        );
+
+        let caller = "fn f()->i32{#[unknown_attr] selected!()}";
+        let mut source =
+            SyntaxAttachment::parse(&input(caller, edition), DeclarationGrammar::Items).unwrap();
+        let call = calls_named(&source, "selected").remove(0);
+        let identity = source.syntax_identity().unwrap();
+        assert!(
+            source
+                .attach(
+                    call.start,
+                    call.end,
+                    &input("1_i32", edition),
+                    FragmentSlot::Expression,
+                )
+                .is_err()
+        );
+        assert_eq!(identity, source.syntax_identity().unwrap());
+    }
+}

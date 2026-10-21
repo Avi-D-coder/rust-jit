@@ -175,6 +175,11 @@ impl<'a> RuntimeMacroContext<'a> {
         else {
             return Ok(None);
         };
+        // cfg-removed code is skipped by the ordinary disabled-node recipe; it
+        // is never a macro to resolve (its attribute makes the range inexact).
+        if !self.source.entered_node_cfg_enabled(handle, body, pc)? {
+            return Ok(None);
+        }
         let node = body
             .nodes()
             .get(pc.node as usize)

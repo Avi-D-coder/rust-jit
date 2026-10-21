@@ -67,15 +67,13 @@ impl SyntaxAttachment {
         if matches!(slot, ListSlot::Statements) {
             let expression = call
                 .parent()
-                .filter(|n| {
-                    ast::MacroExpr::can_cast(n.kind()) && n.text_range() == call.text_range()
-                })
+                .filter(|n| is_macro_expr_with_inert_attrs(n, &call))
                 .ok_or_else(|| error("statement attachment does not select a statement macro"))?;
             let parent = expression
                 .parent()
                 .ok_or_else(|| error("statement attachment has no caller list"))?;
             if let Some(stmt) = ast::ExprStmt::cast(parent.clone()) {
-                if parent.text_range().start() != call.text_range().start() {
+                if parent.text_range().start() != expression.text_range().start() {
                     return Err(error(
                         "statement attachment cannot discard caller attributes",
                     ));

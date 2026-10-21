@@ -162,6 +162,10 @@ pub struct DeclarationScan {
     traits: Vec<ScannedTrait>,
     associated_fragments: Vec<AssociatedDeclarationHeader>,
     producers: Vec<DeclarationProducer>,
+    /// Outermost syntax nodes the active cfg removes, in source order. The
+    /// traversal stops at each, so no producer exists inside one. Derived
+    /// from the parse and cfg already in the fingerprint.
+    disabled: Vec<SourceRange>,
     lexical_scopes: Vec<DeclarationLexicalScope>,
     macro_definitions: Vec<ScannedMacroDefinition>,
     modules: Vec<ScannedModule>,
@@ -210,6 +214,15 @@ impl DeclarationScan {
     }
     pub fn producers(&self) -> &[DeclarationProducer] {
         &self.producers
+    }
+    /// Whether the active cfg removes the syntax at `range`. cfg-stripped
+    /// code is never expanded, so a macro call inside it has no producer and
+    /// is no pending work for the body that textually contains it.
+    pub fn is_cfg_disabled(&self, range: SourceRange) -> bool {
+        let after = self.disabled.partition_point(|d| d.start <= range.start);
+        after
+            .checked_sub(1)
+            .is_some_and(|index| self.disabled[index].end >= range.end)
     }
     pub fn lexical_scopes(&self) -> &[DeclarationLexicalScope] {
         &self.lexical_scopes
@@ -625,6 +638,7 @@ impl ParsedFile {
             traits: Vec::new(),
             associated_fragments: Vec::new(),
             producers: Vec::new(),
+            disabled: Vec::new(),
             lexical_scopes: Vec::new(),
             macro_definitions: Vec::new(),
             modules: Vec::new(),
@@ -665,6 +679,9 @@ impl ParsedFile {
                     .disabled_subtrees
                     .checked_add(1)
                     .ok_or_else(limit)?;
+                budget.charge(std::mem::size_of::<SourceRange>())?;
+                scan.disabled.try_reserve_exact(1).map_err(|_| limit())?;
+                scan.disabled.push(range(node.text_range()));
                 continue;
             }
             let scope_kind = if ast::BlockExpr::can_cast(node.kind()) {
@@ -1426,6 +1443,36 @@ mod module_capture_tests {
             .unwrap();
         assert_eq!(scan.modules().len(), 1);
         assert_eq!(scan.modules()[0].name, "b");
+    }
+    #[test]
+    fn cfg_removed_macro_statements_have_no_producer_and_are_reported_disabled() {
+        let source = "fn main(){#[cfg(any())] gone!(); #[allow(unused)] kept!(); #[cfg(all())] kept!{} #[cfg(any())]{ nested!(); }}";
+        let scan = parsed(source)
+            .scan_declarations(
+                SourcePath::new("cfg.rs").unwrap(),
+                scope(),
+                &CfgSet::default(),
+                DeclarationScanLimits::default(),
+            )
+            .unwrap();
+        let producers = scan
+            .producers()
+            .iter()
+            .filter(|p| p.kind == DeclarationProducerKind::Macro)
+            .collect::<Vec<_>>();
+        assert_eq!(producers.len(), 2);
+        assert!(producers.iter().all(|p| !scan.is_cfg_disabled(p.range)));
+        let at = |needle: &str| {
+            let start = source.find(needle).unwrap() as u32;
+            SourceRange {
+                start,
+                end: start + needle.len() as u32,
+            }
+        };
+        assert!(scan.is_cfg_disabled(at("gone!()")));
+        assert!(scan.is_cfg_disabled(at("nested!()")));
+        assert!(!scan.is_cfg_disabled(at("kept!()")));
+        assert_eq!(scan.cost().disabled_subtrees, 2);
     }
     #[test]
     fn module_physical_identity_is_distinct_from_attachment_kind() {

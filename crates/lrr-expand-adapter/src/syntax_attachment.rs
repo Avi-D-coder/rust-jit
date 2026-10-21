@@ -84,6 +84,54 @@ fn error(message: &str) -> AdapterError {
     }
 }
 
+/// A macro-expression node that is the invocation itself, optionally preceded
+/// by outer attributes the expansion discards. rustc evaluates `cfg` and
+/// `cfg_attr` before expansion, then drops every other builtin attribute from
+/// a macro invocation after its unused-attribute check (rustc_expand
+/// `take_mac_call` / `check_attributes`, for statement and expression macros
+/// alike); the expansion never inherits them. Only compiler-inert attributes
+/// qualify: any other attribute is an attribute-macro invocation that needs
+/// its own prior admission and is never discarded by attachment. The caller
+/// attaches only calls that survived cfg pruning, so a removed statement or
+/// expression never reaches this.
+fn is_macro_expr_with_inert_attrs(expression: &SyntaxNode, call: &SyntaxNode) -> bool {
+    ast::MacroExpr::can_cast(expression.kind())
+        && expression.text_range().end() == call.text_range().end()
+        && expression
+            .children_with_tokens()
+            .all(|child| match child {
+                syntax::NodeOrToken::Node(node) => {
+                    node == *call || ast::Attr::cast(node).is_some_and(|a| is_inert_outer_attr(&a))
+                }
+                syntax::NodeOrToken::Token(token) => token.kind().is_trivia(),
+            })
+}
+
+fn is_inert_outer_attr(attr: &ast::Attr) -> bool {
+    let Some(meta) = attr.meta().filter(|_| attr.excl_token().is_none()) else {
+        return false;
+    };
+    match meta.simple_name() {
+        // Same rule as the caller's producer scan: `rustc*` names are
+        // compiler-reserved, the rest come from the pinned inventory.
+        Some(name) => {
+            name.starts_with("rustc")
+                || crate::builtin_attributes::inert_descriptor(&name)
+                    .ok()
+                    .flatten()
+                    .is_some()
+        }
+        // rustc_resolve `PREDEFINED_TOOLS`: tool attribute paths never name a
+        // macro transformation.
+        None => meta.path().is_some_and(|path| {
+            let text = path.syntax().text().to_string();
+            ["clippy", "rustfmt", "diagnostic", "miri", "rust_analyzer"]
+                .iter()
+                .any(|tool| text.strip_prefix(tool).is_some_and(|rest| rest.starts_with("::")))
+        }),
+    }
+}
+
 /// The outermost node whose range is exactly `target` and which satisfies
 /// `selected`, descending by the tree's binary child lookup.
 fn outermost_at(
@@ -234,11 +282,16 @@ impl SyntaxAttachment {
         slot: FragmentSlot,
     ) -> Result<SyntaxEdit, AdapterError> {
         let call = self.select_call(start, end)?;
-        let range = call.text_range();
         let target = call
             .parent()
-            .filter(|node| slot.accepts_call(node) && node.text_range() == range)
+            .filter(|node| {
+                slot.accepts_call(node)
+                    && (node.text_range() == call.text_range()
+                        || is_macro_expr_with_inert_attrs(node, &call))
+            })
             .ok_or_else(|| error("attachment grammar differs from the caller slot"))?;
+        // The replaced node: the invocation, plus its discarded attributes.
+        let range = target.text_range();
         let prepared = self.prepare(output, slot.grammar())?;
         if !slot.accepts_output(&prepared.root) {
             return Err(error(
