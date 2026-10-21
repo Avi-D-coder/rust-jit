@@ -377,7 +377,7 @@ impl ParsedFile {
     /// the root of a two-segment path) of a path, tuple-struct or record
     /// pattern's path. Such a pattern name is selected through the entered
     /// lexical Value goal of the pattern itself.
-    pub(super) fn pattern_path_binder(
+    pub(crate) fn pattern_path_binder(
         &self,
         path: &ast::Path,
         cfg: &crate::source::snapshot::CfgSet,

@@ -330,7 +330,10 @@ pub(crate) fn prepare_source_name(db: &mut Database,key: &crate::ir::pc::PcKey)
     }
     let Some(environment)=owner.environment() else {return QueryPoll::Ready(Err(unsupported("source pattern environment absent".into())));};
     let completed=environment.macros().source_environment();let sources=completed.sources().iter().collect::<Vec<_>>();
-    let resolver=match CallResolver::new(completed.names(),&sources) {Ok(resolver)=>resolver,Err(error)=>return QueryPoll::Ready(Err(error))};
+    // The shared impl index answers `Type::CONST` / `prim::CONST` pattern paths
+    // (`associated_value`), as it does for qualified expression paths.
+    let members=match completed.member_index() {Ok(members)=>members,Err(error)=>return QueryPoll::Ready(Err(error))};
+    let resolver=match CallResolver::new(completed.names(),&sources) {Ok(resolver)=>resolver.with_members(Some(&members)),Err(error)=>return QueryPoll::Ready(Err(error))};
     let (name,selection)=ready_name!(select_source_pattern_name_inner(&resolver,completed.names(),&sources,db,key,name));
     // The retained name answer also depends on the actual constructor schema;
     // installed target reuse must not outlive a field/variant declaration edit.

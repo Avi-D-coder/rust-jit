@@ -688,8 +688,39 @@ pub fn prepare_lexical(
                 return goal.needs(ValueGoalDemand::Occurrence);
             };
             let qualified_pattern = path.qualifier().is_some() || path.coloncolon_token().is_some();
-            let Some((name, member)) = crate::syntax::parse::ParsedFile::lexical_root_name(&path)
-            else {
+            let lexical_root = crate::syntax::parse::ParsedFile::lexical_root_name(&path);
+            // A qualified pattern path whose root no block item or import
+            // can bind (three or more segments, a path-keyword or absolute
+            // root, or `Root::member` with an unbound root) belongs to the
+            // module route, exactly like a qualified expression path: the
+            // consumer resolves its written spelling through
+            // `CallResolver::lookup_written` in the caller's environment.
+            let module_route = qualified_pattern
+                && match &lexical_root {
+                    Some((_, Some(_))) => !checked!(
+                        source
+                            .parsed()
+                            .pattern_path_binder(&path, source.index().cfg())
+                    ),
+                    Some((_, None)) => false,
+                    None => true,
+                };
+            if module_route {
+                goal.qualified_path = true;
+                goal.type_namespace = record;
+                let mut occurrence =
+                    StableEncoder::new("lrr/v1/entered-value-qualified-pattern-occurrence");
+                let written = range(path.syntax().text_range());
+                occurrence.string(&path.syntax().text().to_string());
+                occurrence.u32(written.start);
+                occurrence.u32(written.end);
+                goal.occurrence = occurrence.finish();
+                if let Some(missing) = plan.missing_expansions.first() {
+                    return goal.needs(ValueGoalDemand::ExpansionDefinition(*missing));
+                }
+                return QueryPoll::Ready(goal.finish());
+            }
+            let Some((name, member)) = lexical_root else {
                 return goal.needs(ValueGoalDemand::PathAdjustment);
             };
             goal.qualified_path = qualified_pattern;
