@@ -438,14 +438,34 @@ fn bind(
                     .all(|(item, value)| bind(item, value, owner, map))
         }
         (TyTerm::Nominal(nominal, arguments), TyTerm::Nominal(other, values)) => {
+            // Regions are runtime-erased metadata: a reached nominal's
+            // descriptor term (`L<Vec<u8>>`) carries no region arguments while
+            // the impl's written self type (`L<'a, T>`) names them. Match the
+            // type and const arguments only (as `erase_regions` does for the
+            // other source-term comparisons); no region is proven.
+            let mut arguments = arguments
+                .iter()
+                .filter(|argument| !matches!(argument, GenericArg::Region(_)));
+            let mut values = values
+                .iter()
+                .filter(|argument| !matches!(argument, GenericArg::Region(_)));
             nominal == other
-                && arguments.len() == values.len()
-                && arguments.iter().zip(values).all(|pair| match pair {
-                    (GenericArg::Type(item), GenericArg::Type(value)) => {
-                        bind(item, value, owner, map)
+                && loop {
+                    match (arguments.next(), values.next()) {
+                        (None, None) => break true,
+                        (Some(GenericArg::Type(item)), Some(GenericArg::Type(value))) => {
+                            if !bind(item, value, owner, map) {
+                                break false;
+                            }
+                        }
+                        (Some(item), Some(value)) => {
+                            if item != value {
+                                break false;
+                            }
+                        }
+                        _ => break false,
                     }
-                    (item, value) => item == value,
-                })
+                }
         }
         _ => template == actual || (unit(template) && unit(actual)),
     }

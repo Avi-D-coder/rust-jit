@@ -2286,3 +2286,64 @@ fn upstream_slice_pattern_receivers_complete() {
         upstream_completes(path);
     }
 }
+
+/// A `Deref` nominal with lifetime parameters (`Guard<'a, T>`, `Ref<'_, T>`,
+/// `RefMut<'_, T>`) steps the receiver probe through the same overloaded
+/// autoderef as a type-parameter-only one: the impl's written self type names
+/// regions that the runtime descriptor of the reached value does not carry.
+#[test]
+fn lifetime_parameterized_deref_guards_share_the_overloaded_probe() {
+    prints(
+        "region_deref",
+        r####"use std::cell::RefCell;
+use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
+struct L<'a, T>(&'a T);
+impl<'a, T> Deref for L<'a, T> {
+    type Target = T;
+    fn deref(&self) -> &T { self.0 }
+}
+struct Guard<'a, T: 'a> { data: &'a mut T }
+impl<'a, T> Deref for Guard<'a, T> {
+    type Target = T;
+    fn deref(&self) -> &T { &*self.data }
+}
+impl<'a, T> DerefMut for Guard<'a, T> {
+    fn deref_mut(&mut self) -> &mut T { &mut *self.data }
+}
+struct Anon<'a>(&'a [i32]);
+impl Deref for Anon<'_> {
+    type Target = [i32];
+    fn deref(&self) -> &[i32] { self.0 }
+}
+fn main() {
+    let v: Vec<u8> = vec![1, 2, 3];
+    let l = L(&v);
+    println!("{}", l.len());
+    let mut data = vec![1u8];
+    {
+        let mut g = Guard { data: &mut data };
+        g.push(2);
+        println!("{}", g.len());
+    }
+    println!("{:?}", data);
+    let arr = [4, 5];
+    println!("{}", Anon(&arr[..]).len());
+    let cell = RefCell::new(Vec::<u8>::new());
+    cell.borrow_mut().push(1);
+    cell.borrow_mut().push(2);
+    println!("{} {:?}", cell.borrow().len(), *cell.borrow());
+    let shared = Rc::new(RefCell::new(vec![7u8]));
+    shared.borrow_mut().push(8);
+    println!("{}", shared.borrow().len());
+}
+"####,
+        r###"3
+2
+[1, 2]
+2
+2 [1, 2]
+2
+"###,
+    );
+}
