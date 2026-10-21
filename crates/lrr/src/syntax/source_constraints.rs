@@ -53,6 +53,9 @@ pub(crate) enum FactKind {
     Return,
     Cast,
     Borrow,
+    /// `&raw const e` / `&raw mut e`: a raw pointer to the place of operand 0;
+    /// `flag` is the mutable form.
+    RawBorrow,
     SuffixedInteger,
     SuffixedFloat,
     /// `expression;`: the statement discards the value. Operand 0 only.
@@ -97,6 +100,10 @@ pub(crate) enum FactKind {
     /// operands are the call's arguments in order; there is no callee
     /// operand.
     LangCall,
+    /// A destructuring assignee's `_` or `..`: a part of the matched value
+    /// that nothing constrains. It states no relation and cannot hold a
+    /// variable open.
+    Wildcard,
 }
 impl FactKind {
     fn tag(self) -> u8 {
@@ -132,6 +139,8 @@ impl FactKind {
             Self::For => 29,
             Self::LangCall => 30,
             Self::IndexRange => 31,
+            Self::RawBorrow => 32,
+            Self::Wildcard => 33,
         }
     }
 }
@@ -555,6 +564,8 @@ impl SourceConstraintPlan {
         let mut type_shapes = BTreeMap::new();
         let mut spelled: Vec<(NodeId, String)> = Vec::new();
         let mut written = WrittenMembers::default();
+        // Destructuring assignments: their assignees spell constructor names.
+        let mut assignees: Vec<ast::Expr> = Vec::new();
         for node in index.nodes() {
             if node.id.0 as usize != facts.len() {
                 return Err(invalid("source constraint node order differs"));
@@ -612,6 +623,11 @@ impl SourceConstraintPlan {
                                 position.checked_add(u32::from(list.self_param().is_some()))
                             });
                     }
+                }
+                if let Some(lhs) = ast::BinExpr::cast(syntax.clone())
+                    .and_then(|binary| super::assignee::destructuring_lhs(&binary))
+                {
+                    assignees.push(lhs);
                 }
                 if !matches!(node.role, NodeRole::OpaqueItem) {
                     classify(
@@ -796,6 +812,17 @@ impl SourceConstraintPlan {
                     &mut structural,
                 );
                 trees.insert(root, Arc::new(tree));
+            }
+        }
+        // A destructuring assignee is a pattern: its constructor names are
+        // selected by the same pattern-name service. Its leaves are places,
+        // not bindings, so it records no occurrences.
+        if !assignees.is_empty() {
+            let items = LocalItems::collect(parsed, body)?;
+            for lhs in &assignees {
+                if let Ok(tree) = PatternTree::build_assignee(parsed, body, index, &items, lhs) {
+                    trees.insert(tree.pattern(), Arc::new(tree));
+                }
             }
         }
         let mut pattern_names = BTreeMap::new();
@@ -1509,12 +1536,11 @@ fn classify(
             }
         }
         ast::Expr::BlockExpr(block) => {
-            // A label, async/const/gen/try or `move` changes the block's
+            // A label, async/gen/try or `move` changes the block's
             // result relation (break values, futures, Try wrapping); those
-            // stay opaque. `unsafe` keeps the ordinary tail relation.
+            // stay opaque. `unsafe` and `const` keep the ordinary tail relation.
             if block.label().is_none()
                 && block.async_token().is_none()
-                && block.const_token().is_none()
                 && block.gen_token().is_none()
                 && block.move_token().is_none()
                 && block.try_block_modifier().is_none()
@@ -1546,9 +1572,31 @@ fn classify(
         }
         ast::Expr::TupleExpr(tuple) => {
             fact.kind = FactKind::Tuple;
-            for element in tuple.fields() {
-                expr_edge(body, index, Some(element), fact)?;
+            if super::assignee::enclosing(tuple.syntax()).is_some() {
+                // A destructuring assignee: its operands align with the
+                // matched tuple (`..` spans the unwritten positions).
+                match super::assignee::fact_operands(&ast::Expr::TupleExpr(tuple.clone())) {
+                    Some(operands) => {
+                        for element in operands {
+                            expr_edge(body, index, Some(element), fact)?;
+                        }
+                    }
+                    None => fact.kind = FactKind::Opaque,
+                }
+            } else {
+                for element in tuple.fields() {
+                    expr_edge(body, index, Some(element), fact)?;
+                }
             }
+        }
+        ast::Expr::UnderscoreExpr(_) if super::assignee::enclosing(expression.syntax()).is_some() => {
+            fact.kind = FactKind::Wildcard;
+        }
+        ast::Expr::RangeExpr(range)
+            if super::assignee::is_rest(&expression)
+                && super::assignee::enclosing(range.syntax()).is_some() =>
+        {
+            fact.kind = FactKind::Wildcard;
         }
         ast::Expr::FieldExpr(access) => {
             // A written position (`.0`) or field name (`.x`); which declared
@@ -1597,8 +1645,18 @@ fn classify(
             fact.kind = FactKind::Array;
             match array.kind() {
                 ast::ArrayExprKind::ElementList(elements) => {
-                    for element in elements {
-                        expr_edge(body, index, Some(element), fact)?;
+                    if super::assignee::enclosing(array.syntax()).is_some() {
+                        // A destructuring assignee: `..` names no element.
+                        for element in
+                            super::assignee::fact_operands(&ast::Expr::ArrayExpr(array.clone()))
+                                .unwrap_or_default()
+                        {
+                            expr_edge(body, index, Some(element), fact)?;
+                        }
+                    } else {
+                        for element in elements {
+                            expr_edge(body, index, Some(element), fact)?;
+                        }
                     }
                 }
                 ast::ArrayExprKind::Repeat { initializer, .. } => {
@@ -1679,6 +1737,13 @@ fn classify(
             fact.kind = FactKind::Cast;
             expr_edge(body, index, cast.expr(), fact)?;
             annotate(body, index, cast.ty(), fact, shapes)?;
+        }
+        // `&raw const e` / `&raw mut e` is a raw pointer to the place, not a
+        // reference to its type.
+        ast::Expr::RefExpr(reference) if reference.raw_token().is_some() => {
+            fact.kind = FactKind::RawBorrow;
+            fact.flag = reference.mut_token().is_some();
+            expr_edge(body, index, reference.expr(), fact)?;
         }
         ast::Expr::RefExpr(reference) => {
             fact.kind = FactKind::Borrow;

@@ -602,7 +602,7 @@ impl RunMachine {
                     {
                         return QueryPoll::Ready(Ok(true));
                     }
-                    FactKind::Borrow => return QueryPoll::Ready(Ok(parent.flag())),
+                    FactKind::Borrow | FactKind::RawBorrow => return QueryPoll::Ready(Ok(parent.flag())),
                     // A `ref mut` binding of the patterns matched against this
                     // place borrows it mutably (rustc picks `DerefMut` when
                     // any binding is `ref mut`).

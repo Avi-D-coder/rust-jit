@@ -1862,7 +1862,12 @@ fn prepare(
             TyTerm::Nominal(..) | TyTerm::Tuple(..) | TyTerm::Array(..)
                 if closed_term(template) =>
             {
-                if &actual.source != template
+                // Regions are erased in every source comparison here: a region
+                // argument (`Option<Arguments<'_>>` through an alias) carries no
+                // runtime fact and there is no borrow checker (E-R5-006).
+                let same_source = super::signature_subst::erase_regions(&actual.source)
+                    == super::signature_subst::erase_regions(template);
+                if !same_source
                     && let Some(store) = store
                     && let Some((view, descriptor)) = pointer_coercion_view(store, template, actual)
                     && super::signature_subst::erase_regions(&view)
@@ -1873,7 +1878,7 @@ fn prepare(
                     descriptors.push(descriptor);
                     continue;
                 }
-                if &actual.source != template {
+                if !same_source {
                     return Err(fault(
                         "LRR-E-CALL-ARG-TYPE",
                         "argument source type differs from the closed parameter type",
@@ -2063,6 +2068,35 @@ fn prepare(
             instantiated.result_symbolic = Some(applied);
         }
     }
+    // A fn-pointer parameter's view names the callee's generics
+    // (`fn(Option<&mut Option<T>>) -> *const T`); once the arguments and the
+    // result context bound them, the view is the closed fn-pointer type the
+    // callee frame can retain.
+    let templates = if templates
+        .iter()
+        .any(|template| matches!(template, TyTerm::Function(_)) && !closed_term(template))
+        && !source_bindings.is_empty()
+    {
+        let mut substitution = crate::traits::subst::Substitution::default();
+        for (key, bound) in &source_bindings {
+            if key.definition == definition && !contains_transaction_term(bound) {
+                substitution.insert(*key, crate::traits::term::GenericArg::Type(bound.clone()))?;
+            }
+        }
+        templates
+            .into_iter()
+            .map(|template| {
+                if matches!(template, TyTerm::Function(_)) && !closed_term(&template) {
+                    let applied = substitution.apply(&template)?;
+                    Ok(if closed_term(&applied) { applied } else { template })
+                } else {
+                    Ok(template)
+                }
+            })
+            .collect::<Result<Vec<_>, Diagnostic>>()?
+    } else {
+        templates
+    };
     let result_descriptor = match instantiated.result_symbolic.as_ref() {
         Some(TyTerm::Param(key)) => runtime.get(key).copied(),
         Some(TyTerm::Primitive(p)) => Some(primitive_runtime_id(*p)?),

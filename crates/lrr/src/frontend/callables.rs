@@ -31,6 +31,11 @@ pub(crate) mod ordinary_local;
 pub(crate) use ordinary_local::{EnteredLocalCall, prepare_entered_local_function};
 #[path = "entered_module_callables.rs"]
 pub(crate) mod entered_module;
+#[path = "callables_type_relative.rs"]
+mod type_relative;
+#[path = "callables_anchored.rs"]
+mod anchored;
+pub(crate) use anchored::explicit_argument_term;
 
 #[derive(Debug, Clone)]
 pub struct SourceCallable {
@@ -307,12 +312,50 @@ fn primitive_self(name: &str) -> Option<super::member_index::BuiltinSelf> {
 /// `<Type as Trait>::name` or `<Type>::name` (the value-path lowering's
 /// spelling): the anchor type, its trait and the remaining segments.
 pub(crate) fn split_qualified_anchor(spelled: &str) -> Option<(&str, Option<&str>, &str)> {
+    split_qualified_anchor_arguments(spelled).map(|(ty, tr, _, rest)| (ty, tr, rest))
+}
+/// `split_qualified_anchor` with the trait's explicit Type arguments
+/// (`<i32 as Mul<&i32>>::mul` -> `i32`, `Mul`, `["&i32"]`, `mul`): the anchor
+/// closes at its matching `>`, and the trait path is returned without them.
+pub(crate) fn split_qualified_anchor_arguments(
+    spelled: &str,
+) -> Option<(&str, Option<&str>, Vec<&str>, &str)> {
     let inner = spelled.strip_prefix('<')?;
-    let close = inner.find('>')?;
+    let bytes = inner.as_bytes();
+    let (mut depth, mut close, mut at) = (0usize, None, 0usize);
+    while at < bytes.len() {
+        match bytes[at] {
+            b'<' => depth += 1,
+            b'-' if bytes.get(at + 1) == Some(&b'>') => at += 1,
+            b'>' if depth == 0 => {
+                close = Some(at);
+                break;
+            }
+            b'>' => depth -= 1,
+            _ => {}
+        }
+        at += 1;
+    }
+    let close = close?;
     let (anchor, rest) = (&inner[..close], inner[close + 1..].strip_prefix("::")?);
     match anchor.split_once(" as ") {
-        Some((ty, tr)) => Some((ty.trim(), Some(tr.trim()), rest)),
-        None => Some((anchor.trim(), None, rest)),
+        Some((ty, tr)) => {
+            let tr = tr.trim();
+            let (path, arguments) = match tr.split_once('<') {
+                Some((path, tail)) => (
+                    path,
+                    tail.strip_suffix('>')
+                        .unwrap_or(tail)
+                        .split(',')
+                        .map(str::trim)
+                        .filter(|argument| !argument.is_empty())
+                        .collect(),
+                ),
+                None => (tr, Vec::new()),
+            };
+            Some((ty.trim(), Some(path), arguments, rest))
+        }
+        None => Some((anchor.trim(), None, Vec::new(), rest)),
     }
 }
 /// A written path spelling as import segments (`crate`/`self`/`super`
@@ -464,6 +507,12 @@ impl<'a> CallResolver<'a> {
         };
         let Some(self_type) = self_type else {
             return QueryPoll::Ready(Ok(None));
+        };
+        // `Alias::function`: the associated items of the aliased type.
+        let self_type = match self.alias_self_type(db, self_type) {
+            QueryPoll::Ready(Ok(self_type)) => self_type,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
         self.associated_of(db, members, self_type, name)
     }
@@ -695,7 +744,7 @@ impl<'a> CallResolver<'a> {
                 members, caller, &scope, edition, segments, absolute, anchored,
             )
         };
-        let result = (|| -> Result<Option<Digest>, Diagnostic> {
+        let resolved = (|| -> Result<Option<(Result<Digest, super::member_index::BuiltinSelf>, Option<Digest>, &str)>, Diagnostic> {
             let (ty, trait_key, name) =
                 if let Some((ty, tr, rest)) = split_qualified_anchor(spelled) {
                     if rest.contains("::") {
@@ -731,9 +780,20 @@ impl<'a> CallResolver<'a> {
                     };
                     (ty, None, name)
                 };
-            members.associated_const(ty, trait_key, name)
+            Ok(Some((ty, trait_key, name)))
         })();
-        QueryPoll::Ready(result)
+        let (ty, trait_key, name) = match resolved {
+            Ok(Some(resolved)) => resolved,
+            Ok(None) => return QueryPoll::Ready(Ok(None)),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        // `Alias::NAME`: the associated items of the aliased type.
+        let ty = match self.alias_self_type(db, ty) {
+            QueryPoll::Ready(Ok(ty)) => ty,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        QueryPoll::Ready(members.associated_const(ty, trait_key, name))
     }
     /// Select from an actual source Type application, supplied by the owning
     /// qualifier plan and reached source substitution. No runtime descriptor
@@ -977,6 +1037,9 @@ impl<'a> CallResolver<'a> {
         caller: Digest,
         name: &str,
     ) -> QueryPoll<CallSelection> {
+        if name == "Self" {
+            return self.select_self_constructor(db, caller);
+        }
         if !name.contains("::") {
             return self.module_function(db, caller, name);
         }
@@ -991,6 +1054,13 @@ impl<'a> CallResolver<'a> {
         }
         // A qualified type anchor names an associated item, never a module path.
         if name.starts_with('<') {
+            // `<Alias>::V` / `<Self>::V`: a variant through the written type.
+            match self.select_type_relative_variant(db, caller, name) {
+                QueryPoll::Ready(Ok(Some(selection))) => return QueryPoll::Ready(Ok(selection)),
+                QueryPoll::Ready(Ok(None)) => {}
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
             return match self.associated_value(db, caller, name) {
                 QueryPoll::Ready(Ok(Some(constant))) => self.associated_value_selection(constant),
                 QueryPoll::Ready(Ok(None)) => self.anchored_function(db, caller, name),
@@ -1064,6 +1134,12 @@ impl<'a> CallResolver<'a> {
         if !absolute
             && matches!(segments.first(), Some(crate::syntax::imports::ImportSegment::Name(n)) if n == "Self")
         {
+            match self.select_type_relative_variant(db, caller, name) {
+                QueryPoll::Ready(Ok(Some(selection))) => return QueryPoll::Ready(Ok(selection)),
+                QueryPoll::Ready(Ok(None)) => {}
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
             return match self.associated_function(db, caller, &segments, absolute, &scope, edition)
             {
                 QueryPoll::Ready(Ok(Some(selection))) => QueryPoll::Ready(Ok(selection)),
@@ -1077,6 +1153,13 @@ impl<'a> CallResolver<'a> {
             .lookup_source_path(Namespace::Value, &segments, absolute, &scope, edition)
         {
             Ok(NameLookup::Absent) => {
+                // A variant reached through a type alias (`Alias::V`).
+                match self.select_type_relative_variant(db, caller, name) {
+                    QueryPoll::Ready(Ok(Some(selection))) => return QueryPoll::Ready(Ok(selection)),
+                    QueryPoll::Ready(Ok(None)) => {}
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
                 match self.associated_function(db, caller, &segments, absolute, &scope, edition) {
                     QueryPoll::Ready(Ok(Some(selection))) => QueryPoll::Ready(Ok(selection)),
                     QueryPoll::Ready(Ok(None)) => self.associated_value_or_absent(db, caller, name),
@@ -1134,46 +1217,14 @@ impl<'a> CallResolver<'a> {
         let Some(members) = self.members else {
             return self.select(db, NameLookup::Absent);
         };
-        let Some((ty, tr, function)) = split_qualified_anchor(name) else {
+        let Some((_, _, function)) = split_qualified_anchor(name) else {
             return self.select(db, NameLookup::Absent);
         };
-        if function.contains("::") {
-            return self.select(db, NameLookup::Absent);
-        }
-        let self_type = match self.written_self_type(db, caller, ty) {
-            QueryPoll::Ready(Ok(self_type)) => self_type,
+        let candidates = match self.anchored_candidates(db, caller, name) {
+            QueryPoll::Ready(Ok(Some((_, candidates)))) => candidates,
+            QueryPoll::Ready(Ok(None)) => return self.select(db, NameLookup::Absent),
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-        };
-        let trait_key = match tr {
-            Some(tr) => match self.written_trait(db, caller, tr) {
-                QueryPoll::Ready(Ok(Some(trait_key))) => Some(trait_key),
-                QueryPoll::Ready(Ok(None)) => return self.select(db, NameLookup::Absent),
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-            },
-            None => None,
-        };
-        let Some(self_type) = self_type else {
-            return self.select(db, NameLookup::Absent);
-        };
-        let candidates = match trait_key {
-            Some(trait_key) => members
-                .trait_method(self_type, trait_key, function)
-                .into_iter()
-                .map(|(_, function)| function)
-                .collect::<Vec<_>>(),
-            None => {
-                let inherent = match self_type {
-                    Ok(nominal) => members.inherent(nominal, function),
-                    Err(builtin) => members.builtin_inherent(builtin, function),
-                };
-                if inherent.is_empty() {
-                    members.trait_candidates(self_type, function)
-                } else {
-                    inherent
-                }
-            }
         };
         match candidates.as_slice() {
             [selected] => match self.member_definition(db, *selected) {
@@ -1181,6 +1232,15 @@ impl<'a> CallResolver<'a> {
                 None => self.select(db, NameLookup::Absent),
             },
             [] => self.select(db, NameLookup::Absent),
+            // Impls of one trait that differ only by the trait's arguments
+            // (`<i32 as Mul>::mul` through `Mul<i32>`, `Mul<&i32>`): the call's
+            // evaluated arguments select the impl (`run_trait_calls.rs`).
+            _ if members
+                .same_trait_of(&candidates)
+                .is_some_and(|trait_key| members.trait_declaration(trait_key, function).is_some()) =>
+            {
+                QueryPoll::Ready(Ok(CallSelection::TypeRelative))
+            }
             _ => QueryPoll::Ready(Err(Diagnostic::new(
                 "LRR-E-NAME-AMBIGUOUS",
                 format!("several impls provide `{function}` for `{name}`"),
@@ -1231,15 +1291,19 @@ impl<'a> CallResolver<'a> {
             module_path: scope.module_path.clone(),
             owner: None,
         };
+        if name == "Self" {
+            return self.self_type_lookup(db, caller, namespace);
+        }
         if !name.contains("::") {
             return QueryPoll::Ready(
                 self.graph
                     .lookup_unqualified(namespace, name, &module, edition, None),
             );
         }
-        // A qualified type anchor or `Self` names no module member.
+        // A qualified type anchor names no module member; `Self::V` names a
+        // variant of the impl's enum, or no module member.
         if name.starts_with('<') || name.starts_with("Self::") {
-            return QueryPoll::Ready(Ok(NameLookup::Absent));
+            return self.type_relative_lookup(db, caller, name, namespace);
         }
         if let Some((root, tail)) = name.split_once("::")
             && let Some(unit) = dollar_crate_root(root)
@@ -1267,10 +1331,16 @@ impl<'a> CallResolver<'a> {
                 }
             });
         }
-        QueryPoll::Ready(
-            self.graph
-                .lookup_source_path(namespace, &segments, absolute, &module, edition),
-        )
+        match self
+            .graph
+            .lookup_source_path(namespace, &segments, absolute, &module, edition)
+        {
+            // `Alias::V`: a variant reached through a type alias of an enum.
+            Ok(NameLookup::Absent) if segments.len() > 1 => {
+                self.type_relative_lookup(db, caller, name, namespace)
+            }
+            found => QueryPoll::Ready(found),
+        }
     }
     pub fn qualified(
         &self,

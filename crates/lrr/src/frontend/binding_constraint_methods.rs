@@ -185,6 +185,11 @@ impl<'a> Component<'a> {
                 Some(inner) => ready!(self.expression_type(db, inner)).map(borrowed),
                 None => None,
             },
+            FactKind::RawBorrow => match fact.operand(0) {
+                Some(inner) => ready!(self.expression_type(db, inner))
+                    .map(|inner| crate::traits::pointer_terms::raw_pointer(fact.flag(), inner)),
+                None => None,
+            },
             FactKind::Prefix => {
                 let inner = match fact.operand(0) {
                     Some(inner) => ready!(self.expression_type(db, inner)),

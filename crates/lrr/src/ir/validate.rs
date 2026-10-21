@@ -45,6 +45,10 @@ pub(crate) fn pattern_owner_test_slot(body: &BodyIndex, owner: NodeId) -> Option
     match node.role {
         NodeRole::Expression(ExpressionKind::Match) => node.runtime_temporaries[1],
         NodeRole::Expression(ExpressionKind::Other) if node.clause_scope.is_some() => node.value,
+        // A destructuring assignment owns the transaction over its right operand.
+        NodeRole::Expression(ExpressionKind::Other) if node.pattern_statement => {
+            node.runtime_temporaries[0]
+        }
         NodeRole::Expression(ExpressionKind::For) => node.value,
         NodeRole::Expression(ExpressionKind::Closure) if node.pattern_statement => {
             node.runtime_temporaries[0]
@@ -98,6 +102,23 @@ fn pattern_step(
                 ));
             }
         }
+        // A destructuring assignment matches its right (last) operand against
+        // the pattern its left operand's shape spells.
+        PatternOperation::Open { source, .. }
+            if selected.role == NodeRole::Expression(crate::syntax::body_index::ExpressionKind::Other)
+                && selected.pattern_statement =>
+        {
+            let scrutinee = selected
+                .operands
+                .last()
+                .and_then(|operand| body.nodes().get(operand.0 as usize))
+                .ok_or_else(|| invalid("assignment scrutinee operand absent"))?;
+            if key.node != owner.0
+                || (scrutinee.value != Some(*source) && scrutinee.place != Some(*source))
+            {
+                return Err(invalid("assignment pattern source differs from its right operand"));
+            }
+        }
         PatternOperation::Open { source, .. } => {
             let scrutinee = selected.operands.iter().find_map(|operand| {
                 let node = body.nodes().get(operand.0 as usize)?;
@@ -114,10 +135,14 @@ fn pattern_step(
         PatternOperation::Test { tree, result, .. } => {
             slot(body, *result, SlotKind::Value)?;
             if *result != test
-                || body
-                    .nodes()
-                    .get(tree.pattern().0 as usize)
-                    .is_none_or(|node| node.role != NodeRole::Pattern)
+                || body.nodes().get(tree.pattern().0 as usize).is_none_or(|node| {
+                    node.role != NodeRole::Pattern
+                        && !(selected.pattern_statement
+                            && selected.role
+                                == NodeRole::Expression(
+                                    crate::syntax::body_index::ExpressionKind::Other,
+                                ))
+                })
                 || !pattern_descendant(body, tree.pattern(), owner)
             {
                 return Err(invalid(
@@ -835,20 +860,37 @@ fn verify_inner(
                 slot(body, *place, SlotKind::Place)?;
                 slot(body, *source, SlotKind::Value)?;
                 slot(body, *destination, SlotKind::Value)?;
+                // A destructuring assignment assigns each leaf place the
+                // temporary its pattern bound there (the leaf's own value
+                // slot): the operand of the phase being lowered.
+                let leaf = (node.pattern_statement
+                    && node.role
+                        == crate::syntax::body_index::NodeRole::Expression(
+                            crate::syntax::body_index::ExpressionKind::Other,
+                        ))
+                .then(|| match Phase::from_code(draft.key.phase) {
+                    Phase::Operand(ordinal) => node
+                        .operands
+                        .get(usize::from(ordinal))
+                        .and_then(|id| body.nodes().get(id.0 as usize)),
+                    _ => None,
+                })
+                .flatten();
+                let (place_owner, source_owner) = match leaf {
+                    Some(leaf) => (Some(leaf), Some(leaf)),
+                    None => (
+                        node.operands
+                            .first()
+                            .and_then(|id| body.nodes().get(id.0 as usize)),
+                        node.operands
+                            .get(1)
+                            .and_then(|id| body.nodes().get(id.0 as usize)),
+                    ),
+                };
                 if source == destination
                     || node.value != Some(*destination)
-                    || node
-                        .operands
-                        .first()
-                        .and_then(|id| body.nodes().get(id.0 as usize))
-                        .and_then(|operand| operand.place)
-                        != Some(*place)
-                    || node
-                        .operands
-                        .get(1)
-                        .and_then(|id| body.nodes().get(id.0 as usize))
-                        .and_then(|operand| operand.value)
-                        != Some(*source)
+                    || place_owner.and_then(|operand| operand.place) != Some(*place)
+                    || source_owner.and_then(|operand| operand.value) != Some(*source)
                 {
                     return Err(invalid(
                         "place assignment requires a separate RHS and its own result",
@@ -961,6 +1003,9 @@ fn verify_inner(
                 Some(*destination)
             }
             Op::Borrow {
+                place, destination, ..
+            }
+            | Op::RawBorrow {
                 place, destination, ..
             } => {
                 slot(body, *place, SlotKind::Place)?;

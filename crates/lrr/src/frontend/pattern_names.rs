@@ -102,6 +102,47 @@ fn select_source_pattern_name_inner(
         QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
     };
     if let Some(member) = goal.rooted() {
+        // `module::Name` where a block-level `use` binds the module: continue
+        // from the module, spelled from its defining crate as the dispatcher
+        // does for rooted value and callee paths, through the module route.
+        if kind == ItemKind::Module {
+            let Some(item) = sources
+                .iter()
+                .find_map(|source| source.outline_item(declaration.identity()))
+            else {
+                return QueryPoll::Ready(Err(unsupported(
+                    "rooted pattern module root is outside the source catalogue".into(),
+                )));
+            };
+            let mut segments: Vec<&str> =
+                item.def_key.module_path.iter().map(String::as_str).collect();
+            segments.push(&item.def_key.declared_name);
+            let continued = PatternName {
+                spelling: format!(
+                    "{}::{}::{member}",
+                    super::callables::dollar_crate_segment(item.def_key.crate_key),
+                    segments.join("::")
+                ),
+                form: name.form.clone(),
+                lexical: None,
+                source: name.source,
+            };
+            return match select_module_pattern_name(
+                resolver,
+                graph,
+                sources,
+                db,
+                at.body.definition,
+                &continued,
+                Some(at),
+            ) {
+                QueryPoll::Ready(Ok((_, selection))) => {
+                    QueryPoll::Ready(Ok((name.clone(), selection)))
+                }
+                QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+            };
+        }
         if kind != ItemKind::Enum {
             return QueryPoll::Ready(Err(unsupported(
                 "rooted pattern member requires enum/associated-item selection".into(),

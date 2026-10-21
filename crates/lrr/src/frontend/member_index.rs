@@ -35,6 +35,15 @@ pub enum BuiltinSelf {
     Reference(bool),
 }
 impl BuiltinSelf {
+    /// The member-index self type of a primitive: `()` is the empty tuple the
+    /// facade's `impl .. for ()` declares (`Tuple(0)`), every other primitive
+    /// its own.
+    pub(crate) fn of_primitive(primitive: crate::ir::op::PrimitiveType) -> Self {
+        match primitive {
+            crate::ir::op::PrimitiveType::Unit => Self::Tuple(0),
+            primitive => Self::Primitive(primitive),
+        }
+    }
     pub(crate) fn named(name: &str) -> Option<Self> {
         use crate::ir::op::PrimitiveType as P;
         Some(Self::Primitive(match name {
@@ -322,7 +331,7 @@ impl MemberIndex {
                 }
                 LocalContainer::Impl { members, aliases } => {
                     let ordinal = layer.impls.len();
-                    for function in members.functions.values() {
+                    for function in members.functions.values().chain(members.consts.values()) {
                         layer.function_owner.insert(*function, ordinal);
                     }
                     for (identity, alias) in aliases {
@@ -470,6 +479,7 @@ impl MemberIndex {
         if let Some(ordinal) = self.impls.iter().position(|members| members.identity == owner) {
             if constant {
                 self.impls[ordinal].consts.insert(name.to_owned(), identity);
+                self.function_owner.insert(identity, ordinal);
                 return;
             }
             self.impls[ordinal]
@@ -848,7 +858,7 @@ impl MemberIndex {
                         row.impl_generic_count = impl_generic_count;
                     }
                 }
-                for function in functions.values() {
+                for function in functions.values().chain(consts.values()) {
                     index.function_owner.insert(*function, ordinal);
                 }
                 match (self_nominal, self_builtin) {

@@ -747,6 +747,10 @@ fn place_context(syntax: &SyntaxNode) -> bool {
     if comparison_place_operand(syntax) {
         return true;
     }
+    // A leaf of a destructuring assignee is the place it assigns.
+    if super::assignee::enclosing(syntax).is_some_and(|(_, leaf)| leaf) {
+        return true;
+    }
     let mut current = syntax.clone();
     loop {
         let Some(parent) = current.parent() else {
@@ -754,6 +758,10 @@ fn place_context(syntax: &SyntaxNode) -> bool {
         };
         if ast::ParenExpr::can_cast(parent.kind()) {
             current = parent;
+            // A parenthesized destructuring leaf is still the place it assigns.
+            if super::assignee::enclosing(&current).is_some_and(|(_, leaf)| leaf) {
+                return true;
+            }
             continue;
         }
         if let Some(prefix) = ast::PrefixExpr::cast(parent.clone()) {
@@ -824,6 +832,13 @@ fn place_context(syntax: &SyntaxNode) -> bool {
                 .is_some_and(|scrutinee| scrutinee.syntax() == &current);
         }
         if let Some(assignment) = ast::BinExpr::cast(parent) {
+            // The right operand of a destructuring assignment is the scrutinee
+            // of its pattern transaction, tested in place like a `let`'s.
+            if super::assignee::destructuring_lhs(&assignment).is_some() {
+                return assignment
+                    .rhs()
+                    .is_some_and(|rhs| rhs.syntax() == &current);
+            }
             return assignment
                 .op_token()
                 .is_some_and(|token| token.text() == "=")
@@ -2765,9 +2780,11 @@ impl ParsedFile {
                 let block = ast::BlockExpr::cast(syntax).expect("checked block");
                 // `unsafe { .. }` evaluates exactly as an ordinary block; the
                 // unsafety obligation is a static check (cargo check), not a
-                // runtime semantic. Other modifiers change evaluation.
+                // runtime semantic. An inline `const { .. }` block is evaluated
+                // at use as an ordinary block (a constant block's value is its
+                // block value; it sees the enclosing generic environment).
+                // Other modifiers change evaluation.
                 if block.async_token().is_some()
-                    || block.const_token().is_some()
                     || block.gen_token().is_some()
                     || block.move_token().is_some()
                     || block.try_block_modifier().is_some()
@@ -3391,11 +3408,12 @@ impl ParsedFile {
                                 );
                             };
                             match trait_ref.and_then(|tr| tr.path()) {
-                                Some(tr) => match self.anchor_spelling(
+                                Some(tr) => match self.anchor_spelling_with(
                                     &tr,
                                     path.syntax(),
                                     index.cfg(),
                                     false,
+                                    true,
                                 )? {
                                     Some(tr) => format!("<{ty} as {tr}>"),
                                     None => {
@@ -3538,22 +3556,17 @@ impl ParsedFile {
                     // or item binds is selected by the dispatcher's entered
                     // lexical Value goal, which refuses what it cannot select
                     // rather than falling back to a same-named module item.
-                    if local_item && !lexical_function
-                        || relative
-                            && components.len() > 2
-                            && self.enclosing_import_may_bind(
-                                path.syntax(),
-                                &root_name,
-                                index.cfg(),
-                            )?
-                    {
+                    if local_item && !lexical_function {
                         return unsupported(
                             "lexical item callee requires body namespace integration",
                         );
                     }
                 }
 
-                if !qualified && MacroName::parse(reference.text(), self.edition).is_err() {
+                if !qualified
+                    && root_name != "Self"
+                    && MacroName::parse(reference.text(), self.edition).is_err()
+                {
                     return unsupported(
                         "qualified or explicitly generic call awaits call-path integration",
                     );
@@ -4909,9 +4922,25 @@ impl ParsedFile {
         match (syntax.kind(), Phase::from_code(key.phase)) {
             (SyntaxKind::REF_EXPR, phase) => {
                 let expression = ast::RefExpr::cast(syntax).expect("checked borrow");
-                if expression.raw_token().is_some() {
-                    return unsupported("raw pointer borrow is outside the live profile");
-                }
+                // `&raw const place` / `&raw mut place` take the same place
+                // route as a borrow; only the final operation differs, since
+                // its result is a raw pointer rather than a reference.
+                let raw = expression.raw_token().is_some();
+                let borrow_operation = |place, access, destination| {
+                    if raw {
+                        Op::RawBorrow {
+                            place,
+                            mutable: matches!(access, crate::ir::op::BorrowAccess::Mutable),
+                            destination,
+                        }
+                    } else {
+                        Op::Borrow {
+                            place,
+                            access,
+                            destination,
+                        }
+                    }
+                };
                 let Some(operand) = expression.expr() else {
                     return unsupported("borrow operand absent");
                 };
@@ -5000,25 +5029,23 @@ impl ParsedFile {
                         Phase::Operand(0) if operand_is_place => draft(
                             index,
                             key,
-                            vec![Op::Borrow {
+                            vec![borrow_operation(
                                 place,
                                 access,
-                                destination: node
-                                    .value
+                                node.value
                                     .ok_or_else(|| error("projected reference result absent"))?,
-                            }],
+                            )],
                             RecipeExit::Next(return_pc(index, body, expression.syntax())?),
                         ),
                         Phase::Commit if !operand_is_place => draft(
                             index,
                             key,
-                            vec![Op::Borrow {
+                            vec![borrow_operation(
                                 place,
                                 access,
-                                destination: node
-                                    .value
+                                node.value
                                     .ok_or_else(|| error("temporary reference result absent"))?,
-                            }],
+                            )],
                             RecipeExit::Next(return_pc(index, body, expression.syntax())?),
                         ),
                         _ => unsupported("invalid projected or temporary borrow phase"),
@@ -5049,13 +5076,12 @@ impl ParsedFile {
                             binding,
                             destination: place,
                         },
-                        Op::Borrow {
+                        borrow_operation(
                             place,
                             access,
-                            destination: node
-                                .value
+                            node.value
                                 .ok_or_else(|| error("borrow value slot absent"))?,
-                        },
+                        ),
                     ],
                     RecipeExit::Next(return_pc(index, body, expression.syntax())?),
                 )
@@ -5780,6 +5806,10 @@ impl ParsedFile {
             let Some(written) = path.path() else {
                 return Ok(false);
             };
+            // A longer path continues from a block-level `use` of its root.
+            if Self::deep_lexical_root(&written).is_some() {
+                return self.deep_root_import_may_bind(&written, index.cfg());
+            }
             return Ok(match Self::lexical_root_name(&written) {
                 Some((root, Some(member)))
                     if format!("{}::{}", root.text(), member.text()) == expected_name =>

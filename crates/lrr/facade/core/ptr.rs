@@ -21,6 +21,24 @@ pub unsafe fn write<T>(dst: *mut T, src: T) {
     core::intrinsics::lrr_ptr_write(dst, src)
 }
 
+// The cell store has no alignment or volatility, so the unaligned and
+// volatile forms are the ordinary read and write.
+pub unsafe fn read_unaligned<T>(src: *const T) -> T {
+    core::intrinsics::lrr_ptr_read(src)
+}
+
+pub unsafe fn read_volatile<T>(src: *const T) -> T {
+    core::intrinsics::lrr_ptr_read(src)
+}
+
+pub unsafe fn write_unaligned<T>(dst: *mut T, src: T) {
+    core::intrinsics::lrr_ptr_write(dst, src)
+}
+
+pub unsafe fn write_volatile<T>(dst: *mut T, src: T) {
+    core::intrinsics::lrr_ptr_write(dst, src)
+}
+
 pub unsafe fn drop_in_place<T: ?Sized>(to_drop: *mut T) {
     core::intrinsics::lrr_unsupported("core::ptr::drop_in_place")
 }
@@ -71,6 +89,12 @@ impl<T: ?Sized> *const T {
         core::intrinsics::lrr_ptr_offset_from(self, origin)
     }
     pub unsafe fn read(self) -> T {
+        core::intrinsics::lrr_ptr_read(self)
+    }
+    pub unsafe fn read_unaligned(self) -> T {
+        core::intrinsics::lrr_ptr_read(self)
+    }
+    pub unsafe fn read_volatile(self) -> T {
         core::intrinsics::lrr_ptr_read(self)
     }
 }
@@ -127,6 +151,18 @@ impl<T: ?Sized> *mut T {
         core::intrinsics::lrr_ptr_read(self)
     }
     pub unsafe fn write(self, value: T) {
+        core::intrinsics::lrr_ptr_write(self, value)
+    }
+    pub unsafe fn read_unaligned(self) -> T {
+        core::intrinsics::lrr_ptr_read(self)
+    }
+    pub unsafe fn read_volatile(self) -> T {
+        core::intrinsics::lrr_ptr_read(self)
+    }
+    pub unsafe fn write_unaligned(self, value: T) {
+        core::intrinsics::lrr_ptr_write(self, value)
+    }
+    pub unsafe fn write_volatile(self, value: T) {
         core::intrinsics::lrr_ptr_write(self, value)
     }
 }

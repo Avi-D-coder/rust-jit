@@ -122,6 +122,7 @@ impl ReachedCallInputs {
             variables: &self.variables,
             relations: &self.relations,
             caller: &self.caller,
+            component: None,
         })
     }
     pub(super) fn site(&self) -> &BodySpan {

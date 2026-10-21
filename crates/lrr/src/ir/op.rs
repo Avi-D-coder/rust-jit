@@ -378,7 +378,9 @@ pub const POINTER_CAST_OPCODE: u8 = 67;
 pub const CALLEE_DEREF_OPCODE: u8 = 68;
 pub const CONSTRUCT_REST_OPCODE: u8 = 69;
 pub const ARRAY_REPEAT_ELEMENT_OPCODE: u8 = 70;
-pub const OPCODE_COUNT: usize = 71;
+// Tag 71 forms `&raw const place` / `&raw mut place` (E-R5-008).
+pub const RAW_BORROW_OPCODE: u8 = 71;
+pub const OPCODE_COUNT: usize = 72;
 pub type OpcodeCounters = [u64; OPCODE_COUNT];
 
 /// Closed source-bound floating value. Public callers can inspect or clone a
@@ -661,6 +663,13 @@ pub enum Op {
     Borrow {
         place: SlotId,
         access: BorrowAccess,
+        destination: SlotId,
+    },
+    /// `&raw const place` / `&raw mut place` (E-R5-008): the raw pointer to the
+    /// place's cell, formed without a reference value or its borrow checks.
+    RawBorrow {
+        place: SlotId,
+        mutable: bool,
         destination: SlotId,
     },
     /// The dispatcher prepares a type/variant witness for this exact source PC.
@@ -961,6 +970,7 @@ impl Op {
             Self::CompoundAssignPlace { .. } => COMPOUND_ASSIGN_PLACE_OPCODE,
             Self::ArrayRepeat { .. } => ARRAY_REPEAT_OPCODE,
             Self::ArrayRepeatElement { .. } => ARRAY_REPEAT_ELEMENT_OPCODE,
+            Self::RawBorrow { .. } => RAW_BORROW_OPCODE,
             Self::ComparisonOperand { .. } => COMPARISON_OPERAND_OPCODE,
             Self::IteratorCall { .. } => ITERATOR_CALL_OPCODE,
             Self::ValuePath { .. } => VALUE_PATH_OPCODE,
@@ -1009,6 +1019,7 @@ impl Op {
             Self::SourceConstant { .. }
             | Self::PromotedPlace { .. }
             | Self::Borrow { .. }
+            | Self::RawBorrow { .. }
             | Self::ReadPlace { .. }
             | Self::AssignPlace { .. }
             | Self::CallPrepare { .. }

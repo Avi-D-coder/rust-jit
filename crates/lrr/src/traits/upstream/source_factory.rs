@@ -138,6 +138,7 @@ pub(super) fn materialize<'cx>(
         // A trait's associated type declaration: the declared own clauses.
         if row.predicates.own.known().is_none() && let Some(own) = bundle.own_clauses(source)
             && own.pending().is_none() && source != bundle.request().callee && source != bundle.request().caller
+            && !bundle.request().extra_callees.contains(&source)
         {
             match own.encode(cx, configuration) {
                 Ok(clauses) => {
@@ -522,7 +523,7 @@ pub(crate) fn check_source_factory(
         &super::source_definition_headers::DefinitionHeaderKey { inventory: inventory.clone(), definition: caller }));
     let configuration = caller_plan.configuration().ok_or_else(|| fault("source factory caller configuration unavailable"))?;
     let bundle = ready!(SourceFactBundle::prepare(db, catalog, super::source_fact_bundle::SourceFactRequest {
-        caller, callee, traits: BTreeSet::from([candidate_trait]), input_types: input_types.to_vec(),
+        caller, callee, extra_callees: BTreeSet::new(), traits: BTreeSet::from([candidate_trait]), input_types: input_types.to_vec(),
     }));
     bundle.require_current(db)?;
     let layouts = bundle.generic_layouts().map_err(|why| fault(&format!("source factory generic layout unavailable: {why:?}")))?;

@@ -252,6 +252,32 @@ fn builtin_names_follow_rustc_register_bang() {
     }
 }
 
+// ----- gca! ----------------------------------------------------------------
+
+#[test]
+fn gca_expands_to_its_single_expression() {
+    // rustc gca.rs: `get_single_expr_from_tts` (one expression, optional
+    // trailing comma) wrapped in `GcaMacro`; the tokens are the expression.
+    assert_eq!(render(&expand(BuiltinKind::Gca, "gca!(2);")), "2");
+    assert_eq!(render(&expand(BuiltinKind::Gca, "gca!(N + 1,);")), "N + 1");
+    assert_eq!(
+        render(&expand(BuiltinKind::Gca, "gca!(BAR::<N>);")),
+        "BAR ::< N >"
+    );
+    assert_eq!(
+        builtin_kind("gca").map(BuiltinKind::disposition),
+        Some(BuiltinDisposition::Adapter)
+    );
+}
+
+#[test]
+fn gca_requires_exactly_one_expression() {
+    for text in ["gca!();", "gca!(1, 2);", "gca!(1 2);"] {
+        let failure = expand_in(BuiltinKind::Gca, text, Edition::E2021).unwrap_err();
+        assert_eq!(failure.kind, BuiltinFailureKind::Syntax, "{text}");
+    }
+}
+
 // ----- assert! -------------------------------------------------------------
 
 #[test]

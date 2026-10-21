@@ -30,6 +30,8 @@ pub mod attributes;
 
 pub mod body_index;
 
+pub(crate) mod assignee;
+
 pub(crate) mod fn_parameters;
 
 mod thunks;

@@ -656,7 +656,7 @@ impl SourceDiscovery {
                 self.expansion_budget.clone(),
                 output,
             )?;
-        match fragment.poll_with_sources(&providers[ordinal], &names, Some(&self.included_views))? {
+        match fragment.poll_with_sources(&providers[ordinal], providers, &names, Some(&self.included_views))? {
             crate::expand::declaration_fragment::DeclarationFragmentStep::Complete(output) => {
                 Ok(output)
             }

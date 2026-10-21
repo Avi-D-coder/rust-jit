@@ -168,6 +168,16 @@ pub enum LibraryFunction {
     F64Math,
     /// `core::intrinsics::lrr_f32_math(op: u32, a: f32, b: f32, c: f32) -> f32`.
     F32Math,
+    /// `core::intrinsics::lrr_float_parse_status(&str) -> u32`: whether the
+    /// float grammar of `str::parse::<f32|f64>` accepts the text (0), or why
+    /// not (1 empty, 2 invalid). The grammar does not depend on the width.
+    FloatParseStatus,
+    /// `core::intrinsics::lrr_f64_parse(&str) -> f64`: the correctly rounded
+    /// (nearest-even) value of text `lrr_float_parse_status` accepted.
+    F64Parse,
+    /// `core::intrinsics::lrr_f32_parse(&str) -> f32`: likewise rounded
+    /// directly to `f32`, never through `f64`.
+    F32Parse,
     /// `core::intrinsics::lrr_size_of() -> usize`: the size of the enclosing
     /// function's first type parameter (`mem::size_of::<T>`; E-R5-012).
     SizeOf,
@@ -471,6 +481,21 @@ const ENTRIES: &[(LibraryFunction, &str, &[&str])] = &[
         &["intrinsics", "lrr_f32_math"],
     ),
     (
+        LibraryFunction::FloatParseStatus,
+        "core",
+        &["intrinsics", "lrr_float_parse_status"],
+    ),
+    (
+        LibraryFunction::F64Parse,
+        "core",
+        &["intrinsics", "lrr_f64_parse"],
+    ),
+    (
+        LibraryFunction::F32Parse,
+        "core",
+        &["intrinsics", "lrr_f32_parse"],
+    ),
+    (
         LibraryFunction::SizeOf,
         "core",
         &["intrinsics", "lrr_size_of"],
@@ -580,6 +605,9 @@ impl LibraryFunction {
             Self::F32FromBits => 103,
             Self::F64Math => 104,
             Self::F32Math => 105,
+            Self::FloatParseStatus => 106,
+            Self::F64Parse => 107,
+            Self::F32Parse => 108,
             Self::SizeOf => 120,
             Self::AlignOf => 121,
             Self::NeedsDrop => 122,
@@ -650,6 +678,9 @@ impl LibraryFunction {
         Self::F32FromBits,
         Self::F64Math,
         Self::F32Math,
+        Self::FloatParseStatus,
+        Self::F64Parse,
+        Self::F32Parse,
         Self::SizeOf,
         Self::AlignOf,
         Self::NeedsDrop,
@@ -746,6 +777,9 @@ impl LibraryFunction {
                 | Self::F32FromBits
                 | Self::F64Math
                 | Self::F32Math
+                | Self::FloatParseStatus
+                | Self::F64Parse
+                | Self::F32Parse
                 | Self::SizeOf
                 | Self::AlignOf
                 | Self::NeedsDrop
@@ -798,6 +832,13 @@ pub(crate) fn install(
         let Some(unit) = library.unit(krate) else {
             continue;
         };
+        // The embedded facade source declares `assert_failed` itself (its
+        // body renders both operands through their own `Debug` impls, which
+        // a closed intrinsic cannot call). The closed entry serves only a
+        // world without that source, so exactly one declaration is visible.
+        if *function == LibraryFunction::AssertFailed && source_declares(graph, unit, path) {
+            continue;
+        }
         let (_, modules) = path.split_last().expect("non-empty facade path");
         for depth in 0..=modules.len() {
             graph.declare_module(
@@ -814,6 +855,22 @@ pub(crate) fn install(
         )?;
     }
     Ok(())
+}
+
+/// Whether ordinary source already declares the value at `path` in `unit`.
+fn source_declares(graph: &NameNamespaces, unit: Digest, path: &[&str]) -> bool {
+    let Ok(name) = NameNamespaces::path(unit, path, LIBRARY_EDITION) else {
+        return false;
+    };
+    let scope = crate::syntax::outline::ScopeKey {
+        crate_key: unit,
+        module_path: path[..path.len() - 1].iter().map(|segment| (*segment).to_owned()).collect(),
+        owner: None,
+    };
+    matches!(
+        graph.lookup(Namespace::Value, &name, &scope),
+        Ok(crate::frontend::names::NameLookup::Defined(_) | crate::frontend::names::NameLookup::Ambiguous(_))
+    )
 }
 
 /// Select a facade function after ordinary value lookup.

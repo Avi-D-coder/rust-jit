@@ -384,3 +384,78 @@ fn main() {
         "true false\ntrue\n",
     );
 }
+
+#[test]
+fn qualified_operator_paths_select_among_impls_by_the_trait_arguments() {
+    // `i32` implements `Mul<i32>` and `Mul<&i32>`: `<i32 as Mul>::mul`,
+    // `<i32 as Mul<&i32>>::mul` (explicit trait arguments, also through a
+    // macro) and the method form select by the call's arguments; a literal
+    // argument takes the selected impl's parameter Type.
+    prints(
+        "qualified-ops",
+        "use std::ops::{Add, Mul};
+macro_rules! tmul { ($t:ty, $a:expr, $b:expr) => { <$t as Mul<$t>>::mul($a, $b) } }
+fn gen<T: Mul<T, Output = T>>(a: T, b: T) -> T { <T as Mul<T>>::mul(a, b) }
+fn main() {
+    let a: i32 = 6;
+    let b: i32 = 7;
+    let c: i64 = 6;
+    println!(\"{}\", <i32 as Mul>::mul(a, b));
+    println!(\"{}\", <i32 as Mul<i32>>::mul(a, b));
+    println!(\"{}\", <i32 as Mul<&i32>>::mul(a, &b));
+    println!(\"{}\", <i64 as Mul>::mul(c, 7));
+    println!(\"{}\", tmul!(i64, 6, 7));
+    println!(\"{}\", c.add(7));
+    println!(\"{}\", gen(1.5f64, 2.0));
+}
+",
+        "42\n42\n42\n42\n42\n13\n3\n",
+    );
+}
+
+#[test]
+fn explicit_trait_arguments_fix_an_unresolved_literal_argument() {
+    prints(
+        "qualified-explicit",
+        "trait Conv<T> { fn conv(self, t: T) -> u64; }
+impl Conv<u8> for u32 { fn conv(self, t: u8) -> u64 { 1000 + t as u64 } }
+impl Conv<u16> for u32 { fn conv(self, t: u16) -> u64 { 2000 + t as u64 } }
+fn main() {
+    println!(\"{} {}\", <u32 as Conv<u16>>::conv(1, 5), <u32 as Conv<u8>>::conv(1, 5));
+}
+",
+        "2005 1005\n",
+    );
+}
+
+#[test]
+fn operators_on_references_to_a_rigid_referent_dispatch_the_bound() {
+    // `&'a T: Add<&'a T, Output = T>`: the operands' views carry the
+    // instantiated referent, the result is statically the rigid `T`.
+    prints(
+        "rigid-ref-ops",
+        "use std::ops::{Add, Neg};
+fn addr<'a, T>(a: &'a T, b: &'a T) -> T where &'a T: Add<&'a T, Output = T> { a + b }
+fn negr<T>(a: &T) -> T where for<'a> &'a T: Neg<Output = T> { -a }
+fn main() {
+    println!(\"{} {} {}\", addr(&3i32, &4i32), addr(&1.5f64, &2.0f64), negr(&5i64));
+}
+",
+        "7 3.5 -5\n",
+    );
+}
+
+#[test]
+fn unit_receivers_select_the_empty_tuple_impls() {
+    prints(
+        "unit-receiver",
+        "use std::cmp::Ordering;
+fn main() {
+    let u = ().clone();
+    println!(\"{:?} {:?} {} {} {}\", ().partial_cmp(&()), ().cmp(&()), ().eq(&()), u == (), ().ne(&()));
+    assert_eq!(().partial_cmp(&()), Some(Ordering::Equal));
+}
+",
+        "Some(Equal) Equal true true false\n",
+    );
+}

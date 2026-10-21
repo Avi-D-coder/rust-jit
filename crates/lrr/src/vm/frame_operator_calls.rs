@@ -324,11 +324,18 @@ impl Frame {
         // an opaque type) as the lang-item trait call; monomorphization only
         // picks the impl. The operand's static source decides, not the primitive
         // value it happens to hold in this instantiation.
+        // A reference to a rigid referent (`&'a T`) is as rigid: its operator is
+        // the `&'a T: Add<..>` bound's trait call, not the primitive forwarding
+        // the instantiated referent would allow.
+        let mut static_source = self.source_view_ref(slot)?;
+        while let Some(crate::traits::term::TyTerm::Ref(_, _, referent)) = static_source {
+            static_source = Some(referent.as_ref());
+        }
         if let Some(
             crate::traits::term::TyTerm::Param(_)
             | crate::traits::term::TyTerm::Projection(_)
             | crate::traits::term::TyTerm::Opaque(..),
-        ) = self.source_view_ref(slot)?
+        ) = static_source
         {
             return Ok(true);
         }
@@ -349,6 +356,21 @@ impl Frame {
         }
         Ok(true)
     }
+    /// Whether the operation's result is statically a rigid Type (`T`,
+    /// `<T as Tr>::Assoc`, an opaque type). A builtin primitive operator can
+    /// only produce a primitive, so a rigid result means rustc typed the
+    /// operation as the lang-item trait call (`&'a T: Add<&'a T, Output = T>`),
+    /// whose operands' own views carry the instantiated referent.
+    fn rigid_result(&self, destination: SlotId) -> Result<bool, Diagnostic> {
+        Ok(matches!(
+            self.source_view_ref(destination)?,
+            Some(
+                crate::traits::term::TyTerm::Param(_)
+                    | crate::traits::term::TyTerm::Projection(_)
+                    | crate::traits::term::TyTerm::Opaque(..)
+            )
+        ))
+    }
     /// The trait-method operator a reached operation dispatches to, when its
     /// operands are not builtin primitives.
     pub(crate) fn overloaded_operator(
@@ -361,18 +383,21 @@ impl Frame {
                 operator,
                 left,
                 right,
-                ..
+                destination,
             } => {
                 let comparison = OperatorKind::Binary(*operator).comparison();
                 (self.overloaded_operand(*left, comparison, store)?
-                    || self.overloaded_operand(*right, comparison, store)?)
+                    || self.overloaded_operand(*right, comparison, store)?
+                    || (!comparison && self.rigid_result(*destination)?))
                 .then_some(OperatorKind::Binary(*operator))
             }
             Op::NumericUnary {
-                operator, source, ..
-            } => self
-                .overloaded_operand(*source, false, store)?
-                .then_some(OperatorKind::Unary(*operator)),
+                operator,
+                source,
+                destination,
+            } => (self.overloaded_operand(*source, false, store)?
+                || self.rigid_result(*destination)?)
+            .then_some(OperatorKind::Unary(*operator)),
             Op::CompoundAssignPlace {
                 operator, place, ..
             } => {

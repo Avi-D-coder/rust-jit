@@ -820,6 +820,35 @@ impl GuestStore {
             )),
         }
     }
+    /// `&raw const place` / `&raw mut place`: the raw pointer to the place's
+    /// cell. The place is resolved and admitted exactly like the operand of
+    /// `&place as *const T`; the pointer is that conversion's result, so the
+    /// intermediate lease is discarded and no reference value is published.
+    pub(crate) fn raw_borrow_ticket(
+        &mut self,
+        place: &crate::runtime::place::Place,
+        mutable: bool,
+    ) -> Result<TicketId, crate::runtime::place::PlaceFailure> {
+        let access = if mutable {
+            Access::Mutable
+        } else {
+            Access::Shared
+        };
+        let reference = self.borrow_ticket(place, access)?;
+        let value = self.peek_ticket(reference)?;
+        let pointee = self.pointer_pointee(TypeId(value.type_id))?;
+        let descriptor = self.raw_pointer_type(mutable, pointee)?;
+        let pointer = self.pointer_cast(value, descriptor)?;
+        // The reference was formed and consumed here, so its record has no
+        // other holder: `discard` retires a mutable lease, and the shared
+        // record is released explicitly.
+        let record = RefId::from_bits(value.payload);
+        self.discard(reference)?;
+        if !mutable {
+            self.references.take(record, &mut self.budget)?;
+        }
+        Ok(self.ticket(pointer)?)
+    }
     /// The thin pointer or reference of type `ty` that an address image
     /// designates. A raw pointer is just the address (`usize as *const T`);
     /// a reference is the ordinary reborrow `&*(address as *const T)` /

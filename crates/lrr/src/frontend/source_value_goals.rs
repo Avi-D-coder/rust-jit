@@ -687,7 +687,23 @@ pub fn prepare_lexical(
             let Some((path, record)) = pattern_path else {
                 return goal.needs(ValueGoalDemand::Occurrence);
             };
-            let qualified_pattern = path.qualifier().is_some() || path.coloncolon_token().is_some();
+            // `root::a::Variant` whose root a block-level `use` may bind: the
+            // path continues from that binding.
+            if checked!(source
+                .parsed()
+                .deep_root_import_may_bind(&path, source.index().cfg()))
+            {
+                return deep_lexical(
+                    db,
+                    goal,
+                    &path,
+                    if record { Namespace::Type } else { Namespace::Value },
+                    true,
+                );
+            }
+            let qualified_pattern = path.qualifier().is_some()
+                || path.coloncolon_token().is_some()
+                || crate::syntax::parse::ParsedFile::is_self_type_path(&path);
             let lexical_root = crate::syntax::parse::ParsedFile::lexical_root_name(&path);
             // A qualified pattern path whose root no block item or import
             // can bind (three or more segments, a path-keyword or absolute
@@ -787,8 +803,20 @@ pub fn prepare_lexical(
             let Some(path) = expression.path() else {
                 return goal.needs(ValueGoalDemand::Occurrence);
             };
-            if path.qualifier().is_some() || path.coloncolon_token().is_some() {
+            if path.qualifier().is_some()
+                || path.coloncolon_token().is_some()
+                || crate::syntax::parse::ParsedFile::is_self_type_path(&path)
+            {
                 goal.qualified_path = true;
+                // `root::a::b` whose root a block-level `use` may bind: the
+                // path continues from that binding.
+                if checked!(source
+                    .parsed()
+                    .deep_root_import_may_bind(&path, source.index().cfg()))
+                {
+                    goal.qualified_path = false;
+                    return deep_lexical(db, goal, &path, Namespace::Value, false);
+                }
                 // `Root::member` whose root a block item or import may bind:
                 // the root is selected through the entered lexical prefix;
                 // any other qualified path keeps the module route.
@@ -998,6 +1026,189 @@ pub fn prepare_lexical(
     }
     complete_lexical_lookup(db, goal, lookup, foreign, name_range)
 }
+/// A qualified path of three or more segments whose root a block-level `use`
+/// may bind (`use std::cmp; cmp::Ordering::Less`): rustc resolves the first
+/// segment lexically, then continues from what it names. The one qualified
+/// body-module kernel (`lookup_qualified_module`, also the qualified Type
+/// service's) performs that continuation through the block's import routes
+/// and the module graph, so the selected declaration is the same as if the
+/// import had named it directly (a variant, constant, function or type).
+fn deep_lexical(
+    db: &mut Database,
+    mut goal: EnteredValueGoal,
+    path: &ast::Path,
+    namespace: Namespace,
+    pattern: bool,
+) -> QueryPoll<EnteredValueGoal> {
+    use crate::syntax::imports::ImportSegment;
+    let plan = Arc::clone(&goal.plan);
+    let source = plan.context().source();
+    let (root, _) = plan.entered.local_hygiene();
+    let Some(root_name) = crate::syntax::parse::ParsedFile::deep_lexical_root(path) else {
+        return goal.needs(ValueGoalDemand::PathAdjustment);
+    };
+    let name_range = range(root_name.syntax().text_range());
+    let name = checked!(owned_spelling(root_name.text()));
+    let edition = checked!(source.parsed().token_edition(name_range));
+    let raw = checked!(source.identifier_context_or_original(name_range, root));
+    let mut segments = Vec::new();
+    let mut cursor = Some(path.clone());
+    while let Some(current) = cursor {
+        let Some(segment) = current.segment() else {
+            return goal.needs(ValueGoalDemand::PathAdjustment);
+        };
+        let Some(reference) = segment.name_ref() else {
+            return goal.needs(ValueGoalDemand::PathAdjustment);
+        };
+        segments.push(match segment.kind() {
+            Some(ast::PathSegmentKind::Name(_)) => ImportSegment::Name(reference.text().to_string()),
+            Some(ast::PathSegmentKind::SelfKw) => ImportSegment::SelfModule,
+            Some(ast::PathSegmentKind::SuperKw) => ImportSegment::Super,
+            _ => return goal.needs(ValueGoalDemand::PathAdjustment),
+        });
+        cursor = current.qualifier();
+    }
+    segments.reverse();
+    let mut occurrence = StableEncoder::new("lrr/v1/entered-value-deep-lexical-occurrence");
+    occurrence.string(&path.syntax().text().to_string());
+    occurrence.u32(name_range.start);
+    occurrence.u32(name_range.end);
+    occurrence.u16(edition);
+    occurrence.digest(Digest(raw.0));
+    goal.occurrence = occurrence.finish();
+    if let Some(missing) = plan.missing_expansions.first() {
+        return goal.needs(ValueGoalDemand::ExpansionDefinition(*missing));
+    }
+    let Some(environment) = plan.environment() else {
+        return goal.needs(ValueGoalDemand::ModulePublication);
+    };
+    let environment = environment.macros().source_environment();
+    let body = goal.key.body.clone();
+    let site = OrdinaryNameSite {
+        source: plan.entered.parent.source(),
+        body: &body,
+        at: u64::from(name_range.start),
+        name: &name,
+        context: raw,
+        namespace,
+    };
+    macro_rules! certified {
+        ($reads:expr) => {
+            match polled!(certify(
+                &$reads,
+                db,
+                environment,
+                goal.occurrence,
+                goal.reads
+            )) {
+                NamespaceReadCertification::Complete(identity) => goal.reads = identity,
+                NamespaceReadCertification::PendingOwner(id) => {
+                    return goal.needs(ValueGoalDemand::SourceOwner(id));
+                }
+                NamespaceReadCertification::PendingScope(id) => {
+                    return goal.needs(ValueGoalDemand::ScopeCertificate(id));
+                }
+                NamespaceReadCertification::PendingName(id) => {
+                    return goal.needs(ValueGoalDemand::ModuleCompletion(id));
+                }
+            }
+        };
+    }
+    // The root itself must be bound by a block-level `use`; any other root
+    // (a crate or module name a glob merely might shadow) returns to the
+    // module route at the prefix result.
+    {
+        let prefix_site = OrdinaryNameSite {
+            source: plan.entered.parent.source(),
+            body: &body,
+            at: u64::from(name_range.start),
+            name: &name,
+            context: raw,
+            namespace: Namespace::Type,
+        };
+        let (prefix, prefix_reads) = checked!(plan.adapter().lookup_prepared_value_prefix_observed(
+            &prefix_site,
+            &plan.type_names,
+            environment.names()
+        ));
+        match prefix {
+            PrefixResolution::Name(_) => {}
+            PrefixResolution::ModuleTail => {
+                certified!(prefix_reads);
+                goal.qualified_path = true;
+                if pattern {
+                    goal.type_namespace = namespace == Namespace::Type;
+                } else {
+                    goal.continuation = Some(ValueContinuation::Qualified);
+                }
+                return QueryPoll::Ready(goal.finish());
+            }
+            PrefixResolution::NeedImport(id) | PrefixResolution::NeedDeclaration(id) => {
+                return goal.needs(ValueGoalDemand::Prefix(id));
+            }
+            PrefixResolution::Parameter(_) | PrefixResolution::NeedOwnerGeneric => {
+                return goal.needs(ValueGoalDemand::PathAdjustment);
+            }
+        }
+    }
+    let (mut lookup, reads) = checked!(plan.adapter().lookup_qualified_module_observed(
+        site,
+        &segments,
+        false,
+        environment.names()
+    ));
+    certified!(reads);
+    goal.type_namespace = namespace == Namespace::Type;
+    // No module item: `root::Type::member` names a variant or an associated
+    // item of the type the prefix selects, as `Type::member` does for a
+    // directly selected type (`Root::member`'s rooted selection).
+    if matches!(lookup, NameLookup::Absent)
+        && let Some((ImportSegment::Name(member), prefix)) = segments.split_last()
+        && prefix.len() >= 2
+    {
+        let type_site = OrdinaryNameSite {
+            source: plan.entered.parent.source(),
+            body: &body,
+            at: u64::from(name_range.start),
+            name: &name,
+            context: raw,
+            namespace: Namespace::Type,
+        };
+        let (root_lookup, root_reads) = checked!(plan.adapter().lookup_qualified_module_observed(
+            type_site,
+            prefix,
+            false,
+            environment.names()
+        ));
+        certified!(root_reads);
+        // Only an enum root (itself or through a type alias) is continued:
+        // its member is a variant, selected as `Enum::Variant` is. Associated
+        // items of other types are not selected from a lexical root yet.
+        if let NameLookup::Defined(root_type) = &root_lookup {
+            let sources: Vec<_> = environment.sources().iter().collect();
+            let resolver = checked!(crate::frontend::callables::CallResolver::new(
+                environment.names(),
+                &sources
+            ));
+            if let Some((_, crate::source::manifest::ItemKind::Enum)) =
+                polled!(resolver.nominal_of(db, root_type.identity))
+            {
+                goal.type_namespace = true;
+                goal.rooted = Some(member.clone());
+                lookup = root_lookup;
+            }
+        }
+    }
+    match lookup {
+        NameLookup::Defined(selected) => {
+            let foreign = edition != plan.entered.parent.source().outline.parse.profile.edition;
+            goal.continuation = Some(ValueContinuation::Declaration { selected, foreign });
+            QueryPoll::Ready(goal.finish())
+        }
+        NameLookup::NeedInput(id) => goal.needs(ValueGoalDemand::Prefix(id)),
+        _ => goal.needs(ValueGoalDemand::PathAdjustment),
+    }
+}
 fn complete_lexical_lookup(
     db: &mut Database,
     mut goal: EnteredValueGoal,
@@ -1028,8 +1239,13 @@ fn complete_lexical_lookup(
             let Some(prior) = plan.pattern_occurrences.for_local(id) else {
                 // The same hygienic prefix selected one of this function's
                 // own parameters: an ordinary local with no body pattern.
-                if goal.target.is_none() && adapter.parameter_recipe(id).is_some() {
-                    goal.local = Some(id);
+                // A local is never a constant or unit constructor, so a
+                // pattern name that finds one is a fresh binding that
+                // shadows it (rustc `try_resolve_as_non_binding` only
+                // disambiguates Def resolutions), exactly as it shadows a
+                // body binding through the prior pattern below.
+                if adapter.parameter_recipe(id).is_some() {
+                    goal.local = Some(goal.target.as_ref().map_or(id, |target| target.identity));
                     return QueryPoll::Ready(goal.finish());
                 }
                 return goal.needs(ValueGoalDemand::Prefix(id));
@@ -1232,7 +1448,18 @@ fn qualified(
         &sources
     ));
     let caller = goal.key.body.definition;
-    let lookup = polled!(resolver.lookup_written(db, caller, &spelled, Namespace::Value));
+    let mut lookup = polled!(resolver.lookup_written(db, caller, &spelled, Namespace::Value));
+    let mut members = None;
+    if lookup == NameLookup::Absent {
+        // A variant reached through `Self` or a type alias is selected by the
+        // same lookup once the impl index answers `Self`.
+        let index = checked!(environment.member_index());
+        let with_members =
+            checked!(crate::frontend::callables::CallResolver::new(environment.names(), &sources))
+                .with_members(Some(&index));
+        lookup = polled!(with_members.lookup_written(db, caller, &spelled, Namespace::Value));
+        members = Some(index);
+    }
     let mut impl_owned = false;
     let mut selected_kind = None;
     let selected = match lookup {
@@ -1240,7 +1467,10 @@ fn qualified(
         // A type-relative associated function (`P::f`, `Self::f`): the
         // dispatcher's own route with this environment's shared impl index.
         NameLookup::Absent => {
-            let members = checked!(environment.member_index());
+            let members = match members {
+                Some(members) => members,
+                None => checked!(environment.member_index()),
+            };
             let resolver = resolver.with_members(Some(&members));
             let selection = polled!(resolver.source_function(db, caller, &spelled));
             // An associated constant (`Type::NAME`, `<T as Tr>::NAME`): an
@@ -1312,6 +1542,14 @@ fn declaration(
     if selected.namespace != expected {
         return QueryPoll::Ready(Err(error("Value goal selected another namespace")));
     }
+    // `Alias::member` (a lexically selected type alias as the root of a
+    // variant or associated item): the root is the type it aliases.
+    let selected = if goal.rooted.is_some() {
+        polled!(alias_root(db, &goal, selected))
+    } else {
+        selected
+    };
+    let id = selected.identity;
     // A closed library facade function has no source declaration; the
     // dispatcher selects it by this same definition identity.
     if goal.target.is_none()
@@ -1450,6 +1688,35 @@ fn declaration(
         selected_kind,
     });
     QueryPoll::Ready(goal.finish())
+}
+
+/// The nominal declaration a lexically selected type root denotes: a type
+/// alias is replaced by the nominal type the ordinary alias service
+/// normalizes it to; any other root is unchanged.
+fn alias_root(
+    db: &mut Database,
+    goal: &EnteredValueGoal,
+    selected: NameDefinition,
+) -> QueryPoll<NameDefinition> {
+    let Some(environment) = goal.plan.environment() else {
+        return QueryPoll::Ready(Ok(selected));
+    };
+    let environment = environment.macros().source_environment();
+    let sources: Vec<_> = environment.sources().iter().collect();
+    let resolver = checked!(crate::frontend::callables::CallResolver::new(
+        environment.names(),
+        &sources
+    ));
+    match resolver.nominal_of(db, selected.identity) {
+        QueryPoll::Ready(Ok(Some((target, _)))) if target != selected.identity => {
+            QueryPoll::Ready(Ok(resolver
+                .nominal_definition(db, target, selected.namespace)
+                .unwrap_or(selected)))
+        }
+        QueryPoll::Ready(Ok(_)) => QueryPoll::Ready(Ok(selected)),
+        QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+    }
 }
 
 pub(crate) enum CanonicalValueKind {

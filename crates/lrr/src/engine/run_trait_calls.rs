@@ -73,11 +73,8 @@ impl RunMachine {
             TypeKey::Nominal { identity, .. } => Ok(*identity),
             TypeKey::Primitive(_) if ty.0 == 16 => Err(BuiltinSelf::Str),
             TypeKey::Primitive(_) => match self.store.descriptor_source_term(ty) {
-                Some(crate::traits::term::TyTerm::Primitive(crate::ir::op::PrimitiveType::Unit)) => {
-                    Err(BuiltinSelf::Tuple(0))
-                }
                 Some(crate::traits::term::TyTerm::Primitive(primitive)) => {
-                    Err(BuiltinSelf::Primitive(primitive))
+                    Err(BuiltinSelf::of_primitive(primitive))
                 }
                 _ => return Err(call_fault("reached primitive self type is not selectable")),
             },
@@ -252,7 +249,26 @@ impl RunMachine {
             // ordinary path selection (`CallResolver::anchored_function`);
             // `Trait::f` selects its impl from the reached self type.
             if self_written.is_some() {
-                return QueryPoll::Ready(Ok(None));
+                // Several impls of the written trait that differ only by its
+                // arguments (`<i32 as Mul>::mul`: `Mul<i32>`, `Mul<&i32>`):
+                // the evaluated arguments select the impl, as for a method
+                // call or a `Type::name` call.
+                if arguments.is_empty() {
+                    return QueryPoll::Ready(Ok(None));
+                }
+                return match poll!(resolver.anchored_alternatives(db, caller, name)) {
+                    Some(found) => self.alternatives_call(
+                        db,
+                        found.trait_key,
+                        found.declaration,
+                        function,
+                        found.functions,
+                        found.self_term,
+                        &found.explicit_arguments,
+                        arguments,
+                    ),
+                    None => QueryPoll::Ready(Ok(None)),
+                };
             }
             let Some(tr) = trait_written else {
                 return QueryPoll::Ready(Ok(None));
@@ -295,6 +311,7 @@ impl RunMachine {
                                     arguments: arguments.to_vec(),
                                     alternatives: functions,
                                     result_self: self_term.filter(|_| returns_self),
+                                    expected: Vec::new(),
                                 },
                             })))
                         }
@@ -404,6 +421,7 @@ impl RunMachine {
                         arguments: arguments.to_vec(),
                         alternatives: candidates,
                         result_self,
+                        expected: Vec::new(),
                     },
                 })));
             }
@@ -418,6 +436,69 @@ impl RunMachine {
         };
         self.member_callee(db, selected)
             .map(|callee| Some(TraitPathCall::Selected(callee)))
+    }
+    /// A call to a function several impls of one trait provide, differing only
+    /// by the trait's arguments: it starts against the trait's `declaration`
+    /// and the evaluated arguments select the impl (`select_by_arguments`).
+    /// `self_term` is the written Self when it is a closed primitive, which
+    /// every accepted impl of a bare-`Self` result must produce.
+    /// `explicit_arguments` are the Type arguments written on the trait
+    /// (`<i32 as Mul<&i32>>`): where one is a plain primitive (or reference
+    /// to one) it fixes the declared parameters written in terms of it.
+    #[allow(clippy::too_many_arguments)]
+    fn alternatives_call(
+        &mut self,
+        db: &mut Database,
+        trait_key: crate::core::digest::Digest,
+        declaration: crate::core::digest::Digest,
+        function: &str,
+        alternatives: Vec<crate::core::digest::Digest>,
+        self_term: Option<crate::traits::term::TyTerm>,
+        explicit_arguments: &[String],
+        arguments: &[SlotId],
+    ) -> QueryPoll<Option<TraitPathCall>> {
+        let (returns_self, expected) =
+            match db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(declaration)) {
+                QueryPoll::Ready(Ok(value)) => match value.value.as_ref() {
+                    QueryValue::FunctionSignature(signature) => (
+                        self_parameter(&signature.result) == Some(false),
+                        match explicit_parameter_types(
+                            signature,
+                            declaration,
+                            explicit_arguments,
+                            self_term.as_ref(),
+                        ) {
+                            Ok(expected) => expected,
+                            Err(error) => return QueryPoll::Ready(Err(error)),
+                        },
+                    ),
+                    _ => (false, Vec::new()),
+                },
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            };
+        let Some(last) = arguments.len().checked_sub(1) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        QueryPoll::Ready(Ok(Some(TraitPathCall::Deferred {
+            declaration,
+            call: DeferredTraitCall {
+                trait_key,
+                name: function.to_owned(),
+                // Selected once the last argument is evaluated.
+                self_ordinal: match u32::try_from(last) {
+                    Ok(ordinal) => ordinal,
+                    Err(_) => {
+                        return QueryPoll::Ready(Err(call_fault("argument ordinal overflow")));
+                    }
+                },
+                self_type: None,
+                arguments: arguments.to_vec(),
+                alternatives,
+                result_self: self_term.filter(|_| returns_self),
+                expected,
+            },
+        })))
     }
     /// `Trait::name(..)`: the declaration's parameter written as `Self`
     /// selects the impl once evaluated; with none, the expected result
@@ -505,6 +586,7 @@ impl RunMachine {
                         arguments: arguments.to_vec(),
                         alternatives: Vec::new(),
                         result_self: None,
+                        expected: Vec::new(),
                     },
                 })));
             }
@@ -755,6 +837,38 @@ impl RunMachine {
                         types.push(ty);
                     }
                     Err(error) => return QueryPoll::Ready(Err(error)),
+                }
+            }
+            // The trait's explicit arguments fix the declared parameters an
+            // argument still unresolved (an unsuffixed literal) could not
+            // select by itself (`<u64 as Shl<u8>>::shl(1, 3)`).
+            for (ordinal, term) in &deferred.expected {
+                use crate::{ir::op::PrimitiveType as P, traits::term::TyTerm};
+                let Some(view) = views.get_mut(*ordinal) else {
+                    continue;
+                };
+                let fits = |integer: bool, term: &TyTerm| match term {
+                    TyTerm::Primitive(P::F32 | P::F64) => !integer,
+                    TyTerm::Primitive(
+                        P::Unit | P::Bool | P::Char,
+                    ) => false,
+                    TyTerm::Primitive(_) => integer,
+                    _ => false,
+                };
+                let applies = match &*view {
+                    SelectionArgument::Unknown => true,
+                    SelectionArgument::Literal {
+                        integer,
+                        behind_reference: false,
+                    } => fits(*integer, term),
+                    SelectionArgument::Literal {
+                        integer,
+                        behind_reference: true,
+                    } => matches!(term, TyTerm::Ref(_, false, referent) if fits(*integer, referent)),
+                    SelectionArgument::Type(_) => false,
+                };
+                if applies {
+                    *view = SelectionArgument::Type(term.clone());
                 }
             }
             // The selection is fixed per (site, reached argument Types);
@@ -1044,6 +1158,38 @@ impl RunMachine {
         for hint in &mut hints {
             argument_hints::apply_context(hint, &callee, &[], result_hint.as_ref());
         }
+        // The impl was selected after its arguments were evaluated (no
+        // parameter hint existed then): an argument still an unconstrained
+        // numeric literal takes the selected impl's parameter Type, as an
+        // argument evaluated under that hint would (`<i64 as Mul>::mul(6, 7)`).
+        let mut literals = Vec::new();
+        for (ordinal, hint) in hints.iter().enumerate() {
+            let Some(expected) = hint.descriptor else {
+                continue;
+            };
+            let outcome = (|| -> Result<Option<(crate::runtime::cell::CellId, TypeId)>, Diagnostic> {
+                use crate::runtime::shape::Primitive;
+                let cell = self.frame.cell(arguments[ordinal])?;
+                let value = self.store.admit_move(cell)?;
+                let numeric = matches!(
+                    (value.kind, crate::runtime::shape::primitive(expected)),
+                    (11, Ok(Primitive::Signed(_) | Primitive::Unsigned(_)))
+                        | (12, Ok(Primitive::F32 | Primitive::F64))
+                );
+                Ok((numeric && self.store.effective_type(value)?.is_none())
+                    .then_some((cell, expected)))
+            })();
+            match outcome {
+                Ok(Some(binding)) => literals.push(binding),
+                Ok(None) => {}
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            }
+        }
+        if !literals.is_empty()
+            && let Err(error) = self.store.bind_numeric_literals(&literals)
+        {
+            return QueryPoll::Ready(Err(error));
+        }
         let mut bytes = callee
             .signature()
             .estimated_bytes()
@@ -1071,4 +1217,65 @@ impl RunMachine {
             bytes,
         }))
     }
+}
+
+/// The declared parameter Types a qualified call's explicit trait arguments
+/// fix: each declared parameter written in terms of a trait Type parameter
+/// (`rhs: Rhs`, `other: &Rhs`) with that parameter replaced by the written
+/// argument, when the argument is a plain primitive (or reference to one) and
+/// the result is a closed Type. Arguments of other shapes constrain nothing
+/// (the call's own arguments select the impl).
+fn explicit_parameter_types(
+    signature: &crate::syntax::signatures::FunctionSignature,
+    declaration: crate::core::digest::Digest,
+    explicit: &[String],
+    self_term: Option<&crate::traits::term::TyTerm>,
+) -> Result<Vec<(usize, crate::traits::term::TyTerm)>, Diagnostic> {
+    use crate::{
+        syntax::signatures::GenericKind,
+        traits::{
+            subst::Substitution,
+            term::{GenericArg, ParamKey},
+        },
+    };
+    let (Some(layout), false) = (signature.generic_source_layout, explicit.is_empty()) else {
+        return Ok(Vec::new());
+    };
+    let inherited = signature
+        .generics
+        .iter()
+        .skip(layout.own as usize)
+        .take(layout.inherited as usize)
+        .filter(|parameter| parameter.kind == GenericKind::Type);
+    let mut substitution = Substitution::default();
+    let mut fixed = false;
+    for (parameter, written) in inherited.zip(explicit) {
+        let Some(term) =
+            crate::frontend::callables::explicit_argument_term(written, self_term)
+        else {
+            continue;
+        };
+        substitution.insert(
+            ParamKey {
+                definition: declaration,
+                ordinal: parameter.ordinal,
+            },
+            GenericArg::Type(term),
+        )?;
+        fixed = true;
+    }
+    if !fixed {
+        return Ok(Vec::new());
+    }
+    let mut expected = Vec::new();
+    for (ordinal, parameter) in signature.parameters.iter().enumerate() {
+        let Some(declared) = &parameter.symbolic else {
+            continue;
+        };
+        let applied = substitution.apply(declared)?;
+        if &applied != declared && crate::frontend::call_contracts::closed_term(&applied) {
+            expected.push((ordinal, applied));
+        }
+    }
+    Ok(expected)
 }

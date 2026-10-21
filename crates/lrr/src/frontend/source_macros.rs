@@ -1267,6 +1267,50 @@ impl SourceMacroIndex {
         ancestry: &ExpansionAncestry,
         discovery: bool,
     ) -> Result<HygienicLookup, Diagnostic> {
+        let name = MacroName::parse(name, edition(self.facts.context(self.context)?.edition))?;
+        self.lookup_reference_using(
+            module_path,
+            before,
+            &name,
+            self.context,
+            None,
+            outers,
+            facts,
+            ancestry,
+            discovery,
+        )
+    }
+    /// Textual lookup of a name written in macro output, at an original
+    /// module position, keeping the name's own context and expansion origin.
+    #[expect(clippy::too_many_arguments, reason = "bounded captured lookup context")]
+    pub(crate) fn lookup_reference_with_external(
+        &self,
+        module_path: &[String],
+        before: u64,
+        name: &MacroName,
+        context: Key,
+        origin: Option<Key>,
+        outers: &[super::macro_scopes::OuterMacroScope<'_>],
+        facts: &HygieneFacts,
+        ancestry: &ExpansionAncestry,
+    ) -> Result<HygienicLookup, Diagnostic> {
+        self.lookup_reference_using(
+            module_path, before, name, context, origin, outers, facts, ancestry, false,
+        )
+    }
+    #[expect(clippy::too_many_arguments, reason = "bounded captured lookup context")]
+    fn lookup_reference_using(
+        &self,
+        module_path: &[String],
+        before: u64,
+        name: &MacroName,
+        context: Key,
+        origin: Option<Key>,
+        outers: &[super::macro_scopes::OuterMacroScope<'_>],
+        facts: &HygieneFacts,
+        ancestry: &ExpansionAncestry,
+        discovery: bool,
+    ) -> Result<HygienicLookup, Diagnostic> {
         let module_path = crate::syntax::ast_adapter::semantic_module_path(module_path)
             .ok_or_else(|| error("invalid or oversized source macro module path"))?;
         let scope = SourceScope {
@@ -1278,13 +1322,12 @@ impl SourceMacroIndex {
             .scope_keys
             .get(&scope)
             .ok_or_else(|| error("source textual module is missing"))?;
-        let name = MacroName::parse(name, edition(self.facts.context(self.context)?.edition))?;
         let reference = MacroReference {
             scope,
             before,
-            name: &name,
-            context: self.context,
-            origin: None,
+            name,
+            context,
+            origin,
         };
         if discovery {
             self.declarations.resolve_for_discovery(

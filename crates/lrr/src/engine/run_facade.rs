@@ -706,6 +706,35 @@ fn execute(
             let value = value.ok_or_else(|| facade_fault("unknown float operation code"))?;
             Ok(FacadeOutcome::Value(store.ticket(value)?))
         }
+        // `str::parse::<f32|f64>`: the host's correctly rounded (nearest-even)
+        // parser, which has std's grammar; width-specific so an `f32` is never
+        // double rounded through `f64`.
+        LibraryFunction::FloatParseStatus
+        | LibraryFunction::F64Parse
+        | LibraryFunction::F32Parse => {
+            let text = store.str_reference_contents(argument()?)?;
+            let value = match function {
+                LibraryFunction::FloatParseStatus => {
+                    let status = if text.is_empty() {
+                        1
+                    } else if text.parse::<f64>().is_ok() {
+                        0
+                    } else {
+                        2
+                    };
+                    ValueRepr::unsigned(crate::runtime::shape::TypeId(11), status)?
+                }
+                LibraryFunction::F64Parse => ValueRepr::f64(
+                    text.parse::<f64>()
+                        .map_err(|_| facade_fault("f64 parse text was not validated"))?,
+                ),
+                _ => ValueRepr::f32(
+                    text.parse::<f32>()
+                        .map_err(|_| facade_fault("f32 parse text was not validated"))?,
+                ),
+            };
+            Ok(FacadeOutcome::Value(store.ticket(value)?))
+        }
         LibraryFunction::RefEq => {
             let [a, b] = tickets else {
                 return Err(facade_fault("reference comparison arguments differ"));

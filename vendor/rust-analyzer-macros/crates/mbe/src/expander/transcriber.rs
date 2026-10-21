@@ -1015,7 +1015,10 @@ fn expand_repeat(
             builder.discard_trial_plans(trial_plans);
             break;
         }
-        if nesting_state.repetition_len.is_none() {
+        // A planned repetition was driven in the counting pass. Its iterations may
+        // all be empty nested repetitions that never look up a binding of this
+        // axis again (`$($(...)?)?` matched once with nothing inside).
+        if nesting_state.repetition_len.is_none() && planned_iterations.is_none() {
             builder.restore(initial_restore_point);
             restore_point = initial_restore_point;
             err = Some(ExpandError::binding_error(

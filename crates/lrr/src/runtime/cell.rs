@@ -2166,7 +2166,13 @@ impl GuestStore {
         let expected = self.address_type(child)?;
         if !field_type
             .find_descriptor(self, args)
-            .is_some_and(|declared| declared == expected || self.dyn_admits(declared, expected))
+            .is_some_and(|declared| {
+                declared == expected
+                    || self.dyn_admits(declared, expected)
+                    // A fn-pointer field holds the erased fn-pointer descriptor
+                    // its stored value was coerced to (E-R5-008).
+                    || self.pointer_family_interchange(declared, expected)
+            })
         {
             return Err(Diagnostic::new(
                 "LRR-E-OWNERSHIP",

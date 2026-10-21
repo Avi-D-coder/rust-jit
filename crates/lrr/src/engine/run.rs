@@ -54,6 +54,8 @@ pub(crate) use borrows::tests::start_discovered_body;
 mod constructors;
 #[path = "run_constructor_inputs.rs"]
 mod constructor_inputs;
+#[path = "run_component_shadow.rs"]
+mod component_shadow;
 #[cfg(test)]
 #[path = "run_discarded_numeric_tests.rs"]
 mod discarded_numeric_tests;
@@ -3048,6 +3050,15 @@ impl RunMachine {
                     }
                     QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
                 }
+            }
+            // Diagnostic only (`LRR_SCR_SHADOW`): the literal's component rows.
+            match self.shadow_component(db, id) {
+                QueryPoll::Ready(Ok(())) => {}
+                QueryPoll::Ready(Err(error)) => {
+                    self.terminal = true;
+                    return RunPoll::Fault(error);
+                }
+                QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
             }
             // A record whose explicit Type argument holds a `_` settles through
             // the pinned inference owner once its first field operand has run.

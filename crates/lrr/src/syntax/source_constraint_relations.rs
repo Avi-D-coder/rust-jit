@@ -203,6 +203,7 @@ fn boundary(kind: FactKind) -> SourceRelationBoundary {
         FactKind::Cast => SourceRelationBoundary::WrittenType,
         FactKind::Prefix | FactKind::Binary => SourceRelationBoundary::Operator,
         FactKind::Borrow
+        | FactKind::RawBorrow
         | FactKind::Tuple
         | FactKind::Field
         | FactKind::Array

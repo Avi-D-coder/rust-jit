@@ -332,6 +332,10 @@ pub(crate) struct DeferredTraitCall {
     /// impl's result must unify with (rejects the blanket `From<T> for T`
     /// when the argument is not a `u64`).
     pub(crate) result_self: Option<crate::traits::term::TyTerm>,
+    /// A qualified call's explicit trait arguments (`<i32 as Mul<&i32>>::mul`)
+    /// as the declared parameter Types they fix: an argument still unresolved
+    /// (an unsuffixed literal) is selected against these.
+    pub(crate) expected: Vec<(usize, crate::traits::term::TyTerm)>,
 }
 /// Actual immutable declared parameter observation, retained across argument
 /// effects and suspension with its relevant source dependencies.
@@ -527,6 +531,7 @@ impl Frame {
                 node.role,
                 crate::syntax::body_index::NodeRole::Expression(
                     crate::syntax::body_index::ExpressionKind::Block
+                        | crate::syntax::body_index::ExpressionKind::Const
                         | crate::syntax::body_index::ExpressionKind::While
                         | crate::syntax::body_index::ExpressionKind::Loop
                         | crate::syntax::body_index::ExpressionKind::For
@@ -3458,6 +3463,68 @@ impl Frame {
         let ticket = store.borrow_ticket(&borrowed, access)?;
         self.write(destination, ticket, store)?;
         self.set_source_view(destination, written_source)?;
+        self.clear_place(place)?;
+        Ok(())
+    }
+    /// `&raw const place` / `&raw mut place`: admission is the borrow's place
+    /// admission (bounds, writability); the result is a raw pointer, so no
+    /// reference source or unsizing contract applies.
+    pub(crate) fn preflight_raw_borrow(
+        &self,
+        place: SlotId,
+        mutable: bool,
+        destination: SlotId,
+        store: &GuestStore,
+    ) -> Result<(), crate::runtime::place::PlaceFailure> {
+        use crate::runtime::reference::Access;
+        let source = self
+            .place_slot(place)?
+            .place
+            .as_ref()
+            .ok_or_else(|| invalid("raw borrow place has not executed"))?;
+        store.admit_place_borrow(
+            source,
+            if mutable {
+                Access::Mutable
+            } else {
+                Access::Shared
+            },
+        )?;
+        let result = self.slot(destination)?;
+        if !self.active_scopes.contains(&result.scope) {
+            return Err(invalid("raw borrow result scope inactive").into());
+        }
+        if let Some(cell) = result.cell
+            && !matches!(store.state(cell)?, CellState::Uninit | CellState::Moved)
+        {
+            return Err(invalid("raw borrow result already live").into());
+        }
+        Ok(())
+    }
+    pub(crate) fn raw_borrow(
+        &mut self,
+        place: SlotId,
+        mutable: bool,
+        destination: SlotId,
+        store: &mut GuestStore,
+    ) -> Result<(), crate::runtime::place::PlaceFailure> {
+        self.preflight_raw_borrow(place, mutable, destination, store)?;
+        let borrowed = {
+            let executed = self.executed_place(place)?;
+            crate::runtime::place::Place {
+                root: executed.root,
+                projections: executed.projections.clone(),
+            }
+        };
+        store.reserve_place_borrow_result(&borrowed, self.slot(destination)?.cell.is_none())?;
+        self.prepare_write(destination, store)?;
+        let ticket = store.raw_borrow_ticket(&borrowed, mutable)?;
+        let descriptor = TypeId(store.peek_ticket(ticket)?.type_id);
+        self.write(destination, ticket, store)?;
+        let view = store
+            .descriptor_source_term(descriptor)
+            .filter(Self::supported_source);
+        self.set_source_view(destination, view)?;
         self.clear_place(place)?;
         Ok(())
     }

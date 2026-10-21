@@ -12,6 +12,8 @@ pub use compile_inputs::capture_macro_export_facet;
 mod callable_value_tests;
 #[cfg(test)]
 mod drop_witness_tests;
+#[cfg(test)]
+mod macro_generated_definition_tests;
 mod explain;
 #[cfg(test)]
 mod nested_operand_prefix;
@@ -31,6 +33,8 @@ mod reached_record_update_tests;
 mod reborrow_tests;
 #[cfg(test)]
 mod ref_pattern_tests;
+#[cfg(test)]
+mod destructuring_tests;
 #[cfg(test)]
 mod subarray_pattern_tests;
 mod render;

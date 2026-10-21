@@ -68,11 +68,15 @@ struct HeaderField {
     shape: Option<HeaderShape>,
 }
 /// The written structure of a compound header Type. Each leaf is an actual
-/// single-segment Type name occurrence, resolved by the same header prefix
-/// service as a single-name field or parameter Type.
+/// Type path occurrence; its first (or only) segment is resolved by the same
+/// header prefix service as a single-name field or parameter Type.
 enum HeaderShape {
+    /// A Type path. `qualifier` holds the module segments before `name`
+    /// (`std::thread::local_impl` of `std::thread::local_impl::LazyStorage<T>`);
+    /// only the last segment takes generic arguments.
     Leaf {
         name: LocalTypeUse,
+        qualifier: Vec<LocalTypeUse>,
         args: Vec<HeaderShape>,
     },
     Tuple(Vec<HeaderShape>),
@@ -81,8 +85,8 @@ enum HeaderShape {
     Ref(bool, Box<HeaderShape>),
 }
 impl HeaderShape {
-    /// `None` when some part is not written structure around single names
-    /// (a qualified path, function pointer, trait object or const length).
+    /// `None` when some part is not written structure around names or module
+    /// paths (a function pointer, trait object or const length).
     fn capture(
         ty: &ast::Type,
         use_name: &dyn Fn(ast::NameRef) -> Result<LocalTypeUse, Diagnostic>,
@@ -128,13 +132,35 @@ impl HeaderShape {
                 }
             }
             ast::Type::PathType(path) => {
-                let Some(path) = path.path().filter(|path| path.qualifier().is_none()) else {
+                let Some(path) = path.path() else {
                     return Ok(None);
                 };
-                let Some(segment) = path.segment().filter(|s| s.coloncolon_token().is_none())
-                else {
+                let mut segments = Vec::new();
+                let mut cursor = Some(path);
+                while let Some(part) = cursor {
+                    let Some(segment) = part.segment().filter(|s| s.coloncolon_token().is_none())
+                    else {
+                        return Ok(None);
+                    };
+                    segments.push(segment);
+                    cursor = part.qualifier();
+                }
+                segments.reverse();
+                let Some((segment, modules)) = segments.split_last() else {
                     return Ok(None);
                 };
+                let mut qualifier = Vec::new();
+                for module in modules {
+                    if module.generic_arg_list().is_some()
+                        || module.parenthesized_arg_list().is_some()
+                    {
+                        return Ok(None);
+                    }
+                    let Some(module) = module.name_ref() else {
+                        return Ok(None);
+                    };
+                    qualifier.push(use_name(module)?);
+                }
                 let Some(name) = segment.name_ref() else {
                     return Ok(None);
                 };
@@ -156,6 +182,7 @@ impl HeaderShape {
                 }
                 Self::Leaf {
                     name: use_name(name)?,
+                    qualifier,
                     args,
                 }
             }
@@ -164,10 +191,24 @@ impl HeaderShape {
     }
     fn heap_bytes(&self) -> usize {
         match self {
-            Self::Leaf { name, args } => args.iter().fold(
+            Self::Leaf {
+                name,
+                qualifier,
+                args,
+            } => args.iter().fold(
                 name.name
                     .capacity()
-                    .saturating_add(args.capacity().saturating_mul(std::mem::size_of::<Self>())),
+                    .saturating_add(args.capacity().saturating_mul(std::mem::size_of::<Self>()))
+                    .saturating_add(
+                        qualifier
+                            .capacity()
+                            .saturating_mul(std::mem::size_of::<LocalTypeUse>()),
+                    )
+                    .saturating_add(
+                        qualifier
+                            .iter()
+                            .fold(0usize, |n, module| n.saturating_add(module.name.capacity())),
+                    ),
                 |n, arg| n.saturating_add(arg.heap_bytes()),
             ),
             Self::Tuple(members) => members.iter().fold(
@@ -183,13 +224,25 @@ impl HeaderShape {
     }
     fn encode(&self, e: &mut StableEncoder) {
         match self {
-            Self::Leaf { name, args } => {
+            Self::Leaf {
+                name,
+                qualifier,
+                args,
+            } => {
                 e.u8(0);
                 e.string(name.name());
                 e.u32(name.range.start);
                 e.u32(name.range.end);
                 e.u16(name.edition());
                 e.digest(Digest(name.context().0));
+                e.u64(qualifier.len() as u64);
+                for module in qualifier {
+                    e.string(module.name());
+                    e.u32(module.range.start);
+                    e.u32(module.range.end);
+                    e.u16(module.edition());
+                    e.digest(Digest(module.context().0));
+                }
                 e.u64(args.len() as u64);
                 for arg in args {
                     arg.encode(e);
@@ -887,20 +940,30 @@ impl PreparedSourceLocalPlan {
             };
         }
         let term = match shape {
-            HeaderShape::Leaf { name, args } => {
+            HeaderShape::Leaf {
+                name,
+                qualifier,
+                args,
+            } => {
                 let leaf = HeaderTypeSite {
                     owner: header.owner,
                     item: header.item,
                     field: header.field,
                     leaf: Some(name),
                 };
-                let selected = ready!(self.prepare_header_name(
-                    db,
-                    leaf,
-                    site.clone(),
-                    scope,
-                    !args.is_empty()
-                ));
+                let selected = if qualifier.is_empty() {
+                    ready!(self.prepare_header_name(
+                        db,
+                        leaf,
+                        site.clone(),
+                        scope,
+                        !args.is_empty()
+                    ))
+                } else {
+                    ready!(self.prepare_qualified_header_leaf(
+                        db, header, site, name, qualifier, scope
+                    ))
+                };
                 let mut arguments = Vec::new();
                 for arg in args {
                     arguments.push(GenericArg::Type(nested!(arg)));
@@ -962,6 +1025,85 @@ impl PreparedSourceLocalPlan {
             }
         };
         QueryPoll::Ready(Ok(NamedTypePreparation::Alias(AliasTarget::Type(term))))
+    }
+    /// A module-qualified Type path in a local declaration header
+    /// (`std::thread::local_impl::LazyStorage<T>`). Its root segment must not
+    /// be a local or imported binding, and a `$crate` root is its token's
+    /// definition crate; the path then names the module-level declaration the
+    /// ordinary source namespaces select from the declaration's module.
+    fn prepare_qualified_header_leaf(
+        self: &Arc<Self>,
+        db: &mut Database,
+        header: &HeaderTypeSite<'_>,
+        site: &super::DeclarationTypeSite,
+        name: &LocalTypeUse,
+        qualifier: &[LocalTypeUse],
+        scope: &crate::syntax::outline::ScopeKey,
+    ) -> QueryPoll<NamedTypePreparation> {
+        use crate::frontend::names::{NameLookup, NamePath};
+        let owner_context = || {
+            QueryPoll::Ready(Ok(NamedTypePreparation::Name(
+                SignatureName::NeedOwnerContext(scope.clone()),
+            )))
+        };
+        ready!(self.require_current(db));
+        let Some(root) = qualifier.first() else {
+            return owner_context();
+        };
+        let Some(environment) = self.environment() else {
+            return QueryPoll::Ready(Err(error("qualified header Type environment absent")));
+        };
+        let completed = Arc::clone(environment.macros().source_environment());
+        let views: Vec<&crate::source::changes::PreparedSourceView> =
+            completed.sources().iter().collect();
+        let names = completed.names();
+        let mut module = scope.clone();
+        module.owner = None;
+        let found = if root.name() == "$crate" {
+            let parsed = self.context.source().parsed();
+            let Some((unit, _)) = checked!(parsed.dollar_crate_root(root.range())) else {
+                return owner_context();
+            };
+            let tail = qualifier[1..]
+                .iter()
+                .chain(std::iter::once(name))
+                .map(|module| MacroName::parse(module.name(), module.edition()))
+                .collect::<Result<Vec<_>, Diagnostic>>();
+            let route = checked!(tail.and_then(|tail| NamePath::new(unit, tail)));
+            checked!(names.lookup(Namespace::Type, &route, &module))
+        } else {
+            let leaf = HeaderTypeSite {
+                owner: header.owner,
+                item: header.item,
+                field: header.field,
+                leaf: Some(root),
+            };
+            let prefix = ready!(self.prepare_header_prefix(db, leaf, site.clone()));
+            if !matches!(prefix.selection(), LocalTypePrefixSelection::ModuleTail) {
+                return owner_context();
+            }
+            let segments: Vec<_> = qualifier
+                .iter()
+                .chain(std::iter::once(name))
+                .map(|module| crate::syntax::imports::ImportSegment::Name(module.name().to_owned()))
+                .collect();
+            checked!(names.lookup_source_path(
+                Namespace::Type,
+                &segments,
+                false,
+                &module,
+                name.edition()
+            ))
+        };
+        match found {
+            NameLookup::Defined(definition) => crate::frontend::source_types::prepare_selected_definition(
+                db,
+                names,
+                &views,
+                definition.identity,
+            ),
+            _ => owner_context(),
+        }
     }
     pub(crate) fn prepare_field_type(
         self: &Arc<Self>,

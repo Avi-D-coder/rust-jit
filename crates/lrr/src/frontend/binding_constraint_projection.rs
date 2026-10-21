@@ -174,7 +174,9 @@ impl<'a> Component<'a> {
             let next = match fact.kind() {
                 FactKind::Integer => return QueryPoll::Ready(Ok(Some((node, false)))),
                 FactKind::Float => return QueryPoll::Ready(Ok(Some((node, true)))),
-                FactKind::Parenthesis | FactKind::Block | FactKind::Borrow => fact.operand(0),
+                FactKind::Parenthesis | FactKind::Block | FactKind::Borrow | FactKind::RawBorrow => {
+                    fact.operand(0)
+                }
                 FactKind::Prefix if fact.numeric_prefix() => fact.operand(0),
                 FactKind::Path => {
                     let observed = ready!(db.fetch(

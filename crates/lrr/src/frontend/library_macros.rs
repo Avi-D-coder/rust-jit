@@ -78,11 +78,30 @@ const FILES: &[LibraryFile] = &[
     library_file!("core", ["default"], "core/src/default.rs"),
     library_file!("core", ["hash"], "core/src/hash/mod.rs"),
     library_file!("core", ["fmt"], "core/src/fmt/mod.rs"),
+    // Library macros defined beside the items they operate on: `ptr::addr_of!`,
+    // `mem::offset_of!` and `pin::pin!`.
+    library_file!("core", ["ptr"], "core/src/ptr/mod.rs"),
+    library_file!("core", ["mem"], "core/src/mem/mod.rs"),
+    library_file!("core", ["pin"], "core/src/pin.rs"),
     library_file!("alloc", [], "alloc/src/lib.rs"),
     library_file!("alloc", ["macros"], "alloc/src/macros.rs"),
     library_file!("std", [], "std/src/lib.rs"),
     library_file!("std", ["macros"], "std/src/macros.rs"),
     library_file!("std", ["panic"], "std/src/panic.rs"),
+    // `thread_local!` and its attribute processor, reached from the macro
+    // through `$crate::thread::local_impl`, which `thread/mod.rs` declares.
+    library_file!("std", ["thread"], "std/src/thread/mod.rs"),
+    library_file!("std", ["thread", "local"], "std/src/thread/local.rs"),
+    // `local_impl` re-exports `sys::thread_local::*`, whose `cfg_select!` picks
+    // the implementation by target. The interpreter runs guest code on one
+    // thread, so the selected arm is the unchanged `no_threads` implementation,
+    // loaded as the content of `sys::thread_local`.
+    library_file!("std", ["sys"], "std/src/sys/mod.rs"),
+    library_file!(
+        "std",
+        ["sys", "thread_local"],
+        "std/src/sys/thread_local/no_threads.rs"
+    ),
 ];
 
 pub(crate) struct LibraryMacros {
@@ -340,7 +359,10 @@ impl LibraryMacros {
 }
 
 fn reexports_macro(import: &crate::syntax::imports::SourceImport, names: &BTreeSet<String>) -> bool {
-    matches!(import.path.last(), Some(ImportSegment::Name(name)) if names.contains(name))
+    // Macro names are stored by semantic spelling; a raw import
+    // (`pub use core::r#try`) names the same macro as `try`.
+    matches!(import.path.last(), Some(ImportSegment::Name(name))
+        if names.contains(name.strip_prefix("r#").unwrap_or(name)))
 }
 
 #[cfg(test)]

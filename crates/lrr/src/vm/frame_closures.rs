@@ -295,6 +295,12 @@ impl Frame {
             captures: types.clone().into_boxed_slice(),
             borrowed: borrowed.into_boxed_slice(),
         })?;
+        // A non-capturing closure coerces to any fn-pointer type, so the
+        // erased fn-pointer descriptor exists wherever the closure can reach a
+        // fn-pointer parameter or location, as for a function item (E-R5-008).
+        if types.is_empty() {
+            store.intern_type(TypeKey::erased_function_pointer())?;
+        }
         self.prepare_callable_write(destination, ty, store)?;
         let guard = store.begin_construction(&types)?;
         for (field, ticket) in tickets.into_iter().enumerate() {

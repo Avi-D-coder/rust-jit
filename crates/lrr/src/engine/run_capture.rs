@@ -97,6 +97,7 @@ impl RunCapture {
                 | Op::PromotedPlace { .. }
                 | Op::PlaceTransfer { .. }
                 | Op::Borrow { .. }
+                | Op::RawBorrow { .. }
                 | Op::ConstructStart { .. }
                 | Op::ConstructField { .. }
                 | Op::ConstructRest { .. }

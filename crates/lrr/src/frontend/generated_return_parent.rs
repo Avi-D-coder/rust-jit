@@ -271,21 +271,38 @@ fn require_chain(
             return Err(missing());
         }
         let facts = unit.items.hygiene_facts();
+        // Only the parent tokens that these origins were transcribed from carry
+        // the provenance obligation. The rest of the definition body may hold
+        // tokens substituted from the parent's own invocation arguments, which
+        // belong to the caller's chain rather than to the parent's definition.
+        let mut matched: Vec<&SpanRecord> = Vec::new();
+        matched
+            .try_reserve_exact(origins.len())
+            .map_err(|_| crate::runtime::arena::resource())?;
         for origin in origins {
             let context = facts.context(origin.context)?;
             if context.transparency != Transparency::SemiTransparent
                 || context.expansion.map(|key| key.0) != Some(identity.0)
                 || context.defining_unit.0 != selected.crate_key.0
                 || edition_year(context.edition) != record.key().definition_edition
-                || !parent_origins.iter().any(|original| {
-                    original.source == origin.source
-                        && original.start == origin.start
-                        && original.end == origin.end
-                        && original.edition == origin.edition
-                        && original.origin == origin.origin
-                        && context.parent == Some(original.context)
-                })
             {
+                return Err(missing());
+            }
+            let mut found = false;
+            for original in parent_origins.iter().filter(|original| {
+                original.source == origin.source
+                    && original.start == origin.start
+                    && original.end == origin.end
+                    && original.edition == origin.edition
+                    && original.origin == origin.origin
+                    && context.parent == Some(original.context)
+            }) {
+                found = true;
+                if !matched.iter().any(|known| std::ptr::eq(*known, *original)) {
+                    matched.push(*original);
+                }
+            }
+            if !found {
                 return Err(missing());
             }
         }
@@ -293,7 +310,7 @@ fn require_chain(
             db,
             parent,
             publication,
-            &parent_origins,
+            &matched,
             name,
             expected,
             seen,
@@ -314,6 +331,12 @@ fn require_chain(
             let item = facts.context(facts.item(origin.context)?)?;
             if item.parent.is_some() || item.defining_unit != origin.source.unit {
                 return Err(missing());
+            }
+            // A token this expansion did not mark was substituted from its
+            // invocation arguments: it belongs to the caller's scope, not to
+            // the definition body, and is joined by the caller-side receipts.
+            if facts.context(origin.context)?.expansion.map(|key| key.0) != Some(identity.0) {
+                continue;
             }
             let mut sources = publication.sources.iter().filter(|source| {
                 source.outline.crate_key.0 == origin.source.unit.0

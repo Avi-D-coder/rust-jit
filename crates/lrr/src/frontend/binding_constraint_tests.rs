@@ -1903,3 +1903,94 @@ fn constant_pattern_header_constrains_empty_array_without_initializer_execution(
         assert!(!db.trace.events[start..].iter().any(|event| matches!(event.key, QueryKey::Thunk(_))));
     }
 }
+
+/// A tail-less block is `()` or diverges (`!` coerces to every Type); a numeric
+/// variable is never `()`, so such a member (`{ return; }`, the `panic!("..")`
+/// expansion) states nothing about the component's variable.
+#[test]
+fn diverging_tail_less_blocks_state_nothing_about_a_numeric_component() {
+    use BindingConstraintState::Resolved;
+    // The goal of the arm value (the last literal in source order).
+    let cases: &[(&str, BindingConstraintState)] = &[
+        (
+            "fn main() { let n = match 0 { 0 => 7, _ => { return; } }; let m: u8 = n; }",
+            Resolved(PrimitiveType::U8),
+        ),
+        (
+            "fn main() { let n = if true { 7 } else { return; }; let m: u16 = n; }",
+            Resolved(PrimitiveType::U16),
+        ),
+    ];
+    for edition in [2015, 2018, 2021, 2024] {
+        for (text, expected) in cases {
+            assert_eq!(
+                literal_goals(text, edition, false).last(),
+                Some(expected),
+                "{edition} {text}"
+            );
+        }
+    }
+}
+
+/// The retained rows of the `nth` unsuffixed numeric literal of the source.
+fn component_rows(
+    text: &str,
+    edition: u16,
+    nth: usize,
+) -> crate::frontend::binding_constraints::rows::ComponentRows {
+    let (mut db, local) = world(text, edition, false);
+    let body = local.context().source().index().body().clone();
+    let graph = ready(db.fetch(&SyntaxProvider, QueryKey::SourceConstraints(body.clone())));
+    let QueryValue::SourceConstraints(graph) = graph.value.as_ref() else {
+        panic!();
+    };
+    let node = graph
+        .facts()
+        .iter()
+        .enumerate()
+        .filter(|(_, fact)| matches!(fact.kind(), FactKind::Integer | FactKind::Float))
+        .map(|(id, _)| u32::try_from(id).unwrap())
+        .nth(nth)
+        .expect("source has that numeric literal");
+    let key = crate::ir::pc::PcKey {
+        body,
+        node,
+        phase: 0,
+    };
+    ready(crate::frontend::binding_constraints::rows::build(&mut db, &key))
+        .expect("an unsuffixed numeric literal has component rows")
+}
+
+/// A component states every relation of its variable's uses or names the
+/// typed hole; only a hole-free component may take rustc's fallback.
+#[test]
+fn component_rows_state_every_relation_or_name_the_hole() {
+    for edition in [2015, 2018, 2021, 2024] {
+        let rows = component_rows(
+            "fn main() { let x = 5; let y = x + 1; if y == 6 { } }",
+            edition,
+            0,
+        );
+        assert!(rows.holes.is_empty(), "{edition}: {:?}", rows.holes);
+        assert_eq!(rows.literals.len(), 3, "{edition}: 5, 1 and 6 share one component");
+        assert!(rows.deferred.len() >= 2, "{edition}: `+` and `==` are structural rows");
+        // A method call on the variable is not yet a stated relation.
+        let rows = component_rows("fn main() { let x = 5; let s = x.to_string(); }", edition, 0);
+        assert!(
+            rows.holes.iter().any(|hole| hole.why.contains("MethodCall")),
+            "{edition}: {:?}",
+            rows.holes
+        );
+        // A value consumed by syntax the source plan does not record.
+        let rows = component_rows("fn main() { let x = 5; let c = || x; }", edition, 0);
+        assert!(!rows.holes.is_empty(), "{edition}: closure capture is a hole");
+        // A selected generic call links its arguments through one variable.
+        let rows = component_rows(
+            "fn id<T>(a: T) -> T { a }\nfn main() { let a = id(3); let b = id(4); let c = a + b; }",
+            edition,
+            0,
+        );
+        assert!(rows.holes.is_empty(), "{edition}: {:?}", rows.holes);
+        assert_eq!(rows.sites.len(), 2, "{edition}");
+    }
+}

@@ -586,6 +586,79 @@ impl<'owner, 'cx> SettledRootApplication<'owner, 'cx> {
 }
 
 impl<'owner, 'cx> SourceRootApplication<'owner, 'cx> {
+    /// The application of one selected call site of a source component: the
+    /// same inference owner, variables and caller assumptions, with that
+    /// callee's generic Type arguments (each a component variable). It
+    /// confers no more authority than the component's own application.
+    pub(super) fn site(
+        &self,
+        layouts: &SourceGenericLayouts,
+        configuration: &PreparedSolverConfiguration,
+        callee: Digest,
+        signature: Digest,
+        parameters: &std::collections::BTreeMap<ParamKey, crate::traits::term::TyTerm>,
+    ) -> Result<Self, RootRelationsPreparationError> {
+        let owner = self.owner;
+        let cx = owner.interner;
+        let bindings = layouts.type_bindings();
+        let definition = bindings
+            .definitions
+            .get(&callee)
+            .filter(|definition| definition.world() == cx.services().source_world())
+            .copied()
+            .ok_or(RootRelationsPending::CalleeDeclaration)?;
+        let declaration = layouts
+            .get(definition)
+            .ok_or(RootRelationsPending::CalleeDeclaration)?;
+        let declared = match DeclarationParameters::prepare(declaration)
+            .map_err(RootRelationsPreparationError::Source)?
+        {
+            DeclaredParameterPreparation::Ready(declared) => declared,
+            DeclaredParameterPreparation::Pending(why) => {
+                return Err(RootRelationsPending::Parameters(why).into());
+            }
+        };
+        let mut arguments = Vec::new();
+        for index in 0..declared.count() {
+            let parameter = declared
+                .from_upstream(index)
+                .map_err(RootRelationsPreparationError::Source)?;
+            if parameter.kind() != BoundKind::Type {
+                return Err(RootRelationsPending::MissingArgument {
+                    parameter: parameter.source(),
+                    kind: parameter.kind(),
+                }
+                .into());
+            }
+            let term = parameters.get(&parameter.source()).ok_or(
+                RootRelationsPending::MissingArgument {
+                    parameter: parameter.source(),
+                    kind: parameter.kind(),
+                },
+            )?;
+            let value = source_terms::encode_root_type(owner, self.variables, configuration, bindings, term)
+                .map_err(|pending| RootRelationsPending::Type {
+                    relation: None,
+                    side: RootRelationSide::Argument(parameter.source()),
+                    pending,
+                })?;
+            arguments.push(Arg::Type(value));
+        }
+        if parameters.len() != arguments.len() {
+            return Err(RootRelationsPending::ParameterMap.into());
+        }
+        Ok(Self {
+            owner,
+            variables: self.variables,
+            snapshot: owner.num_open_snapshots(),
+            callee: definition,
+            signature,
+            arguments: cx.list(arguments),
+            param_env: self.param_env,
+            outstanding_relation_goals: 0,
+        })
+    }
+
     pub(super) fn require_variables(
         &self,
         variables: &RootVariables<'_, 'cx>,

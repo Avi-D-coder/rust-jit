@@ -19,9 +19,9 @@ licenses = ["MIT", "Apache-2.0"]
 id = "E-M006-001"
 path = "crates/mbe/src/expander/transcriber.rs"
 patch = "mbe-cardinality.patch"
-sha256 = "d64e5ea98bbc243b0a33fb4ae594e97d7443bdc17b94de01ab21c8e785d16269"
+sha256 = "c74d27b7c68e6bae2e81776ab6c24dae6a37e470f5a8238c5574848062dfa44b"
 preimage_sha256 = "298f1c16179722ae16dd9c934f42feaf4b306ac1d0c649ae836a788465aded3a"
-postimage_sha256 = "761629930f0eee31f7cd4f5c20f5907a49a23f9958ca8fb3597d8d7c18537845"
+postimage_sha256 = "9a0e0e6ee3b379c3e25172060dcedc7ddfef18fa5cdace0e7cb98f458981e698"
 erratum = "docs/errata/m006-repetition-cardinality.md"
 
 [[rust_analyzer_macros.patches]]

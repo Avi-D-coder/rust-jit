@@ -1,7 +1,13 @@
-// `std::thread`. Threads are outside the interpreter's current profile;
-// the names resolve.
+// `std::thread`. The interpreter runs guest code on one thread, so `spawn`
+// runs the closure to completion before it returns and `join` hands back its
+// result. A spawned thread that waits on another thread (an empty channel
+// whose sender is alive, a lock held elsewhere) can never be woken: that is a
+// deadlock the facade reports, where real threads would simply block. A panic
+// in a spawned closure ends the run instead of reaching `join`, and
+// `current`, `sleep` and other thread identity or time services stay
+// unsupported.
 pub struct JoinHandle<T> {
-    marker: core::marker::PhantomData<T>,
+    result: Option<T>,
 }
 pub struct Thread {
     id: u64,
@@ -15,7 +21,10 @@ where
     F: FnOnce() -> T + Send + 'static,
     T: Send + 'static,
 {
-    core::intrinsics::lrr_unsupported("std::thread::spawn")
+    let value = f();
+    JoinHandle {
+        result: Option::Some(value),
+    }
 }
 
 pub fn sleep(dur: core::time::Duration) {
@@ -30,8 +39,221 @@ pub fn yield_now() {}
 
 impl<T> JoinHandle<T> {
     pub fn join(self) -> crate::thread::Result<T> {
-        core::intrinsics::lrr_unsupported("std::thread::JoinHandle::join")
+        match self.result {
+            Option::Some(value) => core::result::Result::<T, crate::boxed::Box<dyn core::any::Any + Send + 'static>>::Ok(value),
+            Option::None => core::panicking::panic("joined thread has no result"),
+        }
+    }
+    pub fn is_finished(&self) -> bool {
+        true
+    }
+}
+
+impl Builder {
+    pub fn new() -> Builder {
+        Builder {
+            name: Option::None,
+        }
+    }
+    pub fn name(self, name: crate::string::String) -> Builder {
+        Builder {
+            name: Option::Some(name),
+        }
+    }
+    pub fn stack_size(self, size: usize) -> Builder {
+        self
+    }
+    pub fn spawn<F, T>(self, f: F) -> crate::io::Result<JoinHandle<T>>
+    where
+        F: FnOnce() -> T + Send + 'static,
+        T: Send + 'static,
+    {
+        core::result::Result::Ok(spawn(f))
     }
 }
 
 pub type Result<T> = core::result::Result<T, crate::boxed::Box<dyn core::any::Any + Send + 'static>>;
+
+// `std::thread::LocalKey`, the key `thread_local!` declares. Guest code runs on
+// one thread, so a key has one slot per `static` its expansion declares; this is
+// the shape of std's `no_threads` implementation (`sys/thread_local`), whose
+// `thread_local_inner!` macro the library definitions supply unchanged. The
+// storage holds the value in an `Option`: initialisation is lazy and happens at
+// the first access, and the value lives until the program ends.
+pub struct LocalKey<T: 'static> {
+    inner: fn(*mut Option<T>) -> *const T,
+}
+pub struct AccessError;
+
+impl core::fmt::Debug for AccessError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("AccessError")
+    }
+}
+impl core::fmt::Display for AccessError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("already destroyed")
+    }
+}
+impl Clone for AccessError {
+    fn clone(&self) -> AccessError {
+        AccessError
+    }
+}
+impl Copy for AccessError {}
+impl PartialEq for AccessError {
+    fn eq(&self, other: &AccessError) -> bool {
+        true
+    }
+}
+impl Eq for AccessError {}
+impl<T: 'static> core::fmt::Debug for LocalKey<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("LocalKey { .. }")
+    }
+}
+
+fn panic_access_error() -> ! {
+    core::panicking::panic("cannot access a Thread Local Storage value during or after destruction: AccessError")
+}
+
+impl<T: 'static> LocalKey<T> {
+    pub const unsafe fn new(inner: fn(*mut Option<T>) -> *const T) -> LocalKey<T> {
+        LocalKey { inner: inner }
+    }
+    pub fn with<F, R>(&'static self, f: F) -> R
+    where
+        F: FnOnce(&T) -> R,
+    {
+        let init: *mut Option<T> = core::ptr::null_mut();
+        let slot = (self.inner)(init);
+        match unsafe { slot.as_ref() } {
+            Option::Some(value) => f(value),
+            Option::None => panic_access_error(),
+        }
+    }
+    pub fn try_with<F, R>(&'static self, f: F) -> core::result::Result<R, AccessError>
+    where
+        F: FnOnce(&T) -> R,
+    {
+        // The accessor is reached through a fn pointer, so its parameter type
+        // reaches the argument only through this annotation.
+        let init: *mut Option<T> = core::ptr::null_mut();
+        let slot = (self.inner)(init);
+        match unsafe { slot.as_ref() } {
+            Option::Some(value) => core::result::Result::Ok(f(value)),
+            Option::None => core::result::Result::Err(AccessError),
+        }
+    }
+    fn initialize_with<F, R>(&'static self, init: T, f: F) -> R
+    where
+        F: FnOnce(Option<T>, &T) -> R,
+    {
+        let mut init = Option::Some(init);
+        let provided: *mut Option<T> = &mut init;
+        let slot = (self.inner)(provided);
+        match unsafe { slot.as_ref() } {
+            Option::Some(reference) => f(init, reference),
+            Option::None => panic_access_error(),
+        }
+    }
+}
+
+impl<T: 'static> LocalKey<core::cell::Cell<T>> {
+    pub fn set(&'static self, value: T) {
+        self.initialize_with(core::cell::Cell::new(value), |value, cell| {
+            // The cell was already initialized, so `value` was not used to
+            // initialize it: overwrite the current value instead.
+            if let Option::Some(value) = value {
+                cell.set(value.into_inner());
+            }
+        });
+    }
+    pub fn get(&'static self) -> T
+    where
+        T: Copy,
+    {
+        self.with(|cell| cell.get())
+    }
+    pub fn take(&'static self) -> T
+    where
+        T: Default,
+    {
+        self.with(|cell| cell.take())
+    }
+    pub fn replace(&'static self, value: T) -> T {
+        self.with(|cell| cell.replace(value))
+    }
+}
+
+impl<T: 'static> LocalKey<core::cell::RefCell<T>> {
+    pub fn with_borrow<F, R>(&'static self, f: F) -> R
+    where
+        F: FnOnce(&T) -> R,
+    {
+        self.with(|cell| f(&*cell.borrow()))
+    }
+    pub fn with_borrow_mut<F, R>(&'static self, f: F) -> R
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        self.with(|cell| f(&mut *cell.borrow_mut()))
+    }
+    pub fn set(&'static self, value: T) {
+        self.initialize_with(core::cell::RefCell::new(value), |value, cell| {
+            if let Option::Some(value) = value {
+                *cell.borrow_mut() = value.into_inner();
+            }
+        });
+    }
+    pub fn take(&'static self) -> T
+    where
+        T: Default,
+    {
+        self.with(|cell| cell.replace(T::default()))
+    }
+    pub fn replace(&'static self, value: T) -> T {
+        self.with(|cell| cell.replace(value))
+    }
+}
+
+// The storage the `no_threads` `thread_local_inner!` expansion declares as a
+// `static` inside the key's accessor.
+pub mod local_impl {
+    pub struct EagerStorage<T> {
+        pub value: T,
+    }
+    unsafe impl<T> Sync for EagerStorage<T> {}
+
+    pub struct LazyStorage<T> {
+        value: core::cell::UnsafeCell<Option<T>>,
+    }
+    impl<T> LazyStorage<T> {
+        pub const fn new() -> LazyStorage<T> {
+            LazyStorage {
+                value: core::cell::UnsafeCell::new(Option::None),
+            }
+        }
+        // `i` is the value `LocalKey::set` offers for the initial one, or null.
+        pub fn get(&'static self, i: *mut Option<T>, f: impl FnOnce() -> T) -> *const T {
+            let slot = self.value.lrr_get_mut();
+            if slot.is_none() {
+                let provided = if i.is_null() {
+                    Option::None
+                } else {
+                    unsafe { (*i).take() }
+                };
+                let value = match provided {
+                    Option::Some(value) => value,
+                    Option::None => f(),
+                };
+                *slot = Option::Some(value);
+            }
+            match slot {
+                Option::Some(value) => value as *const T,
+                Option::None => core::ptr::null(),
+            }
+        }
+    }
+    unsafe impl<T> Sync for LazyStorage<T> {}
+}

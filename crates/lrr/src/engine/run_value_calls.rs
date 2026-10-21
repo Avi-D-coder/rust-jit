@@ -287,6 +287,16 @@ impl RunMachine {
             TypeKey::Callable { .. } => None,
             // A reified non-capturing closure has no aggregate captures to
             // bind; its registered code address selected this same target.
+            // The erased fn-pointer descriptor (`fn()`: no parameters, unit
+            // result) records no signature, as a fn-pointer parameter or
+            // location names it without the signature's own descriptors
+            // (E-R5-008). The closure's own parameters and body then give the
+            // call its argument and result types.
+            TypeKey::Function { params, result }
+                if target.captures.is_empty() && params.is_empty() && result.0 == 1 =>
+            {
+                None
+            }
             TypeKey::Function { .. } if target.captures.is_empty() => Some(ty),
             _ => return Err(call_fault("closure callee type differs")),
         };

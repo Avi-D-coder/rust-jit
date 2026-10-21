@@ -626,6 +626,16 @@ impl StableEncode for Recipe {
                 });
                 e.u32(destination.0);
             }
+            Op::RawBorrow {
+                place,
+                mutable,
+                destination,
+            } => {
+                e.u32(71);
+                e.u32(place.0);
+                e.bool(*mutable);
+                e.u32(destination.0);
+            }
             Op::ConstructStart { guard } => {
                 e.u32(27);
                 e.u32(guard.0);

@@ -1121,6 +1121,18 @@ pub enum DeclarationMacroParent {
     Generated(Arc<GeneratedDeclarationMacroIndex>),
     Argument(Arc<ArgumentDeclarationMacroIndex>),
 }
+/// One single-segment macro call written inside macro output, resolved in the
+/// textual macro scope of the original module at the producer that expanded
+/// into it. The name keeps its generated token context and expansion origin.
+pub(crate) struct ModuleTextualReference<'a> {
+    pub(crate) module_path: &'a [String],
+    pub(crate) before: u64,
+    pub(crate) name: crate::expand::scopes::MacroName,
+    pub(crate) context: crate::syntax::token_wire::Key,
+    pub(crate) origin: Option<crate::syntax::token_wire::Key>,
+    pub(crate) facts: &'a super::hygiene::HygieneFacts,
+    pub(crate) ancestry: &'a super::macro_origins::ExpansionAncestry,
+}
 /// Exact physical invocation capture, independent of declaration lookup and
 /// of diagnostic/structural expansion ancestry.
 pub(crate) enum DeclarationCallSite<'a> {
@@ -1198,6 +1210,31 @@ impl DeclarationMacroParent {
             Self::Source(index) => index.body_owner(definition),
             Self::Argument(index) => index.body_owner(definition),
             Self::Generated(index) => index.body_owner(definition),
+        }
+    }
+    /// The original-source producer whose expansion transitively contains the
+    /// output attached under `invocation` of this parent. Macro output joins
+    /// the module's textual macro scope at that producer's position, exactly
+    /// as a handwritten call there. `None` when the chain ends at an
+    /// attachment that is not a declaration-inventory producer.
+    pub(crate) fn root_source_producer(
+        &self,
+        invocation: crate::core::digest::Digest,
+    ) -> Option<&DeclarationProducer> {
+        let mut parent = self;
+        let mut invocation = invocation;
+        loop {
+            match parent {
+                Self::Source(index) => return index.producer(invocation).ok(),
+                Self::Generated(index) => {
+                    invocation = index.output.parent_invocation();
+                    parent = &index.parent;
+                }
+                Self::Argument(index) => {
+                    invocation = index.argument.invocation();
+                    parent = &index.outer;
+                }
+            }
         }
     }
     pub(crate) fn compiler_ancestry(&self) -> &super::macro_origins::ExpansionAncestry {
@@ -1672,6 +1709,35 @@ impl GeneratedDeclarationMacroIndex {
             .producers()
             .get(*self.producers.get(&identity).ok_or_else(fault)?)
             .ok_or_else(fault)
+    }
+    /// Module-level textual reference for a single-segment call of this frame.
+    pub(crate) fn module_textual_reference(
+        &self,
+        invocation: crate::core::digest::Digest,
+    ) -> Result<Option<ModuleTextualReference<'_>>, Diagnostic> {
+        use crate::syntax::declaration_scan::DeclarationProducerKind;
+        let producer = self.producer(invocation)?;
+        if producer.kind != DeclarationProducerKind::Macro || producer.path.len() != 1 {
+            return Ok(None);
+        }
+        let capture = self.output.macro_call(invocation)?;
+        let (name, context) =
+            crate::expand::source_hygiene::declaration_macro_name(&capture.path, capture.edition)?;
+        let Some(root) = self
+            .parent
+            .root_source_producer(self.output.parent_invocation())
+        else {
+            return Ok(None);
+        };
+        Ok(Some(ModuleTextualReference {
+            module_path: &root.scope.module_path,
+            before: u64::from(root.range.start),
+            name,
+            context,
+            origin: Some(self.origin),
+            facts: &self.facts,
+            ancestry: &self.ancestry,
+        }))
     }
     pub(crate) fn source_index(&self) -> Result<&DeclarationMacroIndex, Diagnostic> {
         let mut parent = &self.parent;

@@ -158,6 +158,27 @@ fn bind_prepared_record_inner(
                     members.or(target_members.as_deref()),
                 );
             }
+            // `Self { .. }` in an impl: the impl's applied self type, as the
+            // ordinary declaration owner template selects it.
+            if demand == super::source_locals::owned_plan::type_declarations::BodyTypeDemand::AppliedSelf {
+                let target = match applied_self_nominal(db, locals, plan) {
+                    QueryPoll::Ready(Ok(target)) => target,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+                if let Some(target) = target {
+                    let kind = match super::source_types::nominal_definition(db, sources, target) {
+                        Ok(definition) => definition.item_kind,
+                        Err(error) => return QueryPoll::Ready(Err(error)),
+                    };
+                    if matches!(kind, ItemKind::Struct | ItemKind::Union) {
+                        return bind_variant_record_constructor_with_arguments(
+                            db, graph, sources, plan, target, None,
+                            locals.context().source().scope(), arguments, members,
+                        );
+                    }
+                }
+            }
             // A record path may name an enum variant (`E::B { .. }`), which is
             // a Type-namespace member of its enum but not itself a type.
             let variant = match selected_record_variant(db, graph, body, plan, demand) {
@@ -215,17 +236,67 @@ fn bind_prepared_record_inner(
                 && goal.pending().is_none()
                 && let (Some(member), Some(declaration)) = (goal.rooted(), goal.declaration())
             {
+                // `Alias::V { .. }`: the root is a type alias of the enum, and
+                // its variants are the enum's (rustc since 1.37).
+                let owner = match super::callables::CallResolver::new(graph, sources)
+                    .map(|resolver| resolver.nominal_of(db, declaration.identity()))
+                {
+                    Ok(QueryPoll::Ready(Ok(Some((target, ItemKind::Enum))))) => target,
+                    Ok(QueryPoll::Ready(Ok(_))) => declaration.identity(),
+                    Ok(QueryPoll::Ready(Err(error))) | Err(error) => {
+                        return QueryPoll::Ready(Err(error));
+                    }
+                    Ok(QueryPoll::NeedInput(input)) => return QueryPoll::NeedInput(input),
+                };
                 return bind_variant_record_constructor_with_arguments(
                     db,
                     graph,
                     sources,
                     plan,
-                    declaration.identity(),
+                    owner,
                     Some(member),
                     locals.context().source().scope(),
                     arguments,
                     members,
                 );
+            }
+            // `V { .. }` where a block-level `use` brings the variant itself
+            // into scope: the goal selected the variant declaration.
+            if let QueryValue::EnteredValue(goal) = goal.value.as_ref()
+                && goal.pending().is_none()
+                && goal.rooted().is_none()
+                && let Some(variant) = goal.declaration().and_then(|declaration| declaration.variant())
+            {
+                return bind_variant_record_constructor_with_arguments(
+                    db,
+                    graph,
+                    sources,
+                    plan,
+                    variant.enumeration,
+                    Some(&variant.name),
+                    locals.context().source().scope(),
+                    arguments,
+                    members,
+                );
+            }
+            // `Self::V { .. }`: a variant through the impl self type.
+            match type_relative_record_variant(db, graph, sources, locals, plan) {
+                QueryPoll::Ready(Ok(Some(variant))) => {
+                    return bind_variant_record_constructor_with_arguments(
+                        db,
+                        graph,
+                        sources,
+                        plan,
+                        variant.enumeration,
+                        Some(&variant.name),
+                        locals.context().source().scope(),
+                        arguments,
+                        members,
+                    );
+                }
+                QueryPoll::Ready(Ok(None)) => {}
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             }
             return deferred(RecordConstructorDemand::TypeContext);
         }
@@ -352,6 +423,79 @@ fn selected_record_variant(
         _ => return QueryPoll::Ready(Ok(None)),
     };
     QueryPoll::Ready(Ok(graph.enum_variant(identity).cloned()))
+}
+
+/// The nominal declaration of `Self` at a record path in an impl: the applied
+/// self type of the ordinary declaration owner template.
+fn applied_self_nominal(
+    db: &mut Database,
+    locals: &std::sync::Arc<super::source_locals::PreparedSourceLocalPlan>,
+    plan: &ConstructorPlan,
+) -> QueryPoll<Option<crate::core::digest::Digest>> {
+    use super::source_locals::owned_plan::LocalTypePrefixSelection;
+    let prefix = match locals.type_prefix(db, plan.node()) {
+        QueryPoll::Ready(Ok(prefix)) => prefix,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    };
+    QueryPoll::Ready(Ok(match prefix.selection() {
+        LocalTypePrefixSelection::AppliedSelf(crate::traits::term::TyTerm::Nominal(target, _)) => {
+            Some(*target)
+        }
+        _ => None,
+    }))
+}
+/// `Self::V { .. }` (or an alias root): the variant a type-relative record
+/// path names, selected by the one `CallResolver` type-relative lookup over
+/// the record path's written spelling in the Type namespace.
+fn type_relative_record_variant(
+    db: &mut Database,
+    graph: &NameNamespaces,
+    sources: &[&PreparedSourceView],
+    locals: &std::sync::Arc<super::source_locals::PreparedSourceLocalPlan>,
+    plan: &ConstructorPlan,
+) -> QueryPoll<Option<super::names::EnumVariantDefinition>> {
+    let source = locals.context().source();
+    let syntax = match source
+        .parsed()
+        .entered_node_syntax(source.body(), source.index(), plan.node())
+    {
+        Ok(syntax) => syntax,
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    let Some(path) = syntax
+        .and_then(<ra_ap_syntax::ast::RecordExpr as ra_ap_syntax::AstNode>::cast)
+        .and_then(|record| record.path())
+    else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let spelled = match source
+        .parsed()
+        .written_type_relative_spelling(path, source.index().cfg())
+    {
+        Ok(Some(spelled)) => spelled,
+        Ok(None) => return QueryPoll::Ready(Ok(None)),
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    let Some(environment) = locals.environment() else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let members = match environment.macros().source_environment().member_index() {
+        Ok(members) => members,
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    let resolver = match super::callables::CallResolver::new(graph, sources) {
+        Ok(resolver) => resolver.with_members(Some(&members)),
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    match resolver.type_relative_variant(db, source.body().key().definition, &spelled, Namespace::Type) {
+        QueryPoll::Ready(Ok(Some(definition))) => {
+            QueryPoll::Ready(Ok(graph.enum_variant(definition.identity).cloned()))
+        }
+        QueryPoll::Ready(Ok(None)) => QueryPoll::Ready(Ok(None)),
+        QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+    }
 }
 
 /// Bind a record variant constructor through its enum's schema with the same

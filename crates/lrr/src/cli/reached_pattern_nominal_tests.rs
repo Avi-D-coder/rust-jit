@@ -169,3 +169,144 @@ fn unchanged_upstream_crate_qualified_patterns_select_their_variants() {
         Err(error) => panic!("unchanged issue-6449 main: {error:?}"),
     }
 }
+
+#[test]
+fn type_relative_variant_paths_share_one_route_across_origins_and_editions() {
+    // LRR route control: `Self::V` in an impl and `Alias::V` for a type alias of
+    // an enum (rustc since 1.37), as expressions, constructor calls, record
+    // constructors and patterns, handwritten, emitted by a user macro, through a
+    // wrapper and nested in a standard macro, select the enum's variant through
+    // the one `CallResolver` type-relative lookup that every route shares.
+    const SOURCE: &str = r#"
+        mod m { #[derive(Debug, PartialEq)] pub enum E { A, B(i32), C { x: i32 } } pub type Al = E; }
+        use m::Al;
+        #[derive(Debug, PartialEq)] enum L { A, B(i32), C { x: i32 } }
+        struct S { f: i32 }
+        struct T(i32);
+        struct U;
+        macro_rules! mk { ($t:ident :: $v:ident) => { $t::$v }; ($t:ident :: $v:ident ($e:expr)) => { $t::$v($e) }; }
+        macro_rules! pat { ($x:expr, $p:pat => $r:expr) => { match $x { $p => $r, _ => -1 } }; }
+        macro_rules! wrapped { ($x:expr, $p:pat => $r:expr) => { pat!($x, $p => $r) }; }
+        impl L {
+            const K: Self = Self::B(9);
+            fn a() -> Self { Self::A }
+            fn b(n: i32) -> Self { Self::B(n) }
+            fn c(x: i32) -> Self { Self::C { x } }
+            fn m() -> Self { mk!(Self::B(4)) }
+            fn q() -> Self { <Self>::A }
+            fn val(&self) -> i32 {
+                match self { Self::A => 0, Self::B(n) => *n, Self::C { x } => *x }
+            }
+            fn is_a(&self) -> bool { matches!(self, Self::A) }
+            fn wrap(&self) -> i32 { wrapped!(self, Self::B(n) => *n) }
+        }
+        impl S { fn new() -> Self { Self { f: 4 } } fn get(&self) -> i32 { let Self { f } = self; *f } }
+        impl T { fn new() -> Self { Self(5) } fn get(&self) -> i32 { let Self(f) = self; *f } }
+        impl U { fn new() -> Self { Self } fn is(&self) -> bool { matches!(self, Self) } }
+        fn main() {
+            assert_eq!(L::a(), L::A);
+            assert_eq!(L::b(2), L::B(2));
+            assert_eq!(L::c(3), L::C { x: 3 });
+            assert_eq!(L::m(), L::B(4));
+            assert_eq!(L::q(), L::A);
+            assert_eq!(L::K, L::B(9));
+            assert_eq!(L::c(7).val(), 7);
+            assert!(L::a().is_a());
+            assert_eq!(L::b(6).wrap(), 6);
+            assert_eq!(S::new().get(), 4);
+            assert_eq!(T::new().get(), 5);
+            assert!(U::new().is());
+            let a = mk!(Al::A);
+            let b = mk!(Al::B(3));
+            assert_eq!(a, m::E::A);
+            assert_eq!(b, m::Al::B(3));
+            assert_eq!(Al::C { x: 8 }, m::E::C { x: 8 });
+            assert_eq!(pat!(b, Al::B(n) => n), 3);
+            assert_eq!(wrapped!(m::Al::C { x: 8 }, m::Al::C { x } => x), 8);
+            assert_eq!(pat!(a, <Al>::A => 100), 100);
+            assert!(matches!(m::E::B(1), Al::B(1)));
+        }
+    "#;
+    for edition in [2015, 2018, 2021, 2024] {
+        match super::crate_graph::format_trait_facade_tests::run(
+            "type-relative-variant-paths",
+            SOURCE,
+            edition,
+        ) {
+            Ok(StandaloneOutcome::Completed(_)) => {}
+            Ok(_) => panic!("type-relative variant paths did not complete in edition {edition}"),
+            Err(error) => panic!("type-relative variant paths in edition {edition}: {error:?}"),
+        }
+    }
+}
+
+#[test]
+fn block_level_use_roots_continue_through_longer_paths_in_every_origin_and_edition() {
+    // LRR route control: a path of three or more segments whose root a
+    // block-level `use` binds (a module, here also reached through a type alias)
+    // continues from that binding through the one qualified body-module kernel,
+    // in expressions, calls, record constructors and patterns, handwritten, from
+    // a user macro and nested in a standard macro.
+    const SOURCE: &str = r#"
+        mod a {
+            pub mod b {
+                #[derive(Debug, PartialEq)] pub enum E { X, Y(i32), Z { v: i32 } }
+                pub type Al = E;
+                pub fn f(n: i32) -> i32 { n * 2 }
+                pub mod c { pub fn g() -> i32 { 6 } pub const K: i32 = 3; }
+            }
+        }
+        macro_rules! first { ($e:expr) => { match $e { b::E::Y(n) => n, _ => -1 } }; }
+        fn main() {
+            use a::b;
+            use a::b::c;
+            use std::cmp;
+            let v = b::E::Y(2);
+            assert_eq!(first!(b::E::Y(5)), 5);
+            assert!(matches!(v, b::E::Y(2)));
+            match v { b::E::X => panic!(), b::E::Y(n) => assert_eq!(n, 2), b::E::Z { .. } => panic!() }
+            match (b::E::Z { v: 9 }) { b::E::Z { v } => assert_eq!(v, 9), _ => panic!() }
+            assert_eq!(b::f(3), 6);
+            assert_eq!(c::g(), 6);
+            assert_eq!(b::c::g(), 6);
+            assert_eq!(b::Al::Y(7), b::E::Y(7));
+            match b::Al::Y(7) { b::Al::Y(n) => assert_eq!(n, 7), _ => panic!() }
+            let r = match 1.cmp(&2) {
+                cmp::Ordering::Less => 10,
+                cmp::Ordering::Equal => 20,
+                cmp::Ordering::Greater => 30,
+            };
+            assert_eq!(r, 10);
+            assert!(cmp::Ordering::Greater == 2.cmp(&1));
+        }
+    "#;
+    for edition in [2015, 2018, 2021, 2024] {
+        match super::crate_graph::format_trait_facade_tests::run(
+            "block-use-deep-roots",
+            SOURCE,
+            edition,
+        ) {
+            Ok(StandaloneOutcome::Completed(_)) => {}
+            Ok(_) => panic!("block-level use roots did not complete in edition {edition}"),
+            Err(error) => panic!("block-level use roots in edition {edition}: {error:?}"),
+        }
+    }
+}
+
+#[test]
+fn unchanged_upstream_self_and_alias_variant_programs_complete() {
+    for (relative, edition) in [
+        ("pattern/issue-110508.rs", 2015),
+        ("type-alias-enum-variants/type-alias-enum-variants-pass.rs", 2015),
+    ] {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/upstream/rustc-checkout/tests/ui")
+            .join(relative);
+        let source = std::fs::read_to_string(&path).unwrap();
+        match super::crate_graph::format_trait_facade_tests::run("upstream-variants", &source, edition) {
+            Ok(StandaloneOutcome::Completed(_)) => {}
+            Ok(_) => panic!("unchanged {relative} did not complete"),
+            Err(error) => panic!("unchanged {relative}: {error:?}"),
+        }
+    }
+}

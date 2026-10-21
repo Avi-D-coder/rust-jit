@@ -2280,6 +2280,30 @@
       "bytes": 19091
     },
     {
+      "path": "library/std/src/sys/mod.rs",
+      "git_blob": "58c8dc43e12aeeb85cacb9368e90cf623b6a6ede",
+      "sha256": "37f939b08211a401d8dd741a0b34a303beb149c07b7309aaf72a6710f5740819",
+      "bytes": 1249
+    },
+    {
+      "path": "library/std/src/sys/thread_local/no_threads.rs",
+      "git_blob": "a3d50d05eeec8cfa5774e4282572de0baa9f0ee7",
+      "sha256": "5abfad8cd6790cac738e385eb1bb40c63023a578ab241bf4a944e4f96f6c0ea0",
+      "bytes": 5275
+    },
+    {
+      "path": "library/std/src/thread/local.rs",
+      "git_blob": "18b0f3263ad59d2eafe18c14051d174ef6043f09",
+      "sha256": "e3ab1f6bc155548843ec942bc409aecf2d812e6a4088680a4647df1848b5b1f1",
+      "bytes": 29388
+    },
+    {
+      "path": "library/std/src/thread/mod.rs",
+      "git_blob": "955d1f61e75356ce2ae746a527c62c055f421c44",
+      "sha256": "0449be955ee28838a82b3c5d941c56eea1b9b8d1decff388ffac74ed40d8b064",
+      "bytes": 10451
+    },
+    {
       "path": "tests/auxiliary/minicore.rs",
       "git_blob": "e7e924f9ebc08eb89da011442440e058efb0c201",
       "sha256": "87ffcc2c7c3b08fdd96d7fd8f6b104e81aa4d87b6c8d142dc1f9e786988cb406",
@@ -14908,6 +14932,12 @@
       "git_blob": "aa46126563c1d0899b246fafb7a94f91487f0eda",
       "sha256": "022faa4227150d0fcf8387916d1ab9603daae6783e478510482ab22c5b7618b7",
       "bytes": 539
+    },
+    {
+      "path": "tests/ui/packed/packed-struct-address-of-element.rs",
+      "git_blob": "5d7c0b3d8b1b1c16152da53b86e2fb8702213738",
+      "sha256": "c1e011b2ff7915d8fb9ba593a39b2271d1c4173a6ac17d2410ff6b31f0385bae",
+      "bytes": 665
     },
     {
       "path": "tests/ui/packed/packed-struct-drop-aligned.rs",
@@ -36308,6 +36338,15 @@
       "path": "tests/ui/packed/packed-c-style-struct.rs",
       "directives": [
         "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/packed/packed-struct-address-of-element.rs",
+      "directives": [
+        "//@ run-pass",
+        "//@ ignore-emscripten weird assertion?"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"

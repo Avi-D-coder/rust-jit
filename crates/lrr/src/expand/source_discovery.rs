@@ -9376,6 +9376,7 @@ impl SourceDiscovery {
             .ok_or_else(|| fault("argument discovery absent"))?;
         match discovery.poll_with_sources(
             provider,
+            providers,
             &super::declaration_fragment::DeclarationFragmentInput {
                 invocation: identity,
                 request: self.expansion_budget.request_identity(),
@@ -9582,7 +9583,7 @@ impl SourceDiscovery {
             .nested_fragments
             .get_mut(&identity)
             .ok_or_else(|| fault("item declaration fragment absent"))?;
-        let step = match fragment.poll_with_sources(provider, &namespaces, Some(&self.included_views)) {
+        let step = match fragment.poll_with_sources(provider, providers, &namespaces, Some(&self.included_views)) {
             Ok(step) => step,
             Err(error) => {
                 self.failed = Some(error.clone());
@@ -10000,7 +10001,7 @@ impl SourceDiscovery {
             .nested_fragments
             .get_mut(&identity)
             .ok_or_else(|| fault("nested fragment absent"))?
-            .poll_with_sources(provider, &namespaces, Some(&self.included_views))
+            .poll_with_sources(provider, providers, &namespaces, Some(&self.included_views))
         {
             Ok(step) => step,
             Err(error) => {

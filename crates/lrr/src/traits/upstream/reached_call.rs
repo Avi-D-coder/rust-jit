@@ -50,6 +50,9 @@ pub(crate) struct ReachedCallResponse {
     pub(crate) world: Digest,
     pub(crate) values: BTreeMap<InferVarKey, TyTerm>,
     pub(crate) unresolved: BTreeMap<InferVarKey, SourceVariableFamily>,
+    /// A source component had no typed hole, so rustc's fallback was applied
+    /// to its open numeric variables. Always false for a call or constructor.
+    pub(crate) closed: bool,
     current: Arc<ReachedCallCurrent>,
 }
 struct ReachedCallCurrent {
@@ -71,12 +74,16 @@ pub(crate) enum ReachedSubject {
     /// A record constructor of this nominal variant: the actual declaration's
     /// source field Types authenticate the formals.
     Adt(Arc<CurrentAdtSourceFields>, u32),
+    /// A source component rooted at the caller body itself: the packet's rows
+    /// are its relations. `(owner identity, row fingerprint)`.
+    Component(Digest, Digest),
 }
 impl ReachedSubject {
     fn identity(&self) -> Digest {
         match self {
             Self::Callable(callable) => callable.identity(),
             Self::Adt(fields, _) => fields.plan().key().definition,
+            Self::Component(identity, _) => *identity,
         }
     }
     /// The signature identity of a function, the declaration receipt of a nominal.
@@ -84,12 +91,16 @@ impl ReachedSubject {
         match self {
             Self::Callable(callable) => callable.signature().fingerprint(),
             Self::Adt(fields, _) => fields.fingerprint(),
+            Self::Component(_, fingerprint) => *fingerprint,
         }
     }
     fn revalidate(&self, db: &mut Database) -> Result<(), Diagnostic> {
         match self {
             Self::Callable(callable) => callable.revalidate(db),
             Self::Adt(fields, _) => fields.require_current(db),
+            // Its rows are derived from the caller's own source plan, which the
+            // caller revalidation already covers.
+            Self::Component(..) => Ok(()),
         }
     }
 }
@@ -178,6 +189,8 @@ impl SourceRootAdmission {
         self.identity
     }
 }
+#[path = "component_root.rs"]
+mod component_root;
 macro_rules! ready {
     ($value:expr) => {
         match $value {
@@ -239,6 +252,17 @@ pub(crate) fn poll_reached_root(
                 return QueryPoll::Ready(Err(error));
             }
         }
+        ReachedSubject::Component(..) => {
+            // The rows are Equal relations of the caller's own source plan.
+            if packet.component.is_none()
+                || packet
+                    .relations
+                    .iter()
+                    .any(|relation| relation.kind != SourceCallRelationKind::Equal)
+            {
+                return QueryPoll::Ready(Err(fault("component relation is not a source row")));
+            }
+        }
         ReachedSubject::Adt(fields, variant) => {
             // Every formal is one of this variant's actual declared field Types.
             let plan = fields.plan();
@@ -251,6 +275,9 @@ pub(crate) fn poll_reached_root(
                 )));
             }
         }
+    }
+    if packet.component.is_some() && !matches!(subject, ReachedSubject::Component(..)) {
+        return QueryPoll::Ready(Err(fault("component extras on a call or constructor root")));
     }
     let Some(catalog) = db.input(&InputKey::DiscoverySeal(inventory.clone())) else {
         return QueryPoll::NeedInput(InputRequest::Discover {
@@ -288,7 +315,7 @@ pub(crate) fn poll_reached_root(
             "actual caller configuration unavailable",
         )));
     };
-    let input_types: Vec<_> = packet
+    let mut input_types: Vec<_> = packet
         .parameters
         .values()
         .cloned()
@@ -300,6 +327,18 @@ pub(crate) fn poll_reached_root(
                 .flat_map(|relation| [relation.formal.clone(), relation.actual.clone()]),
         )
         .collect();
+    if let Some(component) = packet.component {
+        for site in component.sites {
+            input_types.extend(site.parameters.values().cloned());
+        }
+        for row in component.deferred {
+            input_types.extend([row.first.clone(), row.second.clone(), row.result.clone()]);
+        }
+    }
+    let extra_callees: BTreeSet<Digest> = packet
+        .component
+        .map(|component| component.sites.iter().map(|site| site.callee).collect())
+        .unwrap_or_default();
     let clause_key = super::source_declaration_clauses::SourceDeclarationClausesKey {
         inventory: inventory.clone(),
         definition: packet.callee,
@@ -314,6 +353,28 @@ pub(crate) fn poll_reached_root(
         return QueryPoll::Ready(Ok(held("callee-source", why)));
     }
     let mut demanded = potential_numeric_traits(packet, &clauses);
+    if let Some(component) = packet.component {
+        // Each selected call site's clauses name the traits its generic
+        // Type variables may be asked about.
+        for site in component.sites {
+            let site_key = super::source_declaration_clauses::SourceDeclarationClausesKey {
+                inventory: inventory.clone(),
+                definition: site.callee,
+            };
+            let site_clauses = ready!(
+                super::source_declaration_clauses::PreparedSourceDeclarationClauses::prepare(
+                    db,
+                    &site_key
+                )
+            );
+            if let Some(why) = site_clauses.pending() {
+                return QueryPoll::Ready(Ok(held("site-source", why)));
+            }
+            let mut parameters = BTreeSet::new();
+            parameters.extend(site.parameters.keys().copied());
+            demanded.extend(all_clause_traits(&site_clauses, &parameters));
+        }
+    }
     let mut seeds = BTreeSet::new();
     loop {
         let mut promote = BTreeSet::new();
@@ -330,6 +391,7 @@ pub(crate) fn poll_reached_root(
                 SourceFactRequest {
                     caller: packet.caller.body_definition,
                     callee: packet.callee,
+                    extra_callees: extra_callees.clone(),
                     traits: demanded.clone(),
                     input_types: input_types.clone(),
                 }
@@ -399,17 +461,31 @@ pub(crate) fn poll_reached_root(
                     ));
                 }
                 provider.publish(materialized.facts)?;
-                let outcome = execute(
-                    cx,
-                    packet,
-                    &caller,
-                    application.as_deref(),
-                    &bundle,
-                    &layouts,
-                    configuration,
-                    &current,
-                    &mut promote,
-                );
+                let outcome = match packet.component {
+                    Some(component) => component_root::execute_component(
+                        cx,
+                        packet,
+                        component,
+                        &caller,
+                        application.as_deref(),
+                        &bundle,
+                        &layouts,
+                        configuration,
+                        &current,
+                        &mut promote,
+                    ),
+                    None => execute(
+                        cx,
+                        packet,
+                        &caller,
+                        application.as_deref(),
+                        &bundle,
+                        &layouts,
+                        configuration,
+                        &current,
+                        &mut promote,
+                    ),
+                };
                 // A relevant impl the traversal withheld may have changed any
                 // outcome (a missing candidate reads as NoSolution): hold.
                 let blocked = provider.take_blocked_impls();
@@ -781,6 +857,7 @@ fn execute(
         world,
         values,
         unresolved,
+        closed: false,
         current: Arc::clone(current),
     }))
 }
@@ -859,6 +936,39 @@ fn potential_numeric_traits(
             });
         }
     }
+    let mut traits = BTreeSet::new();
+    for recipe in clauses.source().recipes().into_iter().flatten() {
+        let reference = match recipe {
+            SourcePredicateRecipe::ResolvedSizedDefault(reference)
+            | SourcePredicateRecipe::Explicit {
+                result: PredicateResult::Implemented(reference),
+                ..
+            } => reference,
+            _ => continue,
+        };
+        let mut connected = false;
+        visit_source_reference(reference, &mut |ty| {
+            if let TyTerm::Param(key) = ty {
+                connected |= parameters.contains(key);
+            }
+        });
+        if connected {
+            traits.insert(reference.trait_key);
+            visit_source_reference(reference, &mut |ty| {
+                if let TyTerm::Projection(projection) = ty {
+                    traits.insert(projection.trait_ref.trait_key);
+                }
+            });
+        }
+    }
+    traits
+}
+/// Every trait a selected call site's clauses mention over the given
+/// parameters (all of a site's generics: the component links them).
+fn all_clause_traits(
+    clauses: &super::source_declaration_clauses::PreparedSourceDeclarationClauses,
+    parameters: &BTreeSet<crate::traits::term::ParamKey>,
+) -> BTreeSet<Digest> {
     let mut traits = BTreeSet::new();
     for recipe in clauses.source().recipes().into_iter().flatten() {
         let reference = match recipe {

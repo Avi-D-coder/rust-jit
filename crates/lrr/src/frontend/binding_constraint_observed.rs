@@ -16,6 +16,7 @@ impl Component<'_> {
                             | FactKind::MethodCall
                             | FactKind::LangCall
                             | FactKind::Borrow
+                            | FactKind::RawBorrow
                             | FactKind::Path
                             | FactKind::Parenthesis
                             | FactKind::Prefix

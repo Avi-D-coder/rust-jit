@@ -194,9 +194,8 @@ impl BuiltinKind {
         use BuiltinKind::*;
         match self {
             Assert | CorePanic | StdPanic | Unreachable | FormatArgs | ConstFormatArgs
-            | FormatArgsNl | Line | Column | File | ModulePath | Stringify | Cfg | CompileError => {
-                BuiltinDisposition::Adapter
-            }
+            | FormatArgsNl | Line | Column | File | ModulePath | Stringify | Cfg | CompileError
+            | Gca => BuiltinDisposition::Adapter,
             Concat | ConcatBytes | Env | OptionEnv | Include | IncludeBytes | IncludeStr => {
                 BuiltinDisposition::HandledByLrr
             }
@@ -208,7 +207,6 @@ impl BuiltinKind {
             | TraceMacros
             | PatternType
             | Iter
-            | Gca
             | TestBinderConstraints
             | ViewType => BuiltinDisposition::Unsupported,
         }
@@ -486,6 +484,7 @@ pub fn expand_builtin(
             }])
         }
         CompileError => Ok(Err(compile_error(children, call_site))),
+        Gca => expand_gca(&mut out, &args),
         Concat | ConcatBytes | Env | OptionEnv | Include | IncludeBytes | IncludeStr => Err(fault(
             format!("`{}!` is expanded by LRR's compile-input path", kind.name()),
         )),
@@ -497,7 +496,6 @@ pub fn expand_builtin(
         | TraceMacros
         | PatternType
         | Iter
-        | Gca
         | TestBinderConstraints
         | ViewType => Ok(Err(failure(
             BuiltinFailureKind::Unsupported,
@@ -729,6 +727,38 @@ fn first_span(tree: &TokenTree) -> Key {
 
 fn is_str_literal(tree: &TokenTree) -> bool {
     matches!(tree, TokenTree::Literal { token_text, .. } if tts::unquote_str(token_text).is_some())
+}
+
+/// rustc `gca::expand` (`rustc_builtin_macros/src/gca.rs`): exactly one
+/// expression, with an optional trailing comma
+/// (`util::get_single_expr_from_tts`). rustc wraps it in `ExprKind::GcaMacro`
+/// (and `TyKind::GcaMacro`), which lowering treats as the expression itself
+/// represented directly; as tokens the expansion is the expression, kept one
+/// operand by the invisible output root.
+fn expand_gca(out: &mut Output, args: &Args<'_>) -> Outcome {
+    let one_argument = |at: Key| {
+        failure(
+            BuiltinFailureKind::Syntax,
+            "gca! takes 1 argument",
+            Some(at),
+        )
+    };
+    if args.children.is_empty() {
+        return Ok(Err(one_argument(out.call_site)));
+    }
+    let consumed = match expression_prefix(out, args.children)? {
+        Ok(n) => n,
+        Err(failure) => return Ok(Err(failure)),
+    };
+    let (expression, rest) = args.children.split_at(consumed);
+    let rest = match rest.first() {
+        Some(TokenTree::Punct { scalar: ',', .. }) => &rest[1..],
+        _ => rest,
+    };
+    if let Some(extra) = rest.first() {
+        return Ok(Err(one_argument(first_span(extra))));
+    }
+    out.finish(expression.to_vec())
 }
 
 /// rustc `assert::expand_assert` (without the unstable `generic_assert`).

@@ -3749,6 +3749,13 @@ impl GeneratedMacroCatalog {
             for (_, unit) in compiler.facade_aliases() {
                 add(Arc::new(compiler.source_exports(unit)?))?;
             }
+            // The library's own macro definitions and re-exports join generated
+            // paths (`$crate::thread::local_impl::...!`) as they join source ones.
+            if let Some(library) = compiler.library() {
+                for route in library.routes() {
+                    add(route.clone())?;
+                }
+            }
         }
         if let Some(procedural) = &context.provider.procedural {
             for route in

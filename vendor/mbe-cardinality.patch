@@ -604,7 +604,7 @@
      marker: impl Fn(&mut Span) + Copy,
  ) -> ExpandResult<()> {
      // We already handle $crate case in mbe parser
-@@ -465,23 +975,53 @@
+@@ -465,23 +975,56 @@
      template: &MetaTemplate,
      kind: RepeatKind,
      separator: Option<&Separator>,
@@ -654,7 +654,10 @@
 +            builder.discard_trial_plans(trial_plans);
 +            break;
 +        }
-+        if nesting_state.repetition_len.is_none() {
++        // A planned repetition was driven in the counting pass. Its iterations may
++        // all be empty nested repetitions that never look up a binding of this
++        // axis again (`$($(...)?)?` matched once with nothing inside).
++        if nesting_state.repetition_len.is_none() && planned_iterations.is_none() {
 +            builder.restore(initial_restore_point);
 +            restore_point = initial_restore_point;
 +            err = Some(ExpandError::binding_error(
@@ -664,7 +667,7 @@
              break;
          }
          nesting_state.idx += 1;
-@@ -491,12 +1031,14 @@
+@@ -491,12 +1034,14 @@
  
          restore_point = builder.restore_point();
  
@@ -685,7 +688,7 @@
              err = Some(ExpandError::new(ctx.call_site, ExpandErrorKind::LimitExceeded));
              break;
          }
-@@ -506,6 +1048,9 @@
+@@ -506,6 +1051,9 @@
              continue;
          }
  
@@ -695,7 +698,7 @@
          if let Some(sep) = separator {
              match sep {
                  Separator::Ident(ident) => builder.push(tt::Leaf::from(ident.clone())),
-@@ -530,6 +1075,9 @@
+@@ -530,6 +1078,9 @@
      builder.restore(restore_point);
  
      ctx.nesting.pop().unwrap();
@@ -705,7 +708,7 @@
  
      // Check if it is a single token subtree without any delimiter
      // e.g {Delimiter:None> ['>'] /Delimiter:None>}
-@@ -545,7 +1093,7 @@
+@@ -545,7 +1096,7 @@
  /// we need this fixup.
  fn fix_up_and_push_path_tt(
      ctx: &ExpandCtx<'_>,
@@ -714,7 +717,7 @@
      subtree: tt::TokenTreesView<'_>,
  ) {
      let mut prev_was_ident = false;
-@@ -597,3 +1145,11 @@
+@@ -597,3 +1148,11 @@
          Binding::Fragment(_) | Binding::Missing(_) => 1,
      }
  }

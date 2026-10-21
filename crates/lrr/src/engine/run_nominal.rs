@@ -1029,12 +1029,19 @@ impl RunMachine {
         // anchored, `$crate`, `<T as Trait>` and `Self` paths are the module
         // route's and need no caller source.
         let qualified = name.contains("::");
+        // `Self` (a constructor of the impl self type) is never a block item.
+        if name == "Self" {
+            return QueryPoll::Ready(Ok(false));
+        }
+        // A path of three or more segments is lexical when a block-level
+        // `use` may bind its root: the entered goal continues from it.
+        let mut deep = false;
         if qualified {
             let mut parts = name.split("::");
-            let (Some(root), Some(member), None) = (parts.next(), parts.next(), parts.next())
-            else {
+            let (Some(root), Some(member)) = (parts.next(), parts.next()) else {
                 return QueryPoll::Ready(Ok(false));
             };
+            deep = parts.next().is_some();
             if root.is_empty()
                 || member.is_empty()
                 || root.starts_with(['$', '<'])
@@ -1103,7 +1110,14 @@ impl RunMachine {
         let QueryValue::EnteredValue(goal) = goal.value.as_ref() else {
             return QueryPoll::Ready(Err(call_fault("lexical callee goal variant differs")));
         };
-        QueryPoll::Ready(Ok(goal.rooted().is_some()))
+        // A longer path is lexical when the goal continued it from a
+        // block-level `use`; one whose root is no such binding is the module
+        // route's (the goal marks it qualified).
+        QueryPoll::Ready(Ok(if deep {
+            !goal.is_qualified_path()
+        } else {
+            goal.rooted().is_some()
+        }))
     }
     /// `Root::function(..)` where the entered Value goal bound `Root`
     /// lexically (a block-local type, or an imported one): the associated
@@ -1141,7 +1155,7 @@ impl RunMachine {
         let (Some(member), Some(declaration)) = (goal.rooted(), goal.declaration()) else {
             return QueryPoll::Ready(Ok(None));
         };
-        if declaration.variant().is_some() || name.split("::").count() != 2 {
+        if declaration.variant().is_some() || name.split("::").count() < 2 {
             return QueryPoll::Ready(Ok(None));
         }
         let root = declaration.identity();

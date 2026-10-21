@@ -53,6 +53,18 @@ impl ParsedFile {
         };
         self.written_path(source_path, path.syntax(), cfg, true, false)
     }
+    /// The module-route spelling of a type-relative path written in a record
+    /// expression or pattern (`Self::V`, `Alias::V`), `None` where refused.
+    pub(crate) fn written_type_relative_spelling(
+        &self,
+        path: ast::Path,
+        cfg: &crate::source::snapshot::CfgSet,
+    ) -> Result<Option<String>, Diagnostic> {
+        Ok(match self.written_pattern_path(path, cfg)? {
+            WrittenValuePath::Spelled(spelled) => Some(spelled),
+            WrittenValuePath::Refused(_) => None,
+        })
+    }
     /// The spelling of a call's callee path. The explicit type arguments of
     /// its final segment (`mem::size_of::<u32>`) belong to the call, which
     /// carries them as its explicit arguments (`Op::CallSeal::explicit`), so
@@ -138,16 +150,14 @@ impl ParsedFile {
                 Some(ast::PathSegmentKind::SuperKw) => "super".into(),
                 // `Self::NAME` in an impl: an associated item of its self
                 // type, selected by the dispatcher's member lookup.
-                Some(ast::PathSegmentKind::SelfTypeKw)
-                    if lexical_value && cursor.qualifier().is_none() =>
-                {
+                Some(ast::PathSegmentKind::SelfTypeKw) if cursor.qualifier().is_none() => {
                     "Self".into()
                 }
                 // `<Type as Trait>::NAME` / `<Type>::NAME`.
                 Some(ast::PathSegmentKind::Type {
                     type_ref,
                     trait_ref,
-                }) if lexical_value && cursor.qualifier().is_none() => {
+                }) if cursor.qualifier().is_none() => {
                     let Some(ty) = type_ref.and_then(|ty| match ty {
                         ast::Type::PathType(path) => path.path(),
                         _ => None,
@@ -188,7 +198,9 @@ impl ParsedFile {
             }
         }
         components.reverse();
-        if (components[0] == "Self" || components[0].starts_with('<')) && components.len() != 2 {
+        if (components[0] == "Self" && components.len() > 2
+            || components[0].starts_with('<') && components.len() != 2)
+        {
             return Ok(WrittenValuePath::Refused(
                 "associated value path requires associated-item integration",
             ));
@@ -199,10 +211,7 @@ impl ParsedFile {
             && !components[0].starts_with('<');
         if relative {
             let root = MacroName::parse(&components[0], self.edition)?;
-            if components.len() > 2
-                && (self.lexical_item_may_bind(anchor, &root, cfg)?
-                    || self.enclosing_import_may_bind(anchor, &components[0], cfg)?)
-            {
+            if components.len() > 2 && self.lexical_item_may_bind(anchor, &root, cfg)? {
                 return Ok(WrittenValuePath::Refused(
                     "lexical item value path requires body namespace integration",
                 ));
@@ -235,15 +244,34 @@ impl ParsedFile {
         cfg: &crate::source::snapshot::CfgSet,
         generic: bool,
     ) -> Result<Option<String>, Diagnostic> {
+        self.anchor_spelling_with(path, anchor, cfg, generic, false)
+    }
+    /// `anchor_spelling`, where a `<Type as Trait<Args>>` anchor's trait path
+    /// (`trait_arguments`) may carry its Type arguments on the final segment:
+    /// spelled `Trait<Args,..>` with plain written Types (`&i32`) as the
+    /// trait's explicit arguments. Arguments of any other shape are not
+    /// spelled; the trait is then selected by the call's own arguments.
+    pub(super) fn anchor_spelling_with(
+        &self,
+        path: &ast::Path,
+        anchor: &ra_ap_syntax::SyntaxNode,
+        cfg: &crate::source::snapshot::CfgSet,
+        generic: bool,
+        trait_arguments: bool,
+    ) -> Result<Option<String>, Diagnostic> {
         let mut parts = Vec::new();
         let mut cursor = Some(path.clone());
         let mut absolute = false;
+        let mut final_arguments = None;
         while let Some(current) = cursor {
             let Some(segment) = current.segment() else {
                 return Ok(None);
             };
-            if segment.generic_arg_list().is_some() {
-                return Ok(None);
+            if let Some(list) = segment.generic_arg_list() {
+                if !trait_arguments || parts.len() != 0 {
+                    return Ok(None);
+                }
+                final_arguments = Some(list);
             }
             parts.push(match segment.kind() {
                 Some(ast::PathSegmentKind::Name(name)) if name.text() != "$crate" => {
@@ -278,7 +306,39 @@ impl ParsedFile {
         if absolute {
             spelled.insert_str(0, "::");
         }
+        if let Some(list) = final_arguments
+            && let Some(arguments) = Self::plain_trait_arguments(&list)
+        {
+            spelled.push('<');
+            spelled.push_str(&arguments.join(","));
+            spelled.push('>');
+        }
         Ok(Some(spelled))
+    }
+    /// The Type arguments of a qualified anchor's trait as plain written Types
+    /// (identifier paths, primitives, `&`/`&mut`): the spelling the explicit
+    /// trait arguments of a `<Type as Trait<Args>>` anchor travel in. `None`
+    /// when any argument has another shape (generic application, tuple,
+    /// slice, macro): the anchor is then spelled without arguments.
+    fn plain_trait_arguments(list: &ast::GenericArgList) -> Option<Vec<String>> {
+        let mut arguments = Vec::new();
+        for argument in list.generic_args() {
+            match argument {
+                ast::GenericArg::LifetimeArg(_) => {}
+                ast::GenericArg::TypeArg(_) => {
+                    let text = argument.syntax().text().to_string();
+                    let plain = text.chars().all(|c| {
+                        c.is_alphanumeric() || matches!(c, '_' | '&' | '\'' | ':') || c.is_whitespace()
+                    });
+                    if !plain || text.contains("$crate") {
+                        return None;
+                    }
+                    arguments.push(text.split_whitespace().collect::<Vec<_>>().join(" "));
+                }
+                _ => return None,
+            }
+        }
+        (!arguments.is_empty()).then_some(arguments)
     }
     /// Dispatcher probe for the `ValuePath` at `key`: whether a body-local
     /// item or `use` may bind its single written name. Such a path is
@@ -325,6 +385,11 @@ impl ParsedFile {
         let Some(written) = path.path() else {
             return Ok(false);
         };
+        // A path of three or more segments continues from a block-level
+        // `use` of its root: the entered goal resolves it from that binding.
+        if Self::deep_lexical_root(&written).is_some() {
+            return self.deep_root_import_may_bind(&written, index.cfg());
+        }
         // A single name, or the root of `Root::member`: the entered lexical
         // Value goal decides whether a block item or import really binds it.
         let Some((name, _)) = Self::lexical_root_name(&written) else {
@@ -372,6 +437,49 @@ impl ParsedFile {
                 Some((root, Some(member)))
             }
         }
+    }
+    /// The root of a qualified path of three or more segments (`root::a::b`),
+    /// when it is a plain identifier: a block-level `use` may bind it to a
+    /// module (or a type), and the rest of the path then continues from that
+    /// binding. Keywords, absolute paths and rooted generic arguments are the
+    /// module route's.
+    pub(crate) fn deep_lexical_root(path: &ast::Path) -> Option<ast::NameRef> {
+        path.qualifier()?.qualifier()?;
+        let mut root = path.clone();
+        while let Some(parent) = root.qualifier() {
+            root = parent;
+        }
+        let segment = root.segment()?;
+        if segment.coloncolon_token().is_some() || segment.generic_arg_list().is_some() {
+            return None;
+        }
+        segment.name_ref().filter(|name| {
+            let text = name.text();
+            !matches!(&*text, "$crate" | "Self" | "self" | "super" | "crate")
+        })
+    }
+    /// Whether a block-level `use` may bind the root of a three-or-more
+    /// segment path; the entered lexical Value goal then resolves the path
+    /// from that binding (`lookup_qualified_module`), never the module route.
+    pub(crate) fn deep_root_import_may_bind(
+        &self,
+        path: &ast::Path,
+        cfg: &crate::source::snapshot::CfgSet,
+    ) -> Result<bool, Diagnostic> {
+        let Some(root) = Self::deep_lexical_root(path) else {
+            return Ok(false);
+        };
+        self.enclosing_import_may_bind(path.syntax(), root.text().as_ref(), cfg)
+    }
+    /// Whether `path` is exactly the `Self` type keyword (`Self(..)`,
+    /// `Self { .. }`, a unit struct `Self`): never the name of a block item,
+    /// selected by the module route's `Self` lookup (the impl self type).
+    pub(crate) fn is_self_type_path(path: &ast::Path) -> bool {
+        path.qualifier().is_none()
+            && path.segment().is_some_and(|segment| {
+                matches!(segment.kind(), Some(ast::PathSegmentKind::SelfTypeKw))
+                    && segment.coloncolon_token().is_none()
+            })
     }
     /// Whether a block item or block-level `use` may bind the single name (or
     /// the root of a two-segment path) of a path, tuple-struct or record

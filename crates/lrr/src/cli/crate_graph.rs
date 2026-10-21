@@ -518,6 +518,9 @@ mod trait_object_tests;
 #[path = "pointer_tests.rs"]
 mod pointer_tests;
 #[cfg(test)]
+#[path = "channel_tests.rs"]
+mod channel_tests;
+#[cfg(test)]
 #[path = "local_item_tests.rs"]
 mod local_item_tests;
 #[cfg(test)]

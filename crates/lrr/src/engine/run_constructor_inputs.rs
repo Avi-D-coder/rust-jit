@@ -184,6 +184,7 @@ impl RunMachine {
             variables: &variables,
             relations: &relations,
             caller: &caller,
+            component: None,
         };
         let subject = ReachedSubject::Adt(Arc::clone(&fields), variant);
         let outcome = ready!(poll_reached_root(
@@ -372,6 +373,7 @@ impl RunMachine {
             variables: &variables,
             relations: &relations,
             caller: &caller,
+            component: None,
         };
         let subject = ReachedSubject::Adt(Arc::clone(&fields), variant);
         let response = match ready!(poll_reached_root(

@@ -62,4 +62,22 @@ and `repetition_without_a_driving_binding_refuses_before_repeating_output`.
 This fixes iteration semantics only. Backend output allocation limits are still
 pending and this record does not claim M006 completion.
 
+## E-M006-004: planned nested repetition with only empty inner matches
+
+Rust 1.99.0 accepts `thread_local!` declarations that end in `;`. Their
+matcher `$(; $($($rest:tt)+)?)?` matches the outer repetition once and the inner
+repetition never, and the transcriber `$($($crate::..!($($rest)+);)?)?` repeats
+over `rest`. The counting pass observes the outer axis through the first
+lookup; the planned pass then plans zero inner iterations, so nothing looks the
+outer axis up again, and the `repetition has no binding at this depth` check
+rejected the one outer iteration. The witness is the macro
+`($name:ident $(; $($($rest:tt)+)?)?)` invoked as `tlp!(F;)`.
+
+The undriven-repetition check now applies only to unplanned repetitions. A
+repetition with a plan was driven (or refused) by the counting pass, so its
+planned iterations are authoritative. The combined exact patch
+(`vendor/mbe-cardinality.patch`) reconstructs the modified file from the original
+archived preimage. Regression:
+`nested_optional_repetition_matched_once_with_an_empty_inner_match_expands`.
+
 Current combined transcription patch also includes [E-M007-002 marked span/ancestor admission](m007-marked-byte-preflight.md). Original archived preimages and historical checkpoint receipts are preserved.

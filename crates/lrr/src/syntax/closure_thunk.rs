@@ -165,6 +165,9 @@ pub(crate) fn capture_use(
         let mode = if dereferenced {
             // Preserve the ordinary non-pattern dereference capture route.
             CaptureMode::Shared
+        } else if crate::syntax::assignee::enclosing(&current).is_some_and(|(_, leaf)| leaf) {
+            // A leaf place of a destructuring assignment is assigned.
+            CaptureMode::Mutable
         } else if let Some(reference) = ast::RefExpr::cast(parent.clone()) {
             if reference.mut_token().is_some() {
                 CaptureMode::Mutable

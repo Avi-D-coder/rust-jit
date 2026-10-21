@@ -162,11 +162,19 @@ impl ArgumentDiscovery {
         budget: &SharedExpansionBudget,
         namespaces: &crate::frontend::macro_names::MacroNamespaces,
     ) -> Result<ArgumentDiscoveryStep, Diagnostic> {
-        self.poll_with_sources(provider, input, budget, namespaces, None)
+        self.poll_with_sources(
+            provider,
+            std::slice::from_ref(provider),
+            input,
+            budget,
+            namespaces,
+            None,
+        )
     }
     pub(crate) fn poll_with_sources(
         &mut self,
         provider: &SourceDeclarative,
+        owners: &[SourceDeclarative],
         input: &DeclarationFragmentInput,
         budget: &SharedExpansionBudget,
         namespaces: &crate::frontend::macro_names::MacroNamespaces,
@@ -179,7 +187,7 @@ impl ArgumentDiscovery {
                 ));
             }
             if let Some((ordinal, fragment)) = &mut self.active {
-                match fragment.poll_with_sources(provider, namespaces, included)? {
+                match fragment.poll_with_sources(provider, owners, namespaces, included)? {
                     DeclarationFragmentStep::NeedAttributeSelection(selection) => {
                         return Ok(ArgumentDiscoveryStep::NeedAttributeSelection(selection));
                     }

@@ -31,6 +31,9 @@ use std::{collections::{BTreeMap, BTreeSet}, sync::Arc};
 pub(super) struct SourceFactRequest {
     pub(super) caller: Digest,
     pub(super) callee: Digest,
+    /// Further selected callees of a source component: their own clauses are
+    /// retained exactly as the callee's.
+    pub(super) extra_callees: BTreeSet<Digest>,
     /// Actual candidate-read demands, not every trait mentioned by source metadata.
     pub(super) traits: BTreeSet<Digest>,
     pub(super) input_types: Vec<TyTerm>,
@@ -164,6 +167,7 @@ impl SourceFactBundle {
         // do not promote traits from unrelated metadata into candidate demands.
         request.traits.extend(input_bindings.projections.keys().map(|(parent, _)| *parent));
         let mut pending_definitions = BTreeSet::from([request.caller, request.callee]);
+        pending_definitions.extend(request.extra_callees.iter().copied());
         pending_definitions.extend(request.traits.iter().copied());
         pending_definitions.extend(input_bindings.definitions.keys().copied());
         let mut result = Self { request, catalog, membership, retained, input_bindings,
@@ -290,7 +294,7 @@ impl SourceFactBundle {
                 }
                 // Only the actual caller/callee own/parent clause demand is
                 // seeded here; other definitions retain independent domains.
-                if definition == result.request.caller || definition == result.request.callee {
+                if definition == result.request.caller || definition == result.request.callee || result.request.extra_callees.contains(&definition) {
                     let mut owners = BTreeSet::from([definition]);
                     while let Some(owner) = owners.pop_first() {
                         if result.own_clauses.contains_key(&owner) { continue; }

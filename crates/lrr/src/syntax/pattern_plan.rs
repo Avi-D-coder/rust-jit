@@ -6,7 +6,8 @@
 //! exact same route. Query dependencies establish currentness; installed
 //! operations never call back here.
 use super::{
-    annotation_hint, draft, error, id_for, intrinsic_place_receiver, next_phase_operations,
+    annotation_hint, draft, error, id_for, intrinsic_place_receiver, local_binding,
+    next_phase_operations,
     pattern_tree::{LocalItems, PatternTree},
     return_pc, statement_cfg,
 };
@@ -68,6 +69,38 @@ struct LetPlan {
     hint: HintRecipe,
     pattern: Root,
     otherwise: Option<NodeId>,
+}
+/// `let PAT;` / `let PAT: T;`: a destructuring declaration with no
+/// initializer. rustc declares every binding of the pattern uninitialized
+/// (each is assigned later, like `let x;`); no value is matched. The written
+/// annotation's component for each binding comes from the same entered-Type
+/// selection a matched `let` uses.
+#[derive(Debug)]
+struct DeclarePlan {
+    id: NodeId,
+    hint: HintRecipe,
+    pattern: Root,
+}
+/// `lhs = rhs` with a destructuring left operand (rustc's
+/// `{ let <lhs pattern> = rhs; place0 = tmp0; .. }`): the right operand is the
+/// scrutinee of the shared transaction over the pattern the left operand's
+/// shape spells; each leaf place then receives, in source order, the part the
+/// transaction bound for it.
+#[derive(Debug)]
+struct AssignPlan {
+    id: NodeId,
+    scrutinee: NodeId,
+    place: bool,
+    pattern: Root,
+    leaves: Vec<AssignLeaf>,
+    next: PcKey,
+}
+#[derive(Debug)]
+struct AssignLeaf {
+    node: NodeId,
+    /// A local variable leaf is assigned as a local; any other leaf is a place
+    /// expression evaluated when its turn comes.
+    local: Option<NodeId>,
 }
 #[derive(Debug)]
 struct ConditionPlan {
@@ -136,6 +169,8 @@ impl ClosurePlan {
 enum Prepared {
     Match(MatchPlan),
     Let(LetPlan),
+    Declare(DeclarePlan),
+    Assign(AssignPlan),
     Condition(ConditionPlan),
     For(ForPlan),
     Closure(ClosurePlan),
@@ -183,10 +218,12 @@ impl PatternSourcePlan {
         match &self.prepared {
             Prepared::Match(plan) => plan.arms.iter().map(|arm| &arm.pattern).collect(),
             Prepared::Let(plan) => vec![&plan.pattern],
+            Prepared::Declare(plan) => vec![&plan.pattern],
             Prepared::Condition(plan) => vec![&plan.pattern],
             Prepared::For(plan) => vec![&plan.pattern],
             Prepared::Closure(plan) => plan.pattern_roots(),
-            Prepared::Refused(_) | Prepared::Disabled(_) => Vec::new(),
+            // An assignee's leaves are places, not bindings: no local is introduced.
+            Prepared::Assign(_) | Prepared::Refused(_) | Prepared::Disabled(_) => Vec::new(),
         }
     }
     /// Retained products for ownership observation; refused roots own no tree.
@@ -212,7 +249,9 @@ impl PatternSourcePlan {
             .ok_or_else(|| error("pattern phase node absent"))?;
         let owner = |node: &crate::syntax::body_index::StructuralNode| match node.role {
             NodeRole::Expression(ExpressionKind::Match | ExpressionKind::For) => true,
-            NodeRole::Expression(ExpressionKind::Other) => node.clause_scope.is_some(),
+            NodeRole::Expression(ExpressionKind::Other) => {
+                node.clause_scope.is_some() || node.pattern_statement
+            }
             NodeRole::Statement => node.pattern_statement,
             // The closure's own call frame starts at its Commit phase; its
             // creation (Entry) and return (Operand) are ordinary closure phases.
@@ -323,6 +362,7 @@ impl PatternSourcePlan {
     /// as a value (an annotation's selected Type can hint it).
     pub(crate) fn let_value_owner(&self) -> bool {
         matches!(&self.prepared, Prepared::Let(plan) if !plan.place)
+            || matches!(&self.prepared, Prepared::Declare(_))
     }
 }
 
@@ -348,6 +388,8 @@ impl Lowering<'_> {
         let result = match prepared {
             Prepared::Match(plan) => self.lower_match(plan, key),
             Prepared::Let(plan) => self.lower_let(plan, key),
+            Prepared::Declare(plan) => self.lower_declare(plan, key),
+            Prepared::Assign(plan) => self.lower_assign(plan, key),
             Prepared::Condition(plan) => self.lower_condition(plan, key),
             Prepared::For(plan) => self.lower_for(plan, key),
             Prepared::Closure(plan) => self.lower_closure(plan, key),
@@ -678,6 +720,164 @@ impl Lowering<'_> {
                 }
             }
             _ => Err(unsupported("invalid let pattern phase")),
+        }
+    }
+    /// `let PAT;`: every binding of the pattern is declared uninitialized, each
+    /// with its component of the written annotation, then execution continues
+    /// at the next statement. Later assignments initialize them exactly as
+    /// they do a plain `let x;`.
+    fn lower_declare(&self, plan: &DeclarePlan, key: &PcKey) -> Result<VerifiedRecipe, Diagnostic> {
+        let index = self.index;
+        if NodeId(key.node) != plan.id || Phase::from_code(key.phase) != Phase::Entry {
+            return Err(unsupported("invalid deferred declaration phase"));
+        }
+        let statement = self
+            .parsed
+            .entered_node_syntax(self.body, index, plan.id)?
+            .ok_or_else(|| error("let statement syntax attachment absent"))?;
+        let tree = self.tree(&plan.pattern)?;
+        let whole = self.let_hint.unwrap_or(&plan.hint);
+        let mut declared = Vec::new();
+        declared_bindings(tree.root(), Annotation::of(whole), &mut declared)?;
+        let operations = declared
+            .into_iter()
+            .map(|(binding, writable, hint)| Op::DeclareLocal {
+                binding,
+                hint,
+                writable,
+            })
+            .collect();
+        let (operations, next) = next_phase_operations(index, self.body, &statement, operations)?;
+        self.emit(key, operations, RecipeExit::Next(next))
+    }
+    /// A destructuring assignment: evaluate the right operand, destructure it
+    /// through the shared transaction into the leaves' temporaries, then
+    /// assign them to the leaf places left to right. A place leaf is evaluated
+    /// first (its own PCs return to this owner's operand phase); a local leaf
+    /// needs no evaluation, so execution resumes directly at its operand phase.
+    fn lower_assign(&self, plan: &AssignPlan, key: &PcKey) -> Result<VerifiedRecipe, Diagnostic> {
+        let index = self.index;
+        let owner = plan.id;
+        if NodeId(key.node) != owner {
+            return Err(unsupported("assignment pattern phase is outside its owner"));
+        }
+        let test = self.test_slot(owner)?;
+        let result = self.value(owner)?;
+        let pattern = |operation| Op::Pattern { operation };
+        // Where execution goes to assign the `at`-th leaf (or finish).
+        let turn = |at: usize| -> Result<PcKey, Diagnostic> {
+            match plan.leaves.get(at) {
+                Some(AssignLeaf {
+                    node,
+                    local: Some(_),
+                }) => {
+                    let ordinal = self
+                        .operand(owner, *node)
+                        .ok_or_else(|| error("assignment leaf is not an operand of its owner"))?;
+                    index.pc(owner, Phase::Operand(ordinal))
+                }
+                Some(leaf) => index.pc(leaf.node, Phase::Entry),
+                None => Ok(plan.next.clone()),
+            }
+        };
+        match Phase::from_code(key.phase) {
+            Phase::Entry => {
+                let ops = if plan.place {
+                    vec![]
+                } else {
+                    vec![Op::SetHint {
+                        child: self.value(plan.scrutinee)?,
+                        hint: HintRecipe::None,
+                    }]
+                };
+                self.emit(
+                    key,
+                    ops,
+                    RecipeExit::Next(index.pc(plan.scrutinee, Phase::Entry)?),
+                )
+            }
+            Phase::Operand(n) if self.operand(owner, plan.scrutinee) == Some(n) => self.emit(
+                key,
+                vec![
+                    pattern(PatternOperation::Open {
+                        owner,
+                        source: self.source(plan.scrutinee, plan.place)?,
+                    }),
+                    pattern(PatternOperation::Test {
+                        owner,
+                        tree: self.tree(&plan.pattern)?,
+                        result: test,
+                        retry: false,
+                    }),
+                ],
+                RecipeExit::Branch {
+                    condition: test,
+                    yes: index.pc(owner, Phase::Commit)?,
+                    no: index.pc(owner, Phase::Exit)?,
+                },
+            ),
+            Phase::Commit => {
+                let mut ops = vec![Op::Discard { source: test }];
+                // A local leaf's temporary takes the local's Type, as the
+                // right operand of `local = value` does: an unresolved numeric
+                // literal part is then that Type, never a fresh fallback.
+                for leaf in &plan.leaves {
+                    if let Some(binding) = leaf.local {
+                        ops.push(Op::LocalHint {
+                            binding,
+                            child: self.value(leaf.node)?,
+                        });
+                    }
+                }
+                ops.push(pattern(PatternOperation::Commit { owner }));
+                ops.push(pattern(PatternOperation::Close { owner }));
+                if plan.leaves.is_empty() {
+                    ops.push(Op::Unit {
+                        destination: result,
+                    });
+                }
+                self.emit(key, ops, RecipeExit::Next(turn(0)?))
+            }
+            Phase::Exit => self.emit(
+                key,
+                vec![
+                    Op::Discard { source: test },
+                    pattern(PatternOperation::Close { owner }),
+                ],
+                RecipeExit::Fault(crate::ir::op::DiagnosticTemplate {
+                    message: "destructuring assignment pattern did not match its right operand"
+                        .into(),
+                }),
+            ),
+            Phase::Operand(n) => {
+                let (at, leaf) = plan
+                    .leaves
+                    .iter()
+                    .enumerate()
+                    .find(|(_, leaf)| self.operand(owner, leaf.node) == Some(n))
+                    .ok_or_else(|| unsupported("assignment phase is outside its operands"))?;
+                let node = &index.nodes()[leaf.node.0 as usize];
+                let mut ops = vec![match leaf.local {
+                    Some(binding) => Op::AssignLocal {
+                        binding,
+                        source: self.value(leaf.node)?,
+                        destination: result,
+                    },
+                    None => Op::AssignPlace {
+                        place: node
+                            .place
+                            .ok_or_else(|| error("assignment leaf place absent"))?,
+                        source: self.value(leaf.node)?,
+                        destination: result,
+                    },
+                }];
+                // Every assignment but the last discards its unit result; the
+                // last one is the expression's value.
+                if at + 1 < plan.leaves.len() {
+                    ops.push(Op::Discard { source: result });
+                }
+                self.emit(key, ops, RecipeExit::Next(turn(at + 1)?))
+            }
         }
     }
     fn lower_for(&self, plan: &ForPlan, key: &PcKey) -> Result<VerifiedRecipe, Diagnostic> {
@@ -1218,11 +1418,21 @@ impl ParsedFile {
                     next: return_pc(index, body, expression.syntax())?,
                 })
             } else if let Some(statement) = ast::LetStmt::cast(syntax.clone()) {
-                let (Some(pattern), Some(initializer)) = (statement.pat(), statement.initializer())
-                else {
-                    return Ok(Prepared::Refused(unsupported(
-                        "uninitialized destructuring declaration awaits deferred initialization",
-                    )));
+                let Some(pattern) = statement.pat() else {
+                    return Ok(Prepared::Refused(unsupported("let pattern absent")));
+                };
+                let Some(initializer) = statement.initializer() else {
+                    if statement.let_else().is_some() {
+                        return Ok(Prepared::Refused(unsupported(
+                            "let-else requires an initializer",
+                        )));
+                    }
+                    return Ok(Prepared::Declare(DeclarePlan {
+                        id: NodeId(owner.node),
+                        hint: annotation_hint(self, statement.ty(), owner.body.definition)?
+                            .unwrap_or(HintRecipe::None),
+                        pattern: self.pattern_root(body, index, &local_items, &pattern)?,
+                    }));
                 };
                 let place = intrinsic_place_receiver(&initializer);
                 let hint = if place {
@@ -1255,10 +1465,66 @@ impl ParsedFile {
                     }),
                     Err(refused) => Prepared::Refused(refused),
                 }
+            } else if let Some(binary) = ast::BinExpr::cast(syntax.clone()) {
+                match self.assign_plan(body, index, &local_items, &binary)? {
+                    Ok(plan) => Prepared::Assign(plan),
+                    Err(refused) => Prepared::Refused(refused),
+                }
             } else {
                 return Err(error("pattern owner syntax role differs"));
             },
         )
+    }
+    fn assign_plan(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        local_items: &LocalItems,
+        binary: &ast::BinExpr,
+    ) -> Result<Result<AssignPlan, Diagnostic>, Diagnostic> {
+        let (Some(lhs), Some(rhs)) = (crate::syntax::assignee::destructuring_lhs(binary), binary.rhs())
+        else {
+            return Ok(Err(unsupported("destructuring assignment operand absent")));
+        };
+        let id = id_for(index, body, binary.syntax())?;
+        let tree = match PatternTree::build_assignee(self, body, index, local_items, &lhs) {
+            Ok(tree) => Ok(Arc::new(tree)),
+            Err(error) if error.code == "LRR-E-UNSUPPORTED" => Err(error),
+            Err(error) => return Err(error),
+        };
+        let pattern = Root {
+            node: id_for(index, body, lhs.syntax())?,
+            tree,
+        };
+        let mut leaves = Vec::new();
+        for (node, leaf) in crate::syntax::assignee::region(&lhs) {
+            if !leaf {
+                continue;
+            }
+            // A parenthesized local (`(c) = ..`) is the local itself.
+            let mut inner = node.clone();
+            while let Some(group) = ast::ParenExpr::cast(inner.clone())
+                && let Some(next) = group.expr()
+            {
+                inner = next.syntax().clone();
+            }
+            let local = match ast::PathExpr::cast(inner) {
+                Some(path) => local_binding(self, index, body, &path)?,
+                None => None,
+            };
+            leaves.push(AssignLeaf {
+                node: id_for(index, body, &node)?,
+                local,
+            });
+        }
+        Ok(Ok(AssignPlan {
+            id,
+            scrutinee: id_for(index, body, rhs.syntax())?,
+            place: intrinsic_place_receiver(&rhs),
+            pattern,
+            leaves,
+            next: return_pc(index, body, binary.syntax())?,
+        }))
     }
     fn match_plan(
         &self,
@@ -1310,6 +1576,183 @@ impl ParsedFile {
         }))
     }
 }
+
+/// The written annotation of a pattern component while its declarations are
+/// collected (`let (a, [b, c]): (u8, [i64; 2]);`).
+#[derive(Clone)]
+enum Annotation {
+    /// Nothing is written for this component; its type comes from later use.
+    Open,
+    /// The whole annotation, when it is not structurally decomposable here
+    /// (a generic parameter or another selected hint on a lone binding).
+    Hint(HintRecipe),
+    Written(Arc<crate::ir::written_type::WrittenType>),
+}
+impl Annotation {
+    fn of(hint: &HintRecipe) -> Self {
+        use crate::ir::written_type::WrittenType;
+        match hint {
+            HintRecipe::None => Self::Open,
+            HintRecipe::Primitive(primitive) => {
+                Self::Written(Arc::new(WrittenType::Primitive(*primitive)))
+            }
+            HintRecipe::Written(written) => Self::Written(Arc::clone(written)),
+            other => Self::Hint(other.clone()),
+        }
+    }
+    fn hint(self) -> HintRecipe {
+        use crate::ir::written_type::WrittenType;
+        match self {
+            Self::Open => HintRecipe::None,
+            Self::Hint(hint) => hint,
+            Self::Written(written) => match written.as_ref() {
+                WrittenType::Infer => HintRecipe::None,
+                WrittenType::Primitive(primitive) => HintRecipe::Primitive(*primitive),
+                _ => HintRecipe::Written(written),
+            },
+        }
+    }
+    /// The annotation of the `ordinal`-th sub-component under `step`.
+    fn project(
+        &self,
+        step: impl Fn(&crate::ir::written_type::WrittenType) -> Option<crate::ir::written_type::WrittenType>,
+    ) -> Self {
+        use crate::ir::written_type::WrittenType;
+        let Self::Written(written) = self else {
+            return Self::Open;
+        };
+        let projected = match written.as_ref() {
+            WrittenType::Frame {
+                definition,
+                template,
+            } => step(template).map(|inner| inner.in_frame(*definition)),
+            other => step(other),
+        };
+        projected.map_or(Self::Open, |inner| Self::Written(Arc::new(inner)))
+    }
+}
+/// Every binding a destructuring declaration introduces, in pattern order,
+/// with its writable flag and annotation component. A binding the pattern
+/// would reference (`ref x`) needs an initializer and is refused.
+fn declared_bindings(
+    node: &crate::syntax::pattern_tree::PatternNode,
+    annotation: Annotation,
+    out: &mut Vec<(NodeId, bool, HintRecipe)>,
+) -> Result<(), Diagnostic> {
+    use crate::{ir::written_type::WrittenType, syntax::pattern_tree::PatternNode};
+    match node {
+        PatternNode::Binding {
+            occurrence,
+            binding,
+            by_reference,
+            mutable,
+            subpattern,
+            ..
+        } => {
+            if *by_reference {
+                return Err(unsupported(
+                    "uninitialized reference binding awaits pattern integration",
+                ));
+            }
+            let id = binding.unwrap_or(*occurrence);
+            if !out.iter().any(|(declared, _, _)| *declared == id) {
+                out.push((id, *mutable, annotation.clone().hint()));
+            }
+            if let Some(sub) = subpattern {
+                declared_bindings(sub, annotation, out)?;
+            }
+        }
+        PatternNode::Tuple { items, rest } | PatternNode::Constructor {
+            form:
+                crate::syntax::pattern_tree::ConstructorForm::Tuple { items, rest },
+            ..
+        } => {
+            let constructor = matches!(node, PatternNode::Constructor { .. });
+            let total = items.len();
+            for (position, item) in items.iter().enumerate() {
+                let component = if constructor {
+                    Annotation::Open
+                } else {
+                    // Items after the rest align with the tuple's tail.
+                    let tail = rest
+                        .filter(|rest| position >= *rest as usize)
+                        .map(|_| total - position);
+                    annotation.project(|written| match written {
+                        WrittenType::Tuple(types) => match tail {
+                            Some(from_end) => types
+                                .len()
+                                .checked_sub(from_end)
+                                .and_then(|at| types.get(at)),
+                            None if rest.is_none() && types.len() != total => None,
+                            None => types.get(position),
+                        }
+                        .cloned(),
+                        _ => None,
+                    })
+                };
+                declared_bindings(item, component, out)?;
+            }
+        }
+        PatternNode::Constructor {
+            form: crate::syntax::pattern_tree::ConstructorForm::Record { fields, .. },
+            ..
+        } => {
+            for field in fields.iter() {
+                declared_bindings(field, Annotation::Open, out)?;
+            }
+        }
+        PatternNode::Array {
+            items,
+            rest,
+            rest_binding,
+        } => {
+            let element = |annotation: &Annotation| {
+                annotation.project(|written| match written {
+                    WrittenType::Array(element, _) | WrittenType::Slice(element) => {
+                        Some(element.as_ref().clone())
+                    }
+                    _ => None,
+                })
+            };
+            for item in items.iter() {
+                declared_bindings(item, element(&annotation), out)?;
+            }
+            if let Some(binding) = rest_binding {
+                let sized = items.len();
+                let window = annotation.project(|written| match written {
+                    WrittenType::Array(element, length) => u32::try_from(sized)
+                        .ok()
+                        .and_then(|fixed| length.checked_sub(fixed))
+                        .map(|rest| WrittenType::Array(element.clone(), rest)),
+                    _ => None,
+                });
+                let _ = rest;
+                declared_bindings(binding, window, out)?;
+            }
+        }
+        PatternNode::Reference { inner, .. } => {
+            let target = annotation.project(|written| match written {
+                WrittenType::Ref { target, .. } => Some(target.as_ref().clone()),
+                _ => None,
+            });
+            declared_bindings(inner, target, out)?;
+        }
+        PatternNode::Or(alternatives) => {
+            for alternative in alternatives.iter() {
+                declared_bindings(alternative, annotation.clone(), out)?;
+            }
+        }
+        PatternNode::Wildcard
+        | PatternNode::Literal(_)
+        | PatternNode::Range { .. }
+        | PatternNode::Constructor {
+            form: crate::syntax::pattern_tree::ConstructorForm::Path,
+            ..
+        } => {}
+        PatternNode::Unsupported(message) => return Err(unsupported(message)),
+    }
+    Ok(())
+}
 impl PatternSourcePlan {
     fn new(
         owner: &PcKey,
@@ -1326,10 +1769,12 @@ impl PatternSourcePlan {
         let roots: Vec<&Root> = match &prepared {
             Prepared::Match(plan) => plan.arms.iter().map(|arm| &arm.pattern).collect(),
             Prepared::Let(plan) => vec![&plan.pattern],
+            Prepared::Declare(plan) => vec![&plan.pattern],
             Prepared::Condition(plan) => vec![&plan.pattern],
             Prepared::For(plan) => vec![&plan.pattern],
             Prepared::Closure(plan) => plan.pattern_roots(),
-            Prepared::Refused(_) | Prepared::Disabled(_) => Vec::new(),
+            // An assignee's leaves are places, not bindings: no local is introduced.
+            Prepared::Assign(_) | Prepared::Refused(_) | Prepared::Disabled(_) => Vec::new(),
         };
         let mut bytes = std::mem::size_of::<Self>();
         encoder.sequence(&roots, |e, root| {

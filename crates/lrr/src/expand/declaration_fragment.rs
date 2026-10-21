@@ -1347,26 +1347,28 @@ impl DeclarationFragment {
         &mut self,
         provider: &SourceDeclarative,
     ) -> Result<DeclarationFragmentStep, Diagnostic> {
-        self.poll_using(provider, None, None)
+        self.poll_using(provider, std::slice::from_ref(provider), None, None)
     }
     pub(crate) fn poll_with_namespaces(
         &mut self,
         provider: &SourceDeclarative,
         namespaces: &crate::frontend::macro_names::MacroNamespaces,
     ) -> Result<DeclarationFragmentStep, Diagnostic> {
-        self.poll_using(provider, Some(namespaces), None)
+        self.poll_using(provider, std::slice::from_ref(provider), Some(namespaces), None)
     }
     pub(crate) fn poll_with_sources(
         &mut self,
         provider: &SourceDeclarative,
+        owners: &[SourceDeclarative],
         namespaces: &crate::frontend::macro_names::MacroNamespaces,
         included: Option<&super::source_declarative::IncludedSourceViews>,
     ) -> Result<DeclarationFragmentStep, Diagnostic> {
-        self.poll_using(provider, Some(namespaces), included)
+        self.poll_using(provider, owners, Some(namespaces), included)
     }
     fn poll_using(
         &mut self,
         provider: &SourceDeclarative,
+        owners: &[SourceDeclarative],
         namespaces: Option<&crate::frontend::macro_names::MacroNamespaces>,
         included: Option<&super::source_declarative::IncludedSourceViews>,
     ) -> Result<DeclarationFragmentStep, Diagnostic> {
@@ -1393,7 +1395,7 @@ impl DeclarationFragment {
             })?;
             match arguments
                 .assembly
-                .poll_with_sources(provider, &self.run, &self.budget, namespaces, included)?
+                .poll_with_sources(provider, owners, &self.run, &self.budget, namespaces, included)?
             {
                 super::argument_discovery::ArgumentDiscoveryStep::NeedAttributeSelection(
                     selection,
@@ -1954,7 +1956,7 @@ impl DeclarationFragment {
                             )?,
                         ),
                     });
-                    return self.poll_using(provider, Some(namespaces), included);
+                    return self.poll_using(provider, owners, Some(namespaces), included);
                 }
                 if scans.iter().all(|scan| scan.producers().is_empty()) {
                     let bytes = scans.iter().try_fold(self.retained_bytes, |n, scan| {
@@ -1991,7 +1993,7 @@ impl DeclarationFragment {
                     continue;
                 }
             }
-            match provider.generated_declaration_demand_with_sources(frame, invocation, namespaces, included)? {
+            match provider.generated_declaration_demand_with_sources(frame, invocation, namespaces, included, owners)? {
                 SourceDeclarativeDemand::NeedInput(input) => {
                     return Ok(DeclarationFragmentStep::NeedInput(input));
                 }

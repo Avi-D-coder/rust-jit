@@ -684,6 +684,18 @@ impl Builder<'_> {
         path: Option<ast::Path>,
         form: NameForm,
     ) -> Result<Result<u32, String>, Diagnostic> {
+        let owner = self.indexed(owner)?;
+        self.path_slot_at(owner, path, form)
+    }
+    /// The same slot for a constructor path whose owning indexed node is
+    /// `owner` (a written pattern, or the callee/record expression of a
+    /// destructuring assignee).
+    fn path_slot_at(
+        &mut self,
+        owner: NodeId,
+        path: Option<ast::Path>,
+        form: NameForm,
+    ) -> Result<Result<u32, String>, Diagnostic> {
         let Some(path) = path else {
             return Ok(Err("pattern path absent".into()));
         };
@@ -694,15 +706,125 @@ impl Builder<'_> {
         match self.parsed.written_pattern_path(path, self.index.cfg())? {
             super::value_paths::WrittenValuePath::Spelled(spelling) => {
                 let slot = self.slot(&spelling, form)?;
-                self.names[slot as usize].source = Some(self.indexed(owner)?);
+                self.names[slot as usize].source = Some(owner);
                 if lexical {
-                    let occurrence = self.indexed(owner)?;
-                    self.names[slot as usize].lexical = Some(occurrence);
+                    self.names[slot as usize].lexical = Some(owner);
                 }
                 Ok(Ok(slot))
             }
             super::value_paths::WrittenValuePath::Refused(reason) => Ok(Err(reason.into())),
         }
+    }
+    /// The pattern a destructuring assignee spells (rustc's `destructure_assign`):
+    /// shape becomes pattern structure and every other expression a binding
+    /// whose "name" is the leaf place's own indexed node. The matcher stages
+    /// the part for that leaf; the owner assigns it to the place afterwards.
+    fn assignee(
+        &mut self,
+        node: &crate::syntax::assignee::Assignee,
+    ) -> Result<PatternNode, Diagnostic> {
+        use crate::syntax::assignee::Assignee;
+        Ok(match node {
+            Assignee::Wildcard => PatternNode::Wildcard,
+            Assignee::Rest => PatternNode::Unsupported(
+                "rest assignee outside a tuple, array or tuple-struct".into(),
+            ),
+            Assignee::Leaf(expr) => {
+                let occurrence = id_for(self.index, self.body, expr.syntax())?;
+                let token = expr
+                    .syntax()
+                    .first_token()
+                    .ok_or_else(|| error("assignee has no written token"))?;
+                PatternNode::Binding {
+                    occurrence,
+                    binding: Some(occurrence),
+                    by_reference: false,
+                    mutable: false,
+                    edition: self
+                        .parsed
+                        .token_edition(crate::syntax::ast_adapter::range(token.text_range()))?,
+                    name: None,
+                    subpattern: None,
+                }
+            }
+            Assignee::Tuple(list) => match self.assignee_list(list)? {
+                Ok((items, rest)) => PatternNode::Tuple { items, rest },
+                Err(message) => PatternNode::Unsupported(message),
+            },
+            Assignee::Array(list) => match self.assignee_list(list)? {
+                Ok((items, rest)) => PatternNode::Array {
+                    items,
+                    rest,
+                    rest_binding: None,
+                },
+                Err(message) => PatternNode::Unsupported(message),
+            },
+            Assignee::TupleStruct { callee, items } => {
+                let (items, rest) = match self.assignee_list(items)? {
+                    Ok(list) => list,
+                    Err(message) => return Ok(PatternNode::Unsupported(message)),
+                };
+                let owner = id_for(self.index, self.body, callee.syntax())?;
+                match self.path_slot_at(owner, callee.path(), NameForm::Tuple)? {
+                    Ok(slot) => PatternNode::Constructor {
+                        slot,
+                        form: ConstructorForm::Tuple { items, rest },
+                    },
+                    Err(message) => PatternNode::Unsupported(message),
+                }
+            }
+            Assignee::Record {
+                expression,
+                fields,
+                rest,
+            } => {
+                let mut names = Vec::new();
+                let mut patterns = Vec::new();
+                for (name, field) in fields {
+                    names.push(name.trim_start_matches("r#").to_string());
+                    patterns.push(self.assignee(field)?);
+                }
+                let owner = id_for(self.index, self.body, expression.syntax())?;
+                match self.path_slot_at(
+                    owner,
+                    expression.path(),
+                    NameForm::Record(names.into_boxed_slice()),
+                )? {
+                    Ok(slot) => PatternNode::Constructor {
+                        slot,
+                        form: ConstructorForm::Record {
+                            fields: patterns.into_boxed_slice(),
+                            rest: *rest,
+                        },
+                    },
+                    Err(message) => PatternNode::Unsupported(message),
+                }
+            }
+        })
+    }
+    /// The items of a tuple, array or tuple-struct assignee and the position
+    /// of its `..`, if any.
+    #[allow(clippy::type_complexity)]
+    fn assignee_list(
+        &mut self,
+        list: &[crate::syntax::assignee::Assignee],
+    ) -> Result<Result<(Box<[PatternNode]>, Option<u32>), String>, Diagnostic> {
+        use crate::syntax::assignee::Assignee;
+        let mut items = Vec::new();
+        let mut rest = None;
+        for (ordinal, component) in list.iter().enumerate() {
+            if matches!(component, Assignee::Rest) {
+                if rest.is_some() {
+                    return Ok(Err("assignee has more than one rest".into()));
+                }
+                rest = Some(
+                    u32::try_from(ordinal).map_err(|_| error("assignee arity overflow"))?,
+                );
+                continue;
+            }
+            items.push(self.assignee(component)?);
+        }
+        Ok(Ok((items.into_boxed_slice(), rest)))
     }
     fn build(&mut self, pattern: &ast::Pat, depth: usize) -> Result<PatternNode, Diagnostic> {
         if pattern
@@ -988,6 +1110,45 @@ impl PatternTree {
         let id = builder.indexed(pattern)?;
         let root = builder.build(pattern, 0)?;
         let mut encoder = StableEncoder::new("lrr/v7/pattern-tree");
+        encoder.record(index.body());
+        encoder.u32(id.0);
+        root.encode(&mut encoder);
+        encoder.sequence(&builder.names, |e, name| name.encode(e));
+        let bytes = std::mem::size_of::<Self>()
+            .saturating_add(root.heap_bytes())
+            .saturating_add(builder.names.iter().fold(0usize, |bytes, name| {
+                bytes
+                    .saturating_add(std::mem::size_of::<PatternName>())
+                    .saturating_add(name.spelling.capacity())
+            }));
+        Ok(Self {
+            pattern: id,
+            names: builder.names.into_boxed_slice(),
+            root,
+            identity: encoder.finish(),
+            bytes,
+        })
+    }
+}
+impl PatternTree {
+    /// The pattern a destructuring assignment's left operand spells.
+    pub(crate) fn build_assignee(
+        parsed: &ParsedFile,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        local_items: &LocalItems,
+        lhs: &ast::Expr,
+    ) -> Result<Self, Diagnostic> {
+        let mut builder = Builder {
+            parsed,
+            body,
+            index,
+            local_items,
+            names: Vec::new(),
+        };
+        let id = id_for(index, body, lhs.syntax())?;
+        let root = builder.assignee(&crate::syntax::assignee::assignee(lhs))?;
+        let mut encoder = StableEncoder::new("lrr/v1/assignee-pattern-tree");
         encoder.record(index.body());
         encoder.u32(id.0);
         root.encode(&mut encoder);

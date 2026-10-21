@@ -273,6 +273,8 @@ impl RunMachine {
         let sources: Vec<_> = self.sources.iter().collect();
         match CallResolver::new(graph, &sources) {
             Ok(resolver) => {
+                // Members select `Self` (`Self::V`, `Self(..)`) and aliases.
+                let resolver = resolver.with_members(self.members.as_deref());
                 resolver.lookup_written(db, self.frame.pc().body.definition, spelling, namespace)
             }
             Err(error) => QueryPoll::Ready(Err(error)),

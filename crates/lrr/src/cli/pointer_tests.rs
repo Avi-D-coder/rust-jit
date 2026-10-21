@@ -164,3 +164,34 @@ fn main() {
         "1 0\n1\n1\n5\ntrue\n",
     );
 }
+
+/// `&raw const` / `&raw mut` and the library `ptr::addr_of!` / `addr_of_mut!` macros (which expand to them): the pointer designates the place's own cell, so fields of a `repr(packed)` struct, array elements, tuple fields and `(*p).field` places read and write through it, and no reference exists in between.
+#[test]
+fn raw_borrows_and_addr_of_macros_designate_places() {
+    prints(
+        "raw-borrow-places",
+        "use std::ptr::{addr_of, addr_of_mut};
+#[repr(packed)]
+struct P { a: u8, b: u32 }
+struct S { a: u32, t: (i64, i64), arr: [u8; 3] }
+fn main() {
+    let p = P { a: 1, b: 7 };
+    let r = addr_of!(p.b);
+    println!(\"{} {}\", unsafe { r.read_unaligned() }, p.a);
+    let mut s = S { a: 1, t: (4, 5), arr: [1, 2, 3] };
+    let pa = &raw mut s.a;
+    let pt = &raw mut s.t.1;
+    let pe = &raw const s.arr[1];
+    unsafe { *pa += 10; *pt = 50; }
+    println!(\"{} {} {}\", s.a, s.t.1, unsafe { *pe });
+    let sp: *mut S = &raw mut s;
+    let q = unsafe { addr_of_mut!((*sp).a) };
+    unsafe { q.write(77); }
+    println!(\"{} {}\", s.a, unsafe { addr_of!((*sp).t.0).read() });
+    let x = 3u32;
+    println!(\"{}\", &raw const x == &x as *const u32);
+}
+",
+        "7 1\n11 50 2\n77 4\ntrue\n",
+    );
+}

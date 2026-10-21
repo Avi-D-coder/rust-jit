@@ -130,11 +130,8 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<ArrayRepeatPl
         constant: None,
         written: None,
     };
-    if index.nodes()[element_node.0 as usize].role == NodeRole::Expression(ExpressionKind::Const) {
-        return QueryPoll::Ready(Err(fault(
-            "inline constant repetition requires its shared result Type context",
-        )));
-    }
+    // An inline `const { .. }` element is an ordinary block here: evaluated
+    // once and copied like any other non-path element.
     if index.nodes()[element_node.0 as usize].role != NodeRole::Expression(ExpressionKind::Path) {
         return QueryPoll::Ready(Ok(output));
     }

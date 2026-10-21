@@ -782,6 +782,12 @@ impl ParsedFile {
         let mut boolean_roots: std::collections::BTreeMap<(u32, u32), ScopeId> =
             std::collections::BTreeMap::new();
         let mut chain_aggregators = std::collections::BTreeSet::new();
+        // Pattern-shape expressions (tuple, array, record, tuple-struct, `_`,
+        // `..`, parentheses) of destructuring assignees. Their component
+        // expressions are operands of the assignment that owns the pattern,
+        // never of the shape, so every continuation returns to that owner.
+        let mut assignee_shapes: std::collections::BTreeSet<(u32, u32)> =
+            std::collections::BTreeSet::new();
         while let Some(mut frame) = stack.pop() {
             if ast::Expr::can_cast(frame.syntax.kind()) {
                 let r = range(frame.syntax.text_range());
@@ -812,6 +818,25 @@ impl ParsedFile {
             }
             let expr = ast::Expr::cast(frame.syntax.clone());
             let kind = expr.as_ref().map(expression_kind);
+            // `lhs = rhs` with a destructuring left operand owns a pattern
+            // transaction over the right operand (rustc's `let` desugaring).
+            let destructuring_assignment = match &expr {
+                Some(ast::Expr::BinExpr(binary)) => {
+                    match super::assignee::destructuring_lhs(binary) {
+                        Some(lhs) => {
+                            for (node, leaf) in super::assignee::region(&lhs) {
+                                if !leaf {
+                                    let shape = range(node.text_range());
+                                    assignee_shapes.insert((shape.start, shape.end));
+                                }
+                            }
+                            true
+                        }
+                        None => false,
+                    }
+                }
+                _ => false,
+            };
             // The pattern function's parameter list: the owner of the shared
             // pattern transaction for its parameter patterns.
             let parameter_owner = frame.parent.is_none()
@@ -839,10 +864,7 @@ impl ParsedFile {
                 || matches!(
                     kind,
                     Some(
-                        ExpressionKind::Async
-                            | ExpressionKind::Const
-                            | ExpressionKind::Gen
-                            | ExpressionKind::Macro
+                        ExpressionKind::Async | ExpressionKind::Gen | ExpressionKind::Macro
                     )
                 );
             let r = range(frame.syntax.text_range());
@@ -862,7 +884,9 @@ impl ParsedFile {
             );
             let scope_kind = if is_loop {
                 Some(ScopeKind::Loop)
-            } else if kind == Some(ExpressionKind::Block) {
+            } else if matches!(kind, Some(ExpressionKind::Block | ExpressionKind::Const)) {
+                // An inline `const { .. }` block is an ordinary block here
+                // (evaluated at use, seeing the enclosing generics).
                 Some(ScopeKind::Block)
             } else if role == NodeRole::MatchArm {
                 Some(ScopeKind::MatchArm)
@@ -914,7 +938,7 @@ impl ParsedFile {
                 None
             };
             let tail_scope = if let Some(ast::Expr::BlockExpr(block)) = &expr
-                && kind == Some(ExpressionKind::Block)
+                && matches!(kind, Some(ExpressionKind::Block | ExpressionKind::Const))
                 && !opaque
             {
                 if let Some(tail) = block.tail_expr() {
@@ -1382,6 +1406,17 @@ impl ParsedFile {
                 let slots = [Some(SlotId(index.slots)), None];
                 index.slots = next;
                 slots
+            } else if destructuring_assignment {
+                // The shared pattern transaction's Bool test result for a
+                // destructuring assignment, owned like a statement's.
+                let next = index
+                    .slots
+                    .checked_add(2)
+                    .filter(|n| *n <= limits.slots)
+                    .ok_or_else(|| limit("destructuring assignment temporary slot budget"))?;
+                let slots = [Some(SlotId(index.slots)), None];
+                index.slots = next;
+                slots
             } else if parameter_owner {
                 // The shared pattern transaction's Bool test result for the
                 // function's pattern parameters, owned by its parameter scope.
@@ -1542,6 +1577,7 @@ impl ParsedFile {
                         .is_some_and(|statement| pattern_statement(&statement)))
                     || ast::ClosureExpr::cast(frame.syntax.clone())
                         .is_some_and(|closure| closure_runs_patterns(&closure))
+                    || destructuring_assignment
                     || parameter_owner,
                 parenthesized: frame.syntax.kind() == ra_ap_syntax::SyntaxKind::PAREN_EXPR,
                 projection_base: matches!(
@@ -1580,7 +1616,13 @@ impl ParsedFile {
                 } else {
                     scope
                 };
-                let child_expression = if kind.is_some()
+                let shape = {
+                    let at = range(frame.syntax.text_range());
+                    assignee_shapes.contains(&(at.start, at.end))
+                };
+                let child_expression = if shape {
+                    frame.expression
+                } else if kind.is_some()
                     || (role == NodeRole::Statement
                         && runtime_temporaries[0].is_some()
                         && ast::Expr::can_cast(syntax.kind()))
@@ -1822,6 +1864,54 @@ mod tests {
                 );
             }
         }
+    }
+    /// LRR-specific structural control (not a rustc fixture): a destructuring
+    /// assignment is a pattern owner whose shape expressions and leaf places
+    /// are all operands of the assignment, in source order before its right
+    /// operand; an inline `const { .. }` block is an indexed ordinary block.
+    #[test]
+    fn destructuring_assignment_owns_its_assignee_and_const_blocks_are_indexed() {
+        use crate::source::snapshot::{CfgSet, SourceBlob};
+        const SOURCE: &str = "fn main() { let (a, b); (a, b) = ((1, 2).0, 3); let k = const { 4 }; }";
+        let parsed = ParsedFile::parse(
+            &SourceBlob::new(SOURCE.as_bytes().to_vec()).unwrap(),
+            ProfileIdentity::current(),
+        )
+        .unwrap();
+        let outline = parsed
+            .outline(Digest([150; 32]), vec![], &CfgSet::guest_default())
+            .unwrap();
+        let body = outline.items.iter()
+            .find(|item| item.def_key.declared_name == "main")
+            .unwrap().body.as_ref().unwrap();
+        let index = parsed.index_body(body, Default::default()).unwrap();
+        let text = |id: NodeId| {
+            let node = &index.nodes()[id.0 as usize];
+            SOURCE[(body.range.start + node.range.start) as usize..(body.range.start + node.range.end) as usize].to_owned()
+        };
+        let assignment = index.nodes().iter()
+            .find(|node| node.pattern_statement && node.role == NodeRole::Expression(ExpressionKind::Other))
+            .expect("destructuring assignment is a pattern owner");
+        assert_eq!(text(assignment.id), "(a, b) = ((1, 2).0, 3)");
+        assert!(assignment.runtime_temporaries[0].is_some());
+        let operands: Vec<String> = assignment.operands.iter().map(|id| text(*id)).collect();
+        assert_eq!(operands, ["(a, b)", "a", "b", "((1, 2).0, 3)"]);
+        // The assignee's leaves hang under their shape syntactically, but their
+        // continuations return to the assignment: it lists them as operands.
+        let leaf = index.nodes()[assignment.operands[1].0 as usize].clone();
+        assert_eq!(text(leaf.parent.unwrap()), "(a, b)");
+        // The ordinary `let (a, b);` is a pattern owner too, with no operands.
+        let declaration = index.nodes().iter()
+            .find(|node| node.role == NodeRole::Statement && node.pattern_statement)
+            .expect("deferred declaration owner");
+        assert_eq!(text(declaration.id), "let (a, b);");
+        // The inline constant block indexes its contents like a block's.
+        let constant = index.nodes().iter()
+            .find(|node| node.role == NodeRole::Expression(ExpressionKind::Const))
+            .expect("inline const block");
+        assert!(!constant.opaque);
+        assert!(constant.tail_scope.is_some());
+        assert_eq!(constant.operands.len(), 1);
     }
     #[test]
     fn rustc_single_token_const_initializer_uses_exact_expression_scope() {

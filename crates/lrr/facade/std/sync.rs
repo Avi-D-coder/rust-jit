@@ -296,14 +296,378 @@ impl<'a, T: core::fmt::Debug> core::fmt::Debug for RwLockWriteGuard<'a, T> {
     }
 }
 
+// `std::sync::mpsc`. The interpreter runs guest code on one thread, so a
+// channel is one shared FIFO queue and its endpoints are handles on it.
+// `send` appends and returns at once. A `sync_channel` bound would hold the
+// sender until a receiver (necessarily another thread) made room, which can
+// never happen here, so only `try_send` observes the bound. `recv` takes the
+// oldest message; on an empty queue it returns `Err(RecvError)` once every
+// sender is dropped, and while a sender is alive nothing can ever send, so
+// the real call would block forever and this one panics with that diagnosis.
+// `recv_timeout` has no time to wait out and reports `Timeout` instead. The
+// queue is touched only inside one call that runs no guest code, so it needs no
+// borrow flag.
 pub mod mpsc {
+    use alloc_crate::collections::VecDeque;
+    use alloc_crate::sync::Arc;
+    use core::cell::{Cell, UnsafeCell};
+
+    struct Shared<T> {
+        queue: UnsafeCell<VecDeque<T>>,
+        senders: Cell<usize>,
+        receiver: Cell<bool>,
+        bound: Option<usize>,
+    }
+
     pub struct Sender<T> {
-        marker: core::marker::PhantomData<T>,
+        shared: Arc<Shared<T>>,
+    }
+    pub struct SyncSender<T> {
+        shared: Arc<Shared<T>>,
     }
     pub struct Receiver<T> {
-        marker: core::marker::PhantomData<T>,
+        shared: Arc<Shared<T>>,
     }
+    pub struct SendError<T>(pub T);
+    pub struct RecvError;
+    pub enum TryRecvError {
+        Empty,
+        Disconnected,
+    }
+    pub enum RecvTimeoutError {
+        Timeout,
+        Disconnected,
+    }
+    pub enum TrySendError<T> {
+        Full(T),
+        Disconnected(T),
+    }
+    pub struct Iter<'a, T: 'a> {
+        rx: &'a Receiver<T>,
+    }
+    pub struct TryIter<'a, T: 'a> {
+        rx: &'a Receiver<T>,
+    }
+    pub struct IntoIter<T> {
+        rx: Receiver<T>,
+    }
+
+    unsafe impl<T: Send> Send for Sender<T> {}
+    unsafe impl<T: Send> Sync for Sender<T> {}
+    unsafe impl<T: Send> Send for SyncSender<T> {}
+    unsafe impl<T: Send> Sync for SyncSender<T> {}
+    unsafe impl<T: Send> Send for Receiver<T> {}
+
+    fn shared<T>(bound: Option<usize>) -> Arc<Shared<T>> {
+        Arc::new(Shared {
+            queue: UnsafeCell::new(VecDeque::new()),
+            senders: Cell::new(1),
+            receiver: Cell::new(true),
+            bound: bound,
+        })
+    }
+
     pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
-        core::intrinsics::lrr_unsupported("std::sync::mpsc::channel")
+        let state = shared::<T>(Option::None);
+        (Sender { shared: state.clone() }, Receiver { shared: state })
+    }
+
+    pub fn sync_channel<T>(bound: usize) -> (SyncSender<T>, Receiver<T>) {
+        let state = shared::<T>(Option::Some(bound));
+        (SyncSender { shared: state.clone() }, Receiver { shared: state })
+    }
+
+    impl<T> Sender<T> {
+        pub fn send(&self, t: T) -> Result<(), SendError<T>> {
+            if !self.shared.receiver.get() {
+                return Result::Err(SendError(t));
+            }
+            self.shared.queue.lrr_get_mut().push_back(t);
+            Result::Ok(())
+        }
+    }
+    impl<T> Clone for Sender<T> {
+        fn clone(&self) -> Sender<T> {
+            self.shared.senders.set(self.shared.senders.get() + 1);
+            Sender { shared: self.shared.clone() }
+        }
+    }
+    impl<T> Drop for Sender<T> {
+        fn drop(&mut self) {
+            self.shared.senders.set(self.shared.senders.get() - 1);
+        }
+    }
+    impl<T> core::fmt::Debug for Sender<T> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.debug_struct("Sender").finish_non_exhaustive()
+        }
+    }
+
+    impl<T> SyncSender<T> {
+        pub fn send(&self, t: T) -> Result<(), SendError<T>> {
+            if !self.shared.receiver.get() {
+                return Result::Err(SendError(t));
+            }
+            self.shared.queue.lrr_get_mut().push_back(t);
+            Result::Ok(())
+        }
+        pub fn try_send(&self, t: T) -> Result<(), TrySendError<T>> {
+            if !self.shared.receiver.get() {
+                return Result::Err(TrySendError::Disconnected(t));
+            }
+            let full = match self.shared.bound {
+                Option::Some(bound) => self.shared.queue.lrr_get().len() >= bound,
+                Option::None => false,
+            };
+            if full {
+                return Result::Err(TrySendError::Full(t));
+            }
+            self.shared.queue.lrr_get_mut().push_back(t);
+            Result::Ok(())
+        }
+    }
+    impl<T> Clone for SyncSender<T> {
+        fn clone(&self) -> SyncSender<T> {
+            self.shared.senders.set(self.shared.senders.get() + 1);
+            SyncSender { shared: self.shared.clone() }
+        }
+    }
+    impl<T> Drop for SyncSender<T> {
+        fn drop(&mut self) {
+            self.shared.senders.set(self.shared.senders.get() - 1);
+        }
+    }
+    impl<T> core::fmt::Debug for SyncSender<T> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.debug_struct("SyncSender").finish_non_exhaustive()
+        }
+    }
+
+    impl<T> Receiver<T> {
+        pub fn try_recv(&self) -> Result<T, TryRecvError> {
+            let next = self.shared.queue.lrr_get_mut().pop_front();
+            match next {
+                Option::Some(t) => Result::Ok(t),
+                Option::None => {
+                    if self.shared.senders.get() == 0 {
+                        Result::Err(TryRecvError::Disconnected)
+                    } else {
+                        Result::Err(TryRecvError::Empty)
+                    }
+                }
+            }
+        }
+        pub fn recv(&self) -> Result<T, RecvError> {
+            let next = self.shared.queue.lrr_get_mut().pop_front();
+            match next {
+                Option::Some(t) => Result::Ok(t),
+                Option::None => {
+                    if self.shared.senders.get() == 0 {
+                        Result::Err(RecvError)
+                    } else {
+                        core::panicking::panic(
+                            "deadlock: recv on an empty channel whose senders are alive; no other thread can send",
+                        )
+                    }
+                }
+            }
+        }
+        pub fn recv_timeout(&self, timeout: core::time::Duration) -> Result<T, RecvTimeoutError> {
+            let next = self.shared.queue.lrr_get_mut().pop_front();
+            match next {
+                Option::Some(t) => Result::Ok(t),
+                Option::None => {
+                    if self.shared.senders.get() == 0 {
+                        Result::Err(RecvTimeoutError::Disconnected)
+                    } else {
+                        Result::Err(RecvTimeoutError::Timeout)
+                    }
+                }
+            }
+        }
+        pub fn iter(&self) -> Iter<'_, T> {
+            Iter { rx: self }
+        }
+        pub fn try_iter(&self) -> TryIter<'_, T> {
+            TryIter { rx: self }
+        }
+    }
+    impl<T> Drop for Receiver<T> {
+        fn drop(&mut self) {
+            self.shared.receiver.set(false);
+        }
+    }
+    impl<T> core::fmt::Debug for Receiver<T> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.debug_struct("Receiver").finish_non_exhaustive()
+        }
+    }
+
+    impl<'a, T> Iterator for Iter<'a, T> {
+        type Item = T;
+        fn next(&mut self) -> Option<T> {
+            self.rx.recv().ok()
+        }
+    }
+    impl<'a, T> Iterator for TryIter<'a, T> {
+        type Item = T;
+        fn next(&mut self) -> Option<T> {
+            self.rx.try_recv().ok()
+        }
+    }
+    impl<T> Iterator for IntoIter<T> {
+        type Item = T;
+        fn next(&mut self) -> Option<T> {
+            self.rx.recv().ok()
+        }
+    }
+    impl<'a, T> IntoIterator for &'a Receiver<T> {
+        type Item = T;
+        type IntoIter = Iter<'a, T>;
+        fn into_iter(self) -> Iter<'a, T> {
+            self.iter()
+        }
+    }
+    impl<T> IntoIterator for Receiver<T> {
+        type Item = T;
+        type IntoIter = IntoIter<T>;
+        fn into_iter(self) -> IntoIter<T> {
+            IntoIter { rx: self }
+        }
+    }
+
+    impl<T> core::fmt::Debug for SendError<T> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.debug_struct("SendError").finish_non_exhaustive()
+        }
+    }
+    impl<T> core::fmt::Display for SendError<T> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.write_str("sending on a closed channel")
+        }
+    }
+    impl<T> Clone for SendError<T> where T: Clone {
+        fn clone(&self) -> SendError<T> {
+            SendError(self.0.clone())
+        }
+    }
+    impl<T> Copy for SendError<T> where T: Copy {}
+    impl<T> PartialEq for SendError<T> where T: PartialEq {
+        fn eq(&self, other: &SendError<T>) -> bool {
+            self.0 == other.0
+        }
+    }
+    impl<T> Eq for SendError<T> where T: Eq {}
+
+    impl core::fmt::Debug for RecvError {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.write_str("RecvError")
+        }
+    }
+    impl core::fmt::Display for RecvError {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            f.write_str("receiving on a closed channel")
+        }
+    }
+    impl Clone for RecvError {
+        fn clone(&self) -> RecvError {
+            RecvError
+        }
+    }
+    impl Copy for RecvError {}
+    impl PartialEq for RecvError {
+        fn eq(&self, other: &RecvError) -> bool {
+            true
+        }
+    }
+    impl Eq for RecvError {}
+
+    impl core::fmt::Debug for TryRecvError {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            match self {
+                TryRecvError::Empty => f.write_str("Empty"),
+                TryRecvError::Disconnected => f.write_str("Disconnected"),
+            }
+        }
+    }
+    impl core::fmt::Display for TryRecvError {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            match self {
+                TryRecvError::Empty => f.write_str("receiving on an empty channel"),
+                TryRecvError::Disconnected => f.write_str("receiving on a closed channel"),
+            }
+        }
+    }
+    impl Clone for TryRecvError {
+        fn clone(&self) -> TryRecvError {
+            match self {
+                TryRecvError::Empty => TryRecvError::Empty,
+                TryRecvError::Disconnected => TryRecvError::Disconnected,
+            }
+        }
+    }
+    impl Copy for TryRecvError {}
+    impl PartialEq for TryRecvError {
+        fn eq(&self, other: &TryRecvError) -> bool {
+            match (self, other) {
+                (TryRecvError::Empty, TryRecvError::Empty) => true,
+                (TryRecvError::Disconnected, TryRecvError::Disconnected) => true,
+                _ => false,
+            }
+        }
+    }
+    impl Eq for TryRecvError {}
+
+    impl core::fmt::Debug for RecvTimeoutError {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            match self {
+                RecvTimeoutError::Timeout => f.write_str("Timeout"),
+                RecvTimeoutError::Disconnected => f.write_str("Disconnected"),
+            }
+        }
+    }
+    impl core::fmt::Display for RecvTimeoutError {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            match self {
+                RecvTimeoutError::Timeout => f.write_str("timed out waiting on channel"),
+                RecvTimeoutError::Disconnected => f.write_str("channel is empty and sending half is closed"),
+            }
+        }
+    }
+    impl Clone for RecvTimeoutError {
+        fn clone(&self) -> RecvTimeoutError {
+            match self {
+                RecvTimeoutError::Timeout => RecvTimeoutError::Timeout,
+                RecvTimeoutError::Disconnected => RecvTimeoutError::Disconnected,
+            }
+        }
+    }
+    impl Copy for RecvTimeoutError {}
+    impl PartialEq for RecvTimeoutError {
+        fn eq(&self, other: &RecvTimeoutError) -> bool {
+            match (self, other) {
+                (RecvTimeoutError::Timeout, RecvTimeoutError::Timeout) => true,
+                (RecvTimeoutError::Disconnected, RecvTimeoutError::Disconnected) => true,
+                _ => false,
+            }
+        }
+    }
+    impl Eq for RecvTimeoutError {}
+
+    impl<T> core::fmt::Debug for TrySendError<T> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            match self {
+                TrySendError::Full(_) => f.write_str("Full(..)"),
+                TrySendError::Disconnected(_) => f.write_str("Disconnected(..)"),
+            }
+        }
+    }
+    impl<T> core::fmt::Display for TrySendError<T> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            match self {
+                TrySendError::Full(_) => f.write_str("sending on a full channel"),
+                TrySendError::Disconnected(_) => f.write_str("sending on a closed channel"),
+            }
+        }
     }
 }

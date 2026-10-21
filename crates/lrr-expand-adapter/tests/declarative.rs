@@ -188,6 +188,30 @@ fn repetition_without_a_driving_binding_refuses_before_repeating_output() {
     }
 }
 
+// `thread_local!` matches `$(; $($($rest:tt)+)?)?` for a declaration ending in
+// `;`: the outer optional repetition matches once and the inner one never. The
+// planned transcription must not mistake that for an undriven repetition.
+#[test]
+fn nested_optional_repetition_matched_once_with_an_empty_inner_match_expands() {
+    let rules = DeclarativeMacro::new(definition(
+        "($first:literal $(; $($($rest:literal),+)?)?) => {[$first $($($(, $rest)+)?)?]};",
+        Edition::E2024,
+    ))
+    .unwrap();
+    for (source, expected) in [
+        ("1", vec!["1"]),
+        ("1;", vec!["1"]),
+        ("1; 2, 3", vec!["1", "2", "3"]),
+    ] {
+        let args = input(source);
+        let result = match rules.expand(&args, call_site(&args)).unwrap() {
+            Ok(result) => result,
+            Err(error) => panic!("`{source}` refused: {error}"),
+        };
+        assert_eq!(literal_texts(&result.tokens), expected, "`{source}`");
+    }
+}
+
 #[test]
 fn token_preflight_refuses_before_materialization_and_preserves_exact_boundaries() {
     let rules = DeclarativeMacro::new(definition(

@@ -144,7 +144,7 @@ impl RunMachine {
                     TypeKey::Primitive(_) if ty.0 == 16 => break Err(BuiltinSelf::Str),
                     TypeKey::Primitive(_) => match self.store.descriptor_source_term(ty) {
                         Some(crate::traits::term::TyTerm::Primitive(primitive)) => {
-                            break Err(BuiltinSelf::Primitive(primitive));
+                            break Err(BuiltinSelf::of_primitive(primitive));
                         }
                         _ => {
                             return QueryPoll::Ready(Err(call_fault(&format!(
@@ -373,6 +373,7 @@ impl RunMachine {
                     arguments: arguments.to_vec(),
                     alternatives: alternatives.functions,
                     result_self: None,
+                    expected: Vec::new(),
                 },
             }));
         }
@@ -393,7 +394,7 @@ fn probe_bucket(
         TyTerm::Str => Err(BuiltinSelf::Str),
         TyTerm::Slice(_) => Err(BuiltinSelf::Slice),
         TyTerm::Array(..) => Err(BuiltinSelf::Array),
-        TyTerm::Primitive(primitive) => Err(BuiltinSelf::Primitive(*primitive)),
+        TyTerm::Primitive(primitive) => Err(BuiltinSelf::of_primitive(*primitive)),
         _ => return None,
     })
 }

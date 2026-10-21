@@ -22,6 +22,9 @@ fn unchanged_library_sources_export_real_std_macro_definitions() {
             ("std", "print"),
             ("std", "eprintln"),
             ("std", "panic"),
+            ("std", "thread_local"),
+            // Raw-identifier macro: stored by its semantic spelling.
+            ("core", "try"),
         ] {
             let route = library
                 .exported(krate, name)
@@ -80,6 +83,31 @@ fn std_root_reexports_resolve_through_the_ordinary_macro_graph() {
         }
     }
     assert!(missing.is_empty(), "{missing:#?}");
+}
+
+#[test]
+fn module_scoped_library_macros_resolve_through_their_modules() {
+    let profile = ProfileIdentity::current();
+    let library = LibraryMacros::for_profile(&profile).unwrap();
+    for (krate, path) in [
+        ("core", &["ptr", "addr_of"][..]),
+        ("core", &["ptr", "addr_of_mut"][..]),
+        ("core", &["mem", "offset_of"][..]),
+        ("core", &["pin", "pin"][..]),
+        // `thread::local_impl` re-exports the process-attributes macro of the
+        // private `thread::local` and globs `sys::thread_local`, which defines
+        // the key initializer.
+        ("std", &["thread", "local_impl", "thread_local_process_attrs"][..]),
+        ("std", &["thread", "local_impl", "thread_local_inner"][..]),
+        // The raw re-export `pub use core::r#try` in std.
+        ("std", &["r#try"][..]),
+    ] {
+        assert!(
+            library.resolve_path(krate, path).is_some(),
+            "{krate}::{}",
+            path.join("::")
+        );
+    }
 }
 
 #[test]

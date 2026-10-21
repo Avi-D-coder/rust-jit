@@ -424,6 +424,8 @@ mod open;
 mod patterns;
 #[path = "binding_constraint_projection.rs"]
 mod projection;
+#[path = "binding_constraint_rows.rs"]
+pub(crate) mod rows;
 use nominal::ConstructorSite;
 /// How a member relates to the component's variable: projecting the
 /// member's Type by `steps` yields the variable. A `strict` member was
@@ -1666,8 +1668,9 @@ impl<'a> Component<'a> {
             Some(Callee::Bound(bound)) => {
                 return self.bound_argument(db, call, &bound, ordinal - 1);
             }
-            // No other facade parameter is numeric; `assert_failed`'s `&T`
-            // and `&U` are generic formatting operands.
+            // No other closed facade parameter is numeric; the closed
+            // `assert_failed` (a world without the facade source) takes
+            // generic formatting operands.
             Some(Callee::Facade(_)) | None => return QueryPoll::Ready(Ok(())),
         };
         self.declared_parameter(db, call, definition, ordinal - 1)
@@ -1920,6 +1923,14 @@ impl<'a> Component<'a> {
             SourceRelationInput::Pass(child) => {
                 match child {
                     Some(child) => self.expression(Some(*child)),
+                    // A block with no tail expression has Type `()`, or `!`
+                    // when it diverges (`{ return; }`, the `panic!("..")`
+                    // expansion), and `!` coerces to every Type. A numeric
+                    // variable is never `()`, so in a program rustc accepts
+                    // such a member can only be the diverging block: it
+                    // states nothing about the variable. An open variable
+                    // may be `()` itself, which this service does not state.
+                    None if !self.open => {}
                     None => self.defer(node, ConstraintDemand::ExpressionRelation),
                 }
                 return QueryPoll::Ready(Ok(()));
@@ -2010,7 +2021,7 @@ impl<'a> Component<'a> {
                 // bool and unit results cannot hold a numeric variable.
                 _ => self.defer(node, ConstraintDemand::ExpressionRelation),
             },
-            FactKind::Borrow => match self.via.steps.first() {
+            FactKind::Borrow | FactKind::RawBorrow => match self.via.steps.first() {
                 Some(Step::Deref) => {
                     let via = self.via.unwrap(Step::Deref).expect("checked step");
                     self.expression_via(fact.operand(0), via)
@@ -2110,8 +2121,9 @@ impl<'a> Component<'a> {
                     _ => self.defer(node, ConstraintDemand::ExpressionRelation),
                 }
             }
-            // `return` has Type `!`, which coerces to every Type.
-            FactKind::Return => {}
+            // `return` has Type `!`, which coerces to every Type. A
+            // destructuring assignee's `_`/`..` is a part nothing constrains.
+            FactKind::Return | FactKind::Wildcard => {}
             FactKind::Cast => ready!(self.annotation(db, node)),
             FactKind::Call => {
                 if let Some(constructed) =
@@ -2420,7 +2432,7 @@ impl<'a> Component<'a> {
                     let via = self.via.wrap(Step::Field(edge.ordinal));
                     self.expression_via(Some(edge.parent), via);
                 }
-                FactKind::Borrow => {
+                FactKind::Borrow | FactKind::RawBorrow => {
                     let via = self.via.wrap(Step::Deref);
                     self.expression_via(Some(edge.parent), via);
                 }

@@ -202,7 +202,74 @@ pub(crate) fn lrr_parse_u64(s: &str, max: u64) -> crate::result::Result<u64, Par
 pub(crate) fn lrr_parse_i64(s: &str, min: i64, max: i64) -> crate::result::Result<i64, ParseIntError> {
     lrr_parse_radix_i64(s, 10, min, max)
 }
-pub struct ParseFloatError;
+pub struct ParseFloatError {
+    kind: FloatErrorKind,
+}
+enum FloatErrorKind {
+    Empty,
+    Invalid,
+}
+impl crate::clone::Clone for FloatErrorKind {
+    fn clone(&self) -> FloatErrorKind {
+        match self {
+            FloatErrorKind::Empty => FloatErrorKind::Empty,
+            FloatErrorKind::Invalid => FloatErrorKind::Invalid,
+        }
+    }
+}
+impl crate::cmp::PartialEq for FloatErrorKind {
+    fn eq(&self, other: &FloatErrorKind) -> bool {
+        match (self, other) {
+            (FloatErrorKind::Empty, FloatErrorKind::Empty) => true,
+            (FloatErrorKind::Invalid, FloatErrorKind::Invalid) => true,
+            _ => false,
+        }
+    }
+}
+impl crate::cmp::Eq for FloatErrorKind {}
+impl crate::fmt::Debug for FloatErrorKind {
+    fn fmt(&self, f: &mut crate::fmt::Formatter<'_>) -> crate::fmt::Result {
+        f.write_str(match self {
+            FloatErrorKind::Empty => "Empty",
+            FloatErrorKind::Invalid => "Invalid",
+        })
+    }
+}
+impl crate::clone::Clone for ParseFloatError {
+    fn clone(&self) -> ParseFloatError {
+        ParseFloatError { kind: self.kind.clone() }
+    }
+}
+impl crate::cmp::PartialEq for ParseFloatError {
+    fn eq(&self, other: &ParseFloatError) -> bool {
+        self.kind == other.kind
+    }
+}
+impl crate::cmp::Eq for ParseFloatError {}
+impl crate::fmt::Debug for ParseFloatError {
+    fn fmt(&self, f: &mut crate::fmt::Formatter<'_>) -> crate::fmt::Result {
+        f.debug_struct("ParseFloatError").field("kind", &self.kind).finish()
+    }
+}
+impl crate::fmt::Display for ParseFloatError {
+    fn fmt(&self, f: &mut crate::fmt::Formatter<'_>) -> crate::fmt::Result {
+        f.pad(match self.kind {
+            FloatErrorKind::Empty => "cannot parse float from empty string",
+            FloatErrorKind::Invalid => "invalid float literal",
+        })
+    }
+}
+impl crate::error::Error for ParseFloatError {}
+// The float grammar, rounding and special spellings are the host's
+// `str::parse::<f32|f64>` (nearest-even on the exact decimal value, each width
+// rounded directly); the status intrinsic reports 0 accepted, 1 empty, 2 invalid.
+fn lrr_float_parse_error(s: &str) -> crate::option::Option<ParseFloatError> {
+    match core::intrinsics::lrr_float_parse_status(s) {
+        0 => crate::option::Option::None,
+        1 => crate::option::Option::Some(ParseFloatError { kind: FloatErrorKind::Empty }),
+        _ => crate::option::Option::Some(ParseFloatError { kind: FloatErrorKind::Invalid }),
+    }
+}
 pub struct TryFromIntError(pub(crate) IntErrorKind);
 
 pub struct Wrapping<T>(pub T);
@@ -315,6 +382,28 @@ impl crate::str::FromStr for usize {
         match lrr_parse_u64(s, crate::u64::MAX as u64) {
             crate::result::Result::Ok(value) => crate::result::Result::Ok(value as usize),
             crate::result::Result::Err(error) => crate::result::Result::Err(error),
+        }
+    }
+}
+impl crate::str::FromStr for f32 {
+    type Err = ParseFloatError;
+    fn from_str(s: &str) -> crate::result::Result<f32, ParseFloatError> {
+        match lrr_float_parse_error(s) {
+            crate::option::Option::Some(error) => crate::result::Result::Err(error),
+            crate::option::Option::None => {
+                crate::result::Result::Ok(core::intrinsics::lrr_f32_parse(s))
+            }
+        }
+    }
+}
+impl crate::str::FromStr for f64 {
+    type Err = ParseFloatError;
+    fn from_str(s: &str) -> crate::result::Result<f64, ParseFloatError> {
+        match lrr_float_parse_error(s) {
+            crate::option::Option::Some(error) => crate::result::Result::Err(error),
+            crate::option::Option::None => {
+                crate::result::Result::Ok(core::intrinsics::lrr_f64_parse(s))
+            }
         }
     }
 }

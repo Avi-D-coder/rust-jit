@@ -163,6 +163,26 @@ impl<'source, 'owner, 'cx> SourceRuntimeDemands<'source, 'owner, 'cx> {
         Self::select(owner, variables, application, source)
     }
 
+    /// Demands of one selected call site of a source component, read from the
+    /// site's own application after the component's relations settled.
+    pub(super) fn after_site(
+        owner: &'owner SolverContext<'cx>,
+        variables: &RootVariables<'_, 'cx>,
+        application: &SourceRootApplication<'_, 'cx>,
+        source: &'source EncodedRuntimeSourceClauses<'source, 'cx>,
+    ) -> Result<Self, SourceRuntimeDemandPending> {
+        variables
+            .require_owner(owner)
+            .map_err(SourceRuntimeDemandPending::Owner)?;
+        application
+            .require_owner(owner)
+            .map_err(SourceRuntimeDemandPending::Application)?;
+        application
+            .require_variables(variables)
+            .map_err(SourceRuntimeDemandPending::Application)?;
+        Self::select(owner, variables, application, source)
+    }
+
     fn select(
         owner: &'owner SolverContext<'cx>,
         variables: &RootVariables<'_, 'cx>,

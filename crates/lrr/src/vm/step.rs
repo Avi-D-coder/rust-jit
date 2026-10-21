@@ -554,6 +554,11 @@ fn place_preflight(
             access,
             destination,
         } => frame.preflight_borrow(*place, *access, *destination, store),
+        Op::RawBorrow {
+            place,
+            mutable,
+            destination,
+        } => frame.preflight_raw_borrow(*place, *mutable, *destination, store),
         Op::DerefPlace {
             reference,
             destination,
@@ -590,6 +595,11 @@ fn place_operation(
             access,
             destination,
         } => frame.borrow(*place, *access, *destination, store)?,
+        Op::RawBorrow {
+            place,
+            mutable,
+            destination,
+        } => frame.raw_borrow(*place, *mutable, *destination, store)?,
         Op::DerefPlace {
             reference,
             destination,
@@ -1499,6 +1509,7 @@ fn execute(
         Op::ScopeEnter { scope } => frame.enter(*scope),
         Op::ScopeLeave { scope } => frame.leave(*scope, store),
         Op::Borrow { .. }
+        | Op::RawBorrow { .. }
         | Op::ProjectTuple { .. }
         | Op::ProjectIndex { .. }
         | Op::ProjectField { .. }

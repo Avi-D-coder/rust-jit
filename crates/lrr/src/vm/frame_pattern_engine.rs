@@ -371,7 +371,24 @@ impl Frame {
             ));
         }
         for staged in &open.staged {
-            self.preflight_declaration(staged.binding)?;
+            // A destructuring assignment stages each part into its leaf's own
+            // value slot (assigned to the leaf place afterwards); every other
+            // owner declares a fresh binding.
+            match self.assignee_slot(staged.binding) {
+                Some(slot) => {
+                    let scope = self.slot(slot)?.scope;
+                    if !self.active_scopes.contains(&scope)
+                        || self
+                            .slot(slot)?
+                            .cell
+                            .is_some_and(|cell| !matches!(store.state(cell), Ok(CellState::Uninit | CellState::Moved)))
+                    {
+                        return Err(transaction("assignee staging slot is inactive or live"));
+                    }
+                    self.preflight_temporary_slot(slot)?;
+                }
+                None => self.preflight_declaration(staged.binding)?,
+            }
             match staged.mode {
                 DefaultBindingMode::Move => {
                     let mode = match window_read_mode(store, &staged.place)? {
@@ -406,6 +423,14 @@ impl Frame {
             }
         }
         Ok(())
+    }
+    /// The value slot a destructuring assignment stages `binding`'s part in:
+    /// its assignee leaf is an expression node, not a pattern binding.
+    fn assignee_slot(&self, binding: NodeId) -> Option<SlotId> {
+        let node = self.body.nodes().get(binding.0 as usize)?;
+        (node.role != crate::syntax::body_index::NodeRole::Pattern)
+            .then_some(node.value)
+            .flatten()
     }
     pub(super) fn publish_pattern_binding(
         &mut self,
@@ -467,6 +492,13 @@ impl Frame {
                 }
             }
         };
+        if let Some(slot) = self.assignee_slot(staged.binding) {
+            // The staged part becomes the leaf's temporary; the owner assigns
+            // it to the leaf place when that place's turn comes.
+            self.write(slot, ticket, store)?;
+            *prepared_copy = None;
+            return self.set_source_view(slot, source);
+        }
         let value = store.peek_ticket(ticket)?;
         let physical = self
             .body

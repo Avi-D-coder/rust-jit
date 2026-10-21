@@ -76,9 +76,11 @@ impl RunMachine {
         stated: Option<&crate::ir::written_type::WrittenType>,
         explicit: Option<&[Option<crate::runtime::shape::TypeId>]>,
     ) -> QueryPoll<bool> {
-        // A single name, or `Root::member` whose root a block item or import
-        // may bind; longer or anchored paths are the module route's.
-        if path.starts_with("::") || path.matches("::").count() > 1 {
+        // A single name, `Root::member` whose root a block item or import
+        // may bind, or a longer path whose root a block-level `use` may bind
+        // (`select_lexical_value` decides); anchored paths are the module
+        // route's.
+        if path.starts_with("::") {
             return QueryPoll::Ready(Ok(false));
         }
         let pc = self.frame.pc().clone();
