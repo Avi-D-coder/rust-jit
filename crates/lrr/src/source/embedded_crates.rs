@@ -90,6 +90,7 @@ pub fn standard_facade_crates(profile: &ProfileIdentity) -> Vec<EmbeddedCrate> {
                 facade_file!(["mem"], "core/mem.rs"),
                 facade_file!(["num"], "core/num.rs"),
                 facade_file!(["ops"], "core/ops.rs"),
+                facade_file!(["ops_impls"], "core/ops_impls.rs"),
                 facade_file!(["option"], "core/option.rs"),
                 facade_file!(["panic"], "core/panic.rs"),
                 facade_file!(["panicking"], "core/panicking.rs"),
