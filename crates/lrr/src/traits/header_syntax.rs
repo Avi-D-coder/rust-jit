@@ -14,7 +14,7 @@ use crate::{
         ast_adapter,
         outline::ScopeKey,
         parse::ParseKey,
-        signatures::{DefinitionParameter, GenericKind, capture_generics},
+        signatures::{DefinitionParameter, GenericKind, capture_impl_generics},
         spans::SourceRange,
     },
 };
@@ -143,7 +143,7 @@ impl ImplHeaderSyntax {
         let Some(self_type) = implementation.self_ty() else {
             return QueryPoll::Ready(Err(fault("impl header lacks its written self Type")));
         };
-        let generics = match capture_generics(implementation.generic_param_list()) {
+        let generics = match capture_impl_generics(&implementation) {
             Ok(generics) => generics,
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
@@ -185,7 +185,7 @@ impl ImplHeaderSyntax {
     }
 }
 impl StableEncode for ImplHeaderSyntax {
-    const DOMAIN: &'static str = "lrr/v2/impl-header-syntax";
+    const DOMAIN: &'static str = "lrr/v3/impl-header-syntax";
     fn encode_fields(&self, e: &mut StableEncoder) {
         fn range(e: &mut StableEncoder, range: SourceRange) {
             e.u32(range.start);
@@ -211,6 +211,7 @@ impl StableEncode for ImplHeaderSyntax {
             e.sequence(&p.bounds, |e, t| e.record(t));
             e.sequence(&p.default, |e, t| e.record(t));
             e.sequence(&p.const_type, |e, t| e.record(t));
+            e.option(&p.anonymous_region, |e, r| range(e, *r));
         });
         e.sequence(&self.predicates, |e, r| range(e, *r));
         e.bool(self.negative);

@@ -1,0 +1,1232 @@
+{
+  "schema": "lrr/source-checkpoint-evidence/v1",
+  "recorded_at": "2026-10-21T00:55:02.696101+00:00",
+  "source_baseline": "edd7f85ccc8e158b20cfbc02100cd1f263b06c49",
+  "source_sha256": "7b65f28a6a654849285a6ea5514101e2901d46ed4f2a085a60fc2dff3fbbe3cc",
+  "input_count": 8748,
+  "scope": "V530 source factory first complete demanded bucket publication succeeds, exact unsafe-C source alias control succeeds, anonymous-region metadata control passes two unchanged worlds then fails ordinary declaration parsing of unchanged mixed-order delegation original. Three builds0, two exact controls0 and one101; no runtime/root/full-fixture acceptance.",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-20-root-factory-review.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-20-source-factory-controls.json",
+  "selection_sha256": "92de7d46312ada5f617a5bd041f7b6d59466de5e1a22b47743967339bd750789",
+  "prior_source_delta": {
+    "baseline": "V529",
+    "changed_sources": [
+      "crates/lrr/src/traits/upstream/source_variance_queries.rs"
+    ],
+    "repair": "new nested Parameters(ImplRegionBinders) stable tag4 after unchanged original0..3"
+  },
+  "platform": {
+    "os": "Darwin",
+    "architecture": "arm64",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "rustc_commit": "b940084d7eb6a299eb4bfeb8e34901bc051e7ac4",
+    "host": "aarch64-apple-darwin",
+    "llvm": "23.1.1",
+    "identity_evidence": "actual rustc -Vv and uname terminals retained in V527 capsule; unchanged configured host/toolchain"
+  },
+  "commands": [
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v530",
+        "before"
+      ],
+      "exit": 0
+    },
+    {
+      "shell_command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json > artifacts/validation-current-v530/lib-build.jsonl 2> artifacts/validation-current-v530/lib-build.log",
+      "exit": 0,
+      "cargo_seconds": 38.39,
+      "session": 73064
+    },
+    {
+      "shell_command": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr > artifacts/validation-current-v530/cli-build.log 2>&1",
+      "exit": 0,
+      "cargo_seconds": 27.32,
+      "session": 32229
+    },
+    {
+      "shell_command": "cargo +1.99.0 build --offline --locked -p xtask --example lrr_source_digests > artifacts/validation-current-v530/digester-build.log 2>&1",
+      "exit": 0,
+      "cargo_seconds": 0.57
+    },
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v530",
+        "after-build",
+        "--cargo-messages",
+        "artifacts/validation-current-v530/lib-build.jsonl",
+        "--cli-binary",
+        "target/debug/lrr"
+      ],
+      "session": 22099,
+      "exit": 0
+    },
+    {
+      "shell_command": "/opt/homebrew/bin/python3.12 tools/validation/run_controls.py artifacts/validation-current-v530 worktracks/05-trait-goal-engine/2026-10-20-source-factory-controls.json --dry-run > artifacts/validation-current-v530/control-dry-run.jsonl 2> artifacts/validation-current-v530/control-dry-run.log",
+      "session": 67774,
+      "exit": 0
+    },
+    {
+      "shell_command": "/opt/homebrew/bin/python3.12 tools/validation/run_controls.py artifacts/validation-current-v530 worktracks/05-trait-goal-engine/2026-10-20-source-factory-controls.json > artifacts/validation-current-v530/control-run.jsonl 2> artifacts/validation-current-v530/control-run.log",
+      "session": 25439,
+      "exit": 1
+    },
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v530",
+        "after-runtime"
+      ],
+      "exit": 0
+    }
+  ],
+  "fresh_binaries": true,
+  "binaries": {
+    "test": {
+      "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+      "sha256": "933edd197539185b0587f484b8fe76dfbb11ad033526a757c7ffe074bf504c41"
+    },
+    "cli": {
+      "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+      "sha256": "c90ea305c6045d8beffb9064d471a3b3167ef32d0cbabfe28ec31b8bac14679b"
+    },
+    "digester": {
+      "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+      "sha256": "00716a806660c5353dd2cf35a1a9da01f8bf48f079b544a544fa364134a45efc"
+    }
+  },
+  "control_results": [
+    {
+      "selector": "cli::preentry_loader_tests::upstream_projection_types::unchanged_repr128_source_factory_publishes_actual_query_domains",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+        "cli::preentry_loader_tests::upstream_projection_types::unchanged_repr128_source_factory_publishes_actual_query_domains",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 7.034,
+      "log": "control-0.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::unchanged_unsafe_function_alias_requires_full_source_signature_before_shared_ir",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+        "cli::preentry_loader_tests::unchanged_unsafe_function_alias_requires_full_source_signature_before_shared_ir",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 0,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": true,
+      "seconds": 9.09,
+      "log": "control-1.log"
+    },
+    {
+      "selector": "cli::preentry_loader_tests::upstream_projection_types::unchanged_impl_anonymous_regions_retain_sites_order_and_associated_inheritance",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+        "cli::preentry_loader_tests::upstream_projection_types::unchanged_impl_anonymous_regions_retain_sites_order_and_associated_inheritance",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 101,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": false,
+      "seconds": 5.018,
+      "log": "control-2.log"
+    }
+  ],
+  "factory_control": {
+    "exit": 0,
+    "rust_test_seconds": 6.64,
+    "owning_edition": 2015,
+    "origin": "unchanged original",
+    "actual_printed_observation": {
+      "definitions": 103,
+      "traits": 10,
+      "implementations": 66,
+      "covered_buckets": 1,
+      "impl_empty_clauses": 27,
+      "impl_super_outlives": 66,
+      "adts": 24,
+      "enum_reprs": 7,
+      "encoding_holds": 154,
+      "root_held": true,
+      "input_enum_reprs": [
+        "6674153a7e3f310076313151bf9201a0dab1ac86f25461a3fe60e13075c351e8",
+        "15ccaa8e495d62bb2c24f32d5399f22ff6a9e9153a280059d563c57751e69a74"
+      ]
+    },
+    "assertions_completed": [
+      "actual complete source candidates=66",
+      "covered_buckets=1",
+      "actual query domains/null clauses/outlives counts",
+      "exact actual Signed/Unsigned enum discriminant IDs",
+      "root_held=true coarse domain refusal",
+      "retained source inputs current",
+      "memo Arc and fingerprint reuse",
+      "cold query trace",
+      "fresh direct source withdrawal revokes receipt"
+    ],
+    "root": "not entered; observer invokes real materialize/provider.publish only"
+  },
+  "actual_factory_holds": [
+    {
+      "definition": "0024ccda841caee0ebaa13d80cfac4bd08e429529a82c397b5fe261f6a0b495d",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "03b69a5cdd0de3b3972c81db1c2abf87b0ddf7bcd7746c482803fbe52d79d389",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "0c466066720009b816d5b69df4071401218be31d23017b3390e39e3d8cc38d76",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "0d0b7c4ceebfda3bb3ee3a0a0033c3998bc5c5f640c04223efc2a5d357fb38db",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "0e058f5057b191053af8e216dce17af0bc941f41ba11f1f9cb15d7831533f012",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "0ff6fd422eb36c208928bfbbdc9cc7c3f88f9ccce7ebbb638268ecc171a605e0",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "128270202684684aa4dc81735ed1181a069bd1153286fd69dc1edc9fe739656a",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "13dba9d63660e3b9f74334c42530480798316c0abc3e81d67d363d21051872da",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "14540ec7b099c655bd77d3e15c5f4e715e5f1f1272e31c48d9eb895eee60b0cf",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "15ccaa8e495d62bb2c24f32d5399f22ff6a9e9153a280059d563c57751e69a74",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "176ba5a06881227a896ac35a8d2e5a9387358fcf37d93950716e603aad02ef0b",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "17b7c0f55c2e71924b37fc7b6882a06d554f1a6a60ea92c45d5bd7d4db9ae607",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "1c859f41855bd5870d818fe6d5b2a9bd2bba2059ec9840ad4dc0c67c92db265a",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "28232f7e80fc90838703138112b2c46a16940f2d52a17d31960ce4b53907059f",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "2a95ef69ca54d8529fa47c965ec45c0d9c9b02aae732d26bb0d8c9f409633ec0",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "2d086e842b7e995b306a4c31f6d2cf52bfad7e085b345bbd1870b9eca092760b",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "33074ac0f1607fe1f4fefb6b006cb8c2dce8acbf6229a947ce59a6cc1b0e364d",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "33074ac0f1607fe1f4fefb6b006cb8c2dce8acbf6229a947ce59a6cc1b0e364d",
+      "domain": "opaque_types_defined_by",
+      "reason": "OpaqueTypeWalk"
+    },
+    {
+      "definition": "33074ac0f1607fe1f4fefb6b006cb8c2dce8acbf6229a947ce59a6cc1b0e364d",
+      "domain": "opaque_types_and_coroutines_defined_by",
+      "reason": "NestedBodyIdentities"
+    },
+    {
+      "definition": "355e2d3516858a6712d1aea66372ac23ac617fe60e738626046c1169cf960181",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "36167357deb516a3fa4920112cb46d5b3b623c0a3f06016f2401fbd83ff61be3",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "3ea125bb6264c5177df2fcd1a43a637ed927ea27bec81488cb031e98d8b9515d",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "40b5f3fe02370591362cbe8c5bddc27028d3f3c9c9d74c704113ac60c723f20a",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "40b5f3fe02370591362cbe8c5bddc27028d3f3c9c9d74c704113ac60c723f20a",
+      "domain": "const_conditions",
+      "reason": "ConstConditions"
+    },
+    {
+      "definition": "426237d4162843edaa846c9f84ac87d872ebbc5bf213dc54c2761742694e5c55",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "42a942286f8c27cad4be3144ec4d6585ac1a692cbbfb9621dbdfc881a0915499",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "46046a8e465408e0be534d197dea1a1f7438d4f6828fb6f4ca9b5a15054a57f6",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "470f70d379a5b421cc1a8b98206bd65daa47c7bec77b555bff64083db1573778",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "480e07578fd38859ca4b1ec45a491d2b66556bd5e516c1d5990a4592f2f3237d",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "4a67b78dfad44ac09f9cfe3ee86c4579bdb1099198edf7d5939f5809b1c7b2b5",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "508f7e571b038f7772d89b0e4b29abbb7e8fede0cdcaf4ce8381b9bd9c83cfcf",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "56eec10270367d6cf20dffe6d9b0d7e0775ba957d14f221c6100dc0f28dc7421",
+      "domain": "opaque_types_defined_by",
+      "reason": "OpaqueTypeWalk"
+    },
+    {
+      "definition": "56eec10270367d6cf20dffe6d9b0d7e0775ba957d14f221c6100dc0f28dc7421",
+      "domain": "opaque_types_and_coroutines_defined_by",
+      "reason": "NestedBodyIdentities"
+    },
+    {
+      "definition": "57197804bbe785352c224971c15d8ccbf177a78d13aa4420d83d109183ba52ea",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "6044d27a5688091034a91f94cb4b25981261249a923a162e8749bdf0433fa561",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "6044d27a5688091034a91f94cb4b25981261249a923a162e8749bdf0433fa561",
+      "domain": "opaque_types_defined_by",
+      "reason": "OpaqueTypeWalk"
+    },
+    {
+      "definition": "6044d27a5688091034a91f94cb4b25981261249a923a162e8749bdf0433fa561",
+      "domain": "opaque_types_and_coroutines_defined_by",
+      "reason": "NestedBodyIdentities"
+    },
+    {
+      "definition": "6082d32875f238e142cefa7ddda1a03fdf217174f3defac6da326609a15140c8",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "60e416ea0b916330197fc137be5d5c4077e0afc174e8536ea7ccceb4815fddef",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "60e416ea0b916330197fc137be5d5c4077e0afc174e8536ea7ccceb4815fddef",
+      "domain": "const_conditions",
+      "reason": "ConstConditions"
+    },
+    {
+      "definition": "62537d8bc4019f8965c6e14b5b12d928616ec1525c02432273f4c45803a454cd",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "628f03f8a3c82e2cdec796a18bb56e1fbc292bf190c460d2e43b190a5265f405",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "63ea93e6b00f1e41346e7740a5a70e14965ccb914e037d73a3781b907943c25c",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "661d02386db15519e120673cc559654c911a9961a3edcafd8eda1fe1b348ef27",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "6674153a7e3f310076313151bf9201a0dab1ac86f25461a3fe60e13075c351e8",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "691af4cc0099b0da71ba3c23e8883cfc5ae27b4ea98719f644353fcf84f34951",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "6ea784fa15eb12d08c73f004cdef896abcc1d0678938273db862a7f0c28fca8a",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "6fa787b2fadffd422f5401f9bf804b34d5d02b3874e6e8567923356d1640ac44",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "6ffef55f62cb03cd5628bfc2a21c1f4374d8c14df84b4e2ae259acbe4495546e",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "7540ef8d6584654b88097b9b22042c254754ae6a6037c86db713417f42f5d002",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "78b9fb34e6cf81ac178eb5a9c3b123ca291b43fb41628ff37c2057e301cf1744",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "7ad0477d48942a473771d3aa686b24c4fd24520cb8032e34db6774a576b2cbca",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "7ad0477d48942a473771d3aa686b24c4fd24520cb8032e34db6774a576b2cbca",
+      "domain": "const_conditions",
+      "reason": "ConstConditions"
+    },
+    {
+      "definition": "7b6f2a5f8108a8b80b94ef1ac4c648fe968afbc9a267d8e862e58656ee109cde",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "7d57e07129873b0638bb9cad01c41c2b2afbe3f2decb9a276a844be80446d7ba",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "7eb944f3ee105234c8ebb95b921c8c15f072dc141bdbe39522fe2ba4caf475df",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "8122f0e8e8cf76809044861f30b30add2272acaba42d5a1f65657f40c338ca86",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "85f4efbac29c3f4daa90567e0c6f041b8667176aa18ae17a02e972fbae02fc42",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "86420804379896d375d99609ed61e853efa5743d692743d540b87070d47b896e",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "881b885492c8d69648d990260f0da6a5ead283213aadab4b8146e4272b91e780",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "8b55f10ce4763408913738b09dd70cc7f28267dec1bb27d21a54137dc2802c97",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "8b835249fbd9094cf4a6943281b24d18f97bb9b4bd8b3a9070f5abe05a385dba",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "9287099473b8109a3a040f204a92be73a62c61004cbf6fb3b2e3473c32f1a7a3",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "95375b5a1f409597e86c2f328227c2f9387706181c50666e4ebcaba0fd0b7f10",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "9a1df231d511a6e3b73ba92f2794f855ad4d1d8b578132e2c422ed39ee840161",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "9abeb094c64d51f05c8c6e1b2f8b3c7f0bd723ed1392fe96f70facb4df2935c2",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "9af031d8f5066260f580f55fd6144cdf88f55e5f0a96d0c2654ce7835e39c228",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "9ebaaa89a89b08d56cb5236d36f3d12f8b57e75e292bfc538d339482f5b276aa",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "9f0ff389d7ae1665661fe3fe800b4145a39905dfe3780a5623e46f617273a124",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "a4001a8f7722d7a5cac76c18838f81874414a0ec2cb342311e5d29c93258bc42",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "a454da76ccfc0fb4eda60acff2744983c6cdc13dff92c1d91f279a21d9ab9df1",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "a6b2b233813c0ba7f51c360e6b01208e7649350a27c9da5211d3ca029d985be6",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "a6f1612abfcd2ecbc08078e88d9cf8fbd0a4d2ae034aceaa81046ccdca699296",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "a721647c65828982dad18d0dbd6b90625db3951ed04f10bfd6d4d42b3a58b242",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "a7672bb8db2f19d77a0a09d393c08c09a259f26783c82b453e37cf2adfea578b",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "a84c41ea1c731964183d6fe49acbe878d7a627f1f1acf7e1e55a144078a8db4b",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "a87b5ae0c65809d2c19ad50e29416cbf091a1723adaa23be5544540e20b90052",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "ab6c52adc9f657eb8537ccb7a4c3d6ea7b266dc8d05237165581075dd62c2db4",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "aedd98cd3c7fec97b45f9ec2a07cc5d211924f3592c7e8e520645ce990784b96",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "b670ab066fd08029478c67be669824a6a9eac2bd0b91e4f139b12013b5fa9edc",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "b7884a6fe403272a1bffd4b626e4d5b8382ad8f5b27f150a57bb186aa225c295",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "b84521a3fefbd52d3e376049c9d4e34c24d2fd8c16df9655475091dd3f631ea8",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "ba5bfda1e84449d7142c393b739b0db125d04f22454c59aadf2536a4784fa556",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "c1f68a3d2d96056127ef42f503af190ff96a36284f9a0df9800440aabd857939",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "c603eb5ae725f3ae922052ea6e8862608cbc1c56161890661d514bd2ecd32eb0",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "c7931799239a3a3764d8cee8e23ad0e8145c3951b646c4584dfffeb557b0485f",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "c8c1d062cfb77e7d52052860bf3c5f8da8e987bf295bb543491ea0e6d7e6da8e",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "ca18c6c2e075ffb441f8f39ff5e5a58d637dba51d87188d6604aad2f78f78835",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "ca8e0566c15632eda6a4a925a210d1195ce75315086385fe7d60435e87f27ef4",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "caad9543398eb35bb692628407f176db70f7d1fc3a655b4f9b05299af78f3372",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "cab85b1513ba050d55d189dda5552eb4c117fe74eea161c94341f3716aaf6bdd",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "cfd3dd96cbe2d9f4a4461ca9ce6b6ec3f3ea6691247333cce2a6d075485a6ee8",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "d192cb0a4b557c9c55739012aae8bc667a9abc7bddcb7d523ccbb75380e3006c",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "d1cbccf973e385bbcbe0f6699b377439493c7a649e78ad2b788591fd9c2fe39e",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "d2b8391a447f728d3ea3b7737a454ccfabcd5708b2de5fe32a0ab17d15adc9d1",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "d946a8f627ce90f7e04971a94c970c2585d4b878b42db9a59097b7aa9dcedb8e",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "e01bac2f7eecf850b4be5d50de6e97270e47d54ce0fa2d9fa7565a291d6205a5",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "e117c185d1f287796ef5422b35084fb760b6a1ebd3d4d3b33d9b2f544a5637eb",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "e1a34a4fa7f251ebb6a138de54cfdb0d9550f94b5a8700175278a58973ef560d",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "e1bba36a93993e9c7b3b2659fafaa59f1f4bcf4bf6da99413e2384f2f62facf3",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "e5bba15e6c917423bd0d453fc01f90aff3d41cf6121b13fa85aa9f04eff906c8",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "e623b3f8ce547f31f5ed9dc4a67e4f426fe7dddbba7d4f449577d3270ae6d084",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "e7c2572e1f662f1589f8a306c76ddd07c23a811d1f06fc30e4009988ef4f604d",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "ea116ae37c80776a552e6961d074644b2376630cf9de9a3b3dc0bac01b52897b",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "ef70aceae78e9dbfba538e0a2b202416bb455461315a3e7ad447dda9f9b696fb",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "f50074b721530108e3ac51a1e10a31101245dbc8afbd57d8ce45139007ee7ce6",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "f7f90f9eb675a49c899ded8c33aafe95f54676f8b5f586093379c66fdf5e4d4d",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "f9a8e9e70c1252d26ba0aa31e847eee4f4afbb25822ecf214b3b59638f3ac730",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "f9be8d63a20fbb5cc3c55ebe5c0a68cd6d5f38dfd65bc2d219f9e3797e958369",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "fb1bbf7c9051c4f69af310495ac6ee67f6a80a5995679a4a2a392e390e769826",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "fd11766e5b1d8db66d510e24a8e58a285398fe17770ea4a67a84471e8d2778e1",
+      "domain": "parent",
+      "reason": "ParentIdentity"
+    },
+    {
+      "definition": "40b5f3fe02370591362cbe8c5bddc27028d3f3c9c9d74c704113ac60c723f20a",
+      "domain": "explicit_super_clauses_of",
+      "reason": "Defaults(WrittenRecipe)"
+    },
+    {
+      "definition": "40b5f3fe02370591362cbe8c5bddc27028d3f3c9c9d74c704113ac60c723f20a",
+      "domain": "explicit_implied_clauses_of",
+      "reason": "Defaults(WrittenRecipe)"
+    },
+    {
+      "definition": "7ad0477d48942a473771d3aa686b24c4fd24520cb8032e34db6774a576b2cbca",
+      "domain": "explicit_super_clauses_of",
+      "reason": "Defaults(WrittenRecipe)"
+    },
+    {
+      "definition": "7ad0477d48942a473771d3aa686b24c4fd24520cb8032e34db6774a576b2cbca",
+      "domain": "explicit_implied_clauses_of",
+      "reason": "Defaults(WrittenRecipe)"
+    },
+    {
+      "definition": "c8c1d062cfb77e7d52052860bf3c5f8da8e987bf295bb543491ea0e6d7e6da8e",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "7540ef8d6584654b88097b9b22042c254754ae6a6037c86db713417f42f5d002",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "28232f7e80fc90838703138112b2c46a16940f2d52a17d31960ce4b53907059f",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "128270202684684aa4dc81735ed1181a069bd1153286fd69dc1edc9fe739656a",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "0e058f5057b191053af8e216dce17af0bc941f41ba11f1f9cb15d7831533f012",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "a6b2b233813c0ba7f51c360e6b01208e7649350a27c9da5211d3ca029d985be6",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "d2b8391a447f728d3ea3b7737a454ccfabcd5708b2de5fe32a0ab17d15adc9d1",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "508f7e571b038f7772d89b0e4b29abbb7e8fede0cdcaf4ce8381b9bd9c83cfcf",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "a87b5ae0c65809d2c19ad50e29416cbf091a1723adaa23be5544540e20b90052",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "7b6f2a5f8108a8b80b94ef1ac4c648fe968afbc9a267d8e862e58656ee109cde",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "9a1df231d511a6e3b73ba92f2794f855ad4d1d8b578132e2c422ed39ee840161",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "f7f90f9eb675a49c899ded8c33aafe95f54676f8b5f586093379c66fdf5e4d4d",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "14540ec7b099c655bd77d3e15c5f4e715e5f1f1272e31c48d9eb895eee60b0cf",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "fb1bbf7c9051c4f69af310495ac6ee67f6a80a5995679a4a2a392e390e769826",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "ca18c6c2e075ffb441f8f39ff5e5a58d637dba51d87188d6604aad2f78f78835",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "355e2d3516858a6712d1aea66372ac23ac617fe60e738626046c1169cf960181",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "9af031d8f5066260f580f55fd6144cdf88f55e5f0a96d0c2654ce7835e39c228",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "c1f68a3d2d96056127ef42f503af190ff96a36284f9a0df9800440aabd857939",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "78b9fb34e6cf81ac178eb5a9c3b123ca291b43fb41628ff37c2057e301cf1744",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "9abeb094c64d51f05c8c6e1b2f8b3c7f0bd723ed1392fe96f70facb4df2935c2",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "57197804bbe785352c224971c15d8ccbf177a78d13aa4420d83d109183ba52ea",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "ef70aceae78e9dbfba538e0a2b202416bb455461315a3e7ad447dda9f9b696fb",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "cab85b1513ba050d55d189dda5552eb4c117fe74eea161c94341f3716aaf6bdd",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "7d57e07129873b0638bb9cad01c41c2b2afbe3f2decb9a276a844be80446d7ba",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "3ea125bb6264c5177df2fcd1a43a637ed927ea27bec81488cb031e98d8b9515d",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "0c466066720009b816d5b69df4071401218be31d23017b3390e39e3d8cc38d76",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "6fa787b2fadffd422f5401f9bf804b34d5d02b3874e6e8567923356d1640ac44",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "9287099473b8109a3a040f204a92be73a62c61004cbf6fb3b2e3473c32f1a7a3",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "881b885492c8d69648d990260f0da6a5ead283213aadab4b8146e4272b91e780",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "f9be8d63a20fbb5cc3c55ebe5c0a68cd6d5f38dfd65bc2d219f9e3797e958369",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "a7672bb8db2f19d77a0a09d393c08c09a259f26783c82b453e37cf2adfea578b",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "7eb944f3ee105234c8ebb95b921c8c15f072dc141bdbe39522fe2ba4caf475df",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "46046a8e465408e0be534d197dea1a1f7438d4f6828fb6f4ca9b5a15054a57f6",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "0d0b7c4ceebfda3bb3ee3a0a0033c3998bc5c5f640c04223efc2a5d357fb38db",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "ca8e0566c15632eda6a4a925a210d1195ce75315086385fe7d60435e87f27ef4",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "2a95ef69ca54d8529fa47c965ec45c0d9c9b02aae732d26bb0d8c9f409633ec0",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "8122f0e8e8cf76809044861f30b30add2272acaba42d5a1f65657f40c338ca86",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "c603eb5ae725f3ae922052ea6e8862608cbc1c56161890661d514bd2ecd32eb0",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    },
+    {
+      "definition": "6082d32875f238e142cefa7ddda1a03fdf217174f3defac6da326609a15140c8",
+      "domain": "clauses_of",
+      "reason": "Pending(ClauseParameters)"
+    }
+  ],
+  "actual_factory_hold_summary": {
+    "parent: ParentIdentity": 102,
+    "opaque_types_defined_by: OpaqueTypeWalk": 3,
+    "opaque_types_and_coroutines_defined_by: NestedBodyIdentities": 3,
+    "const_conditions: ConstConditions": 3,
+    "explicit_super_clauses_of: Defaults(WrittenRecipe)": 2,
+    "explicit_implied_clauses_of: Defaults(WrittenRecipe)": 2,
+    "clauses_of: Pending(ClauseParameters)": 39
+  },
+  "pending_head_diagnostics": {
+    "printed": false,
+    "scope": "no pending ImplSourceTypes remained; old7540 canonical exact source path mapping not observed, though actual full coverage now passes"
+  },
+  "alias_control": {
+    "exit": 0,
+    "rust_test_seconds": 8.65,
+    "editions": [
+      2015,
+      2018,
+      2021,
+      2024
+    ],
+    "actual_positive": "actual Some Unsafe/C/nonvariadic metadata must encode to genuine corresponding FnPtr using retained SourceGenericLayouts",
+    "separate_negative": "erased metadata clone must hold FunctionMetadata",
+    "cold_query_trace": "passed all4 editions",
+    "original_main_and_lint_diagnostics": "unexecuted"
+  },
+  "anonymous_region_control": {
+    "exit": 101,
+    "rust_test_seconds": 4.58,
+    "completed_source_worlds": [
+      {
+        "fixture": "tests/ui/impl-header-lifetime-elision/trait-underscore.rs",
+        "edition": 2015,
+        "origin": 0,
+        "canonical": "47cca0bcc295c94755f0b125f21edf9d72c98f97df61846e9e543ef1c34c73aa",
+        "distinct_sites": [
+          [
+            265,
+            267
+          ],
+          [
+            273,
+            277
+          ]
+        ],
+        "written": [],
+        "upstream_source_ordinals": [
+          0,
+          1
+        ],
+        "inherited_method": null,
+        "assertions": "actual source site AST/range identity and distinctness; genuine ReEarlyParam/identity args; memo/cold"
+      },
+      {
+        "fixture": "tests/ui/impl-header-lifetime-elision/inherent-impl.rs",
+        "edition": 2015,
+        "origin": 0,
+        "canonical": "eafc2841b2c6b22e2f0399b1193e6007dd58c26e96a7edf1ced8a20d7b8814b0",
+        "distinct_sites": [
+          [
+            87,
+            89
+          ]
+        ],
+        "written": [],
+        "upstream_source_ordinals": [
+          0
+        ],
+        "inherited_method": "685e59eb882a983f72ed01467ea3c8ed0a90815b8c7e0de1ba9896ec2d090006",
+        "assertions": "actual source site AST/range; associated method inherited parent prefix/owner; genuine ReEarlyParam/identity args; memo/cold"
+      }
+    ],
+    "failed_fixture": "tests/ui/delegation/generics/infer-defaults.rs",
+    "failure": {
+      "code": "LRR-E-PARSE-BLOCKS-ENTRY",
+      "message": "Rust 2015 declaration parse error in infer-defaults.rs at bytes 353..353: expected an item",
+      "test_panic_file": "crates/lrr/src/cli/preentry_loader_tests/upstream_projection_types.rs",
+      "test_panic_line": 453,
+      "stage": "configured ordinary source world, before selected mixed-order helper"
+    },
+    "unexecuted": [
+      "mixed written Type/Const + anonymous lifetime source ordinal assertions",
+      "mixed actual context encoding/identity args",
+      "mixed memo/cold assertions",
+      "original mains/compiler diagnostics/delegation bodies"
+    ],
+    "original_unchanged": true,
+    "filter_or_substitute_applied": false
+  },
+  "guards": {
+    "after_build_exit": 0,
+    "after_build_source_matches": true,
+    "after_build_head_matches": true,
+    "closing_exit": 0,
+    "closing_source_matches": true,
+    "closing_head_matches": true,
+    "closing_binaries_match_build": true,
+    "changed_sources": [],
+    "separate_digester_match": true
+  },
+  "runtime": "unexecuted; live consumer inactive, no unchanged repr128 replay",
+  "unmeasured_helpers": [
+    "actual root invocation",
+    "pinned fulfillment execution",
+    "root relations execution",
+    "packet attempt/result-currentness execution",
+    "numeric source incidence execution",
+    "dormant demand execution",
+    "response application",
+    "activation and once-consumed commit"
+  ],
+  "raw_outputs": {
+    "directory": "artifacts/validation-current-v530",
+    "retention": "retained at capsule creation before fixture cleanup; compact raw hold/control logs retained",
+    "files": {
+      "after-build.json": {
+        "sha256": "48439e601614f758f0697ec13200ee2fcfa8bf86076285b1bc5ce29b622a549a",
+        "bytes": 1284010
+      },
+      "after-runtime.json": {
+        "sha256": "acd80d830e931029bca870246fb9f81f167289fc0d2e307898abfc1979083a6d",
+        "bytes": 1284042
+      },
+      "before.json": {
+        "sha256": "289e019af29d5cd0004ad971a6721e4f34f32a68dbbe66bb474d2043265bb754",
+        "bytes": 1283572
+      },
+      "cli-build.log": {
+        "sha256": "f22600b92310206b6f589e920bd00c733f4057becd856ec10f92b38f7ab6af20",
+        "bytes": 235376
+      },
+      "control-0.log": {
+        "sha256": "4e358de41c389893ea52f29832a0644e77ef88385b9dc9c266092860b9537ad1",
+        "bytes": 20851
+      },
+      "control-1.log": {
+        "sha256": "1f8c8be3f5d7f34234bfa45c3df2f8de8e995c7c2973cef4b35ce6294d742b9c",
+        "bytes": 235
+      },
+      "control-2.log": {
+        "sha256": "8df3cc912fa3a69b4558b5fc5a526ac3aa5df4ae75588d6521bee815a4a9103f",
+        "bytes": 2307
+      },
+      "control-dry-run.jsonl": {
+        "sha256": "96eb5fabc901dc3562f378286f2d3028295d84a5121d68557993ec38562e6ae9",
+        "bytes": 799
+      },
+      "control-dry-run.log": {
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      "control-results.json": {
+        "sha256": "e9ad35bafdbb5edb7d884ba9c89763fe85ca604cb44ffe5edf9dd1576dc7175a",
+        "bytes": 1711
+      },
+      "control-run.jsonl": {
+        "sha256": "e1d991a7e5501752c501529f5f30caec3412d36da1ca1818de1549abedb2ed1c",
+        "bytes": 1483
+      },
+      "control-run.log": {
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      "digester-after-build.json": {
+        "sha256": "41ee1455e9d43af0aaf105b4fc725e1ed75c7b81eaca2d44796c621e1c16cd36",
+        "bytes": 162
+      },
+      "digester-build.log": {
+        "sha256": "3b7517e893627d6ba3ecb40ae266cc5eee54cef8ef70a5029c6a6fd012a0c8f3",
+        "bytes": 235372
+      },
+      "digester-closing.json": {
+        "sha256": "35c63a9bfe9641679efab0352a61272a6243df14186c2467e3df4930df3d73a7",
+        "bytes": 384
+      },
+      "lib-build.jsonl": {
+        "sha256": "3c05a9eaa1ca299ae1571ac7751adb16475673e854d9c801b54a655cc4eb22fd",
+        "bytes": 875124
+      },
+      "lib-build.log": {
+        "sha256": "f9d8bc275ac70c84b262eaf56dea80c4867b0d97b1afb17f1673c699bcf3b6af",
+        "bytes": 136
+      },
+      "temp-before.json": {
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "bytes": 3
+      },
+      "temp-created.json": {
+        "sha256": "f5ce98baec0856e974c2305dece7a41213de14a659adff95a3d9ef4282a9a9ec",
+        "bytes": 1139
+      },
+      "cleanup.json": {
+        "sha256": "7443c68514f3854fedc0e558cda8821cc22012b1897e1c87ad98fed250fda5ba",
+        "bytes": 773
+      }
+    }
+  },
+  "temporary_fixtures": [
+    {
+      "path": "/var/folders/54/vchw6yzd347216x5xgdbmn680000gn/T/lrr-preentry-25162-erased-function-alias-2015",
+      "entries": [
+        "root.rs"
+      ],
+      "reproducible_fixture_only": true,
+      "root_sha256": "55fa4b123e6d81aa12a29549bc8b746c729bae65dc261d32cb1d2c23f3122978"
+    },
+    {
+      "path": "/var/folders/54/vchw6yzd347216x5xgdbmn680000gn/T/lrr-preentry-25162-erased-function-alias-2018",
+      "entries": [
+        "root.rs"
+      ],
+      "reproducible_fixture_only": true,
+      "root_sha256": "55fa4b123e6d81aa12a29549bc8b746c729bae65dc261d32cb1d2c23f3122978"
+    },
+    {
+      "path": "/var/folders/54/vchw6yzd347216x5xgdbmn680000gn/T/lrr-preentry-25162-erased-function-alias-2021",
+      "entries": [
+        "root.rs"
+      ],
+      "reproducible_fixture_only": true,
+      "root_sha256": "55fa4b123e6d81aa12a29549bc8b746c729bae65dc261d32cb1d2c23f3122978"
+    },
+    {
+      "path": "/var/folders/54/vchw6yzd347216x5xgdbmn680000gn/T/lrr-preentry-25162-erased-function-alias-2024",
+      "entries": [
+        "root.rs"
+      ],
+      "reproducible_fixture_only": true,
+      "root_sha256": "55fa4b123e6d81aa12a29549bc8b746c729bae65dc261d32cb1d2c23f3122978"
+    }
+  ],
+  "cleanup": {
+    "status": "complete after durable capsule creation",
+    "receipt": {
+      "recorded_at": "2026-10-21T00:55:23.551388+00:00",
+      "removed": [
+        {
+          "path": "/var/folders/54/vchw6yzd347216x5xgdbmn680000gn/T/lrr-preentry-25162-erased-function-alias-2015",
+          "absent_after": true
+        },
+        {
+          "path": "/var/folders/54/vchw6yzd347216x5xgdbmn680000gn/T/lrr-preentry-25162-erased-function-alias-2018",
+          "absent_after": true
+        },
+        {
+          "path": "/var/folders/54/vchw6yzd347216x5xgdbmn680000gn/T/lrr-preentry-25162-erased-function-alias-2021",
+          "absent_after": true
+        },
+        {
+          "path": "/var/folders/54/vchw6yzd347216x5xgdbmn680000gn/T/lrr-preentry-25162-erased-function-alias-2024",
+          "absent_after": true
+        }
+      ],
+      "private_targets_or_source_snapshots_created": false,
+      "compact_raw_logs": "retained"
+    }
+  },
+  "terminal_status": "all build/control/guard commands terminal; aggregate closing guards passed; run-owned reproducible fixtures removed after capsule; source/HEAD/Cargo/shared-target ownership released",
+  "acceptance": {
+    "component_controls_passed": 2,
+    "component_controls_failed": 1,
+    "partial_anonymous_source_worlds_completed": 2,
+    "runtime_contract_passes": 0,
+    "new_distinct_runtime_gains": 0,
+    "root_activation": "held",
+    "full_fixture": "unexecuted",
+    "interpreter": "incomplete",
+    "guest_jit_allowed": false,
+    "linux": "unexecuted",
+    "performance": "unassessed"
+  },
+  "reproduction": "Fresh run directory, maintained tools/validation/README.md, exact tracked3-control selection. Preserve original failed delegation fixture and its parse error; do not filter it or weaken coverage. Broader source parser admission or a genuinely unchanged independent official mixed witness remains future work. Factory component success is not source-root/query closure or runtime activation."
+}

@@ -238,6 +238,7 @@ fn transform<'a>(
                                 .map(|_| next())
                                 .collect(),
                             result: Box::new(next()),
+                            source_header: function.value.source_header.clone(),
                         },
                     })),
                     TyTerm::Tuple(fields) => {

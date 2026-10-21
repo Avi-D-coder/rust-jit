@@ -1807,7 +1807,7 @@ fn token_bytes(tokens: &Vec<TokenRecipe>) -> Option<usize> {
     Some(bytes)
 }
 impl StableEncode for NominalSchema {
-    const DOMAIN: &'static str = "lrr/v2/nominal-schema";
+    const DOMAIN: &'static str = "lrr/v3/nominal-schema";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.definition);
         e.record(&self.scope);
@@ -1823,6 +1823,7 @@ impl StableEncode for NominalSchema {
             e.sequence(&parameter.bounds, |e, token| e.record(token));
             e.sequence(&parameter.default, |e, token| e.record(token));
             e.sequence(&parameter.const_type, |e, token| e.record(token));
+            e.option(&parameter.anonymous_region, |e, range| { e.u32(range.start); e.u32(range.end); });
         });
         e.sequence(&self.variants, |e, variant| {
             e.option(&variant.name, |e, name| e.string(name));

@@ -1,0 +1,260 @@
+{
+  "schema": "lrr/source-checkpoint-evidence/v1",
+  "recorded_at": "2026-10-21T00:14:27.924021+00:00",
+  "source_baseline": "edd7f85ccc8e158b20cfbc02100cd1f263b06c49",
+  "source_sha256": "ee0c04b3dc5c75b261863451493b5107576e3f1df7b084357f2ebd0d294903ea",
+  "input_count": 8744,
+  "scope": "V527 held M020 actual-source fact factory/cold publication/pinned fulfillment and reached relation helpers. All three builds pass; one exact owning-2015 unchanged repr128 factory component control fails because complete candidate buckets observed 0, expected 1. No component acceptance or runtime gain.",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-20-root-factory-review.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-20-source-factory-controls.json",
+  "selection_sha256": "3332667ae2bdfccee5b132018bf99a8eda1a2ab84f95e82bb743fffeac18dcef",
+  "platform": {
+    "os": "Darwin",
+    "architecture": "arm64",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "rustc_commit": "b940084d7eb6a299eb4bfeb8e34901bc051e7ac4",
+    "host": "aarch64-apple-darwin",
+    "llvm": "23.1.1"
+  },
+  "commands": [
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v527",
+        "before"
+      ],
+      "session": 93448,
+      "exit": 0
+    },
+    {
+      "shell_command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json > artifacts/validation-current-v527/lib-build.jsonl 2> artifacts/validation-current-v527/lib-build.log",
+      "session": 75156,
+      "exit": 0,
+      "cargo_seconds": 43.91
+    },
+    {
+      "shell_command": "cargo +1.99.0 build --offline --locked -p lrr --bin lrr > artifacts/validation-current-v527/cli-build.log 2>&1",
+      "session": 64901,
+      "exit": 0,
+      "cargo_seconds": 43.42
+    },
+    {
+      "shell_command": "cargo +1.99.0 build --offline --locked -p xtask --example lrr_source_digests > artifacts/validation-current-v527/digester-build.log 2>&1",
+      "exit": 0,
+      "cargo_seconds": 0.53
+    },
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v527",
+        "after-build",
+        "--cargo-messages",
+        "artifacts/validation-current-v527/lib-build.jsonl",
+        "--cli-binary",
+        "target/debug/lrr"
+      ],
+      "session": 2144,
+      "exit": 0
+    },
+    {
+      "shell_command": "/opt/homebrew/bin/python3.12 tools/validation/run_controls.py artifacts/validation-current-v527 worktracks/05-trait-goal-engine/2026-10-20-source-factory-controls.json --dry-run > artifacts/validation-current-v527/control-dry-run.jsonl 2> artifacts/validation-current-v527/control-dry-run.log",
+      "session": 80817,
+      "exit": 0
+    },
+    {
+      "shell_command": "/opt/homebrew/bin/python3.12 tools/validation/run_controls.py artifacts/validation-current-v527 worktracks/05-trait-goal-engine/2026-10-20-source-factory-controls.json > artifacts/validation-current-v527/control-run.jsonl 2> artifacts/validation-current-v527/control-run.log",
+      "session": 36655,
+      "exit": 1
+    },
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v527",
+        "after-runtime"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "rustc",
+        "+1.99.0",
+        "-Vv"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "uname",
+        "-sm"
+      ],
+      "exit": 0
+    }
+  ],
+  "fresh_binaries": true,
+  "binaries": {
+    "test": {
+      "path": "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+      "sha256": "51e9f8070cf40df94833c97be5b3ee24a4f6174b9376bc8677153cbd3e8d5e28"
+    },
+    "cli": {
+      "path": "/Users/avi/Code/rust-jit/target/debug/lrr",
+      "sha256": "7dd2f24bc7537fcaa00db9cb5e84b346bbb19a894a8234561bbd0f5f026bb396"
+    },
+    "digester": {
+      "path": "/Users/avi/Code/rust-jit/target/debug/examples/lrr_source_digests",
+      "sha256": "50c25b3a3d7efb0a1a83a3d14ba71fcd8a6365a2a7234e7b96f512463c991232"
+    }
+  },
+  "control_results": [
+    {
+      "selector": "cli::preentry_loader_tests::upstream_projection_types::unchanged_repr128_source_factory_publishes_actual_query_domains",
+      "argv": [
+        "/Users/avi/Code/rust-jit/target/debug/deps/lrr-df1e3f56d083c63c",
+        "cli::preentry_loader_tests::upstream_projection_types::unchanged_repr128_source_factory_publishes_actual_query_domains",
+        "--exact",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit": 101,
+      "one_body": true,
+      "inputs_unchanged": true,
+      "pass": false,
+      "seconds": 6.862,
+      "log": "control-0.log"
+    }
+  ],
+  "actual_failure": {
+    "file": "crates/lrr/src/cli/preentry_loader_tests/upstream_projection_types.rs",
+    "line": 598,
+    "assertion": "assert_eq!(observed.covered_buckets, 1)",
+    "observed": 0,
+    "expected": 1,
+    "rust_test_seconds": 6.46,
+    "test_body_exit": 101,
+    "test_body_count": 1
+  },
+  "observed_before_failure": {
+    "helper_returned": true,
+    "actual_materialize_and_provider_publish_returned": "source-aware consequence of successful observer return; no exact-root admission invoked",
+    "definitions_at_least": 5,
+    "traits_at_least": 1,
+    "implementations_equal_complete_source_candidate_length": true,
+    "candidate_length_at_least": 2,
+    "covered_buckets": 0,
+    "other_exact_counts": "not printed before failing assertion; unavailable"
+  },
+  "unexecuted_after_failure": [
+    "impl_empty_clauses assertion",
+    "impl_super_outlives assertion",
+    "ADT/enum count and exact input enum identity assertions",
+    "external retained guard check",
+    "external memo Arc/fingerprint reuse checks",
+    "cold-path assertion",
+    "fresh-source withdrawal and revocation assertion",
+    "final grouped-count output"
+  ],
+  "guards": {
+    "after_build_exit": 0,
+    "after_build_source_matches": true,
+    "after_build_head_matches": true,
+    "closing_exit": 0,
+    "closing_source_matches": true,
+    "closing_head_matches": true,
+    "closing_binaries_match_build": true,
+    "changed_sources": [],
+    "separate_digester_match": true
+  },
+  "runtime": "unexecuted; consumer inactive, no redundant unchanged repr128 runtime replay",
+  "unmeasured_helpers": [
+    "actual root invocation",
+    "pinned fulfillment execution",
+    "root relations execution",
+    "packet attempt/result-currentness execution",
+    "numeric source incidence execution",
+    "response application",
+    "activation and once-consumed commit"
+  ],
+  "raw_outputs": {
+    "directory": "artifacts/validation-current-v527",
+    "retention": "retained at capsule creation; no cleanup performed by validator",
+    "files": {
+      "before.json": {
+        "sha256": "4a4d6dba322781a78611218af3e9a16bb9814a80fc6b35d25ad69c99023cbc78",
+        "bytes": 1282933
+      },
+      "lib-build.jsonl": {
+        "sha256": "416f7ec00763f439902f2926d669520b74c7d446a4006b6306be2d5bada6e470",
+        "bytes": 863624
+      },
+      "lib-build.log": {
+        "sha256": "82458c4ae82d0a48fd45253ed5c28594d825467b629bb49148bd2930751f69de",
+        "bytes": 136
+      },
+      "cli-build.log": {
+        "sha256": "ec61b4cc7d47a5c6bea064f12047dd0d685c208f87a5a384239e858c272d0963",
+        "bytes": 239876
+      },
+      "digester-build.log": {
+        "sha256": "0c2108fa81ba9ca9b0133f509b345785fb9d5cd960bb365666eae52d017644a9",
+        "bytes": 232270
+      },
+      "after-build.json": {
+        "sha256": "faedcb248b648f937d75b23506a813c6b1bb7daad1f00f0367ae2a393cb4d36b",
+        "bytes": 1283371
+      },
+      "digester-after-build.json": {
+        "sha256": "e745ac431e5018b0850cbb45274055cf5a9d7f7d0e6e0e852c130e19ace59459",
+        "bytes": 162
+      },
+      "control-dry-run.jsonl": {
+        "sha256": "8a299fbf2a2c290a1310842bb3af11ff9fb088082dacd3d1c53e9b624c160024",
+        "bytes": 265
+      },
+      "control-dry-run.log": {
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      "control-run.jsonl": {
+        "sha256": "59583e4a604104aeed10792b4332c8b81ee8d13c6a63afa1486822cf595dede0",
+        "bytes": 494
+      },
+      "control-run.log": {
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      "control-results.json": {
+        "sha256": "42f570ce9aa49c155a44eabfed484f068bdf12d0cf4e1d94fbfbd4c7de65f242",
+        "bytes": 572
+      },
+      "control-0.log": {
+        "sha256": "04dc3c714faa611b90bf887308cb17f7e43310931639ee9dfff6694da3a5c3bb",
+        "bytes": 757
+      },
+      "after-runtime.json": {
+        "sha256": "2dd1c53087c521c0d0e4e939093e24604946f932e8640c55a8283edd6eecac55",
+        "bytes": 1283403
+      },
+      "digester-closing.json": {
+        "sha256": "c64b7760e075b6b9ef89904d5809f247d48132c469d686183df57b2b3936e8bf",
+        "bytes": 388
+      }
+    }
+  },
+  "terminal_status": "all build/control/guard commands terminal; ownership returned after evidence recorded",
+  "acceptance": {
+    "component_controls_passed": 0,
+    "component_controls_failed": 1,
+    "runtime_contract_passes": 0,
+    "new_distinct_runtime_gains": 0,
+    "root_activation": "held",
+    "full_fixture": "unexecuted",
+    "interpreter": "incomplete",
+    "guest_jit_allowed": false,
+    "linux": "unexecuted",
+    "performance": "unassessed"
+  },
+  "reproduction": "Use a fresh run directory and tools/validation/README.md with the exact one-control selection above. Preserve complete-bucket coverage requirement; do not remove pending source candidates or lower expected coverage to make this test pass. Repair the common source fact prerequisite and revalidate a new frozen fingerprint."
+}

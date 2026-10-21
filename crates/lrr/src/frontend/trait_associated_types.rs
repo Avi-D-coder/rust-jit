@@ -51,6 +51,12 @@ macro_rules! ready {
 impl PreparedTraitAssociatedTypes {
     pub fn key(&self) -> &TraitAssociatedTypesKey { &self.key }
     pub fn pending(&self) -> Option<TraitAssociatedTypePending> { self.pending }
+    /// Complete authenticated type-member identities only. A pending producer
+    /// or source/parent join never certifies an empty member list.
+    pub(crate) fn definitions(&self) -> Result<impl Iterator<Item = Digest> + '_, TraitAssociatedTypePending> {
+        if let Some(why) = self.pending { return Err(why); }
+        Ok(self.items.values().copied())
+    }
     /// A missing key is an unmet source demand, never a negative solver result.
     pub fn lookup(&self, item: Digest) -> Result<Digest, TraitAssociatedTypePending> {
         if let Some(why) = self.pending { return Err(why); }

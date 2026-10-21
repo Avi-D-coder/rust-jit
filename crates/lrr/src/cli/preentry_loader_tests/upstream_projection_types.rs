@@ -533,6 +533,109 @@ fn unchanged_iterator_projection_fields_encode_actual_associated_declaration_all
 }
 
 #[test]
+fn unchanged_repr128_source_factory_publishes_actual_query_domains() {
+    use crate::traits::{
+        term::TyTerm,
+        upstream::{check_source_factory, source_definition_headers::DefinitionHeaderKey},
+    };
+
+    // One unchanged owning-edition source world exercises actual factory
+    // publication. Broader source-origin/edition and runtime matrices remain
+    // separate; this control does not evaluate a replacement solver root.
+    let (mut db, seal, root, temporary) = fixture_world(
+        "tests/ui/enum-discriminant/repr128.rs",
+        "use std::intrinsics",
+        2015,
+        0,
+    );
+    assert!(temporary.is_none());
+    let rows = actual_rows(&mut db, &seal);
+    let main = actual_named(&rows, root.crate_key, &[], "main", ItemKind::Function);
+    let discr = actual_named(&rows, root.crate_key, &[], "discr", ItemKind::Function);
+    let signed = actual_named(&rows, root.crate_key, &[], "Signed", ItemKind::Enum);
+    let unsigned = actual_named(&rows, root.crate_key, &[], "Unsigned", ItemKind::Enum);
+    let core = crate::facade::unit(
+        &ProfileIdentity {
+            edition: 2015,
+            ..ProfileIdentity::current()
+        },
+        "core",
+    );
+    let partial_eq = actual_named(&rows, core, &["cmp"], "PartialEq", ItemKind::Trait);
+    let membership_key = QueryKey::ImplTraitCatalog(seal.clone());
+    let membership = ready(db.fetch(&SyntaxProvider, membership_key.clone()));
+    let QueryValue::ImplTraitCatalog(catalog) = membership.value.as_ref() else {
+        unreachable!("actual source candidate catalog")
+    };
+    let expected_candidates = catalog
+        .candidates(partial_eq)
+        .expect("complete actual PartialEq source membership")
+        .len();
+    assert!(expected_candidates >= 2);
+    let header_key = QueryKey::DefinitionHeaderPlan(Box::new(DefinitionHeaderKey {
+        inventory: seal.clone(),
+        definition: main,
+    }));
+    let header = ready(db.fetch(&SyntaxProvider, header_key.clone()));
+    db.trace.detailed = true;
+    let before = db.trace.events.len();
+    let input_types = [
+        TyTerm::Nominal(signed, Vec::new()),
+        TyTerm::Nominal(unsigned, Vec::new()),
+    ];
+    let (current, observed) = check_source_factory(
+        &mut db,
+        &seal,
+        main,
+        discr,
+        partial_eq,
+        &input_types,
+    )
+    .unwrap();
+    eprintln!("actual repr128 source factory observation before assertions: {observed:?}");
+    assert!(observed.definitions >= 5);
+    assert!(observed.traits >= 1);
+    assert_eq!(observed.implementations, expected_candidates);
+    assert_eq!(observed.covered_buckets, 1);
+    assert!(observed.impl_empty_clauses >= 2);
+    assert!(observed.impl_super_outlives >= 2);
+    assert!(observed.adts >= 2);
+    assert!(observed.enum_reprs >= 2);
+    let mut input_enum_reprs = observed.input_enum_reprs.clone();
+    input_enum_reprs.sort_unstable();
+    let mut expected_enum_reprs = vec![signed, unsigned];
+    expected_enum_reprs.sort_unstable();
+    assert_eq!(input_enum_reprs, expected_enum_reprs);
+    assert!(
+        observed.root_held,
+        "coarse readiness stays held for unprepared query domains"
+    );
+    current.require_current(&db).unwrap();
+    let membership_again = ready(db.fetch(&SyntaxProvider, membership_key));
+    let header_again = ready(db.fetch(&SyntaxProvider, header_key));
+    assert!(membership.cacheable && Arc::ptr_eq(&membership.value, &membership_again.value));
+    assert_eq!(membership.fingerprint, membership_again.fingerprint);
+    assert!(header.cacheable && Arc::ptr_eq(&header.value, &header_again.value));
+    assert_eq!(header.fingerprint, header_again.fingerprint);
+    assert_cold(&db, before);
+    // This is fresh withdrawal, independently of expansion-epoch revocation.
+    db.publish_inputs(BTreeMap::new()).unwrap();
+    assert!(current.require_current(&db).is_err());
+    eprintln!(
+        "actual repr128 source factory edition2015,origin0: {}definitions,{}traits,{}implementations,{}complete bucket,{}null impl clauses,{}derived impl outlives,{}ADTs,{}enum reprs,{}encoding holds; same-context publication/index, actual candidate coverage, memo/cold/fresh-source-withdrawal; root/activation/response/runtime held",
+        observed.definitions,
+        observed.traits,
+        observed.implementations,
+        observed.covered_buckets,
+        observed.impl_empty_clauses,
+        observed.impl_super_outlives,
+        observed.adts,
+        observed.enum_reprs,
+        observed.encoding_holds,
+    );
+}
+
+#[test]
 fn unchanged_discriminant_projection_bound_encodes_actual_partial_eq_all_editions_and_origins() {
     use crate::traits::upstream::source_declaration_clauses::SourceDeclarationClausesKey;
     use crate::traits::upstream::source_predicates::check_actual_projected_source_predicates;
@@ -1056,4 +1159,31 @@ fn unchanged_impl_super_outlives_uses_pinned_elaborator_all_editions_and_origins
         (36, 36, 12, 12)
     );
     check_actual_clause_emission_all_editions_and_origins();
+}
+
+#[test]
+fn unchanged_impl_anonymous_regions_retain_sites_order_and_associated_inheritance() {
+    use crate::traits::{term::BoundKind, upstream::source_terms::check_anonymous_impl_regions};
+    // All three original files have the default owning Rust 2015 edition. The
+    // last is a diagnostic fixture: only actual source metadata is observed.
+    for (case, module, written, anonymous, upstream_ordinals, method) in [
+        ("tests/ui/impl-header-lifetime-elision/trait-underscore.rs", &[][..], &[][..], 2, &[0, 1][..], None),
+        ("tests/ui/impl-header-lifetime-elision/inherent-impl.rs", &[][..], &[][..], 1, &[0][..], Some("x")),
+        ("tests/ui/delegation/generics/infer-defaults.rs", &["free_to_trait"][..],
+            &[("XX", BoundKind::Type), ("Y", BoundKind::Type), ("T", BoundKind::Type), ("N", BoundKind::Const)][..],
+            1, &[4, 0, 1, 2, 3][..], None),
+    ] {
+        let (mut db, seal, scope, temporary) = fixture_world(case, "", 2015, 0);
+        assert!(temporary.is_none(), "unchanged original source path");
+        let member = method.map(|name| actual_named(&actual_rows(&mut db, &seal), scope.crate_key,
+            module, name, ItemKind::Function));
+        db.trace.detailed = true;
+        let before = db.trace.events.len();
+        let count = check_anonymous_impl_regions(&mut db, &seal, scope.crate_key, module,
+            written, anonymous, upstream_ordinals, member)
+            .unwrap_or_else(|error| panic!("actual anonymous impl source {case}: {error:?}"));
+        assert_eq!(count, anonymous);
+        assert_cold(&db, before);
+        eprintln!("unchanged anonymous impl source {case},edition2015,origin0: {count} actual anonymous sites; original main/compiler diagnostics unexecuted");
+    }
 }

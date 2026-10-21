@@ -224,6 +224,13 @@ impl PreparedDeclarationSourcePredicates {
                     .insert(ordinal, range(parameter.syntax().text_range()));
             }
         }
+        for parameter in declaration.parameters().iter().take(layout.own as usize) {
+            if let Some(site) = parameter.anonymous_region {
+                if result.parameter_ranges.insert(parameter.ordinal, site).is_some() {
+                    return QueryPoll::Ready(Err(fault("anonymous region overlaps a written parameter ordinal")));
+                }
+            }
+        }
         if usize::try_from(layout.own).ok() != Some(result.parameter_ranges.len()) {
             pending!(DeclarationSourcePredicatesPending::Source);
         }
@@ -345,6 +352,7 @@ impl PreparedDeclarationSourcePredicates {
                     || child.bounds != parameter.bounds
                     || child.default != parameter.default
                     || child.const_type != parameter.const_type
+                    || child.anonymous_region != parameter.anonymous_region
                 {
                     pending!(DeclarationSourcePredicatesPending::ParentLayout);
                 }
@@ -394,7 +402,7 @@ impl PreparedDeclarationSourcePredicates {
                 let Some(ty) = implementation.self_ty() else {
                     pending!(DeclarationSourcePredicatesPending::SelfType);
                 };
-                if super::source_types::symbolic_type_pending(&ty).is_some() {
+                if super::source_types::symbolic_type_pending_with(&ty, parent_declaration.parameters()).is_some() {
                     pending!(DeclarationSourcePredicatesPending::SelfType);
                 }
                 let parent_owner = SourceTypeOwner {
@@ -439,7 +447,7 @@ impl PreparedDeclarationSourcePredicates {
             let Some(ty) = implementation.self_ty() else {
                 pending!(DeclarationSourcePredicatesPending::SelfType);
             };
-            if super::source_types::symbolic_type_pending(&ty).is_some() {
+            if super::source_types::symbolic_type_pending_with(&ty, declaration.parameters()).is_some() {
                 pending!(DeclarationSourcePredicatesPending::SelfType);
             }
             let frame =

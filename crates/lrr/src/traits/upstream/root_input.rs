@@ -18,7 +18,11 @@ pub(crate) enum SourceVariableFamily {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum SourceCallRelationKind {
     Equal,
+    /// Argument value (actual) coerces to the declared parameter (formal).
     Coerce,
+    /// Declared callee return (formal) coerces to the caller's expectation
+    /// (actual). Keeping direction explicit avoids reversing result inference.
+    CoerceResult,
 }
 
 /// Transport the actual relation; capturing it never performs unification.

@@ -55,7 +55,7 @@ impl DeclarationGenericTypes {
         // An inherited parameter Type belongs to the parent's header/source,
         // not to the child function's declaration range. Keep that exact owner
         // for name lookup, rebasing only its captured parameter identities.
-        let inherited = if declaration.parameters().iter().any(|p| p.kind == GenericKind::Const && p.ordinal >= layout.own) {
+        let inherited = if super::source_types::actual_associated_owner(&syntax).is_some() {
             let parent = if let Some(input) = db.input(&crate::db::dependency::InputKey::GeneratedSyntax(source.content)) {
                 let crate::db::dependency::InputValue::GeneratedSyntax(unit) = input.as_ref() else { return QueryPoll::Ready(Err(fault("generic parent generated input differs"))); };
                 if unit.key != *source { return QueryPoll::Ready(Err(fault("generic parent generated source differs"))); }
@@ -64,7 +64,13 @@ impl DeclarationGenericTypes {
                 inventory.declaration_for_member_scope(&context.scope).or(context.scope.owner)
             };
             let Some(parent) = parent else { pending!(Parameters); };
-            Some(ready!(db.fetch(&SyntaxProvider, QueryKey::DeclarationGenerics(parent))).value)
+            let typed_parent = ready!(db.fetch(&SyntaxProvider, QueryKey::DeclarationGenericTypes(Box::new(
+                DeclarationGenericTypesKey { inventory: key.inventory.clone(), definition: parent })))).value;
+            let QueryValue::DeclarationGenericTypes(typed_parent) = typed_parent.as_ref() else {
+                return QueryPoll::Ready(Err(fault("inherited generic Type query differs")));
+            };
+            if typed_parent.pending().is_some() { pending!(Parameters); }
+            Some(Arc::clone(typed_parent.declaration_root()))
         } else { None };
         let mut rebase = BTreeMap::new();
         let parent_syntax = if let Some(parent) = &inherited {
@@ -74,7 +80,8 @@ impl DeclarationGenericTypes {
                 || parent_header.tokens != header.context { pending!(Parameters); }
             for parameter in parent.parameters() {
                 let Some(child) = declaration.parameters().get((layout.own + parameter.ordinal) as usize) else { pending!(Parameters); };
-                if child.kind != parameter.kind || child.name != parameter.name { pending!(Parameters); }
+                if child.kind != parameter.kind || child.name != parameter.name
+                    || child.anonymous_region != parameter.anonymous_region { pending!(Parameters); }
                 rebase.insert(ParamKey { definition: parent.definition(), ordinal: parameter.ordinal }, ParamKey { definition: key.definition, ordinal: child.ordinal });
             }
             if parent.has_trait_self() {
@@ -88,6 +95,9 @@ impl DeclarationGenericTypes {
         let owner = super::type_name_namespace::SourceTypeOwner { definition: key.definition, scope: &context.scope, header };
         let frame = super::source_types::WrittenTypeDeclaration::declaration(owner, declaration.parameters(), &syntax, own_self.as_ref());
         let sources = environment.sources().iter().collect::<Vec<_>>();
+        if ready!(super::source_types::impl_path_regions_pending(db, environment.names(), &sources, &frame, &syntax)) {
+            pending!(Parameters);
+        }
         let mut constants = BTreeMap::new();
         for parameter in declaration.parameters().iter().filter(|parameter| parameter.kind == GenericKind::Const) {
             let (ty, inherited_frame) = if parameter.ordinal >= layout.own {
@@ -102,8 +112,8 @@ impl DeclarationGenericTypes {
             let ty = match ty {
                 Ok(Some(ty)) => ty, Ok(None) => pending!(ConstTypeSyntax), Err(error) => return QueryPoll::Ready(Err(error)),
             };
-            if super::source_types::symbolic_type_pending(&ty).is_some() { pending!(SymbolicIdentity); }
             let source_frame = inherited_frame.as_ref().unwrap_or(&frame);
+            if source_frame.symbolic_type_pending(&ty).is_some() { pending!(SymbolicIdentity); }
             let Some(term) = ready!(super::source_types::resolve_actual_type(db, environment.names(), &sources, source_frame, &ty)) else { pending!(ConstType); };
             constants.insert(parameter.ordinal, term);
         }

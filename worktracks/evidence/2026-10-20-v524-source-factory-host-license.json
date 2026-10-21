@@ -1,0 +1,143 @@
+{
+  "schema": "lrr/source-checkpoint-evidence/v1",
+  "recorded_at": "2026-10-20T23:59:01.579776+00:00",
+  "source_baseline": "edd7f85ccc8e158b20cfbc02100cd1f263b06c49",
+  "source_sha256": "7e6b6ff7c63c2dfcb0b9aecf47ae2c369e476158fb476f4115cf4477a6d4ea19",
+  "input_count": 8743,
+  "scope": "V524 held M020 actual-source fact factory, candidate publication and pinned fulfillment/relation components. Library build stopped in dependency build-script linkers on an unaccepted Xcode license; no LRR source compilation, fresh binaries, component control or runtime acceptance established.",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-20-root-factory-review.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-20-source-factory-controls.json",
+  "reviewed_source_files": {
+    "crates/lrr/src/traits/upstream/source_factory.rs": "37bf21ff511af5b4f6caf47ec5af9f7cba0f4d68ed9c30cd881a05560909a5e2",
+    "crates/lrr/src/traits/upstream/source_fact_bundle.rs": "194f9654a34d411c33051d73ebd3e4eb1f97a5d72aac744eaba7c7d1a3e5c320",
+    "crates/lrr/src/traits/upstream/source_associated_facts.rs": "bead464f354d766e46037265075411afb9c53b2fc5910b3151ae9a96d84eb63c",
+    "crates/lrr/src/traits/upstream/prepared.rs": "e48c76ec05e4b948b2e9cff697ca530da2177fe2b0b70ac0ba0460c87331eac5",
+    "crates/lrr/src/traits/upstream/root_relations.rs": "97f67443ba30b28b29688a1994df0f1033723d4c2ef9ad56cd56cd4cfc316c1b",
+    "crates/lrr/src/traits/upstream/infer/fulfillment.rs": "03ff24c31c25e9a5e04a675296cc4afbb06b5068db5784b0b6659b9a4895fc9d",
+    "crates/lrr/src/cli/preentry_loader_tests/upstream_projection_types.rs": "26e33bfb28a587769ac94cde009629272cdd367584adae1f274a19eaf81cc9ce"
+  },
+  "commands": [
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v524",
+        "before"
+      ],
+      "session": 4885,
+      "exit": 0
+    },
+    {
+      "shell_command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json > artifacts/validation-current-v524/lib-build.jsonl 2> artifacts/validation-current-v524/lib-build.log",
+      "session": 10246,
+      "exit": 101
+    },
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v524",
+        "after-build",
+        "--cli-binary",
+        "target/debug/lrr"
+      ],
+      "exit": 1,
+      "result": "FileNotFoundError: target/debug/lrr does not exist; no phase evidence was written"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v524",
+        "after-build"
+      ],
+      "exit": 0
+    }
+  ],
+  "library_failure": {
+    "diagnostic_count": 10,
+    "linker_exit": 69,
+    "message": "You have not agreed to the Xcode license agreements. Please run sudo xcodebuild -license from within a Terminal window to review and agree to the Xcode and Apple SDKs license.",
+    "packages": [
+      "registry+https://github.com/rust-lang/crates.io-index#crossbeam-utils@0.8.23",
+      "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.107",
+      "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.229",
+      "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.47",
+      "registry+https://github.com/rust-lang/crates.io-index#crossbeam-epoch@0.9.21",
+      "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.229",
+      "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.190",
+      "registry+https://github.com/rust-lang/crates.io-index#parking_lot_core@0.9.12",
+      "registry+https://github.com/rust-lang/crates.io-index#crossbeam-deque@0.8.8",
+      "registry+https://github.com/rust-lang/crates.io-index#memoffset@0.9.1"
+    ],
+    "cargo_build_finished": [
+      {
+        "reason": "build-finished",
+        "success": false
+      }
+    ],
+    "no_source_compile_result": true
+  },
+  "dependent_stages": {
+    "cli_build": "unexecuted",
+    "digester_build": "unexecuted",
+    "exact_selector_listing": "unexecuted",
+    "component_control": "unexecuted",
+    "runtime": "unexecuted; actual reached-root consumer remains inactive"
+  },
+  "fresh_binaries": false,
+  "current_binary_paths": {
+    "cli": {
+      "exists": false,
+      "sha256": null
+    },
+    "digester": {
+      "exists": false,
+      "sha256": null
+    }
+  },
+  "closing_guard": {
+    "exit": 0,
+    "head": "edd7f85ccc8e158b20cfbc02100cd1f263b06c49",
+    "source_sha256": "7e6b6ff7c63c2dfcb0b9aecf47ae2c369e476158fb476f4115cf4477a6d4ea19",
+    "file_count": 8743,
+    "source_matches_before": true,
+    "head_matches_before": true,
+    "changed_sources": [],
+    "binaries": {}
+  },
+  "raw_outputs": {
+    "directory": "artifacts/validation-current-v524",
+    "retention": "retained at capsule creation; no cleanup performed by validator",
+    "files": {
+      "lib-build.jsonl": {
+        "sha256": "55b7b86dd7d4b7adef73c32be0890ae911560151605fbebd4964d249cdaeed06",
+        "bytes": 43487
+      },
+      "lib-build.log": {
+        "sha256": "7bb8520e65420f2f8ff9198fd375231d7a11e4d8c1a0cbaf13406dc3360134a7",
+        "bytes": 1687
+      },
+      "before.json": {
+        "sha256": "a474cad1d56a665a2e3908be0b50edc221974efa045843629e74c1356aaa8634",
+        "bytes": 1282801
+      },
+      "after-build.json": {
+        "sha256": "84703d9c432902b781e5c40a420e1899c9637edd9f45443045114450a2728d72",
+        "bytes": 1282890
+      }
+    }
+  },
+  "terminal_status": "library and all guard invocations terminal; no dependent process launched",
+  "acceptance": {
+    "component_controls_executed": 0,
+    "runtime_contract_passes": 0,
+    "root_activation": "held",
+    "full_fixture": "unexecuted",
+    "interpreter": "incomplete",
+    "guest_jit_allowed": false,
+    "linux": "unexecuted",
+    "performance": "unassessed"
+  },
+  "reproduction": "After the host owner reviews and accepts the Xcode/SDK license, use a fresh run directory and the exact maintained direct Rust1.99 offline/locked commands in worktracks/05-trait-goal-engine/2026-10-20-root-factory-validation.md. License acceptance was not performed by this validator."
+}

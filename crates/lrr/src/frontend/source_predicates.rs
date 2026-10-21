@@ -646,7 +646,7 @@ fn prepare_bound_rows(
                 if missing_self && has_self(&ty) {
                     pending!(Subject);
                 }
-                if source_types::symbolic_type_pending(&ty).is_some() {
+                if declaration.symbolic_type_pending(&ty).is_some() {
                     pending!(SymbolicType);
                 }
                 let Some(term) = ready!(source_types::resolve_actual_type(
@@ -694,7 +694,7 @@ fn prepare_bound_rows(
         if missing_self && has_self(&ast::Type::PathType(ty.clone())) {
             pending!(SymbolicType);
         }
-        if source_types::symbolic_type_pending(&ast::Type::PathType(ty.clone())).is_some() {
+        if declaration.symbolic_type_pending(&ast::Type::PathType(ty.clone())).is_some() {
             pending!(SymbolicType);
         }
         let Some(path) = ty.path() else {

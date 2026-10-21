@@ -59,7 +59,8 @@ type ProofResult<'cx> = (
 
 /// Captured only by reading the actual definition-keyed preparation inputs.
 /// This is a source attachment, not name selection or catalog completeness.
-#[derive(Debug)]
+/// Cloning shares immutable source handles; it adds no currentness or entry authority.
+#[derive(Debug, Clone)]
 pub(super) struct DefinitionReceipt {
     definition: Digest,
     source: Arc<InputValue>,
@@ -726,6 +727,70 @@ pub(super) struct PreparedFacts<'cx> {
 struct CandidateIndex {
     traits: BTreeMap<DefinitionId, ImplBucket>,
 }
+impl CandidateIndex {
+    /// Derive only genuinely complete demanded buckets. The caller has already
+    /// validated actual source membership and every raw/canonical typed head.
+    fn prepare<'cx>(cx: Cx<'cx>, facts: &PreparedFacts<'cx>) -> Result<Self, Diagnostic> {
+        if cx != facts.context {
+            return Err(fault("candidate classification belongs to another context"));
+        }
+        let mut index = Self {
+            traits: facts.traits.iter().filter_map(|(id, row)| {
+                row.implementations.known().map(|_| (*id, ImplBucket::default()))
+            }).collect(),
+        };
+        let mut heads = Vec::new();
+        let mut automatic = BTreeMap::new();
+        for (id, implementation) in &facts.implementations {
+            let Some(Some(reference)) = implementation.trait_ref.known() else { continue; };
+            let reference = reference.skip_binder();
+            if !index.traits.contains_key(&reference.def_id) {
+                continue; // No complete coverage was published for this query.
+            }
+            // Pinned fast_reject::simplify_type recursively unwraps Pat and
+            // reads trait_is_auto only for an actual dyn principal. Certify
+            // exactly those callbacks before entering that upstream code.
+            let mut self_ty = reference.self_ty();
+            while let ty::Pat(inner, ..) = self_ty.kind() { self_ty = inner; }
+            if let ty::Dynamic(predicates, ..) = self_ty.kind()
+                && let Some(principal) = predicates.principal_def_id() {
+                let flag = *facts.traits.get(&principal)
+                    .ok_or_else(|| fault("candidate dyn principal trait metadata is unprepared"))?
+                    .automatic.checked("candidate dyn principal automatic flag")?;
+                automatic.insert(principal, flag);
+            }
+            heads.push((*id, reference));
+        }
+        let provider = cx.services();
+        let _scope = provider.candidate_classification.enter(CandidateClassificationInputs {
+            context: cx, automatic,
+        });
+        for (id, reference) in heads {
+            let bucket = index.traits.get_mut(&reference.def_id)
+                .expect("validated complete candidate trait");
+            match simplify_type(cx, reference.self_ty(), TreatParams::InstantiateWithInfer) {
+                Some(key) => bucket.constructors.entry(key).or_default().push(id),
+                None => bucket.blankets.push(id),
+            }
+        }
+        // Check every derived entry against its complete source-validated
+        // bucket once during publication, never during installed lookup.
+        for (trait_id, bucket) in &index.traits {
+            let mut observed = BTreeSet::new();
+            for id in bucket.constructors.values().flatten().chain(&bucket.blankets) {
+                if !observed.insert(*id) {
+                    return Err(fault("duplicate classified candidate"));
+                }
+            }
+            let expected = *facts.traits[trait_id].implementations
+                .checked("complete candidate bucket")?;
+            if !observed.iter().copied().eq(<[DefinitionId]>::iter(expected).copied()) {
+                return Err(fault("pinned candidate index differs from the complete catalog"));
+            }
+        }
+        Ok(index)
+    }
+}
 #[derive(Default)]
 pub(super) struct ImplBucket {
     constructors: ty::data_structures::HashMap<SimplifiedType<DefinitionId>, Vec<DefinitionId>>,
@@ -800,6 +865,13 @@ struct ImplElaborationInputs<'cx> {
     sized: BTreeMap<DefinitionId, bool>,
 }
 
+/// Only simplify_type's actual dyn-principal flag queries may read this cold
+/// preparation scope. It is neither published source facts nor root admission.
+struct CandidateClassificationInputs<'cx> {
+    context: Cx<'cx>,
+    automatic: BTreeMap<DefinitionId, bool>,
+}
+
 /// Genuine compiler-derived query value, still owned by the same IR context.
 /// A source fingerprint is provenance, not permission to run another root.
 pub(super) struct PreparedImplSuperOutlives<'cx> {
@@ -813,6 +885,7 @@ pub(crate) struct PreparedProvider<'cx> {
     world: Digest,
     configuration: Digest,
     elaboration: &'cx ScopedCache<ImplElaborationInputs<'cx>>,
+    candidate_classification: &'cx ScopedCache<CandidateClassificationInputs<'cx>>,
     settings: &'cx Settings<'cx>,
     facts: &'cx OnceCell<PreparedFacts<'cx>>,
     generic_facts: &'cx ScopedCache<BTreeMap<DefinitionId, Generics<'cx, PreparedProvider<'cx>>>>,
@@ -830,6 +903,7 @@ impl PartialEq for PreparedProvider<'_> {
             && std::ptr::eq(self.facts, b.facts)
             && std::ptr::eq(self.generic_facts, b.generic_facts)
             && std::ptr::eq(self.elaboration, b.elaboration)
+            && std::ptr::eq(self.candidate_classification, b.candidate_classification)
             && self.configuration == b.configuration
             && std::ptr::eq(self.diagnostics, b.diagnostics)
             && std::ptr::eq(self.root_active, b.root_active)
@@ -843,6 +917,7 @@ impl Hash for PreparedProvider<'_> {
         std::ptr::from_ref(self.facts).hash(h);
         std::ptr::from_ref(self.generic_facts).hash(h);
         std::ptr::from_ref(self.elaboration).hash(h);
+        std::ptr::from_ref(self.candidate_classification).hash(h);
         self.configuration.hash(h);
         std::ptr::from_ref(self.diagnostics).hash(h);
         std::ptr::from_ref(self.root_active).hash(h);
@@ -879,12 +954,14 @@ pub(super) fn with_provider<R>(
     let root_active = Cell::new(false);
     let generic_facts = ScopedCache::empty();
     let elaboration = ScopedCache::empty();
+    let candidate_classification = ScopedCache::empty();
     let provider = PreparedProvider::new(
         settings,
         configuration.fingerprint(),
         &facts,
         &generic_facts,
         &elaboration,
+        &candidate_classification,
         &diagnostics,
         &root_active,
     )?;
@@ -901,6 +978,12 @@ pub(super) fn with_provider<R>(
     Ok(run(view.context(), provider))
 }
 impl<'cx> PreparedProvider<'cx> {
+    /// Actual immutable source layout, available before const-Type generic
+    /// materialization enters its IR table. Missing layout is never zero args.
+    pub(super) fn source_argument_kinds(self, definition: DefinitionId) -> Option<&'cx [crate::traits::term::BoundKind]> {
+        if definition.world() != self.world { return None; }
+        self.settings.construction_generics?.argument_kinds(definition)
+    }
     pub(super) fn const_eval_inputs(
         self,
     ) -> &'cx super::infer::const_eval::PreparedConstEvalInputs<'cx> {
@@ -990,6 +1073,7 @@ impl<'cx> PreparedProvider<'cx> {
             BTreeMap<DefinitionId, Generics<'cx, PreparedProvider<'cx>>>,
         >,
         elaboration: &'cx ScopedCache<ImplElaborationInputs<'cx>>,
+        candidate_classification: &'cx ScopedCache<CandidateClassificationInputs<'cx>>,
         diagnostics: &'cx RefCell<Vec<(Span, String)>>,
         root_active: &'cx Cell<bool>,
     ) -> Result<Self, Diagnostic> {
@@ -998,6 +1082,7 @@ impl<'cx> PreparedProvider<'cx> {
             world,
             configuration,
             elaboration,
+            candidate_classification,
             settings,
             facts,
             generic_facts,
@@ -1073,6 +1158,9 @@ impl<'cx> PreparedProvider<'cx> {
         })
     }
     pub(super) fn publish(self, facts: PreparedFacts<'cx>) -> Result<(), Diagnostic> {
+        if self.facts.get().is_some() || self.root_active.get() {
+            return Err(fault("source facts require their unpublished preparation context"));
+        }
         if facts.context.services() != self {
             return Err(fault("typed facts belong to another provider"));
         }
@@ -1456,6 +1544,9 @@ impl<'cx> PreparedProvider<'cx> {
                 }
             }
         }
+        let index = CandidateIndex::prepare(facts.context, &facts)?;
+        facts.indexes.set(index)
+            .map_err(|_| fault("candidate index was already prepared"))?;
         self.facts
             .set(facts)
             .map_err(|_| fault("prepared source facts were already frozen"))
@@ -1494,71 +1585,7 @@ impl<'cx> PreparedProvider<'cx> {
             }
         }
         if self.data().indexes.get().is_none() {
-            let mut index = CandidateIndex {
-                traits: self
-                    .data()
-                    .traits
-                    .iter()
-                    .filter_map(|(id, row)| {
-                        row.implementations
-                            .known()
-                            .map(|_| (*id, ImplBucket::default()))
-                    })
-                    .collect(),
-            };
-            for (id, implementation) in &self.data().implementations {
-                let Some(Some(reference)) = implementation.trait_ref.known() else {
-                    continue;
-                };
-                let reference = reference.skip_binder();
-                let Some(bucket) = index.traits.get_mut(&reference.def_id) else {
-                    continue; // No coverage was published for this trait query.
-                };
-                match simplify_type(cx, reference.self_ty(), TreatParams::InstantiateWithInfer) {
-                    Some(key) => bucket.constructors.entry(key).or_default().push(*id),
-                    None => bucket.blankets.push(*id),
-                }
-            }
-            // Compare every derived entry against the complete source trait
-            // buckets once, before publication/solver entry, not on dispatch.
-            let mut observed: BTreeMap<DefinitionId, BTreeSet<DefinitionId>> = index
-                .traits
-                .keys()
-                .map(|id| (*id, BTreeSet::new()))
-                .collect();
-            for (trait_id, bucket) in &index.traits {
-                for id in bucket
-                    .constructors
-                    .values()
-                    .flatten()
-                    .chain(&bucket.blankets)
-                {
-                    if !observed
-                        .get_mut(trait_id)
-                        .expect("validated trait")
-                        .insert(*id)
-                    {
-                        return Err(fault("duplicate classified candidate"));
-                    }
-                }
-            }
-            for (trait_id, ids) in observed {
-                if !ids.iter().copied().eq(self
-                    .trait_data(trait_id)
-                    .implementations
-                    .copied("complete candidate bucket")
-                    .iter()
-                    .copied())
-                {
-                    return Err(fault(
-                        "pinned candidate index differs from the complete catalog",
-                    ));
-                }
-            }
-            self.data()
-                .indexes
-                .set(index)
-                .map_err(|_| fault("candidate index was concurrently replaced"))?;
+            return Err(fault("published candidate indexes are not prepared"));
         }
         Ok(PreparedIndexSnapshot {
             provider: self,
@@ -2180,7 +2207,14 @@ impl<'cx> SourceFacts<'cx> for PreparedProvider<'cx> {
             .reflection_generic
             .copied("reflection_generic")
     }
-    fn trait_is_auto(self, _: Cx<'cx>, id: DefinitionId) -> bool {
+    fn trait_is_auto(self, cx: Cx<'cx>, id: DefinitionId) -> bool {
+        if let Some(answer) = self.candidate_classification.with_if_entered(|inputs| {
+            assert_eq!(inputs.context, cx, "foreign candidate classification context");
+            *inputs.automatic.get(&id)
+                .expect("uncertified candidate classification automatic query")
+        }) {
+            return answer;
+        }
         self.trait_data(id).automatic.copied("automatic")
     }
     fn trait_is_marker(self, _: Cx<'cx>, id: DefinitionId) -> bool {

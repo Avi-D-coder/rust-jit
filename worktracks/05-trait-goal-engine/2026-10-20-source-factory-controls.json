@@ -1,0 +1,12 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Three exact actual-source component controls. The unchanged repr128 factory world in owning Rust 2015 exercises complete demanded PartialEq membership, same-context materialization/publication, retained guards, memo/cold behavior and direct source withdrawal. The existing four-edition unsafe function alias control uses unchanged fn-ptr-comparisons-some.rs plus an external appended trait witness; it requires actual unsafe C source qualifier encoding and a separate erased-header FunctionMetadata hold. Original main execution and lint/compiler outputs are unexecuted. No solver root, fake WellFormed goal, response consumption, runtime gain or full origin/edition matrix claim. Runtime replay remains held until the reached-call consumer is installed. The third observes three unchanged owning-2015 impl sources for distinct anonymous source sites, actual lifetime-first IR parameter order and associated method inheritance; the mixed type/const ordering original is a diagnostic delegation fixture, with diagnostic/delegation/runtime execution unexecuted.",
+  "controls": [
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_repr128_source_factory_publishes_actual_query_domains",
+    "cli::preentry_loader_tests::unchanged_unsafe_function_alias_requires_full_source_signature_before_shared_ir",
+    "cli::preentry_loader_tests::upstream_projection_types::unchanged_impl_anonymous_regions_retain_sites_order_and_associated_inheritance"
+  ],
+  "runtime_cases": [
+    "tests/ui/enum-discriminant/repr128.rs"
+  ]
+}

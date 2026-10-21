@@ -1,0 +1,241 @@
+{
+  "schema": "lrr/source-checkpoint-evidence/v1",
+  "recorded_at": "2026-10-21T00:51:39.835917+00:00",
+  "source_baseline": "edd7f85ccc8e158b20cfbc02100cd1f263b06c49",
+  "source_sha256": "8b66f6097e3a5e683c82b4415216d4ded212ca4e7d7dc873391bd2318f13be8b",
+  "input_count": 8748,
+  "scope": "V529 source successor for genuine anonymous impl regions, lifetime-first parameter transport, source argument guards, dormant catalog demand and inactive relation fulfillment. Library build failed; all dependent builds and all three controls unexecuted. No runtime acceptance.",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-20-root-factory-review.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-20-source-factory-controls.json",
+  "selection_sha256": "92de7d46312ada5f617a5bd041f7b6d59466de5e1a22b47743967339bd750789",
+  "commands": [
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v529",
+        "before"
+      ],
+      "session": 68517,
+      "exit": 0
+    },
+    {
+      "shell_command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json > artifacts/validation-current-v529/lib-build.jsonl 2> artifacts/validation-current-v529/lib-build.log",
+      "session": 55556,
+      "exit": 101,
+      "duration": "Cargo did not print a successful completion duration; elapsed build duration not retained"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v529",
+        "after-build"
+      ],
+      "exit": 0,
+      "scope": "source-only terminal closing guard, no binary arguments after failed build"
+    }
+  ],
+  "errors": [
+    {
+      "rendered": "error[E0004]: non-exhaustive patterns: `&VarianceQueryPending::Parameters(ParameterPending::ImplRegionBinders)` not covered\n   --> crates/lrr/src/traits/upstream/source_variance_queries.rs:417:52\n    |\n417 |         e.option(&self.pending, |e, pending| match pending {\n    |                                                    ^^^^^^^ pattern `&VarianceQueryPending::Parameters(ParameterPending::ImplRegionBinders)` not covered\n    |\nnote: `VarianceQueryPending` defined here\n   --> crates/lrr/src/traits/upstream/source_variance_queries.rs:40:17\n    |\n 40 | pub(crate) enum VarianceQueryPending {\n    |                 ^^^^^^^^^^^^^^^^^^^^\n 41 |     Header(DefinitionHeaderPending),\n 42 |     Parameters(ParameterPending),\n    |     ---------- not covered\n    = note: the matched value is of type `&VarianceQueryPending`\nhelp: ensure that all possible cases are being handled by adding a match arm with a wildcard pattern or an explicit pattern as shown\n    |\n451 ~             VarianceQueryPending::UnsupportedIdentity => e.u32(4),\n452 ~             &VarianceQueryPending::Parameters(ParameterPending::ImplRegionBinders) => todo!(),\n    |\n\n",
+      "$message_type": "diagnostic",
+      "children": [
+        {
+          "children": [],
+          "code": null,
+          "level": "note",
+          "message": "`VarianceQueryPending` defined here",
+          "rendered": null,
+          "spans": [
+            {
+              "byte_end": 1263,
+              "byte_start": 1243,
+              "column_end": 37,
+              "column_start": 17,
+              "expansion": null,
+              "file_name": "crates/lrr/src/traits/upstream/source_variance_queries.rs",
+              "is_primary": true,
+              "label": "",
+              "line_end": 40,
+              "line_start": 40,
+              "suggested_replacement": null,
+              "suggestion_applicability": null,
+              "text": [
+                {
+                  "highlight_end": 37,
+                  "highlight_start": 17,
+                  "text": "pub(crate) enum VarianceQueryPending {"
+                }
+              ]
+            },
+            {
+              "byte_end": 1317,
+              "byte_start": 1307,
+              "column_end": 15,
+              "column_start": 5,
+              "expansion": null,
+              "file_name": "crates/lrr/src/traits/upstream/source_variance_queries.rs",
+              "is_primary": false,
+              "label": "not covered",
+              "line_end": 42,
+              "line_start": 42,
+              "suggested_replacement": null,
+              "suggestion_applicability": null,
+              "text": [
+                {
+                  "highlight_end": 15,
+                  "highlight_start": 5,
+                  "text": "    Parameters(ParameterPending),"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "children": [],
+          "code": null,
+          "level": "note",
+          "message": "the matched value is of type `&VarianceQueryPending`",
+          "rendered": null,
+          "spans": []
+        },
+        {
+          "children": [],
+          "code": null,
+          "level": "help",
+          "message": "ensure that all possible cases are being handled by adding a match arm with a wildcard pattern or an explicit pattern as shown",
+          "rendered": null,
+          "spans": [
+            {
+              "byte_end": 18456,
+              "byte_start": 18456,
+              "column_end": 66,
+              "column_start": 66,
+              "expansion": null,
+              "file_name": "crates/lrr/src/traits/upstream/source_variance_queries.rs",
+              "is_primary": true,
+              "label": null,
+              "line_end": 451,
+              "line_start": 451,
+              "suggested_replacement": ",\n            &VarianceQueryPending::Parameters(ParameterPending::ImplRegionBinders) => todo!()",
+              "suggestion_applicability": "HasPlaceholders",
+              "text": [
+                {
+                  "highlight_end": 66,
+                  "highlight_start": 66,
+                  "text": "            VarianceQueryPending::UnsupportedIdentity => e.u32(4),"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "level": "error",
+      "message": "non-exhaustive patterns: `&VarianceQueryPending::Parameters(ParameterPending::ImplRegionBinders)` not covered",
+      "spans": [
+        {
+          "byte_end": 17058,
+          "byte_start": 17051,
+          "column_end": 59,
+          "column_start": 52,
+          "expansion": null,
+          "file_name": "crates/lrr/src/traits/upstream/source_variance_queries.rs",
+          "is_primary": true,
+          "label": "pattern `&VarianceQueryPending::Parameters(ParameterPending::ImplRegionBinders)` not covered",
+          "line_end": 417,
+          "line_start": 417,
+          "suggested_replacement": null,
+          "suggestion_applicability": null,
+          "text": [
+            {
+              "highlight_end": 59,
+              "highlight_start": 52,
+              "text": "        e.option(&self.pending, |e, pending| match pending {"
+            }
+          ]
+        }
+      ],
+      "code": {
+        "code": "E0004",
+        "explanation": "This error indicates that the compiler cannot guarantee a matching pattern for\none or more possible inputs to a match expression. Guaranteed matches are\nrequired in order to assign values to match expressions, or alternatively,\ndetermine the flow of execution.\n\nErroneous code example:\n\n```compile_fail,E0004\nenum Terminator {\n    HastaLaVistaBaby,\n    TalkToMyHand,\n}\n\nlet x = Terminator::HastaLaVistaBaby;\n\nmatch x { // error: non-exhaustive patterns: `HastaLaVistaBaby` not covered\n    Terminator::TalkToMyHand => {}\n}\n```\n\nIf you encounter this error you must alter your patterns so that every possible\nvalue of the input type is matched. For types with a small number of variants\n(like enums) you should probably cover all cases explicitly. Alternatively, the\nunderscore `_` wildcard pattern can be added after all other patterns to match\n\"anything else\". Example:\n\n```\nenum Terminator {\n    HastaLaVistaBaby,\n    TalkToMyHand,\n}\n\nlet x = Terminator::HastaLaVistaBaby;\n\nmatch x {\n    Terminator::TalkToMyHand => {}\n    Terminator::HastaLaVistaBaby => {}\n}\n\n// or:\n\nmatch x {\n    Terminator::TalkToMyHand => {}\n    _ => {}\n}\n```\n"
+      }
+    }
+  ],
+  "actual_failure": {
+    "code": "E0004",
+    "file": "crates/lrr/src/traits/upstream/source_variance_queries.rs",
+    "line": 417,
+    "message": "non-exhaustive stable encoding match missing VarianceQueryPending::Parameters(ParameterPending::ImplRegionBinders)",
+    "count": 1
+  },
+  "fresh_binaries": false,
+  "binaries": {
+    "test": "not successfully rebuilt; no fresh executable receipt or hash",
+    "cli": "unbuilt for V529",
+    "digester": "unbuilt for V529"
+  },
+  "unexecuted": [
+    "CLI build",
+    "source digest helper build",
+    "binary after-build receipt",
+    "actual test listing verification",
+    "all three selected controls",
+    "unchanged repr128 runtime",
+    "original fixture mains/diagnostics",
+    "source root/query closure",
+    "response/activation/VM commit"
+  ],
+  "guards": {
+    "source_only_after_build_exit": 0,
+    "source_matches": true,
+    "head_matches": true,
+    "changed_sources": [],
+    "binary_guard": "not applicable: library failed before fresh V529 binary receipt; no stale binaries substituted"
+  },
+  "raw_outputs": {
+    "directory": "artifacts/validation-current-v529",
+    "retention": "compact raw logs retained; no generated fixture projects were executed",
+    "files": {
+      "after-build.json": {
+        "sha256": "06c9d0fe9a4405c7d5ba72c86a90d8e9b223ce62f9719a02511e07cfab5ee320",
+        "bytes": 1283661
+      },
+      "before.json": {
+        "sha256": "679045d15f585723a6e3c076b226c5ca5e7d0ad939757094485cce832978b965",
+        "bytes": 1283572
+      },
+      "lib-build.jsonl": {
+        "sha256": "35a767f14a79b5e3f1969f6be476a659f184f9b2ebe7e43348e7708af6eef33e",
+        "bytes": 358141
+      },
+      "lib-build.log": {
+        "sha256": "31634d1c26530916a751ff933007c214dda5e22721ddd010fec0bb52a63d6db3",
+        "bytes": 149
+      },
+      "temp-before.json": {
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "bytes": 3
+      }
+    }
+  },
+  "cleanup": {
+    "generated_fixtures": "none created by V529; controls unexecuted",
+    "private_targets_or_source_snapshots_created": false,
+    "action": "no run-owned private fixture projects to remove"
+  },
+  "terminal_status": "all launched commands terminal; source-only closing guard passed; source/HEAD/Cargo/shared-target ownership released after capsule",
+  "acceptance": {
+    "component_controls_passed": 0,
+    "component_controls_failed": 0,
+    "component_controls_unexecuted": 3,
+    "runtime_contract_passes": 0,
+    "new_distinct_runtime_gains": 0,
+    "full_fixture": "unexecuted",
+    "root_activation": "held",
+    "guest_jit_allowed": false,
+    "linux": "unexecuted",
+    "performance": "unassessed"
+  },
+  "reproduction": "Repair exhaustive stable pending encoding without lowering assertions or discarding typed pending. Take a fresh frozen source_manifest fingerprint and run maintained sequential three-build/three-exact-control workflow; no runtime replay until actual consumer exists."
+}

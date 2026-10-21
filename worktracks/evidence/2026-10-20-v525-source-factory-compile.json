@@ -1,0 +1,140 @@
+{
+  "schema": "lrr/source-checkpoint-evidence/v1",
+  "recorded_at": "2026-10-21T00:01:56.646290+00:00",
+  "source_baseline": "edd7f85ccc8e158b20cfbc02100cd1f263b06c49",
+  "source_sha256": "7e6b6ff7c63c2dfcb0b9aecf47ae2c369e476158fb476f4115cf4477a6d4ea19",
+  "input_count": 8743,
+  "scope": "V525 retries exact unchanged V524 source after host license resolution. Actual LRR library-test compilation fails on three mechanical errors; no fresh library-test/CLI/digester binaries or component/root/runtime acceptance established.",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-20-root-factory-review.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-20-source-factory-controls.json",
+  "commands": [
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v525",
+        "before"
+      ],
+      "exit": 0
+    },
+    {
+      "shell_command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json > artifacts/validation-current-v525/lib-build.jsonl 2> artifacts/validation-current-v525/lib-build.log",
+      "session": 39307,
+      "exit": 101
+    },
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v525",
+        "after-build"
+      ],
+      "exit": 0
+    }
+  ],
+  "compiler_errors": [
+    {
+      "code": "E0599",
+      "message": "no associated function or constant named `SYM_ANON` found for struct `model::Symbol<'cx>` in the current scope",
+      "primary_spans": [
+        {
+          "file": "crates/lrr/src/traits/upstream/source_factory.rs",
+          "line": 105,
+          "column": 59,
+          "label": "associated function or constant not found in `model::Symbol<'_>`"
+        }
+      ],
+      "rendered": "error[E0599]: no associated function or constant named `SYM_ANON` found for struct `model::Symbol<'cx>` in the current scope\n   --> crates/lrr/src/traits/upstream/source_factory.rs:105:59\n    |\n105 |             (None, DefinitionHeaderRole::Impl) => Symbol::SYM_ANON,\n    |                                                           ^^^^^^^^ associated function or constant not found in `model::Symbol<'_>`\n    |\n   ::: crates/lrr/src/traits/upstream/model.rs:100:1\n    |\n100 | pub(crate) struct Symbol<'cx>(pub(crate) &'cx str);\n    | ----------------------------- associated function or constant `SYM_ANON` not found for this struct\n    |\n    = help: items from traits can only be used if the trait is in scope\nhelp: trait `Symbol` which provides `SYM_ANON` is implemented but not in scope; perhaps you want to import it\n    |\n  3 + use rustc_type_ir::inherent::Symbol;\n    |\n\n"
+    },
+    {
+      "code": "E0271",
+      "message": "expected `Iter<'_, DefinitionId>` to be an iterator that yields `&&_`, but it yields `&DefinitionId`",
+      "primary_spans": [
+        {
+          "file": "crates/lrr/src/traits/upstream/prepared.rs",
+          "line": 786,
+          "column": 63,
+          "label": "expected `&&_`, found `&DefinitionId`"
+        }
+      ],
+      "rendered": "error[E0271]: expected `Iter<'_, DefinitionId>` to be an iterator that yields `&&_`, but it yields `&DefinitionId`\n    --> crates/lrr/src/traits/upstream/prepared.rs:786:63\n     |\n 786 |                 .checked(\"complete candidate bucket\")?.iter().copied()) {\n     |                                                               ^^^^^^ expected `&&_`, found `&DefinitionId`\n     |\n     = note: expected reference `&&_`\n                found reference `&DefinitionId`\n     = note: required for `Copied<std::slice::Iter<'_, DefinitionId>>` to implement `std::iter::Iterator`\nnote: required by a bound in `copied`\n    --> /Users/avi/.rustup/toolchains/1.99.0-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/iter/traits/iterator.rs:3510:32\n     |\n3507 |     fn copied<'a, T>(self) -> Copied<Self>\n     |        ------ required by a bound in this associated function\n...\n3510 |         Self: Sized + Iterator<Item = &'a T>,\n     |                                ^^^^^^^^^^^^ required by this bound in `Iterator::copied`\n\n"
+    },
+    {
+      "code": "E0271",
+      "message": "expected `Iter<'_, DefinitionId>` to be an iterator that yields `&&DefinitionId`, but it yields `&DefinitionId`",
+      "primary_spans": [
+        {
+          "file": "crates/lrr/src/traits/upstream/prepared.rs",
+          "line": 785,
+          "column": 17,
+          "label": "expected `&&DefinitionId`, found `&DefinitionId`"
+        }
+      ],
+      "rendered": "error[E0271]: expected `Iter<'_, DefinitionId>` to be an iterator that yields `&&DefinitionId`, but it yields `&DefinitionId`\n   --> crates/lrr/src/traits/upstream/prepared.rs:785:17\n    |\n785 |               if !observed.iter().copied().eq(facts.traits[trait_id].implementations\n    |  _________________^\n786 | |                 .checked(\"complete candidate bucket\")?.iter().copied()) {\n    | |_______________________________________________________________________^ expected `&&DefinitionId`, found `&DefinitionId`\n    |\n    = note: expected reference `&&DefinitionId`\n               found reference `&DefinitionId`\n    = note: required for `Copied<std::slice::Iter<'_, DefinitionId>>` to implement `std::iter::Iterator`\n    = note: 1 redundant requirement hidden\n    = note: required for `Copied<Copied<std::slice::Iter<'_, DefinitionId>>>` to implement `std::iter::Iterator`\n\n"
+    }
+  ],
+  "diagnostic_count": 3,
+  "host_prerequisite": "The earlier Xcode license linker failure did not recur; this attempt reached actual lrr lib-test compilation.",
+  "dependent_stages": {
+    "cli_build": "unexecuted",
+    "digester_build": "unexecuted",
+    "exact_selector_listing": "unexecuted",
+    "component_control": "unexecuted",
+    "runtime": "unexecuted; actual reached-root consumer remains inactive"
+  },
+  "fresh_binaries": false,
+  "current_binary_paths": {
+    "cli": {
+      "exists": false,
+      "sha256": null
+    },
+    "digester": {
+      "exists": false,
+      "sha256": null
+    }
+  },
+  "closing_guard": {
+    "exit": 0,
+    "head": "edd7f85ccc8e158b20cfbc02100cd1f263b06c49",
+    "source_sha256": "7e6b6ff7c63c2dfcb0b9aecf47ae2c369e476158fb476f4115cf4477a6d4ea19",
+    "file_count": 8743,
+    "source_matches_before": true,
+    "head_matches_before": true,
+    "changed_sources": [],
+    "binaries": {}
+  },
+  "raw_outputs": {
+    "directory": "artifacts/validation-current-v525",
+    "retention": "retained at capsule creation; no cleanup performed by validator",
+    "files": {
+      "lib-build.jsonl": {
+        "sha256": "8cd6402431e5c7751bf85617f6f51e609c14ae23eec86e435ac41d990bcbeb9d",
+        "bytes": 366099
+      },
+      "lib-build.log": {
+        "sha256": "da5e0e7623721106dc65c871eccb923d00301c9c165945696bd237c933632edf",
+        "bytes": 8101
+      },
+      "before.json": {
+        "sha256": "19895a1da2db1d4b2eb4650bdaef239094b30a4a163aa2e2be2d19532d6e77f2",
+        "bytes": 1282801
+      },
+      "after-build.json": {
+        "sha256": "976788fbb2f357b51ae5dab0b88b4ce5079ff1ff5c96760241d13c2aa1335d41",
+        "bytes": 1282890
+      }
+    }
+  },
+  "terminal_status": "library and all guard invocations terminal; no dependent process launched",
+  "acceptance": {
+    "component_controls_executed": 0,
+    "runtime_contract_passes": 0,
+    "root_activation": "held",
+    "full_fixture": "unexecuted",
+    "interpreter": "incomplete",
+    "guest_jit_allowed": false,
+    "linux": "unexecuted",
+    "performance": "unassessed"
+  },
+  "reproduction": "Repair only after source/target ownership returns; freeze a fresh fingerprint and use a new validation directory with the maintained direct Rust1.99 offline/locked commands. Preserve this failed attempt at its original source fingerprint."
+}

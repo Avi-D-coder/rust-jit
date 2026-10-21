@@ -125,6 +125,20 @@ pub(super) fn encode_root_predicate<'owner, 'cx>(
     encode_predicate_using(&encoder, predicate)
 }
 
+/// Argument/result equations use the same source Type walker as predicates.
+/// Numeric family and identity come from the original owning inference table;
+/// this transport supplies neither coercion adjustments nor a solved goal.
+pub(super) fn encode_root_type<'owner, 'cx>(
+    owner: &'owner super::infer::delegate::SolverContext<'cx>,
+    variables: &'owner super::root_variables::RootVariables<'owner, 'cx>,
+    configuration: &'owner PreparedSolverConfiguration,
+    bindings: super::source_bindings::SourceTypeBindings<'owner>,
+    term: &TyTerm,
+) -> Result<Ty<'cx, prepared::PreparedProvider<'cx>>, SourceTypePending> {
+    variables.require_owner(owner)?;
+    Encoder { bindings, cx: variables.context(), configuration, inference: Some(variables) }.ty(term, &[])
+}
+
 fn encode_predicate_using<'cx>(encoder: &Encoder<'_, 'cx>, predicate: &crate::traits::predicate::PredicateResult)
     -> Result<model::Clause<'cx, prepared::PreparedProvider<'cx>>, SourceTypePending> {
     use crate::traits::predicate::PredicateResult;
@@ -158,7 +172,21 @@ impl<'cx> Encoder<'_, 'cx> {
         let definition = *self.bindings.definitions.get(&reference.trait_key).ok_or(SourceTypePending::SourceDefinition)?;
         let mut args = vec![Arg::Type(self_ty)];
         for argument in &reference.args { args.push(self.arg(argument, &[])?); }
+        self.require_arguments(definition, &args)?;
         Ok(EncodedTraitArguments { definition, args: self.cx.list(args) })
+    }
+
+    fn require_arguments(&self, definition: DefinitionId, arguments: &[Arg<'cx, prepared::PreparedProvider<'cx>>])
+        -> Result<(), SourceTypePending> {
+        let actual = self.cx.services().source_argument_kinds(definition)
+            .ok_or(SourceTypePending::ParameterLayout)?;
+        if actual.len() != arguments.len() || !actual.iter().zip(arguments).all(|(parameter, argument)|
+            matches!((parameter, argument), (BoundKind::Type, Arg::Type(_))
+                | (BoundKind::Region, Arg::Region(_))
+                | (BoundKind::Const, Arg::Const(_)))) {
+            return Err(SourceTypePending::ParameterLayout);
+        }
+        Ok(())
     }
 
     fn parameter(&self, key: term::ParamKey, kind: BoundKind) -> Result<SourceParameter, SourceTypePending> {
@@ -220,6 +248,7 @@ impl<'cx> Encoder<'_, 'cx> {
             TyTerm::Nominal(definition, args) => {
                 let id = *self.bindings.definitions.get(definition).ok_or(SourceTypePending::SourceDefinition)?;
                 let args = args.iter().map(|arg| self.arg(arg, binders)).collect::<Result<Vec<_>, _>>()?;
+                self.require_arguments(id, &args)?;
                 TyKind::Adt(AdtDefinition { context: self.cx, definition: id }, self.cx.list(args))
             }
             TyTerm::Tuple(fields) => TyKind::Tuple(self.cx.list(fields.iter().map(|ty| self.ty(ty, binders)).collect::<Result<Vec<_>, _>>()?)),
@@ -228,11 +257,33 @@ impl<'cx> Encoder<'_, 'cx> {
             TyTerm::Array(ty, value) => TyKind::Array(self.ty(ty, binders)?, self.constant(value, Some(self.cx.ty(TyKind::Uint(UintTy::Usize))), binders)?),
             TyTerm::Bound { depth, index } => { self.bound(*depth, *index, BoundKind::Type, binders)?;
                 TyKind::Bound(BoundVarIndexKind::Bound(DebruijnIndex::from_u32(*depth)), BoundTy { var: BoundVar::from_u32(*index), kind: BoundTyKind::Anon }) },
-            // Owned runtime fn terms erase safety/ABI (E-R5-008); aliases can
-            // hide those qualifiers from the impl's syntax. Source facts must
-            // provide the actual function signature before a shared fn Type
-            // can be built. Never guess safe Rust ABI from this erased term.
-            TyTerm::Function(_) => return Err(SourceTypePending::FunctionMetadata),
+            TyTerm::Function(signature) => {
+                // Legacy runtime terms erase qualifiers (E-R5-008). Only an
+                // actual source header and its retained binder justify FnPtr.
+                let header = signature.value.source_header.as_ref()
+                    .ok_or(SourceTypePending::FunctionMetadata)?;
+                let abi = header.abi.parse::<rustc_abi::ExternAbi>()
+                    .map_err(|_| SourceTypePending::FunctionMetadata)?;
+                let mut nested_binders = binders.to_vec();
+                nested_binders.push(&signature.variables);
+                let mut inputs_and_output = signature.value.parameters.iter()
+                    .map(|parameter| self.ty(parameter, &nested_binders))
+                    .collect::<Result<Vec<_>, _>>()?;
+                inputs_and_output.push(self.ty(&signature.value.result, &nested_binders)?);
+                let bound_vars = self.cx.mk_bound_variable_kinds_from_iter(
+                    signature.variables.iter().map(|kind| match kind {
+                        BoundKind::Type => BoundVariableKind::Ty(BoundTyKind::Anon),
+                        BoundKind::Region => BoundVariableKind::Region(BoundRegionKind::Anon),
+                        BoundKind::Const => BoundVariableKind::Const,
+                    }));
+                let signature_types = ty::Binder::bind_with_vars(
+                    ty::FnSigTys { inputs_and_output: self.cx.list(inputs_and_output) }, bound_vars);
+                let fn_sig_kind = ty::FnSigKind::new(abi,
+                    if header.is_unsafe { model::Safety::Unsafe } else { model::Safety::Safe },
+                    header.c_variadic, None, signature.value.parameters.len())
+                    .map_err(|_| SourceTypePending::FunctionMetadata)?;
+                TyKind::FnPtr(signature_types, ty::FnHeader { fn_sig_kind })
+            }
             TyTerm::Infer(key) => return self.inference
                 .ok_or(SourceTypePending::Inference)?.variable(*key),
             TyTerm::Placeholder(_) => return Err(SourceTypePending::Placeholder),
@@ -464,14 +515,175 @@ pub(crate) fn check_erased_function_pending(db: &mut Database, key: &crate::db::
     let QueryValue::PreparedScopeImplHeaders(headers) = headers.as_ref() else { return Err(fault("actual alias headers differ")); };
     let raw = headers.inventory_root().headers().iter().find(|raw| raw.scope.crate_key == local_unit)
         .ok_or_else(|| fault("actual alias local impl absent"))?;
-    let plan = match db.fetch(&SyntaxProvider, QueryKey::ImplSourceTypes(Box::new(ImplHeaderSyntaxKey {
+    let retained = match db.fetch(&SyntaxProvider, QueryKey::ImplSourceTypes(Box::new(ImplHeaderSyntaxKey {
         inventory: key.clone(), implementation: raw.identity,
     }))) { QueryPoll::Ready(Ok(value)) => value.value, _ => return Err(fault("actual alias source plan not ready")) };
-    let QueryValue::ImplSourceTypes(plan) = plan.as_ref() else { return Err(fault("actual alias source plan differs")); };
-    assert!(matches!(plan.head().result(), ImplHeadTypeResult::Resolved { self_type: TyTerm::Function(_), .. }),
-        "the ordinary alias path really reaches the erased runtime fn family");
-    config.with_context(db, input, |cx, _| {
-        assert!(matches!(plan.encode(cx, config), Err(SourceTypePending::FunctionMetadata)),
-            "an erased unsafe extern alias must never become a safe Rust shared Type");
+    let QueryValue::ImplSourceTypes(plan) = retained.as_ref() else { return Err(fault("actual alias source plan differs")); };
+    let ImplHeadTypeResult::Resolved { self_type: TyTerm::Function(signature), .. } = plan.head().result() else {
+        panic!("the ordinary alias path must reach the function-pointer family");
+    };
+    let source_header = signature.value.source_header.as_ref()
+        .expect("the unchanged unsafe extern alias must retain its actual source header");
+    assert!(source_header.is_unsafe);
+    assert_eq!(source_header.abi, "C");
+    assert!(!source_header.c_variadic);
+    let layouts = super::source_generics::SourceGenericLayouts::from_plans(Arc::clone(&input), &[Arc::clone(&retained)])?;
+    config.with_source_context(db, input, Some(&layouts), |cx, _| {
+        match plan.encode(cx, config) {
+            Ok(encoded) => {
+                let TyKind::FnPtr(_, header) = encoded.self_ty.kind() else {
+                    panic!("the actual source alias must preserve the FnPtr family");
+                };
+                assert_eq!(header.safety(), model::Safety::Unsafe);
+                assert_eq!(header.abi(), rustc_abi::ExternAbi::C { unwind: false });
+                assert!(!header.c_variadic());
+            }
+            Err(pending) => panic!("the actual source alias failed shared encoding: {pending:?}"),
+        }
+        let mut erased = signature.clone();
+        erased.value.source_header = None;
+        let encoder = Encoder { bindings: plan.bindings.type_bindings(), cx, configuration: config, inference: None };
+        assert!(matches!(encoder.ty(&TyTerm::Function(erased), &[]), Err(SourceTypePending::FunctionMetadata)),
+            "removing actual source metadata must retain the erased runtime hold");
     })
+}
+
+/// Source component control over an independently selected unchanged impl.
+/// It observes genuine declaration/IR values; it neither publishes ready facts
+/// nor evaluates a goal, and introduces no alternate source-region producer.
+#[cfg(test)]
+pub(crate) fn check_anonymous_impl_regions(
+    db: &mut Database, key: &crate::db::seals::SealKey, local_unit: Digest,
+    module: &[&str], expected_written: &[(&str, BoundKind)],
+    expected_anonymous: usize, expected_upstream_source_ordinals: &[u32],
+    inherited_method: Option<Digest>,
+) -> Result<usize, Diagnostic> {
+    use super::parameters::{DeclarationParameters, DeclaredParameterPreparation};
+    use super::source_generics::SourceGenericLayouts;
+    use crate::syntax::signatures::GenericKind;
+    use ra_ap_syntax::{AstNode, ast};
+    use std::collections::BTreeSet;
+    macro_rules! fetched {
+        ($query:expr) => { match db.fetch(&SyntaxProvider, $query) {
+            QueryPoll::Ready(Ok(value)) => value.value,
+            QueryPoll::Ready(Err(error)) => return Err(error),
+            QueryPoll::NeedInput(_) => return Err(fault("anonymous impl control needs source input")),
+        } };
+    }
+    let input = db.input(&InputKey::DiscoverySeal(key.clone()))
+        .ok_or_else(|| fault("anonymous impl control catalog absent"))?;
+    let InputValue::DiscoverySeal(catalog) = input.as_ref() else { return Err(fault("anonymous impl control catalog differs")); };
+    let root = catalog.impl_catalog.as_ref().ok_or_else(|| fault("anonymous impl control requires actual completion"))?.root();
+    let configuration = fetched!(QueryKey::SolverConfiguration(Box::new(
+        super::configuration::SolverConfigurationKey::from_source(root))));
+    let QueryValue::SolverConfiguration(configuration) = configuration.as_ref() else { return Err(fault("anonymous impl configuration differs")); };
+    let headers = fetched!(QueryKey::PreparedScopeImplHeaders(key.clone()));
+    let QueryValue::PreparedScopeImplHeaders(headers) = headers.as_ref() else { return Err(fault("anonymous impl inventory differs")); };
+    let raw = headers.inventory_root().headers().iter().filter(|raw|
+        raw.scope.crate_key == local_unit && raw.scope.module_path.iter().map(String::as_str).eq(module.iter().copied()))
+        .collect::<Vec<_>>();
+    assert_eq!(raw.len(), 1, "exact original module has one actual impl header");
+    let query = QueryKey::ImplSourceTypes(Box::new(ImplHeaderSyntaxKey { inventory: key.clone(), implementation: raw[0].identity }));
+    let retained = fetched!(query.clone());
+    let again = fetched!(query.clone());
+    assert!(Arc::ptr_eq(&retained, &again), "anonymous impl plan shares the actual source memo");
+    let QueryValue::ImplSourceTypes(plan) = retained.as_ref() else { return Err(fault("anonymous impl source query differs")); };
+    assert_eq!(plan.pending(), None, "actual source head {:?}: {:?}", plan.head().syntax().path(), plan.head().result());
+    let syntax = plan.head().syntax();
+    let definition = syntax.canonical_owner().expect("actual anonymous impl canonical owner").identity();
+    let id = plan.bindings.definitions[&definition];
+    let QueryValue::DeclarationGenericTypes(generic_types) = plan.bindings.generics[&id].as_ref() else { unreachable!("retained declaration generics") };
+    let declaration = generic_types.declaration();
+    let written = declaration.parameters().iter().filter(|p| p.anonymous_region.is_none())
+        .map(|p| (p.name.as_str(), match p.kind { GenericKind::Lifetime => BoundKind::Region,
+            GenericKind::Type => BoundKind::Type, GenericKind::Const => BoundKind::Const })).collect::<Vec<_>>();
+    assert_eq!(written, expected_written, "original written generic order is retained");
+    let anonymous = declaration.parameters().iter().filter(|p| p.anonymous_region.is_some()).collect::<Vec<_>>();
+    assert_eq!(anonymous.len(), expected_anonymous);
+    let mut sites = BTreeSet::new();
+    for parameter in &anonymous {
+        let site = parameter.anonymous_region.unwrap();
+        assert!(sites.insert((site.start, site.end)), "repeated anonymous occurrences have distinct actual sites");
+        let node = syntax.parsed().syntax_at(site, |node|
+            ast::RefType::can_cast(node.kind()) || ast::LifetimeArg::can_cast(node.kind()))?
+            .expect("anonymous parameter retains its actual impl-head syntax site");
+        if let Some(reference) = ast::RefType::cast(node.clone()) {
+            assert!(reference.lifetime().is_none_or(|lt| lt.syntax().text().to_string() == "'_"));
+        } else {
+            let argument = ast::LifetimeArg::cast(node).unwrap();
+            assert_eq!(argument.lifetime().unwrap().syntax().text().to_string(), "'_");
+        }
+    }
+    let DeclaredParameterPreparation::Ready(parameters) = DeclarationParameters::prepare(declaration)? else {
+        return Err(fault("anonymous impl declaration mapping pending"));
+    };
+    let actual_ordinals = (0..parameters.count()).map(|index|
+        parameters.from_upstream(index).map(|p| p.source().ordinal)).collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(actual_ordinals, expected_upstream_source_ordinals, "real upstream lifetime-first slots preserve source ordinals");
+    assert_eq!(syntax.generics(), declaration.parameters(), "header and ordinary declaration share the actual parameter capture");
+    if let Some(method) = inherited_method {
+        let member = fetched!(QueryKey::DeclarationGenerics(method));
+        let QueryValue::DeclarationGenerics(member) = member.as_ref() else { return Err(fault("anonymous parent method query differs")); };
+        let layout = member.layout().expect("actual associated method layout");
+        assert_eq!(layout.own, 0);
+        assert_eq!(layout.inherited as usize, declaration.parameters().len());
+        assert!(!layout.implicit_self);
+        for (parent, child) in declaration.parameters().iter().zip(member.parameters()) {
+            assert_eq!(parent.kind, child.kind); assert_eq!(parent.anonymous_region, child.anonymous_region);
+        }
+        let DeclaredParameterPreparation::Ready(member_parameters) = DeclarationParameters::prepare(member)? else {
+            return Err(fault("actual anonymous parent method mapping pending"));
+        };
+        assert_eq!(member_parameters.parent_count(), parameters.count());
+        for index in 0..parameters.count() {
+            let parent = parameters.from_upstream(index)?;
+            let child = member_parameters.from_upstream(index)?;
+            assert_eq!(child.source().definition, method);
+            assert_eq!(child.source().ordinal, parent.source().ordinal);
+            assert_eq!(child.kind(), parent.kind());
+        }
+    }
+    let layouts = SourceGenericLayouts::from_plans(Arc::clone(&input), &[Arc::clone(&retained)])?;
+    let expected = anonymous.iter().map(|p| {
+        let key = term::ParamKey { definition, ordinal: p.ordinal };
+        (key, layouts.parameter(key, BoundKind::Region).expect("actual anonymous region parameter"))
+    }).collect::<BTreeMap<_, _>>();
+    struct Occurrences<'a> { expected: &'a BTreeMap<term::ParamKey, SourceParameter>, seen: BTreeSet<term::ParamKey> }
+    impl<'cx> TypeVisitor<Cx<'cx>> for Occurrences<'_> {
+        type Result = ();
+        fn visit_region(&mut self, region: ty::Region<Cx<'cx>>) {
+            if let RegionKind::ReEarlyParam(region) = region.kind()
+                && let Some(expected) = self.expected.get(&region.parameter.source()) {
+                assert_eq!(&region.parameter, expected);
+                assert!(region.name.is_none(), "anonymous source sites do not acquire invented compiler names");
+                self.seen.insert(region.parameter.source());
+            }
+        }
+    }
+    let before = db.trace.events.len();
+    configuration.with_source_context(db, Arc::clone(&input), Some(&layouts), |cx, _| -> Result<(), Diagnostic> {
+        let generics = cx.generics_of(id);
+        assert_eq!(generics.count(), parameters.count() as usize);
+        let identity = model::Args::identity_for_item(cx, id);
+        for index in 0..parameters.count() {
+            let parameter = parameters.from_upstream(index)?;
+            assert_eq!(cx.services().source_parameter(parameter.source(), parameter.kind()), Some(parameter));
+            assert_eq!(parameter.index(), index);
+            if let Some(expected) = expected.get(&parameter.source()) {
+                assert!(matches!(identity.items()[index as usize], Arg::Region(region)
+                    if matches!(region.kind(), RegionKind::ReEarlyParam(region) if region.parameter == *expected && region.name.is_none())));
+            }
+        }
+        let encoded = plan.encode(cx, configuration).map_err(|pending| fault(&format!("actual anonymous head encoding pending: {pending:?}")))?;
+        let mut occurrences = Occurrences { expected: &expected, seen: BTreeSet::new() };
+        encoded.self_ty.visit_with(&mut occurrences);
+        if let Some(reference) = encoded.trait_arguments { reference.args.visit_with(&mut occurrences); }
+        assert_eq!(occurrences.seen, expected.keys().copied().collect(), "all actual source sites survive in genuine ReEarlyParam values");
+        Ok(())
+    })??;
+    assert_eq!(db.trace.events.len(), before, "anonymous head IR encoding makes no source query");
+    let again = fetched!(query);
+    assert!(Arc::ptr_eq(&retained, &again));
+    eprintln!("actual anonymous impl source path={} canonical={definition:?} module={module:?}: {expected_anonymous} distinct sites {sites:?}, written={written:?}, upstream source ordinals={actual_ordinals:?}, inherited_method={inherited_method:?}; genuine early regions/identity args, memo/cold; no ready/root/runtime", syntax.path().as_str());
+    Ok(expected_anonymous)
 }

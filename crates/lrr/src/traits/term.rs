@@ -65,15 +65,33 @@ impl<T: StableEncode> StableEncode for Binder<T> {
     }
 }
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
+pub struct SourceFunctionHeader {
+    pub abi: String,
+    pub is_unsafe: bool,
+    pub c_variadic: bool,
+}
+impl StableEncode for SourceFunctionHeader {
+    const DOMAIN: &'static str = "lrr/v1/source-function-header";
+    fn encode_fields(&self, e: &mut StableEncoder) {
+        e.string(&self.abi);
+        e.bool(self.is_unsafe);
+        e.bool(self.c_variadic);
+    }
+}
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub struct FunctionSignature {
     pub parameters: Vec<TyTerm>,
     pub result: Box<TyTerm>,
+    /// Actual source qualifiers; legacy runtime terms have no such evidence.
+    #[serde(default)]
+    pub source_header: Option<SourceFunctionHeader>,
 }
 impl StableEncode for FunctionSignature {
-    const DOMAIN: &'static str = "lrr/v2/symbolic-safe-rust-function-signature";
+    const DOMAIN: &'static str = "lrr/v3/symbolic-function-signature";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.sequence(&self.parameters, |e, term| e.record(term));
         e.record(self.result.as_ref());
+        e.option(&self.source_header, |e, header| e.record(header));
     }
 }
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]

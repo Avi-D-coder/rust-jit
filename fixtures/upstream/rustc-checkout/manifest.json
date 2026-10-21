@@ -3438,6 +3438,12 @@
       "bytes": 1025
     },
     {
+      "path": "tests/ui/async-await/async-assoc-fn-anon-lifetimes.rs",
+      "git_blob": "1a2aae8fb23a59c5aa4d08d12c1e4e7bff9ded3c",
+      "sha256": "b94e8dbd5bfbfb6b7f465dd91caf461fd6893c3d255cfaf6236a25c7a9564836",
+      "bytes": 622
+    },
+    {
       "path": "tests/ui/async-await/context-is-sorta-unwindsafe.rs",
       "git_blob": "278476ea2379ce91840b199498414b2efea7ae8f",
       "sha256": "d7b13b8dc4f5c5391a8cbedc1c046d8b1a7f95c448dcefc5a19d544d268a1695",
@@ -8172,6 +8178,18 @@
       "bytes": 1720
     },
     {
+      "path": "tests/ui/delegation/generics/infer-defaults.rs",
+      "git_blob": "c801eab6af083dddcf66ddd59da6bd44c2ffba19",
+      "sha256": "c787e7f477fc1ab7d281cedcd70b2f611a5c08e6434db7bb3ff11b50c5df3519",
+      "bytes": 4486
+    },
+    {
+      "path": "tests/ui/delegation/generics/infer-defaults.stderr",
+      "git_blob": "4d9695fc823e7485234e7889ea79a378c6808c5f",
+      "sha256": "9386ca5398838580a40a7d77f6bf1aa27b0f07589d07d0743010bacdd84f77b5",
+      "bytes": 3062
+    },
+    {
       "path": "tests/ui/delegation/generics/inherent-impl-to-trait-method-pass.rs",
       "git_blob": "8cf0ddbd286d29dbd557cc5ddec2f3bd01f5e8c3",
       "sha256": "4f61c72fe444c0aa3c0daa7b338a02c6386045c992fabcf97ac035ec07300da3",
@@ -10972,6 +10990,12 @@
       "git_blob": "fb5f9b0aeee55de8dc1d7b562005d1128b74c9ef",
       "sha256": "7b66390cde6b3efd323b4290d1ec18b09236eb0deea7d65fe1f7ee82617aeadb",
       "bytes": 203
+    },
+    {
+      "path": "tests/ui/impl-header-lifetime-elision/inherent-impl.rs",
+      "git_blob": "da071cfcefbdcd9f028866b72984d93d8ab15824",
+      "sha256": "45d5c311788ff37845319700fe16e3e0d3ece3c351534c062b7221ef17b4dac7",
+      "bytes": 123
     },
     {
       "path": "tests/ui/impl-header-lifetime-elision/path-underscore.rs",
@@ -22454,6 +22478,15 @@
       "native_acceptance": "unexecuted"
     },
     {
+      "path": "tests/ui/async-await/async-assoc-fn-anon-lifetimes.rs",
+      "directives": [
+        "//@ check-pass",
+        "//@ edition:2018"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
       "path": "tests/ui/async-await/context-is-sorta-unwindsafe.rs",
       "directives": [
         "//@ run-pass"
@@ -28211,6 +28244,12 @@
       "native_acceptance": "unexecuted"
     },
     {
+      "path": "tests/ui/delegation/generics/infer-defaults.rs",
+      "directives": [],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
       "path": "tests/ui/delegation/generics/inherent-impl-to-trait-method-pass.rs",
       "directives": [
         "//@ run-pass"
@@ -31731,6 +31770,14 @@
       "path": "tests/ui/impl-header-lifetime-elision/explicit-and-elided-same-header.rs",
       "directives": [
         "//@ run-pass"
+      ],
+      "lrr_acceptance": "pending",
+      "native_acceptance": "unexecuted"
+    },
+    {
+      "path": "tests/ui/impl-header-lifetime-elision/inherent-impl.rs",
+      "directives": [
+        "//@ build-pass (FIXME(62277): could be check-pass?)"
       ],
       "lrr_acceptance": "pending",
       "native_acceptance": "unexecuted"

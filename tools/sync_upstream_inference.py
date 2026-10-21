@@ -22,6 +22,7 @@ from upstream_hidden_type_bounds import extend_hidden_type_bounds
 from upstream_wellformed import expected as expected_well_formed
 from upstream_const_eval import expected as expected_const_eval
 from upstream_transmute import adapter as expected_transmute
+from upstream_fulfillment import expected as expected_fulfillment
 
 ROOT = Path(__file__).resolve().parents[1]
 PIN = 'ae0fe511b15ab760d7e963b13389d1bc2ab42b18'
@@ -155,6 +156,8 @@ impl Span {
     outputs['well_formed.rs'] = expected_well_formed()
     outputs['const_eval.rs'] = expected_const_eval()
     outputs['transmute.rs'] = expected_transmute()
+    outputs['fulfillment.rs'] = expected_fulfillment()
+    outputs['mod.rs'] += b'\npub(crate) mod fulfillment;\n'
     return outputs
 
 

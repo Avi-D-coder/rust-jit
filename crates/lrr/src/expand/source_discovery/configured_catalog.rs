@@ -7,14 +7,17 @@ use crate::{
         digest::{Digest, StableEncode, StableEncoder},
     },
     db::{
+        dependency::{InputKey, InputValue},
         key::QueryKey,
+        memo::Database,
         seals::{DiscoveryInput, SealDomain, SealKey},
     },
     expand::source_discovery::{SourceCompilerPreparation, SourceDiscovery},
+    frontend::procedural_exports::PreparedProcCatalog,
     service::source_preparation::PreparedCompileInputs,
-    source::{changes::SourceSelection, manifest::Namespace},
+    source::{changes::{PreparedSourceView, SourceSelection}, manifest::Namespace},
 };
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-IMPL-CATALOG-WORLD", message.into())
 }
@@ -28,9 +31,13 @@ pub(crate) struct ImplCatalogPlan {
     environment: Digest,
     engine: Digest,
     compiler: Digest,
+    source_dependencies: Digest,
+    source_closure: Digest,
+    facade: Digest,
+    procedural: Option<Digest>,
 }
 impl StableEncode for ImplCatalogPlan {
-    const DOMAIN: &'static str = "lrr/v1/configured-standalone-impl-catalog-plan";
+    const DOMAIN: &'static str = "lrr/v2/configured-standalone-impl-catalog-plan";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.record(&self.key);
         e.record(&QueryKey::Outline(self.root.outline.clone()));
@@ -43,7 +50,95 @@ impl StableEncode for ImplCatalogPlan {
         e.digest(self.environment);
         e.digest(self.engine);
         e.digest(self.compiler);
+        e.digest(self.source_dependencies);
+        e.digest(self.source_closure);
+        e.digest(self.facade);
+        e.option(&self.procedural, |e, catalog| e.digest(*catalog));
     }
+}
+
+/// A dormant request over actual captured inputs. This is neither a completed
+/// catalog nor a configured discovery, and has no constructor from a raw key.
+pub(crate) struct PreparedImplCatalogDemand {
+    plan: Arc<ImplCatalogPlan>,
+    root: PreparedSourceView,
+    sources: Vec<PreparedSourceView>,
+    inputs: BTreeMap<InputKey, Digest>,
+    procedural: Option<Arc<PreparedProcCatalog>>,
+}
+impl PreparedImplCatalogDemand {
+    pub(crate) fn key(&self) -> &SealKey { &self.plan.key }
+    pub(crate) fn procedural_catalog(&self) -> Option<&Arc<PreparedProcCatalog>> {
+        self.procedural.as_ref()
+    }
+    pub(crate) fn require_current(
+        &self,
+        compiler: &PreparedCompileInputs,
+        db: &Database,
+    ) -> Result<(), Diagnostic> {
+        db.require_coordinator()?;
+        self.plan.key.validate()?;
+        if compiler.impl_catalog_generation() != self.plan.generation
+            || compiler.environment_identity() != self.plan.environment
+            || compiler.catalog.owning_profile_identity()? != self.plan.compiler
+            || crate::expand::source_declarative::engine_version() != self.plan.engine
+        {
+            return Err(fault("dormant catalog compiler configuration changed"));
+        }
+        for (key, expected) in &self.inputs {
+            if db.published_input(key).map(|(_, stamp)| stamp) != Some(*expected) {
+                return Err(fault("dormant catalog input changed or disappeared"));
+            }
+        }
+        let current = db.prepared_source(&self.plan.root)?
+            .ok_or_else(|| fault("dormant catalog source publication is absent"))?;
+        if !current.same_publication(&self.root) {
+            return Err(fault("dormant catalog source publication changed"));
+        }
+        if let Some(catalog) = &self.procedural {
+            require_procedural(catalog, &self.plan.root, self.plan.key.epoch,
+                self.plan.environment, self.plan.key.unit_graph)?;
+        }
+        if self.procedural.as_ref().map(|catalog| catalog.fingerprint()) != self.plan.procedural {
+            return Err(fault("dormant catalog procedural identity changed"));
+        }
+        Ok(())
+    }
+    /// Enter the existing discovery machinery only on actual demand. Compiler
+    /// and procedural route configuration remains the coordinator's next step.
+    pub(crate) fn into_discovery(
+        self,
+        compiler: &PreparedCompileInputs,
+        db: &Database,
+    ) -> Result<SourceDiscovery, Diagnostic> {
+        self.require_current(compiler, db)?;
+        let scope = self.root.outline().root_scope.clone();
+        let key = self.plan.key.clone();
+        let environment_key = InputKey::UnitCompileEnv(self.plan.root.outline.crate_key);
+        let stamp = *self.inputs.get(&environment_key)
+            .ok_or_else(|| fault("dormant catalog compiler dependency is absent"))?;
+        let mut discovery = SourceDiscovery::new_domain(
+            self.sources, scope, Namespace::Value, key.unit_graph, key.epoch, key.domain, false,
+        )?;
+        discovery.impl_catalog_plan = Some(self.plan);
+        // The ordinary work ledger must observe this before its fixed point.
+        discovery.compiler_inputs.insert(environment_key, stamp);
+        Ok(discovery)
+    }
+}
+fn require_procedural(
+    catalog: &PreparedProcCatalog,
+    root: &SourceSelection,
+    epoch: u64,
+    environment: Digest,
+    graph: Digest,
+) -> Result<(), Diagnostic> {
+    if catalog.consumer() != root.outline.crate_key || catalog.epoch() != epoch
+        || catalog.environment() != environment || catalog.graph() != graph
+    {
+        return Err(fault("catalog procedural graph/consumer/epoch/environment differs"));
+    }
+    Ok(())
 }
 
 /// Private completion fields bind a real configured source plan to the common
@@ -92,6 +187,12 @@ impl ImplCatalogPlan {
                 != Some(input.seal.fingerprint())
             || *environment != self.environment
             || *engine != self.engine
+            || input.source_dependencies != self.source_dependencies
+            || match self.procedural {
+                Some(expected) => !input.procedural_catalogs.iter()
+                    .any(|catalog| catalog.fingerprint() == expected),
+                None => !input.procedural_catalogs.is_empty(),
+            }
             || discovery.compiler_profiles.is_none()
             || !discovery.producers.is_empty()
             || discovery.nested_sources.iter().any(|(ordinal, index)| {
@@ -160,19 +261,26 @@ impl ImplCatalogPlan {
     }
 }
 impl SourceDiscovery {
-    /// Start a fresh global work ledger over the actual explicitly prepared
-    /// standalone world. No prior Scope or TestCatalog certificate is consumed.
-    /// Common compiler/module preparation can still return NeedModule here.
-    pub(crate) fn for_impl_catalog(
+    /// Authenticate a dormant request using already captured immutable inputs.
+    /// No name graph, compiler routes, discovery jobs or source IO are prepared.
+    pub(crate) fn prepare_impl_catalog_demand(
         compiler: &PreparedCompileInputs,
-        root: &crate::source::changes::PreparedSourceView,
+        root: &PreparedSourceView,
         epoch: u64,
-        db: &crate::db::memo::Database,
-    ) -> Result<SourceCompilerPreparation, Diagnostic> {
+        procedural: Option<Arc<PreparedProcCatalog>>,
+        db: &Database,
+    ) -> Result<PreparedImplCatalogDemand, Diagnostic> {
+        db.require_coordinator()?;
+        let environment = compiler.environment_identity();
+        let unit_graph = match &procedural {
+            Some(catalog) => {
+                require_procedural(catalog, root.selection(), epoch, environment, catalog.graph())?;
+                catalog.graph()
+            }
+            None => root.selection().outline.crate_key,
+        };
         let prepared = PreparedLiveImplCatalogSources::capture(
-            root,
-            root.source_dependencies()?.fingerprint(),
-            epoch,
+            root, unit_graph, epoch,
         )?;
         let super::LiveImplCatalogPreparation::NeedConfiguredWorld {
             captured: live,
@@ -188,7 +296,6 @@ impl SourceDiscovery {
             .iter()
             .find(|source| source.selection() == live.selected_root())
             .ok_or_else(|| fault("configured source catalog root is absent"))?;
-        let scope = root.outline().root_scope.clone();
         let root_unit = root.selection().outline.crate_key;
         let mut originals: Vec<_> = sources
             .iter()
@@ -200,24 +307,28 @@ impl SourceDiscovery {
                 QueryKey::Outline(source.outline.clone()).fingerprint(),
             )
         });
-        let environment = compiler.environment_identity();
         let generation = compiler.impl_catalog_generation();
         let engine = crate::expand::source_declarative::engine_version();
         let compiler_id = compiler.catalog.owning_profile_identity()?;
-        let mut graph = StableEncoder::new("lrr/v1/standalone-impl-catalog-unit-graph");
-        graph.digest(live.source_dependencies().fingerprint());
+        let source_dependencies = live.source_dependencies().fingerprint();
+        let mut graph = StableEncoder::new("lrr/v1/standalone-impl-catalog-source-closure");
+        graph.digest(source_dependencies);
         graph.sequence(&originals, |e, source| {
             e.string(source.path.as_str());
             e.record(&source.outline);
         });
-        let unit_graph = graph.finish();
-        let mut identity = StableEncoder::new("lrr/v1/configured-impl-catalog-identity");
+        let source_closure = graph.finish();
+        let facade = facade.fingerprint();
+        let procedural_identity = procedural.as_ref().map(|catalog| catalog.fingerprint());
+        let mut identity = StableEncoder::new("lrr/v2/configured-impl-catalog-identity");
         identity.digest(unit_graph);
+        identity.digest(source_closure);
         identity.digest(generation);
         identity.digest(environment);
         identity.digest(engine);
         identity.digest(compiler_id);
-        identity.digest(facade.fingerprint());
+        identity.digest(facade);
+        identity.option(&procedural_identity, |e, catalog| e.digest(*catalog));
         let key = SealKey {
             domain: SealDomain::ImplCatalog {
                 id: identity.finish(),
@@ -234,32 +345,51 @@ impl SourceDiscovery {
             environment,
             engine,
             compiler: compiler_id,
+            source_dependencies,
+            source_closure,
+            facade,
+            procedural: procedural_identity,
         });
-        let mut discovery = Self::new_domain(
-            sources,
-            scope,
-            Namespace::Value,
-            unit_graph,
-            key.epoch,
-            key.domain,
-            false,
-        )?;
-        discovery.impl_catalog_plan = Some(plan);
-        // The common ParseSource completion records prepared input stamps in
-        // the ledger. Register this before polling, never append dependencies
-        // to an already completed seal at publication.
-        let input_key = crate::db::dependency::InputKey::UnitCompileEnv(root_unit);
+        let input_key = InputKey::UnitCompileEnv(root_unit);
         let (input, stamp) = db
             .published_input(&input_key)
             .ok_or_else(|| fault("actual owning compiler input is not published"))?;
-        if !matches!(input, crate::db::dependency::InputValue::UnitCompileEnv(actual) if actual.unit() == root_unit && actual.fingerprint() == environment)
+        if !matches!(input, InputValue::UnitCompileEnv(actual) if actual.unit() == root_unit && actual.fingerprint() == environment)
         {
             return Err(fault(
                 "actual owning compiler input differs from preparation",
             ));
         }
-        discovery.compiler_inputs.insert(input_key, stamp);
-        discovery.prepare_with_declarative_compiler(environment, engine, compiler.catalog.clone())
+        let mut inputs = BTreeMap::from([(input_key, stamp)]);
+        for input_key in [InputKey::SourceDependencies, InputKey::ExpansionEpoch,
+            InputKey::CapturedSource(root.selection().location_identity())] {
+            let (value, stamp) = db.published_input(&input_key)
+                .ok_or_else(|| fault("dormant catalog source/epoch input is absent"))?;
+            let valid = match (value, &input_key) {
+                (InputValue::SourceDependencies(actual), InputKey::SourceDependencies) => actual.fingerprint() == source_dependencies,
+                (InputValue::ExpansionEpoch(actual), InputKey::ExpansionEpoch) => *actual == epoch,
+                (InputValue::CapturedSource(actual), InputKey::CapturedSource(_)) => actual == root.selection(),
+                _ => false,
+            };
+            if !valid { return Err(fault("dormant catalog source/epoch input differs")); }
+            inputs.insert(input_key, stamp);
+        }
+        let demand = PreparedImplCatalogDemand { plan, root: root.share(), sources, inputs, procedural };
+        demand.require_current(compiler, db)?;
+        Ok(demand)
+    }
+    /// Compatibility entry through the same authentic dormant plan. Common
+    /// compiler/module preparation can still return NeedModule here.
+    pub(crate) fn for_impl_catalog(
+        compiler: &PreparedCompileInputs,
+        root: &PreparedSourceView,
+        epoch: u64,
+        db: &Database,
+    ) -> Result<SourceCompilerPreparation, Diagnostic> {
+        Self::prepare_impl_catalog_demand(compiler, root, epoch, None, db)?
+            .into_discovery(compiler, db)?
+            .prepare_with_declarative_compiler(compiler.environment_identity(),
+                crate::expand::source_declarative::engine_version(), compiler.catalog.clone())
     }
 }
 

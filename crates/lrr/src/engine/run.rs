@@ -255,6 +255,9 @@ struct SelectedArgumentCall {
     hints: Vec<ArgumentHint>,
     argument_slots: Vec<SlotId>,
     result_hint: Option<ArgumentType>,
+    /// Allocated lazily only when source inference captures this actual
+    /// pending selection. Clones/suspension retain its same attempt identity.
+    source_input_attempt: Option<Arc<call_inputs::ReachedCallAttempt>>,
     /// Callee type parameters the reached result context fixes through the
     /// declared result: the expectation its arguments evaluate under.
     expected: BTreeMap<crate::traits::term::ParamKey, crate::runtime::shape::TypeId>,
@@ -1298,6 +1301,7 @@ impl RunMachine {
             hints,
             argument_slots: slots,
             result_hint,
+            source_input_attempt: None,
             expected,
             bytes,
         }))

@@ -4,8 +4,8 @@
 //! reserved-identity nominal `RawPtr<T>` (the way a closure's callable
 //! identity is a nominal-like term), so substitution, unification, impl
 //! matching and open type arguments reach it through the ordinary `Nominal`
-//! arms. `fn(A) -> R` is `TyTerm::Function`; its ABI and `unsafe` qualifiers
-//! are not part of the term.
+//! arms. `fn(A) -> R` is `TyTerm::Function`. Actual source terms can retain
+//! qualifiers; legacy runtime construction below carries no qualifier evidence.
 use super::term::{Binder, FunctionSignature, GenericArg, TyTerm};
 use crate::core::digest::Digest;
 use std::sync::OnceLock;
@@ -84,6 +84,7 @@ pub fn fn_pointer(parameters: Vec<TyTerm>, result: TyTerm) -> TyTerm {
         value: FunctionSignature {
             parameters,
             result: Box::new(result),
+            source_header: None,
         },
     }))
 }

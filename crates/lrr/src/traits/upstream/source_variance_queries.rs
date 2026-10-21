@@ -443,6 +443,10 @@ impl StableEncode for PreparedSourceVarianceQueries {
                 e.u32(1);
                 e.u32(3);
             }
+            VarianceQueryPending::Parameters(ParameterPending::ImplRegionBinders) => {
+                e.u32(1);
+                e.u32(4);
+            }
             VarianceQueryPending::Nominal(why) => {
                 e.u32(2);
                 e.record(why);

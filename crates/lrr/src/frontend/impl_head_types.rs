@@ -204,7 +204,7 @@ impl PreparedImplHeadTypes {
         };
         let trait_syntax = implementation.trait_();
         for ty in std::iter::once(&self_syntax).chain(trait_syntax.iter()) {
-            match super::source_types::symbolic_type_pending(ty) {
+            match super::source_types::symbolic_type_pending_with(ty, syntax.generics()) {
                 Some(super::source_types::SymbolicTypePending::Regions) => {
                     pending!(SymbolicRegions)
                 }

@@ -11,8 +11,15 @@ pub(crate) mod source_variance_queries;
 pub(crate) mod source_declaration_clauses;
 mod generic_clauses;
 mod root_variables;
+mod root_relations;
 mod root_response;
 mod query_facts;
+mod source_fact_bundle;
+mod source_factory;
+mod source_associated_facts;
+mod source_runtime_demands;
+#[cfg(test)]
+pub(crate) use source_factory::check_source_factory;
 pub(crate) mod root_input;
 mod variance;
 pub(crate) mod source_lang_identity;

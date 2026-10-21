@@ -471,6 +471,10 @@ impl<'a> WrittenTypeDeclaration<'a> {
         let name = canonical_lifetime(&lifetime.syntax().text().to_string())?;
         if name == "'static" { return Some(RegionTerm::Static); }
         if name == "'_" {
+            if let Some(parent) = lifetime.syntax().parent()
+                && let Some(region) = self.anonymous_region(crate::syntax::ast_adapter::range(parent.text_range())) {
+                return Some(region);
+            }
             let source = crate::syntax::ast_adapter::range(lifetime.syntax().text_range());
             return Some(RegionTerm::Local { definition: self.definition, start: source.start, end: source.end });
         }
@@ -480,6 +484,48 @@ impl<'a> WrittenTypeDeclaration<'a> {
             Some(GenericArg::Region(region)) => region.clone(),
             _ => RegionTerm::Param(self.parameter_key(key)),
         })
+    }
+    fn anonymous_region(&self, site: crate::syntax::spans::SourceRange) -> Option<crate::traits::term::RegionTerm> {
+        let parameter = self.generics.iter().find(|parameter| parameter.anonymous_region == Some(site))?;
+        let key = crate::traits::term::ParamKey { definition: self.definition, ordinal: parameter.ordinal };
+        Some(match self.type_arguments.and_then(|arguments| arguments.get(&key)) {
+            Some(crate::traits::term::GenericArg::Region(region)) => region.clone(),
+            _ => crate::traits::term::RegionTerm::Param(self.parameter_key(key)),
+        })
+    }
+    fn const_parameter(&self, path: &ra_ap_syntax::ast::Path) -> Option<crate::traits::term::ConstTerm> {
+        use ra_ap_syntax::ast::HasGenericArgs;
+        if path.qualifier().is_some() { return None; }
+        let segment = path.segment()?;
+        if segment.coloncolon_token().is_some() || segment.generic_arg_list().is_some()
+            || segment.parenthesized_arg_list().is_some() { return None; }
+        let name = segment.name_ref()?;
+        let name = crate::syntax::ast_adapter::semantic_name(name.text())?;
+        let parameter = self.generics.iter().find(|parameter|
+            parameter.kind == crate::syntax::signatures::GenericKind::Const && parameter.name == name)?;
+        let key = crate::traits::term::ParamKey { definition: self.definition, ordinal: parameter.ordinal };
+        Some(match self.type_arguments.and_then(|arguments| arguments.get(&key)) {
+            Some(crate::traits::term::GenericArg::Const(value)) => value.clone(),
+            _ => crate::traits::term::ConstTerm::Param(self.parameter_key(key)),
+        })
+    }
+    /// Pinned resolver::visit_generic_arg tries TypeNS before ValueNS for an
+    /// ambiguous identifier. An actual absence proof is required before using
+    /// the same-spelled const parameter; unknown lookup is never absence.
+    fn ambiguous_const_parameter(&self, db: &mut Database, graph: &NameNamespaces,
+        sources: &[&PreparedSourceView], path: &ra_ap_syntax::ast::Path,
+    ) -> QueryPoll<Option<crate::traits::term::ConstTerm>> {
+        let Some(value) = self.const_parameter(path) else { return QueryPoll::Ready(Ok(None)); };
+        let name = path.segment().and_then(|segment| segment.name_ref()).expect("checked simple const path");
+        match self.resolve_name_at(db, graph, sources, &name) {
+            QueryPoll::Ready(Ok(SignatureName::Unresolved(super::names::NameLookup::Absent))) => QueryPoll::Ready(Ok(Some(value))),
+            QueryPoll::Ready(Ok(_)) => QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
+    }
+    pub(super) fn symbolic_type_pending(&self, ty: &ra_ap_syntax::ast::Type) -> Option<SymbolicTypePending> {
+        symbolic_type_pending_with(ty, self.generics)
     }
     fn resolve_name(
         &self,
@@ -519,15 +565,91 @@ impl<'a> WrittenTypeDeclaration<'a> {
 /// exact trait identities. This is a preparation demand, never runtime refusal.
 pub(super) enum SymbolicTypePending { Regions, Identity }
 pub(super) fn symbolic_type_pending(ty: &ra_ap_syntax::ast::Type) -> Option<SymbolicTypePending> {
+    symbolic_type_pending_with(ty, &[])
+}
+pub(super) fn symbolic_type_pending_with(ty: &ra_ap_syntax::ast::Type,
+    generics: &[crate::syntax::signatures::DefinitionParameter]) -> Option<SymbolicTypePending> {
     use ra_ap_syntax::{AstNode, ast};
-    if ty.syntax().descendants().any(|node| ast::RefType::can_cast(node.kind())
-        || ast::Lifetime::can_cast(node.kind()) && !node.parent().is_some_and(|p| ast::LifetimeArg::can_cast(p.kind()))) {
+    // Explicit reference lifetimes are resolved by the same declaration region
+    // lookup as lifetime arguments, preserving their actual ParamKey. Omitted
+    // references require the genuine shared impl-header anonymous site producer;
+    // runtime static erasure cannot become a declaration-region fact.
+    if ty.syntax().descendants().any(|node| {
+        if let Some(reference) = ast::RefType::cast(node.clone()) {
+            return reference.lifetime().is_none() && !generics.iter().any(|parameter|
+                parameter.anonymous_region == Some(crate::syntax::ast_adapter::range(reference.syntax().text_range())));
+        }
+        ast::Lifetime::can_cast(node.kind()) && !node.parent().is_some_and(|parent|
+            ast::LifetimeArg::can_cast(parent.kind()) || ast::RefType::can_cast(parent.kind()))
+    }) {
         return Some(SymbolicTypePending::Regions);
     }
+    // Function qualifiers now travel in the actual source header. The shared
+    // TypeIR encoder requires that header, so runtime-erased/unknown signatures
+    // still cannot become exact source facts.
     ty.syntax().descendants().any(|node| ast::DynTraitType::can_cast(node.kind())
-        || ast::ImplTraitType::can_cast(node.kind()) || ast::FnPtrType::cast(node).is_some_and(|function|
-            function.abi().is_some() || function.unsafe_token().is_some()))
+        || ast::ImplTraitType::can_cast(node.kind()))
         .then_some(SymbolicTypePending::Identity)
+}
+
+/// Raw syntactic impl parameters cannot certify hidden path lifetime arity.
+/// Resolve actual targets through the ordinary source namespace, then retain a
+/// preparation hold for omitted path arguments until their producer exists.
+pub(super) fn impl_path_regions_pending(
+    db: &mut Database, graph: &NameNamespaces, sources: &[&PreparedSourceView],
+    declaration: &WrittenTypeDeclaration<'_>, syntax: &ra_ap_syntax::SyntaxNode,
+) -> QueryPoll<bool> {
+    use ra_ap_syntax::{AstNode, WalkEvent, ast::{self, HasGenericArgs}};
+    // Associated declarations validate their actual parent's GenericTypes
+    // separately. Never use a child's source receipt for its parent's tokens.
+    let implementation = ast::Impl::cast(syntax.clone());
+    let Some(implementation) = implementation else { return QueryPoll::Ready(Ok(false)); };
+    macro_rules! ready { ($value:expr) => { match $value {
+        QueryPoll::Ready(Ok(value)) => value,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    } }; }
+    for ty in implementation.trait_().into_iter().chain(implementation.self_ty()) {
+        let mut walk = ty.syntax().preorder();
+        while let Some(event) = walk.next() {
+            let WalkEvent::Enter(node) = event else { continue; };
+            if ast::FnPtrType::can_cast(node.kind()) || ast::ForType::can_cast(node.kind())
+                || ast::Expr::can_cast(node.kind()) {
+                walk.skip_subtree(); continue;
+            }
+            let Some(path_type) = ast::PathType::cast(node) else { continue; };
+            let Some(path) = path_type.path() else { return QueryPoll::Ready(Ok(true)); };
+            let Some(segment) = path.segment() else { return QueryPoll::Ready(Ok(true)); };
+            if segment.parenthesized_arg_list().is_some() { return QueryPoll::Ready(Ok(true)); }
+            if path_type.syntax().parent().is_some_and(|parent| ast::TypeArg::can_cast(parent.kind()))
+                && ready!(declaration.ambiguous_const_parameter(db, graph, sources, &path)).is_some() { continue; }
+            let target = if path.qualifier().is_none() && segment.coloncolon_token().is_none() {
+                if matches!(segment.kind(), Some(ast::PathSegmentKind::SelfTypeKw)) { continue; }
+                let Some(name) = segment.name_ref() else { return QueryPoll::Ready(Ok(true)); };
+                match ready!(declaration.resolve_name_at(db, graph, sources, &name)) {
+                    SignatureName::Primitive(_) | SignatureName::Str | SignatureName::Parameter(_) => continue,
+                    SignatureName::Source(target) => target.identity,
+                    _ => return QueryPoll::Ready(Ok(true)),
+                }
+            } else {
+                let Some(target) = ready!(projection_trait_key(db, graph, declaration, &path)) else {
+                    return QueryPoll::Ready(Ok(true));
+                };
+                target
+            };
+            let actual = ready!(db.fetch(&SyntaxProvider, QueryKey::DeclarationGenerics(target))).value;
+            let QueryValue::DeclarationGenerics(actual) = actual.as_ref() else {
+                return QueryPoll::Ready(Err(fault("path lifetime arity query differs")));
+            };
+            let Some(layout) = actual.layout() else { return QueryPoll::Ready(Ok(true)); };
+            let expected = actual.parameters().iter().take(layout.own as usize)
+                .filter(|parameter| parameter.kind == crate::syntax::signatures::GenericKind::Lifetime).count();
+            let supplied = segment.generic_arg_list().into_iter().flat_map(|args| args.generic_args())
+                .filter(|argument| matches!(argument, ast::GenericArg::LifetimeArg(_))).count();
+            if supplied < expected { return QueryPoll::Ready(Ok(true)); }
+        }
+    }
+    QueryPoll::Ready(Ok(false))
 }
 
 /// Resolve an actual retained Type occurrence through the same walk as legacy
@@ -635,7 +757,8 @@ pub(super) fn resolve_actual_type(
                     Some(lifetime) => match signature.region(&lifetime) {
                         Some(region) => region, None => return QueryPoll::Ready(Ok(None)),
                     },
-                    None => crate::traits::term::RegionTerm::Static,
+                    None => signature.anonymous_region(crate::syntax::ast_adapter::range(reference.syntax().text_range()))
+                        .unwrap_or(crate::traits::term::RegionTerm::Static),
                 };
                 match reference.ty() {
                     Some(target) => match walk(db, graph, sources, signature, &target) {
@@ -669,13 +792,14 @@ pub(super) fn resolve_actual_type(
                 },
                 None => QueryPoll::Ready(Ok(None)),
             },
-            // `fn(A) -> R` (any ABI; `for<'a>` binders name regions only).
+            // Retain actual qualifiers without changing runtime permissiveness.
             ast::Type::FnPtrType(function) => {
                 let Some(list) = function.param_list() else {
                     return QueryPoll::Ready(Ok(None));
                 };
                 let mut parameters = Vec::new();
                 for parameter in list.params() {
+                    if parameter.dotdotdot_token().is_some() { continue; }
                     let Some(ty) = parameter.ty() else {
                         return QueryPoll::Ready(Ok(None));
                     };
@@ -691,9 +815,25 @@ pub(super) fn resolve_actual_type(
                     },
                     None => TyTerm::Primitive(crate::ir::op::PrimitiveType::Unit),
                 };
-                QueryPoll::Ready(Ok(Some(crate::traits::pointer_terms::fn_pointer(
-                    parameters, result,
-                ))))
+                // This runtime-oriented walk has no elision or higher-ranked
+                // binder producer. Qualifiers cannot certify its static
+                // erasure of an omitted reference lifetime as a source FnSig.
+                let unknown_binder = function.syntax().ancestors().skip(1).any(|parent| ast::ForType::can_cast(parent.kind()))
+                    || function.syntax().descendants().any(|node| ast::ForType::can_cast(node.kind())
+                        || ast::RefType::cast(node).is_some_and(|reference| reference.lifetime().is_none()));
+                let source_header = if unknown_binder {
+                    None
+                } else {
+                    crate::syntax::symbolic_headers::source_function_header(function)
+                };
+                QueryPoll::Ready(Ok(Some(TyTerm::Function(Box::new(crate::traits::term::Binder {
+                    variables: Vec::new(),
+                    value: crate::traits::term::FunctionSignature {
+                        parameters,
+                        result: Box::new(result),
+                        source_header,
+                    },
+                })))))
             }
             ast::Type::ArrayType(array) => {
                 let Some(element) = array.ty() else {
@@ -705,25 +845,9 @@ pub(super) fn resolve_actual_type(
                     // (an impl's `const N: usize`): its length is that
                     // parameter, bound from the reached array at a call.
                     Some(ast::Expr::PathExpr(path)) => {
-                        let parameter = path
-                            .path()
-                            .filter(|path| path.qualifier().is_none())
-                            .and_then(|path| path.segment())
-                            .and_then(|segment| segment.name_ref())
-                            .and_then(|name| {
-                                signature.generics.iter().find(|parameter| {
-                                    parameter.kind == crate::syntax::signatures::GenericKind::Const
-                                        && parameter.name == name.text()
-                                })
-                            });
-                        let Some(parameter) = parameter else {
+                        let Some(length) = path.path().and_then(|path| signature.const_parameter(&path)) else {
                             return QueryPoll::Ready(Ok(None));
                         };
-                        let length =
-                            crate::traits::term::ConstTerm::Param(signature.parameter_key(crate::traits::term::ParamKey {
-                                definition: signature.definition,
-                                ordinal: parameter.ordinal,
-                            }));
                         return match walk(db, graph, sources, signature, &element) {
                             QueryPoll::Ready(Ok(Some(element))) => {
                                 QueryPoll::Ready(Ok(Some(TyTerm::Array(Box::new(element), length))))
@@ -750,6 +874,9 @@ pub(super) fn resolve_actual_type(
                 let Some(path) = path.path() else {
                     return QueryPoll::Ready(Ok(None));
                 };
+                if path.qualifier().is_none() && path.segment().is_some_and(|segment| segment.coloncolon_token().is_some()) {
+                    return module_path_type(db, graph, sources, signature, &path);
+                }
                 if let Some(qualifier) = path.qualifier() {
                     // A module-qualified nominal (`m::W<T>`, `crate::ops::Range<A>`)
                     // names a Type item through its whole path; otherwise the
@@ -1208,6 +1335,14 @@ fn written_generic_argument(
     match argument {
         ast::GenericArg::TypeArg(argument) => {
             let Some(ty) = argument.ty() else { return QueryPoll::Ready(Ok(None)); };
+            if let ast::Type::PathType(path) = &ty && let Some(path) = path.path() {
+                match declaration.ambiguous_const_parameter(db, graph, sources, &path) {
+                    QueryPoll::Ready(Ok(Some(value))) => return QueryPoll::Ready(Ok(Some(GenericArg::Const(value)))),
+                    QueryPoll::Ready(Ok(None)) => {},
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            }
             match resolve_actual_type(db, graph, sources, declaration, &ty) {
                 QueryPoll::Ready(Ok(term)) => QueryPoll::Ready(Ok(term.map(GenericArg::Type))),
                 QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
@@ -1216,6 +1351,10 @@ fn written_generic_argument(
         }
         ast::GenericArg::LifetimeArg(argument) => QueryPoll::Ready(Ok(argument.lifetime()
             .and_then(|lifetime| declaration.region(&lifetime)).map(GenericArg::Region))),
+        ast::GenericArg::ConstArg(argument) => QueryPoll::Ready(Ok(match argument.expr() {
+            Some(ast::Expr::PathExpr(path)) => path.path().and_then(|path| declaration.const_parameter(&path)).map(GenericArg::Const),
+            _ => None,
+        })),
         // Const argument Types and associated equalities require their own
         // actual declaration metadata. They never become positional guesses.
         _ => QueryPoll::Ready(Ok(None)),
@@ -1299,14 +1438,13 @@ fn complete_trait_arguments(
         return QueryPoll::Ready(Err(fault("trait default declaration query differs")));
     };
     let Some(header) = trait_declaration.header() else { return QueryPoll::Ready(Ok(None)); };
-    if header.generics().iter().any(|p| p.kind == GenericKind::Const) || arguments.len() > header.generics().len() {
-        // Const arguments still need actual source Type metadata. Do not
-        // turn an incomplete representation into an exact reference.
+    if arguments.len() > header.generics().len() {
         return QueryPoll::Ready(Ok(None));
     }
     if arguments.len() == header.generics().len() {
         let compatible = header.generics().iter().zip(&arguments).all(|(p, arg)| matches!((p.kind,arg),
-            (GenericKind::Type,GenericArg::Type(_)) | (GenericKind::Lifetime,GenericArg::Region(_))));
+            (GenericKind::Type,GenericArg::Type(_)) | (GenericKind::Lifetime,GenericArg::Region(_))
+                | (GenericKind::Const,GenericArg::Const(_))));
         return QueryPoll::Ready(Ok(compatible.then_some((trait_key, arguments))));
     }
     let (Some(scope), Some(recipe), Some(parsed)) =
@@ -1318,6 +1456,11 @@ fn complete_trait_arguments(
         if parameter.kind == GenericKind::Lifetime {
             let Some(GenericArg::Region(region)) = arguments.get(index) else { return QueryPoll::Ready(Ok(None)); };
             bindings.insert(ParamKey { definition: trait_key, ordinal: parameter.ordinal }, GenericArg::Region(region.clone()));
+            continue;
+        }
+        if parameter.kind == GenericKind::Const {
+            let Some(GenericArg::Const(value)) = arguments.get(index) else { return QueryPoll::Ready(Ok(None)); };
+            bindings.insert(ParamKey { definition: trait_key, ordinal: parameter.ordinal }, GenericArg::Const(value.clone()));
             continue;
         }
         let term = if let Some(argument) = arguments.get(index) {
@@ -1353,6 +1496,7 @@ pub(super) fn projection_trait_identity(
     // A single declaration-context trait name uses the same source Type
     // namespace query as an ordinary Type leaf, retaining its bucket deps.
     let trait_key = if path.qualifier().is_none()
+        && path.segment().is_some_and(|segment| segment.coloncolon_token().is_none())
         && let Some(name) = path.segment().and_then(|segment| segment.name_ref())
     {
         match signature.resolve_name_at(db, graph, sources, &name) {
@@ -1396,7 +1540,7 @@ fn projection_trait_key(
     }
 }
 
-fn actual_associated_owner(owner: &ra_ap_syntax::SyntaxNode) -> Option<ra_ap_syntax::SyntaxNode> {
+pub(super) fn actual_associated_owner(owner: &ra_ap_syntax::SyntaxNode) -> Option<ra_ap_syntax::SyntaxNode> {
     use ra_ap_syntax::{AstNode, ast};
     owner
         .parent()

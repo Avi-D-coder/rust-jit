@@ -1063,6 +1063,7 @@ impl RunMachine {
             hints,
             argument_slots: arguments.to_vec(),
             result_hint,
+            source_input_attempt: None,
             expected: std::collections::BTreeMap::new(),
             bytes,
         }))

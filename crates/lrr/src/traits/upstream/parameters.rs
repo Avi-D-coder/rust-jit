@@ -27,10 +27,11 @@ impl rustc_type_ir::inherent::ParamLike for SourceParameter { fn index(self) -> 
 pub(super) struct DeclarationParameters<'a> {
     definition: Digest,
     parameters: &'a [DefinitionParameter],
-    layout: GenericSourceLayout,
     trait_self: bool,
     count: u32,
     parent_count: u32,
+    source_to_upstream: Vec<u32>,
+    upstream_to_source: Vec<u32>,
 }
 pub(super) enum DeclaredParameterPreparation<'a> {
     Ready(DeclarationParameters<'a>), Pending(ParameterPending),
@@ -47,6 +48,9 @@ impl<'a> DeclarationParameters<'a> {
         }
         if !declaration.parameter_type_macros().is_empty() {
             return Ok(DeclaredParameterPreparation::Pending(ParameterPending::FunctionParameterMacros));
+        }
+        if declaration.impl_regions_pending() {
+            return Ok(DeclaredParameterPreparation::Pending(ParameterPending::ImplRegionBinders));
         }
         let Some(layout) = declaration.layout() else {
             return Ok(DeclaredParameterPreparation::Pending(if declaration.is_function() {
@@ -72,7 +76,30 @@ impl<'a> DeclarationParameters<'a> {
         let count = written.checked_add(u32::from(trait_self)).ok_or_else(|| fault("source generic count overflow"))?;
         let parent_count = layout.inherited.checked_add(u32::from(layout.implicit_self))
             .ok_or_else(|| fault("source parent generic index overflow"))?;
-        Ok(Self { definition, parameters, layout, trait_self, count, parent_count })
+        // Pinned collect/generics_of.rs groups early lifetimes before Type and
+        // Const params, including anonymous lifetimes appended by lowering.
+        // Source ordinals remain own-first; only upstream indexes are reordered.
+        let mut upstream_to_source = Vec::new();
+        if trait_self || layout.implicit_self {
+            upstream_to_source.push(count - 1);
+        }
+        for range in [layout.own..layout.own + layout.inherited, 0..layout.own] {
+            for lifetime in [true, false] {
+                upstream_to_source.extend(range.clone().filter(|ordinal|
+                    (parameters[*ordinal as usize].kind == GenericKind::Lifetime) == lifetime));
+            }
+        }
+        let count_usize = usize::try_from(count).map_err(|_| fault("source generic count overflow"))?;
+        if upstream_to_source.len() != count_usize {
+            return Err(fault("lowered generic order differs from source parameters"));
+        }
+        let mut source_to_upstream = vec![0; count_usize];
+        for (index, ordinal) in upstream_to_source.iter().enumerate() {
+            source_to_upstream[*ordinal as usize] = u32::try_from(index)
+                .map_err(|_| fault("upstream generic index overflow"))?;
+        }
+        Ok(Self { definition, parameters, trait_self, count, parent_count,
+            source_to_upstream, upstream_to_source })
     }
     pub(super) fn count(&self) -> u32 { self.count }
     pub(super) fn parent_count(&self) -> u32 { self.parent_count }
@@ -90,11 +117,7 @@ impl<'a> DeclarationParameters<'a> {
     }
     pub(super) fn from_upstream(&self, index: u32) -> Result<SourceParameter, Diagnostic> {
         if index >= self.count { return Err(fault("upstream index is outside the actual source binder")); }
-        let ordinal = if self.trait_self {
-            if index == 0 { self.count - 1 } else { index - 1 }
-        } else if index >= self.parent_count { index - self.parent_count }
-        else if self.layout.implicit_self && index == 0 { self.count - 1 }
-        else { self.layout.own + index - u32::from(self.layout.implicit_self) };
+        let ordinal = self.upstream_to_source[index as usize];
         self.parameter(ordinal)
     }
     fn parameter(&self, ordinal: u32) -> Result<SourceParameter, Diagnostic> {
@@ -105,10 +128,7 @@ impl<'a> DeclarationParameters<'a> {
             match parameter.kind { GenericKind::Type => BoundKind::Type,
                 GenericKind::Lifetime => BoundKind::Region, GenericKind::Const => BoundKind::Const }
         };
-        let index = if self.trait_self { if implicit_trait_self { 0 } else { ordinal + 1 } }
-            else if ordinal < self.layout.own { self.parent_count + ordinal }
-            else if self.layout.implicit_self && ordinal == self.count - 1 { 0 }
-            else { ordinal - self.layout.own + u32::from(self.layout.implicit_self) };
+        let index = self.source_to_upstream[ordinal as usize];
         Ok(SourceParameter { source: ParamKey { definition: self.definition, ordinal }, kind, index })
     }
 }
@@ -120,6 +140,7 @@ pub(crate) enum ParameterPreparation<'a> { Ready(SignatureParameters<'a>), Pendi
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum ParameterPending {
     SourceLayout,
+    ImplRegionBinders,
     /// Pinned collect/generics_of.rs:270 and is_late_bound. Written function
     /// lifetimes cannot all be silently treated as early parameters.
     FunctionRegionBinders,

@@ -42,14 +42,19 @@ struct ArgumentSnapshot {
     value: ValueRepr,
     effective_type: Option<TypeId>,
 }
+/// Identity of one actual pending selection, not its reusable source call site.
+/// The pending map owns the original; capture retains it across NeedInput.
+pub(super) struct ReachedCallAttempt;
 /// Owned by the active call preparation, not Clone and not an entry token.
 /// A future consumer must retain this under an actual call-attempt/activation
-/// identity across NeedInput. The checks here validate retained inputs, not that
-/// activation or the result expectation; both remain consumer obligations before
-/// commit. No guest ownership or engine value crosses source().
+/// identity across NeedInput. Checks bind it to that exact pending selection and
+/// current result expectation; root admission, result-slot/phase ownership and
+/// once-consumed commit remain consumer obligations. No guest ownership or
+/// engine value crosses source().
 pub(super) struct ReachedCallInputs {
     pc: PcKey,
     identity: CallIdentity,
+    attempt: Arc<ReachedCallAttempt>,
     body: Arc<BodyIndex>,
     callee: Arc<SourceCallable>,
     signature: Digest,
@@ -61,6 +66,7 @@ pub(super) struct ReachedCallInputs {
     span: BodySpan,
     source_site: Option<SourceCallSite>,
     arguments: Vec<ArgumentSnapshot>,
+    result_hint: Option<ArgumentType>,
     parameters: BTreeMap<ParamKey, TyTerm>,
     variables: BTreeMap<InferVarKey, SourceVariableFamily>,
     relations: Vec<SourceCallRelation>,
@@ -91,12 +97,15 @@ impl ReachedCallInputs {
         self.source_site
     }
     /// Checks read the actual active caller/store and retained source inputs.
-    /// PC/call/cell identities can recur: this is not an activation certificate.
-    /// No namespace census or guest mutation is performed.
+    /// PC/call/cell identities can recur; the attempt must also be the actual
+    /// retained pending selection. The result hint is freshly supplied by the
+    /// ordinary seal's current result contract, never read from this packet.
+    /// This still grants neither root permission nor once-consumed VM commit.
     pub(super) fn require_current(
         &self,
         machine: &RunMachine,
         db: &mut Database,
+        result_hint: Option<&ArgumentType>,
     ) -> Result<(), Diagnostic> {
         if machine.frame.pc() != &self.pc
             || machine.frame.call_identity(self.identity.0) != self.identity
@@ -108,7 +117,8 @@ impl ReachedCallInputs {
             .pending
             .get(&self.identity)
             .ok_or_else(|| call_fault("reached call selection is no longer active"))?;
-        if !Arc::ptr_eq(&selected.callee, &self.callee)
+        if !selected.source_input_attempt.as_ref().is_some_and(|current| Arc::ptr_eq(current, &self.attempt))
+            || !Arc::ptr_eq(&selected.callee, &self.callee)
             || selected.callee.signature().fingerprint() != self.signature
             || selected.argument_slots.len() != self.arguments.len()
             || selected
@@ -120,6 +130,13 @@ impl ReachedCallInputs {
             return Err(call_fault(
                 "reached call selection differs from captured inputs",
             ));
+        }
+        if match (&self.result_hint, result_hint) {
+            (None, None) => false,
+            (Some(previous), Some(current)) => previous.descriptor != current.descriptor || previous.source != current.source,
+            _ => true,
+        } {
+            return Err(call_fault("reached call result expectation changed before input commit"));
         }
         self.callee.revalidate(db)?;
         if let Some(typed) = &self.typed {
@@ -188,7 +205,7 @@ impl RunMachine {
         let identity = self.frame.call_identity(site.0);
         let selected = self
             .pending
-            .get(&identity)
+            .get_mut(&identity)
             .ok_or_else(|| call_fault("reached inputs require an actual selected call"))?;
         if selected.argument_slots != arguments
             || selected.callee.signature().parameters.len() != arguments.len()
@@ -211,6 +228,7 @@ impl RunMachine {
             .as_ref()
             .map(|(_, guard)| Arc::clone(guard));
         let explicit = selected.explicit.clone();
+        let attempt = Arc::clone(selected.source_input_attempt.get_or_insert_with(|| Arc::new(ReachedCallAttempt)));
         let signature = callee.signature().fingerprint();
         let span = if let Some(call) = &self.frame.runtime_call {
             call.require(
@@ -427,7 +445,7 @@ impl RunMachine {
                 relations.push(SourceCallRelation {
                     formal: formal.clone(),
                     actual: expected.source.clone(),
-                    kind: SourceCallRelationKind::Coerce,
+                    kind: SourceCallRelationKind::CoerceResult,
                     site,
                 });
             } else {
@@ -437,6 +455,7 @@ impl RunMachine {
         let packet = ReachedCallInputs {
             pc,
             identity,
+            attempt,
             body: Arc::clone(&self.frame.body),
             callee,
             signature,
@@ -448,13 +467,14 @@ impl RunMachine {
             span,
             source_site,
             arguments: snapshots,
+            result_hint: result_hint.cloned(),
             parameters,
             variables,
             relations,
             caller,
             pending,
         };
-        packet.require_current(self, db)?;
+        packet.require_current(self, db, result_hint)?;
         Ok(packet)
     }
 }

@@ -1,0 +1,104 @@
+{
+  "schema": "lrr/source-checkpoint-evidence/v1",
+  "recorded_at": "2026-10-21T00:04:46.972094+00:00",
+  "source_baseline": "edd7f85ccc8e158b20cfbc02100cd1f263b06c49",
+  "source_sha256": "b9456389da8f98ca146af6dcf866cc35a92f13af32f724a7003e44c910860521",
+  "input_count": 8743,
+  "scope": "V526 held M020 actual-source fact factory. Two V525 mechanical repairs removed iterator/import diagnostics; library-test compilation still fails on generic Symbol associated-constant inference. No fresh binaries, component control or runtime acceptance.",
+  "source_review": "worktracks/05-trait-goal-engine/2026-10-20-root-factory-review.md",
+  "selection": "worktracks/05-trait-goal-engine/2026-10-20-source-factory-controls.json",
+  "commands": [
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v526",
+        "before"
+      ],
+      "exit": 0
+    },
+    {
+      "shell_command": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json > artifacts/validation-current-v526/lib-build.jsonl 2> artifacts/validation-current-v526/lib-build.log",
+      "session": 9505,
+      "exit": 101
+    },
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v526",
+        "after-build"
+      ],
+      "session": 46417,
+      "exit": 0
+    }
+  ],
+  "compiler_errors": [
+    {
+      "code": "E0283",
+      "message": "type annotations needed",
+      "primary_spans": [
+        {
+          "file": "crates/lrr/src/traits/upstream/source_factory.rs",
+          "line": 106,
+          "column": 51,
+          "label": "cannot infer type for type parameter `I` declared on the trait `Symbol`"
+        }
+      ],
+      "rendered": "error[E0283]: type annotations needed\n   --> crates/lrr/src/traits/upstream/source_factory.rs:106:51\n    |\n106 |             (None, DefinitionHeaderRole::Impl) => Symbol::SYM_ANON,\n    |                                                   ^^^^^^^^^^^^^^^^ cannot infer type for type parameter `I` declared on the trait `Symbol`\n    |\n    = note: the type must implement `rustc_type_ir::Interner`\nhelp: the trait `rustc_type_ir::Interner` is implemented for `upstream::context::Context<'cx, F>`\n   --> crates/lrr/src/traits/upstream/context.rs:450:1\n    |\n450 | impl<'cx, F: SourceFacts<'cx>> ty::Interner for Context<'cx, F> {\n    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    = note: associated constants cannot be accessed directly on a `trait`, they can only be accessed through a specific `impl`\nnote: required by a bound in `SYM_ANON`\n   --> vendor/rustc-trait-solver/compiler/rustc_type_ir/src/inherent.rs:736:21\n    |\n736 | pub trait Symbol<I: Interner>: Copy + Hash + PartialEq + Eq + Debug {\n    |                     ^^^^^^^^ required by this bound in `Symbol::SYM_ANON`\n...\n739 |     const SYM_ANON: Self;\n    |           -------- required by a bound in this associated constant\nhelp: use the fully qualified path to an implementation\n    |\n106 -             (None, DefinitionHeaderRole::Impl) => Symbol::SYM_ANON,\n106 +             (None, DefinitionHeaderRole::Impl) => <Type as rustc_type_ir::Interner>::SYM_ANON,\n    |\n\n"
+    }
+  ],
+  "diagnostic_count": 1,
+  "fresh_binaries": false,
+  "dependent_stages": {
+    "cli_build": "unexecuted",
+    "digester_build": "unexecuted",
+    "exact_selector_listing": "unexecuted",
+    "component_control": "unexecuted",
+    "runtime": "unexecuted; actual reached-root consumer remains inactive"
+  },
+  "closing_guard": {
+    "exit": 0,
+    "head": "edd7f85ccc8e158b20cfbc02100cd1f263b06c49",
+    "source_sha256": "b9456389da8f98ca146af6dcf866cc35a92f13af32f724a7003e44c910860521",
+    "file_count": 8743,
+    "source_matches_before": true,
+    "head_matches_before": true,
+    "changed_sources": [],
+    "binaries": {}
+  },
+  "raw_outputs": {
+    "directory": "artifacts/validation-current-v526",
+    "retention": "retained at capsule creation; no cleanup performed by validator",
+    "files": {
+      "lib-build.jsonl": {
+        "sha256": "56587b0194bce17aa7be9c8eac41c4f925ef1d3568e0b28e22805fbdd2178639",
+        "bytes": 358323
+      },
+      "lib-build.log": {
+        "sha256": "31634d1c26530916a751ff933007c214dda5e22721ddd010fec0bb52a63d6db3",
+        "bytes": 149
+      },
+      "before.json": {
+        "sha256": "335997878035885f3ab3814f58f4bb8ecbeb7c3f11b46d6de1b30fb0eec8a5d4",
+        "bytes": 1282801
+      },
+      "after-build.json": {
+        "sha256": "3fd507783a7e564d4eb4d4356b40d38550af5cb1c49844806014a72774fe61e2",
+        "bytes": 1282890
+      }
+    }
+  },
+  "terminal_status": "all launched commands terminal; no dependent process launched",
+  "acceptance": {
+    "component_controls_executed": 0,
+    "runtime_contract_passes": 0,
+    "root_activation": "held",
+    "full_fixture": "unexecuted",
+    "interpreter": "incomplete",
+    "guest_jit_allowed": false,
+    "linux": "unexecuted",
+    "performance": "unassessed"
+  },
+  "reproduction": "After source/target ownership returns, fully qualify the actual Symbol implementation interner, freeze a fresh fingerprint and run the maintained direct Rust1.99 offline/locked protocol in a new directory. Preserve this failed attempt at its original fingerprint."
+}

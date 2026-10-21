@@ -608,6 +608,13 @@
       "upstream_sha256": "2e5f26dba08abf4f96c52975f1ac0fba42c37d2e650de96f9a182314e7b88f53"
     },
     {
+      "path": "compiler/rustc_infer/src/traits/mod.rs",
+      "bytes": 6731,
+      "sha256": "4bfd95cdd4b0e3b18cdc0a60ae81470d916556d2270fe9a1556d31206a03757c",
+      "upstream": "compiler/rustc_infer/src/traits/mod.rs",
+      "upstream_sha256": "4bfd95cdd4b0e3b18cdc0a60ae81470d916556d2270fe9a1556d31206a03757c"
+    },
+    {
       "path": "compiler/rustc_middle/src/infer/canonical.rs",
       "bytes": 8347,
       "sha256": "a93e513ae058def7ec200af342b23a1f3088417ffdd335bbbf6345fd8953d4c0",
@@ -958,11 +965,25 @@
       "upstream_sha256": "75b077bf393efddd9436fbf3d907b55595415a66320e504d649ff05576206358"
     },
     {
+      "path": "compiler/rustc_structures/src/limit.rs",
+      "bytes": 1707,
+      "sha256": "aaed7ebb13ff9ba166be0ef015e86f9bdfff8f1cba9e4e15a950a96932ae9faf",
+      "upstream": "compiler/rustc_structures/src/limit.rs",
+      "upstream_sha256": "aaed7ebb13ff9ba166be0ef015e86f9bdfff8f1cba9e4e15a950a96932ae9faf"
+    },
+    {
       "path": "compiler/rustc_trait_selection/src/solve/delegate.rs",
       "bytes": 24761,
       "sha256": "ad43375618c2e3a7c5ff6f69abfc8a4af33ae1d003cb003d350aea0bb0d17095",
       "upstream": "compiler/rustc_trait_selection/src/solve/delegate.rs",
       "upstream_sha256": "ad43375618c2e3a7c5ff6f69abfc8a4af33ae1d003cb003d350aea0bb0d17095"
+    },
+    {
+      "path": "compiler/rustc_trait_selection/src/solve/fulfill.rs",
+      "bytes": 17207,
+      "sha256": "b847f09571a9b182c1456ea0c3fc9ccae43457ac7b12f01f1d28c0573e06ad7f",
+      "upstream": "compiler/rustc_trait_selection/src/solve/fulfill.rs",
+      "upstream_sha256": "b847f09571a9b182c1456ea0c3fc9ccae43457ac7b12f01f1d28c0573e06ad7f"
     },
     {
       "path": "compiler/rustc_trait_selection/src/traits/mod.rs",
@@ -1720,6 +1741,7 @@
     "compiler/rustc_infer/src/infer/solver_region_constraints.rs",
     "compiler/rustc_infer/src/infer/solver_region_constraints/tests.rs",
     "compiler/rustc_infer/src/infer/type_variable.rs",
+    "compiler/rustc_infer/src/traits/mod.rs",
     "compiler/rustc_middle/src/infer/canonical.rs",
     "compiler/rustc_middle/src/mir/interpret/queries.rs",
     "compiler/rustc_middle/src/mir/syntax.rs",
@@ -1743,7 +1765,9 @@
     "compiler/rustc_middle/src/ty/util.rs",
     "compiler/rustc_session/src/options.rs",
     "compiler/rustc_span/src/symbol.rs",
+    "compiler/rustc_structures/src/limit.rs",
     "compiler/rustc_trait_selection/src/solve/delegate.rs",
+    "compiler/rustc_trait_selection/src/solve/fulfill.rs",
     "compiler/rustc_trait_selection/src/traits/mod.rs",
     "compiler/rustc_trait_selection/src/traits/project.rs",
     "compiler/rustc_trait_selection/src/traits/util.rs",

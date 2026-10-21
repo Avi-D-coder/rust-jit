@@ -68,7 +68,7 @@ impl ParsedFile {
     }
 }
 impl StableEncode for TypeAliasRecipe {
-    const DOMAIN: &'static str = "lrr/v2/type-alias-recipe";
+    const DOMAIN: &'static str = "lrr/v3/type-alias-recipe";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.definition);
         e.record(&self.scope);
@@ -84,6 +84,7 @@ impl StableEncode for TypeAliasRecipe {
             e.sequence(&p.bounds, |e, t| e.record(t));
             e.sequence(&p.default, |e, t| e.record(t));
             e.sequence(&p.const_type, |e, t| e.record(t));
+            e.option(&p.anonymous_region, |e, range| { e.u32(range.start); e.u32(range.end); });
         });
         // Predicates remain in the exact header;
         // target terms preserve the rigid definition/ordinal identities.

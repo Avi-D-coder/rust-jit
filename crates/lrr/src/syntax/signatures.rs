@@ -28,6 +28,8 @@ pub struct DefinitionParameter {
     pub bounds: Vec<TokenRecipe>,
     pub default: Vec<TokenRecipe>,
     pub const_type: Vec<TokenRecipe>,
+    /// Actual anonymous impl-header region site, not a written identifier.
+    pub anonymous_region: Option<super::spans::SourceRange>,
 }
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ParameterRecipe {
@@ -134,7 +136,7 @@ impl ParsedFile {
             .into_iter()
             .chain(owner)
             .flat_map(|list| list.generic_params());
-        for (parameter, written) in generics.iter_mut().zip(written) {
+        for (parameter, written) in generics.iter_mut().filter(|p| p.anonymous_region.is_none()).zip(written) {
             let bounds = match written {
                 ast::GenericParam::TypeParam(p) => p.type_bound_list(),
                 ast::GenericParam::LifetimeParam(p) => p.type_bound_list(),
@@ -152,7 +154,7 @@ impl ParsedFile {
         &self,
         declaration: &SyntaxNode,
     ) -> Result<(Vec<DefinitionParameter>, GenericSourceLayout), Diagnostic> {
-        let own = capture_generics(declaration.children().find_map(ast::GenericParamList::cast))?;
+        let own = capture_declaration_generics(declaration)?;
         let (mut generics, layout) = associated_generics_with_layout(declaration, own)?;
         self.spell_generic_bounds(declaration, &mut generics)?;
         Ok((generics, layout))
@@ -493,7 +495,7 @@ impl ParsedFile {
     }
 }
 impl StableEncode for FunctionSignature {
-    const DOMAIN: &'static str = "lrr/v3/function-signature";
+    const DOMAIN: &'static str = "lrr/v4/function-signature";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.definition);
         e.record(&self.scope);
@@ -510,6 +512,7 @@ impl StableEncode for FunctionSignature {
             e.sequence(&p.bounds, |e, t| e.record(t));
             e.sequence(&p.default, |e, t| e.record(t));
             e.sequence(&p.const_type, |e, t| e.record(t));
+            e.option(&p.anonymous_region, |e, range| { e.u32(range.start); e.u32(range.end); });
         });
         e.sequence(&self.parameters, |e, p| {
             e.option(&p.symbolic, |e, t| e.record(t));
@@ -785,7 +788,7 @@ fn associated_generics_with_layout(
     };
     let (inherited, implicit_self) = if let Some(implementation) = ast::Impl::cast(owner.clone()) {
         (
-            capture_generics(implementation.generic_param_list())?,
+            capture_impl_generics(&implementation)?,
             false,
         )
     } else if let Some(definition) = ast::Trait::cast(owner) {
@@ -810,6 +813,7 @@ fn associated_generics_with_layout(
             bounds: Vec::new(),
             default: Vec::new(),
             const_type: Vec::new(),
+            anonymous_region: None,
         });
     }
     Ok((generics, layout))
@@ -879,10 +883,80 @@ pub(crate) fn capture_generics(
                 bounds,
                 default,
                 const_type,
+                anonymous_region: None,
             });
         }
     }
     Ok(generics)
+}
+
+fn capture_declaration_generics(declaration: &SyntaxNode) -> Result<Vec<DefinitionParameter>, Diagnostic> {
+    if let Some(implementation) = ast::Impl::cast(declaration.clone()) {
+        capture_impl_generics(&implementation)
+    } else {
+        capture_generics(declaration.children().find_map(ast::GenericParamList::cast))
+    }
+}
+
+/// Pinned resolver AnonymousCreateParameter for impl header Types. Extra
+/// lifetimes follow written source params; the upstream transport orders early
+/// lifetimes before type/const params. Nested binders own their own lifetimes.
+pub(crate) fn capture_impl_generics(implementation: &ast::Impl) -> Result<Vec<DefinitionParameter>, Diagnostic> {
+    use ra_ap_syntax::WalkEvent;
+    let mut parameters = capture_generics(implementation.generic_param_list())?;
+    let mut roots = implementation.trait_().into_iter().chain(implementation.self_ty()).collect::<Vec<_>>();
+    roots.sort_by_key(|ty| ty.syntax().text_range().start());
+    for ty in roots {
+        let mut walk = ty.syntax().preorder();
+        while let Some(event) = walk.next() {
+            let WalkEvent::Enter(node) = event else { continue; };
+            if ast::FnPtrType::can_cast(node.kind()) || ast::ForType::can_cast(node.kind())
+                || ast::MacroType::can_cast(node.kind()) || ast::DynTraitType::can_cast(node.kind())
+                || ast::ImplTraitType::can_cast(node.kind()) || ast::Expr::can_cast(node.kind()) {
+                walk.skip_subtree();
+                continue;
+            }
+            let site = if let Some(reference) = ast::RefType::cast(node.clone()) {
+                reference.lifetime().is_none_or(|lt| lt.syntax().text().to_string() == "'_")
+                    .then(|| super::ast_adapter::range(reference.syntax().text_range()))
+            } else if let Some(argument) = ast::LifetimeArg::cast(node) {
+                argument.lifetime().filter(|lt| lt.syntax().text().to_string() == "'_")
+                    .map(|_| super::ast_adapter::range(argument.syntax().text_range()))
+            } else { None };
+            let Some(site) = site else { continue; };
+            parameters.push(DefinitionParameter {
+                ordinal: u32::try_from(parameters.len()).map_err(|_| fault("anonymous region parameter index overflow"))?,
+                kind: GenericKind::Lifetime,
+                // Not source spelling; names cannot collide with valid Rust.
+                name: format!("'<anonymous@{}:{}>", site.start, site.end),
+                bounds: Vec::new(), default: Vec::new(), const_type: Vec::new(),
+                anonymous_region: Some(site),
+            });
+        }
+    }
+    Ok(parameters)
+}
+
+/// Unknown nested macro/object/opaque binder semantics cannot certify even a
+/// zero anonymous-parameter count. FnPtr/for scopes own their own parameters.
+pub(crate) fn impl_region_binders_pending(declaration: &SyntaxNode) -> bool {
+    use ra_ap_syntax::WalkEvent;
+    let implementation = ast::Impl::cast(declaration.clone())
+        .or_else(|| associated_owner(declaration).and_then(ast::Impl::cast));
+    let Some(implementation) = implementation else { return false; };
+    for ty in implementation.trait_().into_iter().chain(implementation.self_ty()) {
+        let mut walk = ty.syntax().preorder();
+        while let Some(event) = walk.next() {
+            let WalkEvent::Enter(node) = event else { continue; };
+            if ast::FnPtrType::can_cast(node.kind()) || ast::ForType::can_cast(node.kind())
+                || ast::Expr::can_cast(node.kind()) {
+                walk.skip_subtree(); continue;
+            }
+            if ast::MacroType::can_cast(node.kind()) || ast::DynTraitType::can_cast(node.kind())
+                || ast::ImplTraitType::can_cast(node.kind()) { return true; }
+        }
+    }
+    false
 }
 
 #[cfg(test)]

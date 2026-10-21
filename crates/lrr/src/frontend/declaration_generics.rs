@@ -31,6 +31,7 @@ pub struct DeclarationGenerics {
     parameter_type_macros: Vec<crate::syntax::spans::SourceRange>,
     opaque_returns: Option<OpaqueReturnHeaders>,
     const_types: std::collections::BTreeMap<u32, crate::syntax::spans::SourceRange>,
+    impl_regions_pending: bool,
 }
 impl DeclarationGenerics {
     pub fn definition(&self) -> Digest { self.definition }
@@ -41,8 +42,9 @@ impl DeclarationGenerics {
     pub(crate) fn argument_impl_traits(&self) -> &[crate::syntax::spans::SourceRange] { &self.argument_impl_traits }
     pub(crate) fn parameter_type_macros(&self) -> &[crate::syntax::spans::SourceRange] { &self.parameter_type_macros }
     pub(crate) fn has_unproduced_parameter_identities(&self) -> bool {
-        !self.argument_impl_traits.is_empty() || !self.parameter_type_macros.is_empty()
+        !self.argument_impl_traits.is_empty() || !self.parameter_type_macros.is_empty() || self.impl_regions_pending
     }
+    pub(crate) fn impl_regions_pending(&self) -> bool { self.impl_regions_pending }
     pub(crate) fn opaque_returns(&self) -> Option<&OpaqueReturnHeaders> { self.opaque_returns.as_ref() }
     pub(crate) fn opaque_return_syntax(&self, position: u32) -> Result<Option<ast::ImplTraitType>, Diagnostic> {
         match (self.opaque_returns.as_ref(), self.source_parts()) {
@@ -71,7 +73,7 @@ impl DeclarationGenerics {
     pub(crate) fn prepare(db: &mut Database, definition: Digest) -> QueryPoll<Self> {
         let mut result = Self { definition, metadata: None, parsed: None, parameters: Vec::new(),
             layout: None, trait_self: false, function: false, argument_impl_traits: Vec::new(),
-            parameter_type_macros: Vec::new(), opaque_returns: None, const_types: std::collections::BTreeMap::new() };
+            parameter_type_macros: Vec::new(), opaque_returns: None, const_types: std::collections::BTreeMap::new(), impl_regions_pending: false };
         let source = db.input(&InputKey::DefinitionSource(definition));
         let header = db.input(&InputKey::DefinitionHeader(definition));
         let context = db.input(&InputKey::DeclarationContext(definition));
@@ -100,6 +102,7 @@ impl DeclarationGenerics {
         }
         result.trait_self = ast::Trait::can_cast(node.kind());
         result.function = ast::Fn::can_cast(node.kind());
+        result.impl_regions_pending = crate::syntax::signatures::impl_region_binders_pending(&node);
         if result.function {
             let function = match tree.function_header(definition, recipe, declaration, None) {
                 Ok(function) => function, Err(error) => return QueryPoll::Ready(Err(error)),
@@ -135,7 +138,7 @@ impl DeclarationGenerics {
         };
         // Function early/late lifetime classification must come from the real
         // binder service. Never expose all written function lifetimes as early.
-        if result.function && parameters[..layout.own as usize].iter().any(|p| p.kind == GenericKind::Lifetime) {
+        if result.impl_regions_pending || result.function && parameters[..layout.own as usize].iter().any(|p| p.kind == GenericKind::Lifetime) {
             result.parameters = parameters; result.metadata = Some([source, header, context]);
             result.parsed = Some(parsed); return QueryPoll::Ready(Ok(result));
         }
@@ -146,10 +149,11 @@ impl DeclarationGenerics {
 }
 fn fault(message: &str) -> Diagnostic { Diagnostic::new("LRR-E-DECLARATION-GENERICS", message.into()) }
 impl StableEncode for DeclarationGenerics {
-    const DOMAIN: &'static str = "lrr/v4/actual-declaration-generics";
+    const DOMAIN: &'static str = "lrr/v5/actual-declaration-generics";
     fn encode_fields(&self, e: &mut StableEncoder) {
         e.digest(self.definition); e.option(&self.layout, |e, layout| e.record(layout));
         e.bool(self.trait_self); e.bool(self.function);
+        e.bool(self.impl_regions_pending);
         for sites in [&self.argument_impl_traits, &self.parameter_type_macros] {
             e.sequence(sites, |e, range| { e.u32(range.start); e.u32(range.end); });
         }
@@ -159,6 +163,7 @@ impl StableEncode for DeclarationGenerics {
             e.u32(p.ordinal); e.string(&p.name);
             e.u32(match p.kind { GenericKind::Type => 0, GenericKind::Lifetime => 1, GenericKind::Const => 2 });
             for tokens in [&p.bounds, &p.default, &p.const_type] { e.sequence(tokens, |e, token| e.record(token)); }
+            e.option(&p.anonymous_region, |e, range| { e.u32(range.start); e.u32(range.end); });
         });
         e.option(&self.metadata, |e, inputs| { for input in inputs { e.digest(input.fingerprint()); } });
         e.option(&self.parsed, |e, parsed| { let QueryValue::ParseFile(tree) = parsed.as_ref() else { unreachable!() }; e.record(&tree.key()); });

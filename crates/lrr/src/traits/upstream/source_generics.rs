@@ -118,7 +118,7 @@ impl SourceGenericLayouts {
         let parameter = self.parameter(key, BoundKind::Region)?;
         let id = self.definitions.get(&key.definition)?;
         let name = self.declarations.get(id)?.types().declaration().parameters().get(key.ordinal as usize)?;
-        Some(EarlyRegion { parameter, name: Some(Symbol(name.name.as_str())) })
+        Some(EarlyRegion { parameter, name: name.anonymous_region.is_none().then_some(Symbol(name.name.as_str())) })
     }
     pub(super) fn materialize<'cx>(&'cx self, cx: Cx<'cx>, configuration: &PreparedSolverConfiguration)
         -> Result<BTreeMap<DefinitionId, Generics<'cx, prepared::PreparedProvider<'cx>>>, Diagnostic> {

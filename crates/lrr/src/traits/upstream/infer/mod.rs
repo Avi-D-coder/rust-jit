@@ -251,3 +251,5 @@ pub(crate) mod const_eval;
 pub(crate) mod transmute;
 
 pub(crate) mod hidden_type_bounds;
+
+pub(crate) mod fulfillment;

@@ -352,6 +352,32 @@ fn array_type(
     Ok(TyTerm::Array(Box::new(element), length))
 }
 
+/// Capture qualifiers from the existing actual function-pointer AST. Binder
+/// identity is supplied separately by the consumer's genuine Binder producer.
+pub(crate) fn source_function_header(
+    function: &ast::FnPtrType,
+) -> Option<crate::traits::term::SourceFunctionHeader> {
+    use ra_ap_syntax::AstToken;
+    if function.async_token().is_some() || function.const_token().is_some() {
+        return None;
+    }
+    let abi = match function.abi() {
+        None => "Rust".to_owned(),
+        Some(abi) => {
+            abi.extern_token()?;
+            match abi.string_token() {
+                Some(token) => ast::String::cast(token)?.value().ok()?.into_owned(),
+                None => "C".to_owned(),
+            }
+        }
+    };
+    Some(crate::traits::term::SourceFunctionHeader {
+        abi,
+        is_unsafe: function.unsafe_token().is_some(),
+        c_variadic: function.param_list()?.params().any(|parameter| parameter.dotdotdot_token().is_some()),
+    })
+}
+
 fn function_type(
     function: &ast::FnPtrType,
     variables: BTreeMap<String, u32>,
@@ -359,8 +385,8 @@ fn function_type(
     depth: u32,
     context: Option<(Digest, &[DefinitionParameter])>,
 ) -> Result<TyTerm, Diagnostic> {
-    // The ABI and `unsafe` qualifiers are not part of a runtime fn pointer
-    // (E-R5-008); `async`/`const` function types do not exist.
+    // Qualifiers are retained for source consumers; runtime fn-pointer
+    // operations remain permissive under E-R5-008.
     if function.async_token().is_some() || function.const_token().is_some() {
         return Err(unsupported());
     }
@@ -425,6 +451,7 @@ fn function_type(
         value: FunctionSignature {
             parameters: terms,
             result: Box::new(result),
+            source_header: source_function_header(function),
         },
     })))
 }
