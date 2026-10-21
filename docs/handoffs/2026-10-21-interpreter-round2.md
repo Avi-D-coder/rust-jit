@@ -1,4 +1,4 @@
-# Interpreter handoff — October 20/21, 2026, round 2
+# Interpreter handoff — October 20/21, 2026, rounds 2 and 3
 
 Continues [the winddown handoff](2026-10-20-interpreter-winddown.md). Repository `/Users/avi/Code/rust-jit`, branch `codex/lrr-implementation`. Read `AGENTS.md` and the revision-5 specification first. The project goal (interpreter first, tested against unchanged upstream rustc programs, then the JIT) is **incomplete**; the JIT gates are unchanged.
 
@@ -59,3 +59,32 @@ A reached solver root suspends once for the actual impl catalog and the host ser
 ## Resume workflow
 
 Unchanged from the winddown handoff, plus: `tools/validation/regress_retained.sh [binary]` is a fast PASS/FAIL screen over 32 retained programs (exit 0 and `completed` only; not acceptance). Use `tools/rustc_checkout_runtime.py` for acceptance, in batches of at most 64 cases, with `source_manifest.py` before/after-build/after-runtime. Keep one Cargo owner; give other agents disjoint files or read-only analysis, because the facade is parsed at runtime from the embedded copy and a broken facade file breaks every program run after the next build. Filtered `cargo test` runs this round showed pre-existing failures in `operator_dispatch_tests`, `numeric_constraint_facade_tests`, `generic_boundary_tests`, `trait_header_tests`, `test_catalog_primitive_namespace_tests`, several `pattern`/`closure` filters and a stack overflow at the default test stack (use `RUST_MIN_STACK=268435456`); those are internal checks, not acceptance, and were not triaged individually.
+
+## Round 3 (October 21): V541
+
+[V541](../../worktracks/evidence/2026-10-21-v541-interpreter-runtime.json): 115 unchanged official programs (the 71 V540 programs plus 44 reported newly completing this round) through `tools/rustc_checkout_runtime.py` in two invocations: **113 `runtime_contract_pass`, 2 `unsupported_harness`** (`insignificant_drop.rs` `//@ run-rustfix`, and the newly imported `packed/packed-struct-address-of-element.rs` `//@ ignore-emscripten`), 0 interpreter failures. Source fingerprint `2e0ea0a9b52859a25461c6bad3dee857103d0bf8428cf7bba35cb8be49feb34a`, HEAD `d41cb0bc14` plus the tree committed as `0fb1968efa`; all manifest guards agree. Selected batch only. Still only repr128 and union-generic-rpass reach the solver root at runtime.
+
+Commit `0fb1968efa` contents (each driven by an unchanged upstream program, see the evidence rows):
+
+| Area | Shared route extended |
+| --- | --- |
+| Function-parameter shadowing (`let foo = foo;`, match/closure/for bindings) | `frontend/source_value_goals.rs::complete_lexical_lookup` deferred-parameter branch now applies to binding patterns. 73-program control: `tools/validation/regress_shadowing.sh` + `tools/validation/shadow_params/` |
+| Destructuring assignment, `let PAT;`, `const {}` | `syntax/assignee.rs` (rustc's `lower_expr_assign` grammar), `pattern_plan.rs` Declare/Assign through the one pattern transaction |
+| Macro-defining macros, std-macro-argument `#[macro_use]` macros, `gca!` | `expand/source_declarative.rs` generated bodies, module textual scope lookup, `lrr-expand-adapter` `expand_gca`; mbe repetition cardinality erratum E-M006-004 (vendor patch regenerated, audit passes) |
+| `Self::V`, `Alias::V`, `Self(..)`/`Self{..}`, block-local `use` roots with 3+ segments | `frontend/callables_type_relative.rs`, `source_value_goals.rs::deep_lexical` |
+| Fully qualified multi-impl trait calls, `&'a T: Add` operands, `()` receivers | `frontend/callables_anchored.rs`, `engine/run_trait_calls.rs` deferred route, `vm/frame_operator_calls.rs::rigid_result`; literals bind to the selected impl parameter type |
+| `f32`/`f64` `FromStr` | host `str::parse` intrinsics `lrr_f32_parse`/`lrr_f64_parse`/`lrr_float_parse_status` |
+| Failing `assert_eq!`/`assert_ne!` panics | `assert_failed` is ordinary facade source (`facade/core/panicking.rs`) with a real signature |
+| Library macros, `&raw` | `frontend/library_macros.rs` FILES (core `ptr`/`mem`/`pin`, std `thread`), `Op::RawBorrow`, facade mpsc/`LocalKey`/eager `spawn` |
+| Source-component inference root (shadow only) | `binding_constraint_rows.rs`, `traits/upstream/component_root.rs` (`ReachedSubject::Component`), `LRR_SCR_SHADOW=solve|apply` |
+
+The source-component root is **not** the production decision source: in shadow mode over the 71 round-2 programs it matched legacy on 106 of 619 reached literals, mismatched 0, held or left open 450 where legacy resolved, and gained 0; per-literal cost is high. It is unfinished work with an env-gated consumer, not a feature. `tests/ui/match/guard-pattern-ordering-14865.rs` passes through a separate small legacy-component rule (tail-less diverging blocks state nothing about a numeric component). Slice 2 (overloaded Deref/method-probe/Field/Record rows) is blocked on an unprepared "ADT sizedness" query fact (`traits/upstream/query_facts.rs:48`, `source_adt_facts.rs:381`).
+
+### Next work after round 3
+
+1. **`?` operator** (`TryExpr`) is unsupported ("entered node phase awaits its ordered lowering task"); `a.parse::<i64>()?` fails. High value.
+2. **Block-level `mod` items inside function bodies**, and associated items through a block-imported type root; `assert_eq!`/std macros inside functions of non-root module files (`mod x;` files) fail with "reached user macro requires source expansion integration".
+3. **Deferred inference** (largest family): continue the source-component root (needs ADT sizedness facts and method-probe rows), or an alternative; see round-2 list item 2. Also `Rc::new(1)`-style numeric fallback closures, `let g: fn(u32)->u32 = |x| x+1`, `Vec::new()` fixed by later use, `Map<I,F>::next`'s `None` (closure Output).
+4. `thread_local!` expands but its generated `const` is refused (`generated_result_namespace.rs::require_original_origins` on multi-level hygiene provenance); `offset_of!` has no `builtin # offset_of` lowering; `pin!` needs `super let`; `type_ascribe!`, `cfg_select!` have no expanders.
+5. Harness: `//@ run-rustfix` and `//@ ignore-emscripten` are unhandled directives; 64-case cap per invocation.
+6. Library: `rest @ ..` value read/assign, constant promotion of `&[N(1), ..]`, non-Copy `[const { Vec::new() }; N]`, `format!("{x}")` implicit argument capture, const generic parameters as values, closure typing from an expected fn-pointer type, mixed-RHS shift impls.
