@@ -18,6 +18,7 @@ use crate::{
     },
     source::manifest::DefKey,
 };
+use crate::runtime::object::MemoryRegion;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -99,7 +100,7 @@ impl GuestStore {
     }
 
     /// Whether a pointer to `target` is a fat pointer.
-    fn unsized_pointee(&self, target: TypeId) -> bool {
+    pub(super) fn unsized_pointee(&self, target: TypeId) -> bool {
         target.0 == 16
             || matches!(
                 self.types.descriptor(target).map(|d| d.key.as_ref()),
@@ -543,12 +544,17 @@ impl GuestStore {
 // ---- Plain data: `mem::zeroed` and `mem::transmute` ---------------------------
 //
 // The managed runtime has no byte-addressable memory. A *plain* type - a
-// scalar, a raw pointer, or an array, tuple or nominal struct of plain types - has a byte
-// image under its layout, so a value converts to bytes and back without
-// naming a host representation. `zeroed` builds the all-zero image;
-// `transmute` is image-to-image between plain types of equal size. Everything
-// else (references, `Box`, enums/unions, closures) has provenance or
-// ownership the byte image cannot carry and is refused with the type pair.
+// scalar, a thin pointer (raw, fn or reference), or an array, tuple, nominal
+// struct or union of plain types - has a byte image under its layout, so a
+// value converts to bytes and back without naming a host representation.
+// `zeroed` builds the all-zero image; `transmute` is image-to-image between
+// plain types of equal size. A pointer's image is its synthetic address
+// (E-R5-008, `cell_pointers.rs`); reading it back as a raw or fn pointer is
+// that address, and as a reference is the checked reborrow of the live cell
+// of the pointee type that starts there (`pointer_from_address`), so an
+// address that names nothing live never becomes a reference. Everything else
+// (fat pointers, `Box`, enums, closures) has provenance or ownership the byte
+// image cannot carry and is refused with the type pair.
 
 fn plain_fault(message: String) -> Diagnostic {
     Diagnostic::new("LRR-E-UNSUPPORTED", message)
@@ -624,23 +630,41 @@ impl GuestStore {
         }
     }
 
-    /// Whether `ty` has a byte image (see the section comment).
+    /// Whether `ty` has a byte image (see the section comment). A thin
+    /// reference or raw pointer is its address; a union is its bytes.
     pub(super) fn plain_type(&self, ty: TypeId) -> bool {
         if let Ok(scalar) = primitive(ty) {
             return scalar != Primitive::Str;
         }
         match self.types.descriptor(ty).map(|d| Arc::clone(&d.key)) {
             Ok(key) => match key.as_ref() {
-                TypeKey::RawPtr { target, .. } => !self.unsized_pointee(*target),
+                TypeKey::RawPtr { target, .. } | TypeKey::Ref { target, .. } => {
+                    !self.unsized_pointee(*target)
+                }
+                TypeKey::Function { .. } => true,
                 TypeKey::Array { element, .. } => self.plain_type(*element),
                 TypeKey::Tuple(members) => members.iter().all(|member| self.plain_type(*member)),
-                TypeKey::Nominal { .. } => self.nominal_image_fields(ty)
-                    .ok().flatten().is_some_and(|(members, _)|
-                        members.iter().all(|member| self.plain_type(*member))),
+                TypeKey::Nominal { .. } => match self.union_image_members(ty) {
+                    Some(members) => members.iter().all(|member| self.plain_type(*member)),
+                    None => self.nominal_image_fields(ty)
+                        .ok().flatten().is_some_and(|(members, _)|
+                            members.iter().all(|member| self.plain_type(*member))),
+                },
                 _ => false,
             },
             Err(_) => false,
         }
+    }
+
+    /// The member types of a union whose declaration is installed.
+    fn union_image_members(&self, ty: TypeId) -> Option<Vec<TypeId>> {
+        let (declaration, instance) = self.declaration_of(ty).ok()?;
+        if declaration.kind != NominalKind::Union {
+            return None;
+        }
+        let instance = instance?;
+        let [members] = instance.as_slice() else { return None; };
+        Some(members.clone())
     }
 
     /// Byte offsets of the members of a plain tuple.
@@ -712,6 +736,25 @@ impl GuestStore {
             9 => {
                 let address = self.pointer_address(value)?;
                 Self::put_bytes(image, offset, &address.to_le_bytes())?;
+            }
+            8 if self.is_union_type(ty) => {
+                // A union is its canonical bytes; none may be uninitialized
+                // (the image carries no initialization mask).
+                let ObjectStorage::Aggregate(storage) = &self.objects.get(ObjectId::from_bits(value.payload))?.storage else {
+                    return Err(invalid());
+                };
+                let region = storage.memory.as_ref().ok_or_else(invalid)?;
+                if region.bytes.len() != length {
+                    return Err(invalid());
+                }
+                if !region.initialized.iter().all(|byte| *byte) {
+                    return Err(Diagnostic::new(
+                        "LRR-E-UNINITIALIZED",
+                        "byte image of a union with uninitialized bytes".into(),
+                    ));
+                }
+                let bytes = region.bytes.clone();
+                Self::put_bytes(image, offset, &bytes)?;
             }
             8 => {
                 let key = Arc::clone(&self.types.descriptor(ty)?.key);
@@ -824,11 +867,22 @@ impl GuestStore {
         }
         let key = Arc::clone(&self.types.descriptor(ty)?.key);
         match key.as_ref() {
-            TypeKey::RawPtr { .. } => {
+            TypeKey::RawPtr { .. } | TypeKey::Ref { .. } | TypeKey::Function { .. } => {
                 let address = u64::from_le_bytes(Self::image_word(image, offset, 8)?);
-                let integer = ValueRepr::unsigned(TypeId(13), address)?;
-                let pointer = self.pointer_cast(integer, ty)?;
-                self.ticket(pointer)
+                self.pointer_from_address(address, ty)
+            }
+            TypeKey::Nominal { .. } if self.is_union_type(ty) => {
+                let range = Self::image_range(offset, length)?;
+                let bytes = image.get(range).ok_or_else(invalid)?.to_vec();
+                self.install_union_memory(
+                    ty,
+                    MemoryRegion {
+                        initialized: vec![true; bytes.len()],
+                        bytes,
+                        pointers: Vec::new(),
+                        leaves: Vec::new(),
+                    },
+                )
             }
             TypeKey::Array { element, len } => {
                 let stride = self.layout_of(*element)?.size;
@@ -883,14 +937,10 @@ impl GuestStore {
         destination: TypeId,
     ) -> Result<TicketId, Diagnostic> {
         let value = self.peek_ticket(source_ticket)?;
-        // A thin reference is accepted as a source: its byte image is its
-        // address (`transmute::<&T, usize>`). Rebuilding a reference from
-        // bytes has no provenance to restore, so it is not a destination.
-        let thin_reference = matches!(
-            self.types.descriptor(source).map(|d| d.key.as_ref()),
-            Ok(TypeKey::Ref { target, .. }) if !self.unsized_pointee(*target)
-        );
-        if !(self.plain_type(source) || thin_reference) || !self.plain_type(destination) {
+        // A thin reference's byte image is its address; reading it back as a
+        // reference re-borrows the live cell at that address
+        // (`pointer_from_address`), so references transmute in both directions.
+        if !self.plain_type(source) || !self.plain_type(destination) {
             return Err(plain_fault(format!(
                 "mem::transmute::<{}, {}> requires supported byte images and pointer provenance",
                 self.describe_type(source),
@@ -974,5 +1024,91 @@ mod image_storage_tests {
         let unit = store.read_plain_image(TypeId(1), 0, &[]).unwrap();
         store.discard(unit).unwrap();
         assert!(store.read_plain_image(TypeId(1), 1, &[]).is_err());
+    }
+
+    /// A writable `u8` local holding `value`.
+    fn byte_local(store: &mut GuestStore, value: u64) -> CellId {
+        let frame = store.new_frame_anchor().unwrap();
+        let cell = store
+            .new_cell(
+                StorageContract::Exact(TypeId(9)),
+                true,
+                CellOwner::FrameSlot { frame, slot: 0 },
+            )
+            .unwrap();
+        let ticket = store.ticket(ValueRepr::unsigned(TypeId(9), value).unwrap()).unwrap();
+        store.initialize(cell, ticket).unwrap();
+        cell
+    }
+    fn reference_type(store: &mut GuestStore, mutable: bool) -> TypeId {
+        store.intern_type(TypeKey::Ref { mutable, target: TypeId(9) }).unwrap()
+    }
+
+    #[test]
+    fn thin_references_round_trip_through_address_images_as_checked_reborrows() {
+        let mut store = GuestStore::for_epoch(1).unwrap();
+        let cell = byte_local(&mut store, 5);
+        let shared = reference_type(&mut store, false);
+        let ticket = store.borrow_ticket(&Place::cell(cell), Access::Shared).unwrap();
+        let value = store.peek_ticket(ticket).unwrap();
+        assert!(store.plain_type(shared));
+        let mut image = [0u8; 8];
+        store.write_plain_image(value, shared, 0, &mut image).unwrap();
+        assert_eq!(u64::from_le_bytes(image), store.cell_address(cell).unwrap());
+        // The image names the cell; reading it re-borrows that same location.
+        let back = store.read_plain_image(shared, 0, &image).unwrap();
+        let back_value = store.peek_ticket(back).unwrap();
+        assert_eq!(TypeId(back_value.type_id), shared);
+        let id = RefId::from_bits(back_value.payload);
+        assert_eq!(store.read_place(&Place::deref(id)).unwrap().payload, 5);
+        // The recovered reference is bound to the location, not to its bytes:
+        // a dead location is reported, never silently resurrected.
+        store.discard(back).unwrap();
+        store.discard(ticket).unwrap();
+        assert!(!store.plain_type(TypeId(16)));
+        let dead = byte_local(&mut store, 6);
+        let dead_address = store.cell_address(dead).unwrap();
+        let moved = store.move_from(dead).unwrap();
+        store.discard(moved).unwrap();
+        store.retire_cell(dead).unwrap();
+        let error = store
+            .read_plain_image(shared, 0, &dead_address.to_le_bytes())
+            .unwrap_err();
+        assert_eq!(error.code, "LRR-E-POINTER-DANGLING");
+        for address in [0u64, 1, dead_address + 1] {
+            assert_eq!(
+                store.read_plain_image(shared, 0, &address.to_le_bytes()).unwrap_err().code,
+                "LRR-E-POINTER-DANGLING"
+            );
+        }
+        // A cell of another pointee type at that address is not a `&u8`.
+        let wide = store.intern_type(TypeKey::Ref { mutable: false, target: TypeId(11) }).unwrap();
+        let live = store.cell_address(cell).unwrap();
+        assert_eq!(
+            store.read_plain_image(wide, 0, &live.to_le_bytes()).unwrap_err().code,
+            "LRR-E-POINTER-DANGLING"
+        );
+    }
+
+    #[test]
+    fn mutable_references_recover_one_owned_lease_from_an_address_image() {
+        let mut store = GuestStore::for_epoch(1).unwrap();
+        let cell = byte_local(&mut store, 1);
+        let unique = reference_type(&mut store, true);
+        let address = store.cell_address(cell).unwrap();
+        let back = store.read_plain_image(unique, 0, &address.to_le_bytes()).unwrap();
+        let value = store.peek_ticket(back).unwrap();
+        assert_eq!(TypeId(value.type_id), unique);
+        let id = RefId::from_bits(value.payload);
+        let nine = store.ticket(ValueRepr::unsigned(TypeId(9), 9).unwrap()).unwrap();
+        let old = store.replace_place(&Place::deref(id), nine).unwrap();
+        store.discard(old).unwrap();
+        assert_eq!(store.read_place(&Place::cell(cell)).unwrap().payload, 9);
+        // Writing the lease back to bytes consumes it exactly once.
+        let mut image = [0u8; 8];
+        store.write_plain_image(value, unique, 0, &mut image).unwrap();
+        assert_eq!(u64::from_le_bytes(image), address);
+        store.discard(back).unwrap();
+        assert!(store.read_place(&Place::deref(id)).is_err());
     }
 }

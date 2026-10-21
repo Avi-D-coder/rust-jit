@@ -114,6 +114,32 @@ pub(super) struct AggregateStorage {
 pub(super) struct MemoryRegion {
     pub bytes: Vec<u8>,
     pub initialized: Vec<bool>,
+    /// The reference or pointer values recovered from the pointer-typed
+    /// views of these bytes (`GuestStore::refresh_pointer_slots`). The bytes
+    /// stay canonical: a slot is only returned while the bytes at its view
+    /// still hold the address it was recovered from.
+    pub pointers: Vec<PointerSlot>,
+    /// Every pointer-typed leaf view of the union that owns these bytes,
+    /// fixed when the region is installed.
+    pub leaves: Vec<PointerLeaf>,
+}
+/// One pointer-typed leaf view: its cell, byte offset and type.
+#[derive(Clone, Copy)]
+pub(super) struct PointerLeaf {
+    pub cell: CellId,
+    pub offset: u64,
+    pub ty: TypeId,
+}
+/// A thin reference, raw pointer or fn pointer value recovered from the
+/// address a leaf view's bytes hold. `value` is a kind-9 value whose record
+/// designates the location that address named when the bytes were last
+/// written; a recovered `&mut` is owned by its view cell like a `&mut`
+/// held by any other cell.
+#[derive(Clone, Copy)]
+pub(super) struct PointerSlot {
+    pub cell: CellId,
+    pub address: u64,
+    pub value: ValueRepr,
 }
 /// Run-local field state; never serialized as a host layout or native pointer.
 /// A set bit means the entire owning child value is initialized, including its

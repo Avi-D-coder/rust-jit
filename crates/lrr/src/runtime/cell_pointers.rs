@@ -820,6 +820,57 @@ impl GuestStore {
             )),
         }
     }
+    /// The thin pointer or reference of type `ty` that an address image
+    /// designates. A raw pointer is just the address (`usize as *const T`);
+    /// a reference is the ordinary reborrow `&*(address as *const T)` /
+    /// `&mut *(address as *mut T)` of the live cell of exactly the pointee
+    /// type that starts there, so it carries a checked location lease and,
+    /// for `&mut`, the one transfer owner a moved reference has. An address
+    /// that names no live cell of the pointee type is dangling and yields no
+    /// reference: no address is invented and no lease is forged.
+    pub(super) fn pointer_from_address(
+        &mut self,
+        address: u64,
+        ty: TypeId,
+    ) -> Result<TicketId, Diagnostic> {
+        let key = std::sync::Arc::clone(&self.types.descriptor(ty)?.key);
+        let integer = ValueRepr::unsigned(TypeId(13), address)?;
+        match key.as_ref() {
+            // A raw or fn pointer is just the address (`usize as *const T`,
+            // `usize as fn()`): its record names no lease.
+            TypeKey::RawPtr { .. } | TypeKey::Function { .. } => {
+                let pointer = self.pointer_cast(integer, ty)?;
+                self.ticket(pointer)
+            }
+            TypeKey::Ref { mutable, target } if !self.unsized_pointee(*target) => {
+                if self.cell_at_exact(address, *target).is_none() {
+                    return Err(dangling());
+                }
+                let raw_type = self.raw_pointer_type(*mutable, *target)?;
+                let raw = RefId::from_bits(self.pointer_cast(integer, raw_type)?.payload);
+                let access = if *mutable {
+                    Access::Mutable
+                } else {
+                    Access::Shared
+                };
+                let borrowed = self.borrow_ticket(&Place::deref(raw), access);
+                // The detached address record only named the location.
+                self.references.take(raw, &mut self.budget)?;
+                let ticket = borrowed.map_err(|failure| match failure {
+                    PlaceFailure::RuntimeFault(error) => error,
+                    PlaceFailure::GuestPanic(_) => dangling(),
+                })?;
+                if self.peek_ticket(ticket)?.type_id != ty.0 {
+                    self.discard(ticket)?;
+                    return Err(dangling());
+                }
+                Ok(ticket)
+            }
+            _ => Err(pointer_type_fault(
+                "only thin references and raw pointers are recovered from an address",
+            )),
+        }
+    }
     fn callable_identity(&self, value: ValueRepr) -> Result<Digest, Diagnostic> {
         match self.types.descriptor(TypeId(value.type_id))?.key.as_ref() {
             TypeKey::Callable {

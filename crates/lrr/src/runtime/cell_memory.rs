@@ -1,10 +1,11 @@
 //! Canonical union bytes and stable typed cell views. No source lookup or parsing.
 use super::layouts::NominalKind;
 use super::*;
-use crate::runtime::object::MemoryRegion;
+use crate::runtime::object::{MemoryRegion, PointerLeaf, PointerSlot};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct MemoryView {
+    pub(super) cell: CellId,
     pub(super) root: ObjectId,
     pub(super) offset: u64,
     pub(super) ty: TypeId,
@@ -85,6 +86,26 @@ impl GuestStore {
                 "read of uninitialized shared storage bytes".into(),
             ));
         }
+        if self.pointer_leaf_type(view.ty) {
+            // The bytes hold an address; the reference or pointer recovered
+            // from it (`refresh_pointer_slots`) is the value while they still
+            // hold that address.
+            let address = Self::slot_address(&memory.bytes, view.offset)?;
+            return memory
+                .pointers
+                .iter()
+                .find(|slot| slot.cell == view.cell && slot.address == address)
+                .map(|slot| slot.value)
+                .ok_or_else(|| {
+                    Diagnostic::new(
+                        "LRR-E-POINTER-DANGLING",
+                        format!(
+                            "{} stored in shared storage designates no live guest location",
+                            self.describe_type(view.ty)
+                        ),
+                    )
+                });
+        }
         self.image_scalar(view.ty, view.offset, &memory.bytes)?
             .ok_or_else(|| {
                 Diagnostic::new(
@@ -121,6 +142,9 @@ impl GuestStore {
             return self.install_union_memory(view.ty, image);
         }
         self.validate_memory_view(view)?;
+        if let Some(ticket) = self.move_out_unique_reference(view)? {
+            return Ok(ticket);
+        }
         let image = self.snapshot_memory_view(view)?;
         self.read_plain_image(view.ty, 0, &image.bytes)
     }
@@ -135,6 +159,8 @@ impl GuestStore {
                 .ok_or_else(invalid)?
                 .to_vec(),
             initialized: region.initialized.get(range).ok_or_else(invalid)?.to_vec(),
+            pointers: Vec::new(),
+            leaves: Vec::new(),
         })
     }
     pub(super) fn copy_union_memory(&mut self, source: CellId) -> Result<TicketId, Diagnostic> {
@@ -202,6 +228,7 @@ impl GuestStore {
         };
         let union_field = self.is_union_type(self.objects.get(parent)?.type_id);
         self.cells.get_mut(cell)?.state = CellState::View(MemoryView {
+            cell,
             root,
             offset,
             ty,
@@ -210,7 +237,7 @@ impl GuestStore {
         });
         Ok(cell)
     }
-    fn install_union_memory(
+    pub(super) fn install_union_memory(
         &mut self,
         ty: TypeId,
         image: MemoryRegion,
@@ -251,6 +278,16 @@ impl GuestStore {
             pending_cleanup: None,
             variant,
         });
+        let mut leaves = Vec::new();
+        self.pointer_leaves(object, &mut leaves)?;
+        let ObjectStorage::Aggregate(storage) = &mut self.objects.get_mut(object)?.storage else {
+            return Err(invalid());
+        };
+        let memory = storage.memory.as_mut().ok_or_else(invalid)?;
+        memory.leaves = leaves;
+        // A cloned region's slots belong to the union it was cloned from.
+        memory.pointers.clear();
+        self.refresh_pointer_slots(object)?;
         let value = ValueRepr {
             kind: 8,
             type_id: ty.0,
@@ -300,6 +337,8 @@ impl GuestStore {
         let mut image = MemoryRegion {
             bytes: vec![0; size],
             initialized: vec![false; size],
+            pointers: Vec::new(),
+            leaves: Vec::new(),
         };
         for (field, value) in values {
             let field_ty = *members.get(field as usize).ok_or_else(invalid)?;
@@ -376,10 +415,184 @@ impl GuestStore {
             .get_mut(range)
             .ok_or_else(invalid)?
             .fill(true);
+        self.refresh_pointer_slots(view.root)?;
         self.consume_image_source(incoming)
+    }
+
+    /// Whether a view of `ty` holds an address that reads back as a pointer
+    /// or reference: a thin raw pointer, fn pointer or thin reference.
+    fn pointer_leaf_type(&self, ty: TypeId) -> bool {
+        match self.types.descriptor(ty).map(|d| d.key.as_ref()) {
+            Ok(TypeKey::RawPtr { target, .. } | TypeKey::Ref { target, .. }) => {
+                !self.unsized_pointee(*target)
+            }
+            Ok(TypeKey::Function { .. }) => true,
+            _ => false,
+        }
+    }
+    fn unique_reference_leaf(&self, ty: TypeId) -> bool {
+        matches!(
+            self.types.descriptor(ty).map(|d| d.key.as_ref()),
+            Ok(TypeKey::Ref { mutable: true, .. })
+        ) && self.pointer_leaf_type(ty)
+    }
+    fn slot_address(bytes: &[u8], offset: u64) -> Result<u64, Diagnostic> {
+        let range = Self::image_range(offset, 8)?;
+        let word: [u8; 8] = bytes
+            .get(range)
+            .ok_or_else(invalid)?
+            .try_into()
+            .map_err(|_| invalid())?;
+        Ok(u64::from_le_bytes(word))
+    }
+    /// Every pointer-typed leaf view below a union's field views.
+    fn pointer_leaves(&self, object: ObjectId, leaves: &mut Vec<PointerLeaf>) -> Result<(), Diagnostic> {
+        let ObjectStorage::Aggregate(storage) = &self.objects.get(object)?.storage else {
+            return Err(invalid());
+        };
+        for cell in &storage.fields {
+            let CellState::View(view) = self.cells.get(*cell)?.state else {
+                return Err(invalid());
+            };
+            match view.aggregate {
+                Some(child) => self.pointer_leaves(child, leaves)?,
+                None if self.pointer_leaf_type(view.ty) => leaves.push(PointerLeaf {
+                    cell: *cell,
+                    offset: view.offset,
+                    ty: view.ty,
+                }),
+                None => {}
+            }
+        }
+        Ok(())
+    }
+    fn is_unique_record(&self, value: ValueRepr) -> Result<bool, Diagnostic> {
+        Ok(value.kind == 9
+            && self.references.get(RefId::from_bits(value.payload))?.access == Access::Mutable)
+    }
+    /// Recover the reference or pointer each pointer-typed view of a union's
+    /// bytes now names. The bytes are the one source of truth: a slot is the
+    /// value `pointer_from_address` gives for the address the view's bytes
+    /// hold (the ordinary `&*(address as *const T)` reborrow), kept while
+    /// that address is unchanged. An address that names no live cell of the
+    /// pointee type has no slot, and a view read then reports a dangling
+    /// reference; the write itself never fails over it. A recovered `&mut`
+    /// belongs to its view cell, so reading it in place (`*u.r = 1`,
+    /// `&mut *u.r`) is the same checked access as through any `&mut` local.
+    fn refresh_pointer_slots(&mut self, root: ObjectId) -> Result<(), Diagnostic> {
+        let memory = self.memory_region(root)?;
+        if memory.leaves.is_empty() && memory.pointers.is_empty() {
+            return Ok(());
+        }
+        let mut kept = Vec::with_capacity(memory.leaves.len());
+        let mut recover = Vec::new();
+        for leaf in &memory.leaves {
+            let range = Self::image_range(leaf.offset, 8)?;
+            let covered = memory.initialized.get(range).ok_or_else(invalid)?;
+            if !covered.iter().all(|bit| *bit) {
+                continue;
+            }
+            let address = Self::slot_address(&memory.bytes, leaf.offset)?;
+            match memory
+                .pointers
+                .iter()
+                .find(|slot| slot.cell == leaf.cell && slot.address == address)
+            {
+                Some(slot) => kept.push(*slot),
+                None => recover.push((*leaf, address)),
+            }
+        }
+        // The superseded slots of this union's own views release their lease.
+        let superseded: Vec<ValueRepr> = memory
+            .pointers
+            .iter()
+            .filter(|slot| {
+                memory.leaves.iter().any(|leaf| leaf.cell == slot.cell)
+                    && !kept.iter().any(|keep| keep.cell == slot.cell)
+            })
+            .map(|slot| slot.value)
+            .collect();
+        for value in superseded {
+            if self.is_unique_record(value)? {
+                self.references.take(RefId::from_bits(value.payload), &mut self.budget)?;
+            }
+        }
+        for (leaf, address) in recover {
+            // A failed recovery is the absence of a slot, reported when the
+            // view is read.
+            let Ok(ticket) = self.pointer_from_address(address, leaf.ty) else {
+                continue;
+            };
+            let value = self.peek_ticket(ticket)?;
+            if self.is_unique_record(value)? {
+                self.tickets.take(ticket, &mut self.budget)?;
+                self.set_owner(value, ValueOwner::Cell(leaf.cell))?;
+            } else {
+                self.discard(ticket)?;
+            }
+            kept.push(PointerSlot { cell: leaf.cell, address, value });
+        }
+        let ObjectStorage::Aggregate(storage) = &mut self.objects.get_mut(root)?.storage else {
+            return Err(invalid());
+        };
+        storage.memory.as_mut().ok_or_else(invalid)?.pointers = kept;
+        Ok(())
+    }
+    /// Moving a `&mut` out of its view hands out the view's own lease, once:
+    /// rustc treats the union as moved from afterwards, so the slot is not
+    /// left to be read a second time.
+    fn move_out_unique_reference(&mut self, view: MemoryView) -> Result<Option<TicketId>, Diagnostic> {
+        if view.aggregate.is_some() || !self.unique_reference_leaf(view.ty) {
+            return Ok(None);
+        }
+        let memory = self.memory_region(view.root)?;
+        let address = Self::slot_address(&memory.bytes, view.offset)?;
+        let Some(index) = memory
+            .pointers
+            .iter()
+            .position(|slot| slot.cell == view.cell && slot.address == address)
+        else {
+            return Ok(None);
+        };
+        let value = memory.pointers[index].value;
+        self.tickets.reserve(1, &mut self.budget)?;
+        let ticket = self
+            .tickets
+            .allocate(TransferTicket { value }, 0, &mut self.budget)
+            .map(TicketId::from)?;
+        self.set_owner(value, ValueOwner::Ticket(ticket))?;
+        let ObjectStorage::Aggregate(storage) = &mut self.objects.get_mut(view.root)?.storage else {
+            return Err(invalid());
+        };
+        storage.memory.as_mut().ok_or_else(invalid)?.pointers.swap_remove(index);
+        Ok(Some(ticket))
+    }
+    /// A retiring view gives up its slot; a recovered `&mut` lease is destroyed
+    /// with it, never the referent.
+    fn release_pointer_slot(&mut self, view: MemoryView) -> Result<(), Diagnostic> {
+        let ObjectStorage::Aggregate(storage) = &mut self.objects.get_mut(view.root)?.storage else {
+            return Ok(());
+        };
+        let Some(memory) = storage.memory.as_mut() else {
+            return Ok(());
+        };
+        let Some(index) = memory.pointers.iter().position(|slot| slot.cell == view.cell) else {
+            return Ok(());
+        };
+        let slot = memory.pointers.swap_remove(index);
+        if self.is_unique_record(slot.value)? {
+            self.references.take(RefId::from_bits(slot.value.payload), &mut self.budget)?;
+        }
+        Ok(())
     }
     pub(super) fn retire_memory_views(&mut self, fields: Vec<CellId>) -> Result<(), Diagnostic> {
         for cell in fields {
+            if let CellState::View(view) = self.cells.get(cell)?.state
+                && view.aggregate.is_none()
+                && self.pointer_leaf_type(view.ty)
+            {
+                self.release_pointer_slot(view)?;
+            }
             if let CellState::View(view) = self.cells.get(cell)?.state
                 && let Some(object) = view.aggregate
             {
