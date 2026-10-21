@@ -29,6 +29,7 @@ pub(crate) struct CaptureFacts {
     typed_fault_exit_candidates: u64,
     observed_fault: bool,
     observed_suspension: bool,
+    host_preparation_suspensions: u64,
     terminal: Option<ObservedTerminal>,
     cleanup_observed: bool,
     closed_no_external_effects: bool,
@@ -185,6 +186,15 @@ impl RunCapture {
         }
         self.facts.closed_no_external_effects = false;
         match result {
+            // A reached solver root demands the actual impl catalog; the host
+            // services it through the ordinary compiler/module preparation and
+            // publishes immutable metadata (host preparation streams stay outside
+            // guest capture), then resumes the same interpreter. It performs no
+            // guest effect, so it is counted rather than latched. Every other
+            // suspension kind stays an unclassified observation gap.
+            RunPoll::NeedInput(crate::db::poll::InputRequest::Discover { .. }) => {
+                add(&mut self.facts.host_preparation_suspensions, 1)?
+            }
             RunPoll::NeedInput(_) => self.facts.observed_suspension = true,
             RunPoll::Fault(_) => self.facts.observed_fault = true,
             RunPoll::Completed(report) => {
@@ -326,6 +336,39 @@ mod tests {
             installed_lrir_bytes: 1,
             output: Default::default(),
         })
+    }
+    #[test]
+    fn catalog_discovery_is_counted_host_preparation_not_an_observation_gap() {
+        let mut capture = RunCapture::default();
+        capture
+            .observe_poll(
+                &RunPoll::NeedInput(crate::db::poll::InputRequest::Discover {
+                    key: crate::db::seals::SealKey {
+                        domain: crate::db::seals::SealDomain::ImplCatalog { id: Digest([3; 32]) },
+                        unit_graph: Digest([4; 32]),
+                        epoch: 1,
+                    },
+                }),
+                None,
+            )
+            .unwrap();
+        assert_eq!(capture.facts.host_preparation_suspensions, 1);
+        assert!(!capture.facts.observed_suspension);
+        capture
+            .observe_recipe(
+                &[Op::Unit {
+                    destination: SlotId(0),
+                }],
+                &RecipeExit::Next(pc()),
+            )
+            .unwrap();
+        capture.after_vm_dispatch(&StepOutcome::Next(pc())).unwrap();
+        let retained = TerminalFacts {
+            outcome: TerminalExecution::Completed { unit: true },
+            cleanup_ran: Some(true),
+        };
+        capture.observe_poll(&completed(), Some(&retained)).unwrap();
+        assert!(capture.facts.complete());
     }
     #[test]
     fn detached_public_report_and_suspension_cannot_certify_closed_capture() {
