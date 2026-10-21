@@ -1,5 +1,7 @@
 # Interpreter handoff — October 20, 2026 winddown
 
+> **Superseded for current state** by [the October 20/21 round-2 handoff](2026-10-21-interpreter-round2.md): repr128.rs and union-generic-rpass.rs listed below as failures now pass (V540). This document is kept as the historical V537 record.
+
 The user requested winddown after the current round. All implementation and validation workers have stopped; no new repair was begun after this request. Continue from this checkout, preserving inherited work. The project goal is incomplete and implementation is paused for handoff, not completed.
 
 Repository: `/Users/avi/Code/rust-jit`, branch `codex/lrr-implementation`, remote `https://github.com/Avi-D-coder/rust-jit.git`. Read current `AGENTS.md` and revision 5 specification first. Earlier handoffs and checkpoint banners are historical. This document describes the outgoing shared source tree. The source checkpoint containing it can be identified with `git log -1`; the validated baseline HEAD before checkpointing was `08c177d83dda20a283e06709c92cfffc19eee6be` with the changes now checkpointed.

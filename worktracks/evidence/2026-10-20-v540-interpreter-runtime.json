@@ -1,0 +1,1509 @@
+{
+ "schema": "lrr/worktrack-evidence/v1",
+ "id": "V540",
+ "recorded_utc": "2026-10-21",
+ "scope": "Seventy-one unchanged official rustc runtime programs through the production CLI/VM (maintained tools/rustc_checkout_runtime.py in two invocations because the harness caps one run at 64 cases). A selected batch: 70 runtime-contract passes and 1 unsupported_harness, which is not an interpreter failure. Not a suite total, full-fixture, diagnostic, tooling, complete-interpreter or JIT acceptance. No isolated component controls were selected or counted.",
+ "platform": "aarch64-apple-darwin",
+ "toolchain": "rust 1.99.0",
+ "head_before_checkpoint": "ba8e4ab34cb33c85b4fb1b8c2ca7b7f9c9d1bb56",
+ "source_sha256": "2f881ff698b772cec4ce576f6e6dd90333b86af3d485c08634845c3d63efe282",
+ "source_file_count": 8763,
+ "source_note": "Working tree = HEAD ba8e4ab34cb33c85b4fb1b8c2ca7b7f9c9d1bb56 plus the later-committed crates/lrr/src/engine/run_capture.rs change (commit 3b1263ff86). Before, after-build and after-runtime source manifests all report the same fingerprint, HEAD and binaries.",
+ "binaries": {
+  "cli_sha256": "a8735c85684fc5c1089af9788739a29f3fc8986c94ae61a7b188bfbb0a27c924",
+  "lib_test_sha256": "00465ca3d490e2ea8008a4805859a03381286a056465091be15707c6acaa37fa",
+  "interpreter_sha256_in_report": "a8735c85684fc5c1089af9788739a29f3fc8986c94ae61a7b188bfbb0a27c924",
+  "source_digester_sha256": "43cbcb07915003b143e7051b2b06779d5c1934d7976acdc07202a1a67de5be89"
+ },
+ "selection": "worktracks/05-trait-goal-engine/2026-10-20-interpreter-runtime-selection-round2.json",
+ "commands": [
+  "python3.12 tools/validation/source_manifest.py artifacts/validation-current-v540 before",
+  "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json",
+  "cargo +1.99.0 build --offline --locked -p lrr --bin lrr",
+  "cargo +1.99.0 build --offline --locked -p xtask --example lrr_source_digests",
+  "python3.12 tools/validation/source_manifest.py artifacts/validation-current-v540 after-build --cargo-messages ... --cli-binary target/debug/lrr",
+  "LRR_EMBEDDED_FACADE=1 python3.12 tools/rustc_checkout_runtime.py --lrr target/debug/lrr --source-digester target/debug/examples/lrr_source_digests --report-dir /private/tmp/lrr-v540-interpreter-runtime-a --timeout 240 --case <first 36 of the selection>",
+  "same with --report-dir /private/tmp/lrr-v540-interpreter-runtime-b and the remaining 35 cases",
+  "python3.12 tools/validation/source_manifest.py artifacts/validation-current-v540 after-runtime"
+ ],
+ "exit_codes": {
+  "before": 0,
+  "lib_test_build": 0,
+  "cli_build": 0,
+  "digester_build": 0,
+  "after_build": 0,
+  "runtime_a": 0,
+  "runtime_b": 1,
+  "after_runtime": 0,
+  "note": "runtime_b exits 1 because one case is unsupported_harness"
+ },
+ "outcome_counts": {
+  "runtime_contract_pass": 70,
+  "unsupported_harness": 1,
+  "interpreter_failure": 0,
+  "incomplete_evidence": 0
+ },
+ "unsupported_harness": [
+  {
+   "case": "tests/ui/closures/2229_closure_analysis/migrations/insignificant_drop.rs",
+   "reason": "harness does not handle directive //@ run-rustfix; not run, so neither a pass nor an interpreter failure"
+  }
+ ],
+ "attempt_history": [
+  {
+   "id": "V538",
+   "outcome": "aborted by the harness before any program ran: it refuses more than 64 --case arguments (71 given). No result; directory discarded."
+  },
+  {
+   "id": "V539",
+   "source_sha256": "0bc03e0437f4aa3e7edc16b079fb45af58bf7f7b67049b8e23b54afb7bf662d8",
+   "outcome": "68 runtime_contract_pass, 2 incomplete_evidence, 1 unsupported_harness. repr128.rs and union-generic-rpass.rs completed main (exit 0, status completed) but the CLI capture latched observed_suspension because their reached solver roots suspend once for the actual impl catalog (InputRequest::Discover), so the harness reported incomplete capture. Host preparation streams are outside guest capture; the CLI now counts Discover suspensions (host_preparation_suspensions) instead of latching, every other suspension kind still latches. That is a capture-classification change made after V539 and tested by V540; it makes V540 pass counts for the two root-using programs depend on it."
+  }
+ ],
+ "root_using_programs": "Only repr128.rs and union-generic-rpass.rs reached the pinned solver root at runtime (host_preparation_suspensions 1 each); the other 69 executed programs did not.",
+ "programs": [
+  {
+   "case": "tests/ui/enum-discriminant/repr128.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "66af2eb56be2026a744d2169f8467d11df4c75e8ea21d204f0948db2c8e445bc",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 32.1,
+   "vm_dispatches": 544,
+   "vm_outcomes": 544,
+   "source_call_boundaries": 30,
+   "host_preparation_suspensions": 1,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-generic-rpass.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "f59d90d6dad771e639a8ff498e0475e10e126c1b81342c3a14c08263458356b8",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 23.7,
+   "vm_dispatches": 433,
+   "vm_outcomes": 433,
+   "source_call_boundaries": 20,
+   "host_preparation_suspensions": 1,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-nonzero.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "96dfc0d9afa93863bc30cde8c32468b017d2eedc070ad5c251a038bcd4faecc2",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 8.1,
+   "vm_dispatches": 189,
+   "vm_outcomes": 189,
+   "source_call_boundaries": 25,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/enum-discriminant/discriminant_size.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "3188f517b24186d08376bd2eac494b4041ddcbb1d11c6de50186be1a1f4d1871",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 14.2,
+   "vm_dispatches": 4684,
+   "vm_outcomes": 4684,
+   "source_call_boundaries": 108,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/enum-discriminant/discriminant_value.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "2bd9fa7d77e4818c60a1493ee03a550c8d1f1ad0b251edf2aa9d9b18a01440a9",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 8.0,
+   "vm_dispatches": 4537,
+   "vm_outcomes": 4537,
+   "source_call_boundaries": 46,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/associated-types/assoc-type-in-struct-constructor.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "8b7183304d6ee634fb3484db7aa3a00ece816496df723a904754198475de58b3",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.2,
+   "vm_dispatches": 15,
+   "vm_outcomes": 15,
+   "source_call_boundaries": 2,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/generics/generic-derived-type.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "59e07d17994d57e0175737319e69637680861a13e39a162cc2c12fe53e0ac06b",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.7,
+   "vm_dispatches": 199,
+   "vm_outcomes": 199,
+   "source_call_boundaries": 5,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/structs-enums/struct-aliases.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "8da894106e96817d0e10bea2b1668090bd62f661804742b32ff0d474ccb59ab3",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.7,
+   "vm_dispatches": 961,
+   "vm_outcomes": 961,
+   "source_call_boundaries": 4,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/type-alias/static-method-type-alias-11047.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "bbd1a7b205e796bf377489b0c151ee14988c8beaac045d32c77f12403d9ff68b",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.4,
+   "vm_dispatches": 22,
+   "vm_outcomes": 22,
+   "source_call_boundaries": 3,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/generics/generic-extern-mangle.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "afac24076799cfab08386541998792b4042fb9208d84904310160bfd717d3919",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.8,
+   "vm_dispatches": 148,
+   "vm_outcomes": 148,
+   "source_call_boundaries": 2,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/associated-types/ret-associated-type.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "7a7e51cfea79168cc132a105bc5961f90ea03881b812e4b7367589ef0a135562",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.5,
+   "vm_dispatches": 34,
+   "vm_outcomes": 34,
+   "source_call_boundaries": 2,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/associated-types/assoc-type-add-output-via-operator-syntax.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "e8267ec3f0dff64e389cd98bb307516d6b1be37601513b593e7af0700d49ce91",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.5,
+   "vm_dispatches": 32,
+   "vm_outcomes": 32,
+   "source_call_boundaries": 2,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/binop/add-ref-operand-method-lookup.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "bbc3b73b55dfcc013f1a0000b99db9e99c0452b761620a54d8a85a892449d088",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.9,
+   "vm_dispatches": 226,
+   "vm_outcomes": 226,
+   "source_call_boundaries": 20,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/numbers-arithmetic/numeric-method-autoexport.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "ab494ca28ed7ffb47bc05042177602868193405324503944b7829aa0dda18618",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 6.7,
+   "vm_dispatches": 1302,
+   "vm_outcomes": 1302,
+   "source_call_boundaries": 10,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/structs-enums/functional-struct-upd.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "99523cf3db37c83096666946c5cc33bc9e155c6a25d71bc9f4fed35c9a276d50",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.9,
+   "vm_dispatches": 692,
+   "vm_outcomes": 692,
+   "source_call_boundaries": 40,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/generics/impl-generic-struct-with-concrete-types.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "b1556a7860e330ed9d703d29eca16293b8bb64cc12d31d47b47141090bed2161",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.9,
+   "vm_dispatches": 602,
+   "vm_outcomes": 602,
+   "source_call_boundaries": 33,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/drop/drop-once-on-move.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "d2892665d4350ee481cfce0e476195bfc5c5f8c40046e47fd165e1dad27adfb1",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 6.5,
+   "vm_dispatches": 980,
+   "vm_outcomes": 980,
+   "source_call_boundaries": 57,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/pattern/issue-6449.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "25d89658394fadfc2cd67fb869b3118db21625c0afc9e589d781ca59eea4a38f",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.2,
+   "vm_dispatches": 194,
+   "vm_outcomes": 194,
+   "source_call_boundaries": 3,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/closures/2229_closure_analysis/migrations/precise_no_migrations.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "69e8300b9460fa27585a907a897b22792eb51483de0f490ebfe662057ae1cc23",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 7.3,
+   "vm_dispatches": 742,
+   "vm_outcomes": 742,
+   "source_call_boundaries": 53,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/structs-enums/enum-discrim-autosizing.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "ad148258be816c89d6b817742cfa8aed46e9644a3d0dcf563444893b3d12d60c",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 6.4,
+   "vm_dispatches": 683,
+   "vm_outcomes": 683,
+   "source_call_boundaries": 14,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/consts/const-negation.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "34553975ea7d6f9d962daae0aba447f8014f549bb511775075bfbcf5547a9f57",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 6.5,
+   "vm_dispatches": 682,
+   "vm_outcomes": 682,
+   "source_call_boundaries": 0,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/traits/multidispatch-conditional-impl-not-considered.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "0c12e13895e94ca027d7a284eee73ca924375457995ee1aa342706b41d2e229d",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.7,
+   "vm_dispatches": 205,
+   "vm_outcomes": 205,
+   "source_call_boundaries": 14,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/drop/issue-90752.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "3ee41889a573e59fa5ec18cc489b7e5a5d475a754d3b664626fccea9c41cf5f2",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 6.4,
+   "vm_dispatches": 838,
+   "vm_outcomes": 838,
+   "source_call_boundaries": 55,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/borrowck/refcell-borrow-comparison-12033.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "3eae89a44441a70c083fe1e451e31cb4764124a75cd12f804e12301c8db6598e",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.6,
+   "vm_dispatches": 209,
+   "vm_outcomes": 209,
+   "source_call_boundaries": 13,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/structs-enums/small-enums-with-fields.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "c994bc4ddc0c46eaef19083fd041a4404aa5ff17ef59d97a087cde94bfd81c16",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 25.9,
+   "vm_dispatches": 22674,
+   "vm_outcomes": 22674,
+   "source_call_boundaries": 868,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/array-slice-vec/rcvr-borrowed-to-slice.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "9a4e4050f6f304a1eadd94380d8d7c87bdead49b875b495b672b491b0f26c161",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 7.7,
+   "vm_dispatches": 1512,
+   "vm_outcomes": 1512,
+   "source_call_boundaries": 79,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/binding/zero_sized_subslice_match.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "e9bc0a1ff17a323b1f6da0612c17c98b74f77dc7d442dff54b0103c8246095fa",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.4,
+   "vm_dispatches": 110,
+   "vm_outcomes": 110,
+   "source_call_boundaries": 0,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/autoref-autoderef/autoderef-arc-boxed-closure-call.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "fabf4ef808e07613d8e14e69784d490d5b8b5375298fde027e6385f24d1eab75",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.0,
+   "vm_dispatches": 296,
+   "vm_outcomes": 296,
+   "source_call_boundaries": 22,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/closures/once-move-out-on-heap.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "61cc2af67813e5d20446442b6180ce2ccb0b4d44cc8e43084421b66523c2e685",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.8,
+   "vm_dispatches": 257,
+   "vm_outcomes": 257,
+   "source_call_boundaries": 22,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/pattern/pattern-match-arc-move.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "1f9309ee59810c5a112761a0d1ffe6de2553ea354fc1cbf012dad7c4bbd068ea",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.7,
+   "vm_dispatches": 206,
+   "vm_outcomes": 206,
+   "source_call_boundaries": 19,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/traits/trait-upcasting/struct.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "dc956f275da6afae4aa02ea2e69cc8f9de073b14b32de37a90e5e71adc34bf05",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 67.0,
+   "vm_dispatches": 17884,
+   "vm_outcomes": 17884,
+   "source_call_boundaries": 268,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/closures/closure-upvar-trait-caching.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "b4e8e2e2f3da08212372ad6ebf7c040301292c4e96c69194a819a4becce0eb4b",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.2,
+   "vm_dispatches": 36,
+   "vm_outcomes": 36,
+   "source_call_boundaries": 3,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/drop/drop-count-assertion-16151.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "5348838198913fbd60deafc339213d79fc841dbdbc0cd6a617d20f0ea7709c3c",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 6.3,
+   "vm_dispatches": 576,
+   "vm_outcomes": 576,
+   "source_call_boundaries": 40,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/drop/same-alloca-reassigned-match-binding-16151.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "ec45cdbba9ed34d3698de0ce88e007623d6106ebf998caa66c843d5a48e3af0a",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 6.3,
+   "vm_dispatches": 576,
+   "vm_outcomes": 576,
+   "source_call_boundaries": 40,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/codegen/issue-27859.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "b40c0f26546e0a27203f51ebbf5a636d8049e5350e6825ae28ad73bc32b77a3d",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 6.2,
+   "vm_dispatches": 502,
+   "vm_outcomes": 502,
+   "source_call_boundaries": 38,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/lifetimes/rvalue-cleanup-shortcircuit.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "ab3a70eeb52620d4ff606c829401b2f5aac19dc42798e32bbf19851e8173af12",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.5,
+   "vm_dispatches": 481,
+   "vm_outcomes": 481,
+   "source_call_boundaries": 41,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/match/match-cloned-string.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "bb8c041f65538c76855da4783fa072f526e525d1995f9ceecfe0a1e1675d49b4",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.8,
+   "vm_dispatches": 671,
+   "vm_outcomes": 671,
+   "source_call_boundaries": 47,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/structs-enums/multiple-reprs.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "ff5172231890565a17eec2bdddb28218ab5f3a56f1690afb90c45506f13c34d1",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 7.9,
+   "vm_dispatches": 990,
+   "vm_outcomes": 990,
+   "source_call_boundaries": 28,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/binding/match-ref-binding-in-guard-3256.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "ec28f2f5d4797817ab6443a55da884dcd5f5f45f7c6042d05f57ae0f1a648d6e",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.9,
+   "vm_dispatches": 374,
+   "vm_outcomes": 374,
+   "source_call_boundaries": 29,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/closures/2229_closure_analysis/migrations/insignificant_drop.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass",
+    "//@ run-rustfix"
+   ],
+   "source_sha256": "ecf34baca6ac2c1f3b650febfcc76531a04bf2f7485e6b9c8428f8f9b12ac100",
+   "status": "unsupported_harness",
+   "blockers": [
+    "unhandled directive: //@ run-rustfix"
+   ],
+   "exit_code": null,
+   "elapsed_seconds": 0
+  },
+  {
+   "case": "tests/ui/inference/issue-36053.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "936770ac02e2e942fd3bf348885676a3f59c5d611e726242798a2bd72d40c50f",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.6,
+   "vm_dispatches": 126,
+   "vm_outcomes": 126,
+   "source_call_boundaries": 8,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/overloaded/overloaded-calls-simple.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "e713d816fa9f78cd35c83ef1daf191ed495c5352eb2890709675f0bdbd8da08c",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.2,
+   "vm_dispatches": 323,
+   "vm_outcomes": 323,
+   "source_call_boundaries": 3,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/overloaded/overloaded-calls-zero-args.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "54acad3b2141d49a246dade45f25430716624e5dc988e5eb070f612846f0491e",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.6,
+   "vm_dispatches": 80,
+   "vm_outcomes": 80,
+   "source_call_boundaries": 1,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/overloaded/overloaded-calls-object-one-arg.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "0d7145a5bb3eb7485115ccaf93ec7caf4b0a7444697f2158af88f97c2024306f",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.6,
+   "vm_dispatches": 74,
+   "vm_outcomes": 74,
+   "source_call_boundaries": 2,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/overloaded/overloaded-calls-object-two-args.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "3c01385b34056c55f8458f218a2d3448ad89367c3fd06f0f4783010694f05698",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.6,
+   "vm_dispatches": 80,
+   "vm_outcomes": 80,
+   "source_call_boundaries": 2,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/overloaded/overloaded-calls-object-zero-args.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "08e083c8854f0a2efb37bb46feee6a41b7a6212608463a279cd8e49b00310d4e",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.5,
+   "vm_dispatches": 68,
+   "vm_outcomes": 68,
+   "source_call_boundaries": 2,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/unboxed-closures/unboxed-closures-manual-impl.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "ecfd4646fb7bca31ae6e44d1669d86eee048c51b54dd3d199489b33c4711f011",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.1,
+   "vm_dispatches": 182,
+   "vm_outcomes": 182,
+   "source_call_boundaries": 4,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/unboxed-closures/unboxed-closures-fn-as-fnmut-and-fnonce.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "04f9a0c3049785202106cda5ab546c7527a33af0ebbbd1e7dfb01b39892a2f1d",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.4,
+   "vm_dispatches": 200,
+   "vm_outcomes": 200,
+   "source_call_boundaries": 6,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/unboxed-closures/fn-traits-overloading-arity-18952.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "591b8a3211d47072eec9d03d2e1fe3489215c2b26701f0ad779c385d01d47c5a",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 7.0,
+   "vm_dispatches": 1528,
+   "vm_outcomes": 1528,
+   "source_call_boundaries": 66,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/unboxed-closures/unboxed-closures-fnmut-as-fnonce.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "918d30f8642f5e2f12fdbc1a454dfb1daf46f2e4bc9da2bcaaeb7ce3130599a6",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.1,
+   "vm_dispatches": 116,
+   "vm_outcomes": 116,
+   "source_call_boundaries": 5,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/extern/issue-13655.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "08dcaf95c0e0e7e2fb33435e67b7c6288443bbd25183604e4575088f2e5f1ed6",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.4,
+   "vm_dispatches": 34,
+   "vm_outcomes": 34,
+   "source_call_boundaries": 3,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/fn_traits/call-unit-struct-impl-fn-once.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "d05c5cb24855ee5b9e490b84ca0272b0f17dec1f72debe5dfa810cd17804f3d4",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.5,
+   "vm_dispatches": 67,
+   "vm_outcomes": 67,
+   "source_call_boundaries": 1,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/fn_traits/overloaded-fnonce-resolution.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "0fc6b020710eaf5249588eca5e351e7028256b2466009e7251b2c9ae3f22ca53",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 7.8,
+   "vm_dispatches": 160,
+   "vm_outcomes": 160,
+   "source_call_boundaries": 4,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-align.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "20a81a6381d98eebfc1fd742ee35c4ee09c49a1f164ad9e4be23b26b49a34729",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 9.5,
+   "vm_dispatches": 1462,
+   "vm_outcomes": 1462,
+   "source_call_boundaries": 25,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-backcomp.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass",
+    "//@ reference: lex.keywords.weak.union"
+   ],
+   "source_sha256": "c95ba38dbc5add8c9737c4972456d3105ae6998d660581793341e8d032815d2d",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.3,
+   "vm_dispatches": 19,
+   "vm_outcomes": 19,
+   "source_call_boundaries": 1,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-const-codegen.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "c558164870e6ad56f07848205884a26f1df3a3bb12700b91463a74418e623244",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.5,
+   "vm_dispatches": 120,
+   "vm_outcomes": 120,
+   "source_call_boundaries": 0,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-const-eval-field.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "ba8ef6dea7e096d0f57741971ea427bd8e0798122eefcd17d3848e8c734c9c1e",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.3,
+   "vm_dispatches": 630,
+   "vm_outcomes": 630,
+   "source_call_boundaries": 6,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-derive-rpass.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "be72fb56a62f0a0c4a329db7225c4c76f0067ce6d9630888f24c6a7b40b9edf6",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 7.8,
+   "vm_dispatches": 83,
+   "vm_outcomes": 83,
+   "source_call_boundaries": 2,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-drop-assign.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass",
+    "//@ reference: items.union.drop"
+   ],
+   "source_sha256": "90061165d623fa715382b34c1e690d6ee9ff62673a672d96f409b618b75a13a7",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.2,
+   "vm_dispatches": 317,
+   "vm_outcomes": 317,
+   "source_call_boundaries": 2,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-drop.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass",
+    "//@ reference: destructors.manually-suppressing",
+    "//@ reference: items.union.drop"
+   ],
+   "source_sha256": "2a52d24cc37fcf2767c1fff68a9279725012c2b856c50b85caa98af2a5c50b3c",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 6.3,
+   "vm_dispatches": 518,
+   "vm_outcomes": 518,
+   "source_call_boundaries": 2,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-inherent-method.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass",
+    "//@ reference: items.impl.inherent.allowed-items"
+   ],
+   "source_sha256": "73528ec30c5038eeeae935d3eb607480a0e51807c13e9856a692483598eaa7ee",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.5,
+   "vm_dispatches": 74,
+   "vm_outcomes": 74,
+   "source_call_boundaries": 1,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-macro.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "156e83a208d6223b317a92aaaa6470b33cb97725a2f26fcb565e0e4626158ab1",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.3,
+   "vm_dispatches": 14,
+   "vm_outcomes": 14,
+   "source_call_boundaries": 0,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-manuallydrop-rpass.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass",
+    "//@ reference: items.union.field-copy",
+    "//@ reference: items.union.field-manually-drop"
+   ],
+   "source_sha256": "def92f80ff1184837f4dd261c28d77c58153488817c737b781394424509463cf",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.6,
+   "vm_dispatches": 36,
+   "vm_outcomes": 36,
+   "source_call_boundaries": 4,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-modification.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "1d695ff6f3c91845afbe5b886875786e26aeb2496a4628b30cc881bc3825f4f9",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 4.9,
+   "vm_dispatches": 453,
+   "vm_outcomes": 453,
+   "source_call_boundaries": 2,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-nodrop.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass"
+   ],
+   "source_sha256": "d2b3089c0760cbc0d1898daa98e290df1032a20f5563da7ba4522c6da02ae153",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.6,
+   "vm_dispatches": 116,
+   "vm_outcomes": 116,
+   "source_call_boundaries": 12,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-overwrite.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass",
+    "//@ reference: items.union.common-storage",
+    "//@ reference: items.union.fields.read"
+   ],
+   "source_sha256": "c8e4aaf8f6e489b27b6aedb73c79de0cfec62bdd69d607d4e75de264411b585f",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 7.8,
+   "vm_dispatches": 632,
+   "vm_outcomes": 632,
+   "source_call_boundaries": 3,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-packed.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass",
+    "//@ reference: layout.repr.alignment.intro"
+   ],
+   "source_sha256": "ef047f9e701667a453dd99364c4535f3fa4be657564eecd648feb6330c47e21a",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 22.9,
+   "vm_dispatches": 17756,
+   "vm_outcomes": 17756,
+   "source_call_boundaries": 109,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-pat-refutability.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass",
+    "//@ reference: items.union.pattern.intro",
+    "//@ reference: items.union.pattern.safety",
+    "//@ reference: patterns.struct.refutable"
+   ],
+   "source_sha256": "ca95eefa4cf97ec1e00b8ec67a6e4bdc501959b818814b07ed1ceb9765ebb734",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.0,
+   "vm_dispatches": 167,
+   "vm_outcomes": 167,
+   "source_call_boundaries": 2,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-trait-impl.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass",
+    "//@ reference: items.union.ref.use"
+   ],
+   "source_sha256": "c6bf3366a02c5a9472b9709b2fb7fc50c6e559e1809ffc47a949d8fd1eb62e9f",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.1,
+   "vm_dispatches": 588,
+   "vm_outcomes": 588,
+   "source_call_boundaries": 42,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union-transmute.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass",
+    "//@ reference: items.union.common-storage",
+    "//@ reference: type.union.access"
+   ],
+   "source_sha256": "d445999bd161d4162048a5369d0c74b121e7366cc3c2db92e27b30b24aafda45",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 5.4,
+   "vm_dispatches": 435,
+   "vm_outcomes": 435,
+   "source_call_boundaries": 2,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  },
+  {
+   "case": "tests/ui/union/union_destructure.rs",
+   "edition": 2015,
+   "directives": [
+    "//@ run-pass",
+    "//@ reference: items.union.pattern.safety"
+   ],
+   "source_sha256": "7240f33d0cecf1896c6c5d6c980af78f348384606626376794f09ab5969f4902",
+   "status": "runtime_contract_pass",
+   "blockers": [],
+   "exit_code": 0,
+   "elapsed_seconds": 6.0,
+   "vm_dispatches": 221,
+   "vm_outcomes": 221,
+   "source_call_boundaries": 3,
+   "host_preparation_suspensions": 0,
+   "observed_suspension": false,
+   "observed_fault": false,
+   "capture_complete": true,
+   "terminal": "completed"
+  }
+ ],
+ "previously_recorded_failures_now_passing": [
+  "tests/ui/enum-discriminant/repr128.rs",
+  "tests/ui/union/union-generic-rpass.rs"
+ ],
+ "known_gaps": [
+  "assert_eq!/assert_ne! failure path reports LRR-E-TYPE-CONTEXT instead of panicking (native assert_failed has no declared parameter hints).",
+  "Deferred literal/type inference where a later use fixes a value's type is the largest remaining failure family (see docs/handoffs/2026-10-21-interpreter-round2.md).",
+  "Legacy normalizer remains primary for projection-typed ADT field types; the pinned route is a fallback.",
+  "Region arguments of runtime-derived terms are erased to 'static in root encoding (looser-than-rustc erasure convention)."
+ ],
+ "cleanup": "V538 directory and V539 raw outputs removed after recording; V540 raw reports under /private/tmp/lrr-v540-interpreter-runtime-{a,b} and artifacts/validation-current-v540 are disposable."
+}
