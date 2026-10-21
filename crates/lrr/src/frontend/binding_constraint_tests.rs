@@ -27,6 +27,7 @@ fn unchanged_suffix_shadowed_bindings_use_actual_later_parameter_source_goals() 
         let (mut db, local) = world(SUFFIX, edition, false);
         let body = local.context().source().index().body().clone();
         let graph = ready(db.fetch(&SyntaxProvider, QueryKey::SourceConstraints(body.clone())));
+        let graph_fingerprint = graph.fingerprint;
         let QueryValue::SourceConstraints(graph) = graph.value.as_ref() else {
             panic!();
         };
@@ -43,6 +44,12 @@ fn unchanged_suffix_shadowed_bindings_use_actual_later_parameter_source_goals() 
             .collect();
         assert_eq!(targets.len(), expected.len());
         for (key, expected) in targets.into_iter().zip(expected) {
+            let initializer = graph.fact(crate::ir::pc::NodeId(key.node)).unwrap().operand(1).unwrap();
+            assert!(graph.relations().outward(initializer).unwrap().iter().any(|relation|
+                relation.edge.parent.0 == key.node
+                    && matches!(relation.consumer,
+                        crate::syntax::source_constraint_relations::SourceRelationConsumer::LetInitializer { .. })),
+                "ordinary binding inference consumes the retained source initializer edge");
             let start = db.trace.events.len();
             let query = QueryKey::BindingConstraints(key);
             let first = ready(db.fetch(&SyntaxProvider, query.clone()));
@@ -54,6 +61,10 @@ fn unchanged_suffix_shadowed_bindings_use_actual_later_parameter_source_goals() 
                 BindingConstraintState::Resolved(expected),
                 "real binding goal {source:?}"
             );
+            assert!(db.memo(&query).unwrap().dependencies.iter().any(|dependency| matches!(dependency,
+                crate::db::dependency::DependencyStamp::Query { key, fingerprint }
+                    if key == &QueryKey::SourceConstraints(body.clone()) && *fingerprint == graph_fingerprint)),
+                "the legacy consumer depends on the actual shared source-relation memo");
             let second = ready(db.fetch(&SyntaxProvider, query));
             assert!(Arc::ptr_eq(&first.value, &second.value));
             assert!(

@@ -45,6 +45,12 @@ Compile-time acceptance/rejection, exact diagnostics/static borrow checking, MIR
 
 macOS ARM64 with Rust 1.99.0 is primary. Rust 2015/2018/2021/2024 ownership is retained; configurations come from upstream directives and the pinned harness matrix. Linux is a later port and Docker is supplementary. Actual upstream platform deferrals allow macOS progress without implying Linux support. An LRR implementation gap is never a platform exemption.
 
+## Interpreter acceptance: actual upstream programs
+
+User direction, October20: every language contribution must be connected to the same production parser, source tree, preparation services and interpreter, and its acceptance must execute unchanged official rustc programs through that interpreter. Separate file ownership helps contributors edit safely; it does not authorize separate engines, mocked execution, alternate fixture routes or isolated feature acceptance. Source-adapter, metadata and unit checks may diagnose a failure or check an LRR-specific invariant, but do not establish language support, interpreter progress or a stock pass. An uncalled production API remains an unfinished draft.
+
+Start from a real upstream failure and record its actual interpreter terminal. Implement the common mechanism on its execution path, then rerun that original and relevant real upstream regressions asynchronously in the shared checkout with one Cargo owner and unchanged tested sources. Preserve original directives/auxiliaries and observe main, assertions, effects and cleanup. Report actual runtime passes, failures and unexecuted cases; never replace them with component counts. Keep source-only work explicitly held until its executing consumer and actual upstream acceptance exist.
+
 ## Review, merge and refresh
 
 Maintainers review source identity, lazy semantics, capability boundaries, deterministic/checked encodings, upstream preservation and actual evidence. Require the current scoped acceptance and the integrated milestone appropriate to Section 57. A merge and a component test pass are separate from acceptance of a full card or track. Guest tier implementation stays parked until the runtime/correctness prerequisites actually pass.

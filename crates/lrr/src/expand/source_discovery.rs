@@ -30,7 +30,8 @@ pub(crate) use completed_source_environment::SourceScopeOwner;
 mod compiler_preparation;
 #[path = "source_discovery/compiler_profiles.rs"]
 mod compiler_profiles;
-pub(crate) use compiler_preparation::SourceCompilerPreparation;
+pub(crate) use compiler_preparation::{SourceCompilerPreparation, OrdinaryCompilerModuleHold,
+    PendingOrdinaryCompilerModule};
 #[path = "source_discovery/original_modules.rs"]
 mod original_modules;
 use original_modules::{OrdinaryModuleOwner, OriginalModuleDeclaration};
@@ -5718,6 +5719,30 @@ impl SourceDiscovery {
         let (_, declaration) = self.ordinary_module_binding(producer)?;
         Ok(declaration.source().selection().clone())
     }
+    fn require_ordinary_module_parent_current(
+        &self,
+        db: &mut crate::db::memo::Database,
+        producer: Digest,
+        parent: OrdinaryModuleOwner,
+        declaration: &crate::frontend::source_module_declarations::SourceModuleDeclaration,
+    ) -> Result<(), Diagnostic> {
+        use crate::db::dependency::{InputKey, InputValue};
+        match parent {
+            OrdinaryModuleOwner::Original(_) => self.require_original_module_source(db, producer),
+            OrdinaryModuleOwner::Staged(parent) => {
+                let parent = self.staged_modules.get(&parent)
+                    .ok_or_else(|| fault("ordinary module parent capture owner absent"))?;
+                let capture = parent.syntax.capture();
+                let published = db.input(&InputKey::ModuleRecord(capture.input_identity()))
+                    .ok_or_else(|| fault("ordinary module parent capture absent"))?;
+                if !matches!(published.as_ref(), InputValue::ModuleRecord {captured,..} if captured.identity() == capture.record().identity())
+                    || declaration.source().selection() != parent.syntax.prepared_source().selection() {
+                    return Err(fault("ordinary module parent source changed"));
+                }
+                Ok(())
+            }
+        }
+    }
     pub fn ordinary_module_syntax_input(
         &self,
         db: &mut crate::db::memo::Database,
@@ -5751,27 +5776,7 @@ impl SourceDiscovery {
             if *compile_environment != expected {
                 return Err(fault("ordinary module compile environment changed"));
             }
-            match parent {
-                OrdinaryModuleOwner::Original(_) => {
-                    self.require_original_module_source(db, request.producer())?;
-                }
-                OrdinaryModuleOwner::Staged(parent) => {
-                    let parent = self
-                        .staged_modules
-                        .get(&parent)
-                        .ok_or_else(|| fault("ordinary module parent capture owner absent"))?;
-                    let capture = parent.syntax.capture();
-                    let published = db
-                        .input(&InputKey::ModuleRecord(capture.input_identity()))
-                        .ok_or_else(|| fault("ordinary module parent capture absent"))?;
-                    if !matches!(published.as_ref(), InputValue::ModuleRecord {captured,..} if captured.identity() == capture.record().identity())
-                        || declaration.source().selection()
-                            != parent.syntax.prepared_source().selection()
-                    {
-                        return Err(fault("ordinary module parent source changed"));
-                    }
-                }
-            }
+            self.require_ordinary_module_parent_current(db, request.producer(), parent, declaration)?;
             Ok((declaration, expected))
         })();
         let (declaration, expected) = match binding {

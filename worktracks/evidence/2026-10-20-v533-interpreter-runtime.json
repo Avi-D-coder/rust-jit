@@ -1,0 +1,121 @@
+{
+  "schema": "lrr/validation-evidence/v1",
+  "checkpoint": "V533",
+  "recorded_utc": "2026-10-21T01:31:34.291648+00:00",
+  "scope": "Actual interpreter validation attempt; source-only closure after failed library compilation. No program executed and no interpreter acceptance established.",
+  "platform": "aarch64-apple-darwin",
+  "toolchain": "Rust1.99.0",
+  "head": "a7e64f338d2c23dde07383a2e730b8324cca4019",
+  "source_sha256": "76751413fc6d4bea4e0c1f8b1735155449f157e3ce2c6b200737317a36b224a2",
+  "source_file_count": 8750,
+  "selection": {
+    "path": "worktracks/05-trait-goal-engine/2026-10-20-interpreter-runtime-selection.json",
+    "sha256": "348415d5f8f68410d517b557d30f524663a2114a2ee402fad572267977680cf1",
+    "schema": "lrr/validation-selection/v1",
+    "scope": "Seven unchanged official rustc runtime programs through actual LRR main; preserve known failures. Runtime-contract evidence only, no full-fixture, complete interpreter, upstream solver, JIT, diagnostic or tooling acceptance. No isolated component controls selected.",
+    "controls": [],
+    "runtime_cases": [
+      "tests/ui/enum-discriminant/repr128.rs",
+      "tests/ui/union/union-generic-rpass.rs",
+      "tests/ui/enum-discriminant/discriminant_size.rs",
+      "tests/ui/enum-discriminant/discriminant_value.rs",
+      "tests/ui/associated-types/assoc-type-in-struct-constructor.rs",
+      "tests/ui/generics/generic-derived-type.rs",
+      "tests/ui/structs-enums/struct-aliases.rs"
+    ]
+  },
+  "commands": [
+    {
+      "argv": [
+        "/opt/homebrew/bin/python3.12",
+        "tools/validation/source_manifest.py",
+        "artifacts/validation-current-v533",
+        "before"
+      ],
+      "session": 69597,
+      "exit_code": 0
+    },
+    {
+      "shell": "cargo +1.99.0 test --offline --locked -p lrr --lib --no-run --message-format=json > artifacts/validation-current-v533/lib-build.jsonl 2> artifacts/validation-current-v533/lib-build.log",
+      "session": 98500,
+      "exit_code": 101
+    }
+  ],
+  "compile_errors": [
+    {
+      "code": {
+        "code": "E0596",
+        "explanation": "This error occurs because you tried to mutably borrow a non-mutable variable.\n\nErroneous code example:\n\n```compile_fail,E0596\nlet x = 1;\nlet y = &mut x; // error: cannot borrow mutably\n```\n\nIn here, `x` isn't mutable, so when we try to mutably borrow it in `y`, it\nfails. To fix this error, you need to make `x` mutable:\n\n```\nlet mut x = 1;\nlet y = &mut x; // ok!\n```\n"
+      },
+      "message": "cannot borrow `*db` as mutable, as it is behind a `&` reference",
+      "rendered": "error[E0596]: cannot borrow `*db` as mutable, as it is behind a `&` reference\n  --> crates/lrr/src/service/source_preparation.rs:95:22\n   |\n95 |         if !matches!(db.input(&crate::db::dependency::InputKey::ExpansionEpoch).as_deref(),\n   |                      ^^ `db` is a `&` reference, so it cannot be borrowed as mutable\n   |\nhelp: consider changing this to be a mutable reference\n   |\n92 |         db: &mut Database,\n   |              +++\n\n",
+      "spans": [
+        {
+          "byte_end": 3355,
+          "byte_start": 3353,
+          "column_end": 24,
+          "column_start": 22,
+          "expansion": null,
+          "file_name": "crates/lrr/src/service/source_preparation.rs",
+          "is_primary": true,
+          "label": "`db` is a `&` reference, so it cannot be borrowed as mutable",
+          "line_end": 95,
+          "line_start": 95,
+          "suggested_replacement": null,
+          "suggestion_applicability": null,
+          "text": [
+            {
+              "highlight_end": 24,
+              "highlight_start": 22,
+              "text": "        if !matches!(db.input(&crate::db::dependency::InputKey::ExpansionEpoch).as_deref(),"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "dependent_stages": {
+    "cli": "unbuilt; not started after lib failure",
+    "source_digester": "unbuilt; not started after lib failure",
+    "actual_runtime_seven_programs": "all unexecuted; dependency build failed"
+  },
+  "binary_evidence": "No binary is attributed to this failed build. Existing target binaries were neither selected nor executed.",
+  "closing_guard": {
+    "source_matches_before": true,
+    "head_matches_before": true,
+    "source_sha256": "76751413fc6d4bea4e0c1f8b1735155449f157e3ce2c6b200737317a36b224a2",
+    "changed_sources": [],
+    "aggregate_passed": true
+  },
+  "logs": {
+    "artifacts/validation-current-v533/before.json": {
+      "bytes": 1283829,
+      "sha256": "318944cbb6ad59df60f35e4dbb178a36e3eaec358e13b052d68867abe6c0f5fb"
+    },
+    "artifacts/validation-current-v533/lib-build.jsonl": {
+      "bytes": 358600,
+      "sha256": "2121dac9ef31694a4ad7c5db2c8332b6c9d9cb344ba672476c2dd293e2a3e9c4"
+    },
+    "artifacts/validation-current-v533/lib-build.log": {
+      "bytes": 149,
+      "sha256": "ae7ac8953d41bf548dd5f3ea665deab34d6d0f805b44f822fd6f38a831aaee3f"
+    },
+    "artifacts/validation-current-v533/closing-source.json": {
+      "bytes": 1283900,
+      "sha256": "28b93af3bb0b399ced4a859c2d63225e856439c896dcfcfbc68909df51389d09"
+    }
+  },
+  "cleanup": {
+    "run_generated_fixture_projects": [],
+    "private_targets_or_source_copies": [],
+    "runtime_report_directory": "not created",
+    "action": "none required; compact raw compile logs retained"
+  },
+  "acceptance": {
+    "runtime_contract_passes": 0,
+    "runtime_executions": 0,
+    "full_fixture_passes": 0,
+    "interpreter_gate": "incomplete",
+    "guest_jit_gate": "unchanged/incomplete"
+  }
+}

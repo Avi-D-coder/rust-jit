@@ -99,6 +99,7 @@ pub(crate) mod primitive_type_names;
 mod node_lookup;
 
 pub(crate) mod source_constraints;
+pub(crate) mod source_constraint_relations;
 
 pub(crate) use scalar_pattern_binding::BindingPreludePolicies;
 

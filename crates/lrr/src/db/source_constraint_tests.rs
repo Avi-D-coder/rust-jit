@@ -7,7 +7,8 @@ use crate::{
         changes::{PreparedSourceInputs, SourceUnitInput},
         snapshot::{CfgSet, SourceBlob, SourcePath},
     },
-    syntax::{parse::ParsedFile, source_constraints::FactKind},
+    syntax::{parse::ParsedFile, source_constraints::FactKind,
+        source_constraint_relations::{SourceRelationBoundary, SourceRelationConsumer, SourceRelationInput}},
 };
 use std::sync::Arc;
 
@@ -79,6 +80,14 @@ fn unchanged_suffix_source_constraints_retain_real_call_and_binding_nodes_once()
             panic!();
         };
         assert_eq!(plan.structure(), index.semantic_identity());
+        let relations = plan.relations();
+        relations.require_source(&body, index.semantic_identity()).unwrap();
+        let mut different_structure = index.semantic_identity();
+        different_structure.0[0] ^= 1;
+        assert!(relations.require_source(&body, different_structure).is_err());
+        let invalid_node = crate::ir::pc::NodeId(u32::try_from(plan.facts_len()).unwrap());
+        assert!(relations.inward(invalid_node).is_none());
+        assert!(relations.outward(invalid_node).is_none());
         assert_eq!(plan.facts().len(), index.nodes().len());
         assert_eq!(plan.paths_named("j").len(), 9);
         assert_eq!(plan.paths_named("r#j"), plan.paths_named("j"));
@@ -93,6 +102,11 @@ fn unchanged_suffix_source_constraints_retain_real_call_and_binding_nodes_once()
                             .any(|edge| edge.parent.0 as usize == parent
                                 && edge.ordinal as usize == ordinal)
                     );
+                    let retained = relations.outward(*child).unwrap().iter()
+                        .find(|relation| relation.edge.parent.0 as usize == parent
+                            && relation.edge.ordinal as usize == ordinal)
+                        .expect("ordinary relation retains the exact indexed use edge");
+                    assert_eq!(retained.edge.child, *child);
                 }
             }
         }
@@ -102,11 +116,19 @@ fn unchanged_suffix_source_constraints_retain_real_call_and_binding_nodes_once()
             .filter(|fact| fact.kind() == FactKind::Call)
             .collect();
         assert_eq!(calls.len(), 18);
-        for call in calls {
+        for (node, call) in plan.facts().iter().enumerate().filter(|(_, fact)| fact.kind() == FactKind::Call) {
             assert_eq!(call.operands().len(), 2);
+            let node = crate::ir::pc::NodeId(u32::try_from(node).unwrap());
+            assert!(matches!(relations.inward(node), Some(SourceRelationInput::Boundary {
+                kind: SourceRelationBoundary::Call, operands,
+            }) if operands.as_ref() == call.operands()),
+                "the call is an unsolved source boundary, never absent relations");
             let callee = call.operands()[0].unwrap();
             assert_eq!(plan.fact(callee).unwrap().kind(), FactKind::Path);
-            assert!(call.operands()[1].is_some());
+            let argument = call.operands()[1].unwrap();
+            assert!(relations.outward(argument).unwrap().iter().any(|relation|
+                relation.edge.parent == node && relation.edge.ordinal == 1
+                    && matches!(relation.consumer, SourceRelationConsumer::Boundary(SourceRelationBoundary::Call))));
         }
         let bindings: Vec<_> = plan
             .facts()
@@ -146,6 +168,13 @@ fn unchanged_suffix_source_constraints_retain_real_call_and_binding_nodes_once()
                 |event| !matches!(&event.key, QueryKey::BodyStructure(other) if other != &body)
             )
         );
+        let guard = db.prepare_input_guard(&SyntaxProvider,
+            &QueryKey::SourceConstraints(body), first.fingerprint)
+            .into_ready().unwrap().unwrap();
+        guard.require_current(&db).unwrap();
+        db.publish_inputs(Default::default()).unwrap();
+        assert!(guard.require_current(&db).is_err(),
+            "retaining relation endpoints does not bypass actual source withdrawal");
     }
 }
 #[test]
@@ -169,6 +198,16 @@ fn cold_source_call_shape_does_not_prepare_its_signature_or_executable_body() {
                     .value
                     .matches(&QueryKey::SourceConstraints(body.clone()))
             );
+            let QueryValue::SourceConstraints(plan) = result.value.as_ref() else { panic!() };
+            let branches = plan.facts().iter().enumerate()
+                .filter(|(_, fact)| fact.kind() == FactKind::If).collect::<Vec<_>>();
+            assert_eq!(branches.len(), 1);
+            let (node, branch) = branches[0];
+            assert!(matches!(plan.relations().inward(crate::ir::pc::NodeId(u32::try_from(node).unwrap())),
+                Some(SourceRelationInput::If { condition, then_value, else_value })
+                    if *condition == branch.operand(0) && *then_value == branch.operand(1)
+                        && *else_value == branch.operand(2)),
+                "cold branch endpoints use the same retained source coercion row");
             assert!(!db.trace.events.iter().any(|event| matches!(
                 event.key,
                 QueryKey::Thunk(_) | QueryKey::FunctionSignature(_)

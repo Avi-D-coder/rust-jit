@@ -16,7 +16,7 @@ use crate::{
         shape::TypeId,
         value::ValueRepr,
     },
-    syntax::{body_index::BodyIndex, signatures::GenericKind, spans::BodySpan},
+    syntax::{body_index::{BodyIndex, ExpressionKind, NodeRole}, signatures::GenericKind, spans::BodySpan},
     traits::{
         term::{InferVarKey, ParamKey, TyTerm},
         upstream::root_input::{
@@ -26,12 +26,13 @@ use crate::{
     },
     vm::{call::CallIdentity, context::GenericEnv},
 };
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::{BTreeMap, BTreeSet}, sync::Arc};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(super) enum ReachedCallInputPending {
     CallerSource,
     ArgumentSource(u32),
+    ArgumentOccurrence(u32),
     ParameterSource(u32),
     ResultSource,
 }
@@ -41,6 +42,21 @@ struct ArgumentSnapshot {
     state: CellState,
     value: ValueRepr,
     effective_type: Option<TypeId>,
+}
+/// Source occurrence and runtime numeric identity are separate. A receiver's
+/// source expression owns its adjustment boundary; its bare Type is not the
+/// adjusted argument Type. No inference equality is certified by either row.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(super) enum NumericSourceKind {
+    WrittenArgument,
+    MethodReceiver,
+}
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(super) struct NumericSourceOccurrence {
+    pub(super) argument: u32,
+    pub(super) slot: SlotId,
+    pub(super) node: NodeId,
+    pub(super) kind: NumericSourceKind,
 }
 /// Identity of one actual pending selection, not its reusable source call site.
 /// The pending map owns the original; capture retains it across NeedInput.
@@ -69,6 +85,7 @@ pub(super) struct ReachedCallInputs {
     result_hint: Option<ArgumentType>,
     parameters: BTreeMap<ParamKey, TyTerm>,
     variables: BTreeMap<InferVarKey, SourceVariableFamily>,
+    numeric_sources: BTreeMap<InferVarKey, Vec<NumericSourceOccurrence>>,
     relations: Vec<SourceCallRelation>,
     caller: CallerSourceContext,
     pending: Option<ReachedCallInputPending>,
@@ -95,6 +112,13 @@ impl ReachedCallInputs {
     }
     pub(super) fn source_site(&self) -> Option<SourceCallSite> {
         self.source_site
+    }
+    /// Borrow retained source occurrences after the same packet's ordinary
+    /// currentness guard. An empty map does not manufacture a constraint
+    /// closure; method rows still require their actual adjustment boundary.
+    pub(super) fn numeric_sources(&self) -> Result<&BTreeMap<InferVarKey, Vec<NumericSourceOccurrence>>, ReachedCallInputPending> {
+        if let Some(why) = self.pending { return Err(why); }
+        Ok(&self.numeric_sources)
     }
     /// Checks read the actual active caller/store and retained source inputs.
     /// PC/call/cell identities can recur; the attempt must also be the actual
@@ -369,6 +393,9 @@ impl RunMachine {
             .then_some(ReachedCallInputPending::CallerSource);
         let mut snapshots = Vec::new();
         let mut literals = BTreeMap::<(u32, u64), InferVarKey>::new();
+        let mut numeric_sources = BTreeMap::<InferVarKey, Vec<NumericSourceOccurrence>>::new();
+        let source_operands: BTreeSet<NodeId> = self.frame.body.nodes().get(site.0 as usize)
+            .into_iter().flat_map(|call| call.operands.iter().copied()).collect();
         for (ordinal, slot) in arguments.iter().enumerate() {
             let ordinal = u32::try_from(ordinal)
                 .map_err(|_| call_fault("reached argument ordinal overflow"))?;
@@ -410,6 +437,10 @@ impl RunMachine {
                         );
                         key
                     };
+                    match indexed_argument_occurrence(&self.frame.body, site, &source_operands, ordinal, *slot) {
+                        Some(source) => numeric_sources.entry(key).or_default().push(source),
+                        None => { pending.get_or_insert(ReachedCallInputPending::ArgumentOccurrence(ordinal)); }
+                    }
                     Some(TyTerm::Infer(key))
                 }
                 _ => {
@@ -470,6 +501,7 @@ impl RunMachine {
             result_hint: result_hint.cloned(),
             parameters,
             variables,
+            numeric_sources,
             relations,
             caller,
             pending,
@@ -477,4 +509,29 @@ impl RunMachine {
         packet.require_current(self, db, result_hint)?;
         Ok(packet)
     }
+}
+
+/// The active CallSeal's selected slot list supplies argument order. Structural
+/// call operands include the callee, so their ordinal is not an argument index.
+/// Primary slots use the retained direct index, never slot/2 or source text.
+fn indexed_argument_occurrence(
+    body: &BodyIndex,
+    site: NodeId,
+    operands: &BTreeSet<NodeId>,
+    argument: u32,
+    slot: SlotId,
+) -> Option<NumericSourceOccurrence> {
+    let call = body.nodes().get(site.0 as usize).filter(|node| node.id == site)?;
+    if !matches!(call.role, NodeRole::Expression(ExpressionKind::Call | ExpressionKind::MethodCall | ExpressionKind::LangCall)) {
+        return None;
+    }
+    if call.role == NodeRole::Expression(ExpressionKind::MethodCall)
+        && argument == 0 && call.runtime_temporaries[0] == Some(slot) {
+        let receiver = *call.operands.first()?;
+        body.nodes().get(receiver.0 as usize).filter(|node| node.id == receiver)?;
+        return Some(NumericSourceOccurrence { argument, slot, node: receiver, kind: NumericSourceKind::MethodReceiver });
+    }
+    let source = body.value_node(slot)?;
+    if !operands.contains(&source.id) { return None; }
+    Some(NumericSourceOccurrence { argument, slot, node: source.id, kind: NumericSourceKind::WrittenArgument })
 }

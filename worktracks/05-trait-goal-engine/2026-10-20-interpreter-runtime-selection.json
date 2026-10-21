@@ -1,0 +1,15 @@
+{
+  "schema": "lrr/validation-selection/v1",
+  "scope": "Eight unchanged official rustc runtime programs through actual LRR main; preserve known failures. Runtime-contract evidence only, no full-fixture, complete interpreter, upstream solver, JIT, diagnostic or tooling acceptance. No isolated component controls selected.",
+  "controls": [],
+  "runtime_cases": [
+    "tests/ui/enum-discriminant/repr128.rs",
+    "tests/ui/union/union-generic-rpass.rs",
+    "tests/ui/enum-discriminant/discriminant_size.rs",
+    "tests/ui/enum-discriminant/discriminant_value.rs",
+    "tests/ui/associated-types/assoc-type-in-struct-constructor.rs",
+    "tests/ui/generics/generic-derived-type.rs",
+    "tests/ui/structs-enums/struct-aliases.rs",
+    "tests/ui/type-alias/static-method-type-alias-11047.rs"
+  ]
+}

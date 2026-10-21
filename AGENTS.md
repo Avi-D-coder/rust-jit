@@ -2,6 +2,30 @@
 
 Specification: [LRR revision 5](lrr_rust2024_macros_traits_implementation_spec.md).
 
+## Real-program implementation priority (October 20, 2026)
+
+Explicit user direction: implement one connected interpreter and get unchanged
+official rustc programs to pass through it. Workstream ownership divides edits,
+not language engines or acceptance. Every language change must connect to the
+same production source tree, parser, preparation services, lowering and VM.
+Do not develop a separate mocked interpreter, fixture evaluator or isolated
+feature execution path.
+
+Use an actual failing upstream program and its interpreter terminal to select
+work. Fix its common production path, then run that original and relevant real
+upstream regressions asynchronously in this shared checkout. Observe execution
+of main, assertions, required effects and cleanup. Internal metadata, adapter,
+unit and source-review checks may diagnose problems or check LRR-specific
+invariants; they cannot establish language support, interpreter progress or a
+stock pass. An uncalled API is unfinished work, even if it builds or its helper
+checks pass. Do not replace end-to-end execution with increasingly elaborate
+component evaluations, and do not claim an isolated workstream complete before
+its actual interpreter consumer and upstream execution work together.
+
+Keep imported counts, internal checks, runtime-contract passes and full-fixture
+outcomes separate. A selected real runtime batch is not a comprehensive suite
+total. Preserve failures, unsupported cases and unexecuted cases honestly.
+
 ## Upstream trait solver (October 19, 2026)
 
 Explicit user direction, [E-R5-014](docs/errata/revision5-upstream-trait-solver.md): reuse the **next-generation rustc trait solver**, `rustc_next_trait_solver` with `rustc_type_ir`, from the exact pinned upstream Rust revision. Implement the source/type/inference/dependency adapter and lazy runtime dictionaries; do not write an independent trait solver, canonicalizer, candidate-transaction engine, projection solver or cycle scheduler where upstream supplies the semantics. M020 first establishes the pinned macOS Rust1.99.0 build and real upstream invocation. Preserve demand-driven preparation and ordinary eager execution; do not introduce whole-body checking, a borrow checker or implicit rustc/cargo-check execution. Existing custom semantic paths and historical uncompiled solver candidates are migration debt, not the new implementation plan. Follow updated Section53 and WT05; keep all runtime and JIT gates unchanged and incomplete until actual acceptance.

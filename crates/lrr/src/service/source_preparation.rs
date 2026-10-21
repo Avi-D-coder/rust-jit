@@ -13,7 +13,9 @@ use crate::{
     expand::{
         builtins::FrozenCompileEnvironment,
         source_discovery::{
-            ModuleSourceReadiness, OrdinaryModuleReadiness, SourceDiscovery, SourceDiscoveryStep,
+            ModuleSourceReadiness, OrdinaryCompilerModuleHold, OrdinaryModuleReadiness,
+            PendingOrdinaryCompilerModule, SourceCompilerPreparation, SourceDiscovery,
+            SourceDiscoveryStep,
         },
     },
     frontend::compile_input_catalog::CompileInputCatalog,
@@ -57,6 +59,90 @@ pub(crate) struct PreparedCompileInputs {
     catalog_sources: Arc<[(Digest, Digest)]>,
     module_layouts: BTreeMap<Digest, PathBuf>,
     pub catalog: Arc<CompileInputCatalog>,
+}
+struct DiscoveryCoordination {
+    context: DemandContext,
+    coordinator: ExpansionCoordinator,
+    phase_index: u32,
+    modules: BTreeMap<Digest, InputRequest>,
+}
+impl DiscoveryCoordination {
+    fn new(prepared: &PreparedCompileInputs, discovery: &SourceDiscovery, db: &Database) -> Self {
+        let context = DemandContext {
+            request: discovery.key().fingerprint(),
+            session: prepared.generation,
+            unit: prepared.environment.unit(),
+            revision: db.source_revision(),
+            epoch: discovery.key().epoch,
+            source_generation: prepared.generation,
+            native_generation: None,
+            compile_environment: prepared.environment.fingerprint(),
+        };
+        Self {
+            coordinator: ExpansionCoordinator::new(context.clone()),
+            context,
+            phase_index: 0,
+            modules: BTreeMap::new(),
+        }
+    }
+    fn require_current(
+        &self,
+        prepared: &PreparedCompileInputs,
+        discovery: &SourceDiscovery,
+        db: &mut Database,
+    ) -> Result<(), Diagnostic> {
+        db.require_coordinator()?;
+        if !matches!(db.input(&crate::db::dependency::InputKey::ExpansionEpoch).as_deref(),
+            Some(crate::db::dependency::InputValue::ExpansionEpoch(epoch)) if *epoch == self.context.epoch)
+        {
+            return Err(fault(
+                "LRR-E-SOURCE-MODULE",
+                "retained module coordinator expansion epoch changed",
+            ));
+        }
+        if self.context.request != discovery.key().fingerprint()
+            || self.context.session != prepared.generation
+            || self.context.unit != prepared.environment.unit()
+            || self.context.revision != db.source_revision()
+            || self.context.epoch != discovery.key().epoch
+            || self.context.source_generation != prepared.generation
+            || self.context.compile_environment != prepared.environment.fingerprint()
+        {
+            return Err(fault(
+                "LRR-E-SOURCE-MODULE",
+                "retained module coordinator source/configuration changed",
+            ));
+        }
+        Ok(())
+    }
+}
+/// Only this service creates a held continuation; its discovery, exact adopted
+/// requests and coordinator phases cannot be replaced by a caller.
+pub(crate) struct PendingCompilerModules {
+    preparation: SourceCompilerPreparation,
+    coordination: DiscoveryCoordination,
+}
+impl PendingCompilerModules {
+    pub(crate) fn diagnostic(&self) -> Diagnostic {
+        match &self.preparation {
+            SourceCompilerPreparation::NeedModule { demand, .. } => demand.diagnostic(),
+            SourceCompilerPreparation::Ready(_) => fault(
+                "LRR-E-SOURCE-MODULE",
+                "retained compiler preparation awaits discovery",
+            ),
+        }
+    }
+}
+pub(crate) enum CompilerModulePreparation {
+    Complete(SourceDiscovery),
+    Held {
+        continuation: PendingCompilerModules,
+        reason: OrdinaryCompilerModuleHold,
+    },
+    NeedInput {
+        continuation: PendingCompilerModules,
+        input: InputRequest,
+    },
 }
 fn captured_module_layouts(
     root: &PreparedSourceView,
@@ -405,25 +491,217 @@ impl PreparedCompileInputs {
     ) -> Result<(), Diagnostic> {
         self.discover_with(discovery, db, None)
     }
+    /// Continue the same compiler configuration before the normal discovery
+    /// poll. The retained reader was opened by preparation; no new source
+    /// capability or configured SDK role publication is created here.
+    pub(crate) fn discover_prepared_configuration(
+        &self,
+        preparation: SourceCompilerPreparation,
+        db: &mut Database,
+        procedural: Option<&mut dyn SourceExpansionExecutor>,
+    ) -> Result<CompilerModulePreparation, Diagnostic> {
+        let discovery = match &preparation {
+            SourceCompilerPreparation::Ready(discovery)
+            | SourceCompilerPreparation::NeedModule { discovery, .. } => discovery,
+        };
+        let coordination = DiscoveryCoordination::new(self, discovery, db);
+        self.resume_prepared_configuration(
+            PendingCompilerModules {
+                preparation,
+                coordination,
+            },
+            db,
+            procedural,
+        )
+    }
+    pub(crate) fn resume_prepared_configuration(
+        &self,
+        continuation: PendingCompilerModules,
+        db: &mut Database,
+        procedural: Option<&mut dyn SourceExpansionExecutor>,
+    ) -> Result<CompilerModulePreparation, Diagnostic> {
+        let PendingCompilerModules {
+            mut preparation,
+            mut coordination,
+        } = continuation;
+        loop {
+            let (mut discovery, demand) = match preparation {
+                SourceCompilerPreparation::Ready(mut discovery) => {
+                    self.discover_with_coordination(&mut discovery, db, procedural, coordination)?;
+                    return Ok(CompilerModulePreparation::Complete(discovery));
+                }
+                SourceCompilerPreparation::NeedModule { discovery, demand } => (discovery, demand),
+            };
+            coordination.require_current(self, &discovery, db)?;
+            let plan = match discovery.prepare_pending_compiler_ordinary_module(
+                db,
+                self.environment.unit(),
+                &self.authorities,
+            ) {
+                QueryPoll::Ready(Ok(PendingOrdinaryCompilerModule::Capture(plan))) => plan,
+                QueryPoll::Ready(Ok(PendingOrdinaryCompilerModule::Held(reason))) => {
+                    return Ok(CompilerModulePreparation::Held {
+                        continuation: PendingCompilerModules {
+                            preparation: SourceCompilerPreparation::NeedModule {
+                                discovery,
+                                demand,
+                            },
+                            coordination,
+                        },
+                        reason,
+                    });
+                }
+                QueryPoll::Ready(Err(error)) => return Err(error),
+                QueryPoll::NeedInput(input) => {
+                    return Ok(CompilerModulePreparation::NeedInput {
+                        continuation: PendingCompilerModules {
+                            preparation: SourceCompilerPreparation::NeedModule {
+                                discovery,
+                                demand,
+                            },
+                            coordination,
+                        },
+                        input,
+                    });
+                }
+            };
+            let original = plan.original();
+            let member = (
+                original.selection().location_identity(),
+                QueryKey::Outline(original.selection().outline.clone()).fingerprint(),
+            );
+            if !self
+                .catalog_publication
+                .ptr_eq(&original.retained_state_weak())
+                || self.catalog_sources.binary_search(&member).is_err()
+            {
+                return Err(fault(
+                    "LRR-E-SOURCE-MODULE",
+                    "ordinary module original source belongs to another prepared reader",
+                ));
+            }
+            match self.capture_and_stage_module(
+                &mut discovery,
+                db,
+                true,
+                plan.caller().clone(),
+                plan.input().clone(),
+                &mut coordination,
+            ) {
+                QueryPoll::Ready(Ok(())) => {}
+                QueryPoll::Ready(Err(error)) => return Err(error),
+                QueryPoll::NeedInput(input) => {
+                    return Ok(CompilerModulePreparation::NeedInput {
+                        continuation: PendingCompilerModules {
+                            preparation: SourceCompilerPreparation::NeedModule {
+                                discovery,
+                                demand,
+                            },
+                            coordination,
+                        },
+                        input,
+                    });
+                }
+            }
+            // A staged namespace is not complete. Resume actual route
+            // preparation, then let normal polling own parse/macro jobs.
+            preparation = discovery.resume_compiler_preparation()?;
+        }
+    }
+    fn capture_and_stage_module(
+        &self,
+        discovery: &mut SourceDiscovery,
+        db: &mut Database,
+        ordinary: bool,
+        caller: crate::source::changes::SourceSelection,
+        input: InputRequest,
+        state: &mut DiscoveryCoordination,
+    ) -> QueryPoll<()> {
+        let capture: Result<(), Diagnostic> = (|| {
+            state.require_current(self, discovery, db)?;
+            let InputRequest::CaptureModule { request, .. } = &input else {
+                return Err(fault(
+                    "LRR-E-COMPILE-INPUT",
+                    "module capture input variant changed",
+                ));
+            };
+            let producer = request.producer();
+            if let Some(previous) = state.modules.get(&producer) {
+                if previous != &input {
+                    return Err(fault(
+                        "LRR-E-COMPILE-INPUT",
+                        "retained module request changed",
+                    ));
+                }
+                return Ok(());
+            }
+            match crate::db::provider::SyntaxProvider::module_capture(db, &input) {
+                QueryPoll::Ready(Ok(_)) => {
+                    // The exact request was genuinely adopted by prior work.
+                    // Reuse that immutable candidate evidence without I/O.
+                    state.modules.insert(producer, input.clone());
+                    return Ok(());
+                }
+                QueryPoll::Ready(Err(error)) => return Err(error),
+                QueryPoll::NeedInput(_) => {}
+            }
+            let captured = self.capture.capture_module(request)?;
+            let phase = PhaseIdentity {
+                frame: self.generation,
+                body: BodyKey {
+                    definition: producer,
+                    exact_body_bytes: input.fingerprint(),
+                },
+                index: state.phase_index,
+            };
+            state.phase_index = state.phase_index.checked_add(1).ok_or_else(|| {
+                fault(
+                    "LRR-E-DISCOVERY-LIMIT",
+                    "standalone module phase count overflow",
+                )
+            })?;
+            let token =
+                state
+                    .coordinator
+                    .issue(QueryKey::Outline(caller.outline), phase, input.clone())?;
+            state.coordinator.start(&state.context, &token)?;
+            state
+                .coordinator
+                .accept_module(&state.context, &token, &captured)?;
+            state
+                .coordinator
+                .adopt_module(&state.context, &token, db, captured)?;
+            state.modules.insert(producer, input.clone());
+            Ok(())
+        })();
+        if let Err(error) = capture {
+            return QueryPoll::Ready(Err(error));
+        }
+        if ordinary {
+            discovery
+                .stage_ordinary_module_source(db, &input)
+                .map(|_| ())
+        } else {
+            discovery.stage_module_source(db, &input).map(|_| ())
+        }
+    }
     pub fn discover_with(
         &self,
         discovery: &mut SourceDiscovery,
         db: &mut Database,
-        mut procedural: Option<&mut dyn SourceExpansionExecutor>,
+        procedural: Option<&mut dyn SourceExpansionExecutor>,
     ) -> Result<(), Diagnostic> {
-        let context = DemandContext {
-            request: discovery.key().fingerprint(),
-            session: self.generation,
-            unit: self.environment.unit(),
-            revision: db.source_revision(),
-            epoch: discovery.key().epoch,
-            source_generation: self.generation,
-            native_generation: None,
-            compile_environment: self.environment.fingerprint(),
-        };
-        let mut coordinator = ExpansionCoordinator::new(context.clone());
-        let mut phase_index = 0u32;
-        let mut modules = BTreeMap::<Digest, InputRequest>::new();
+        let state = DiscoveryCoordination::new(self, discovery, db);
+        self.discover_with_coordination(discovery, db, procedural, state)
+    }
+    fn discover_with_coordination(
+        &self,
+        discovery: &mut SourceDiscovery,
+        db: &mut Database,
+        mut procedural: Option<&mut dyn SourceExpansionExecutor>,
+        mut state: DiscoveryCoordination,
+    ) -> Result<(), Diagnostic> {
+        state.require_current(self, discovery, db)?;
         loop {
             let step = discovery.poll()?;
             if let Some(key) = step.compiler_key() {
@@ -433,9 +711,9 @@ impl PreparedCompileInputs {
                         definition: key.invocation,
                         exact_body_bytes: key.input_tokens,
                     },
-                    index: phase_index,
+                    index: state.phase_index,
                 };
-                phase_index = phase_index.checked_add(1).ok_or_else(|| {
+                state.phase_index = state.phase_index.checked_add(1).ok_or_else(|| {
                     fault(
                         "LRR-E-DISCOVERY-LIMIT",
                         "standalone compiler phase count limit",
@@ -453,23 +731,29 @@ impl PreparedCompileInputs {
                             ));
                         };
                         let captured = self.capture.capture(request)?;
-                        let token = coordinator.issue(query, phase, input)?;
-                        coordinator.start(&context, &token)?;
-                        coordinator.accept_include(&context, &token, &captured)?;
-                        coordinator.adopt_include(&context, &token, db, captured)?;
+                        let token = state.coordinator.issue(query, phase, input)?;
+                        state.coordinator.start(&state.context, &token)?;
+                        state
+                            .coordinator
+                            .accept_include(&state.context, &token, &captured)?;
+                        state
+                            .coordinator
+                            .adopt_include(&state.context, &token, db, captured)?;
                     }
                     EagerCompileInputPoll::Produced(record) => {
                         let input = InputRequest::Expand(Box::new(ExpansionRequest {
                             key: record.key().clone(),
                         }));
-                        let token = coordinator.issue(query, phase, input)?;
-                        coordinator.start(&context, &token)?;
-                        coordinator.accept(
-                            &context,
+                        let token = state.coordinator.issue(query, phase, input)?;
+                        state.coordinator.start(&state.context, &token)?;
+                        state.coordinator.accept(
+                            &state.context,
                             &token,
                             Reply::success(&token, record.output()),
                         )?;
-                        coordinator.adopt(&context, &token, db, record)?;
+                        state
+                            .coordinator
+                            .adopt(&state.context, &token, db, record)?;
                     }
                     EagerCompileInputPoll::Complete(record) => discovery.admit_compiler_expansion(
                         db,
@@ -496,20 +780,22 @@ impl PreparedCompileInputs {
                         ));
                     }
                     EagerCompileInputPoll::NeedExternal(request) => {
-                        let token = coordinator.issue(query, phase, request.input())?;
-                        coordinator.start(&context, &token)?;
+                        let token = state.coordinator.issue(query, phase, request.input())?;
+                        state.coordinator.start(&state.context, &token)?;
                         let record = discovery.expand_compiler_string_operand(
                             db,
                             &self.environment,
                             &self.authorities,
                             &request,
                         )?;
-                        coordinator.accept(
-                            &context,
+                        state.coordinator.accept(
+                            &state.context,
                             &token,
                             Reply::success(&token, record.output()),
                         )?;
-                        coordinator.adopt(&context, &token, db, record)?;
+                        state
+                            .coordinator
+                            .adopt(&state.context, &token, db, record)?;
                     }
                     EagerCompileInputPoll::NeedLookup { .. } => {
                         return Err(fault(
@@ -575,7 +861,7 @@ impl PreparedCompileInputs {
                         if discovery.module_namespace_complete(producer) {
                             continue;
                         }
-                        if !modules.contains_key(&producer) {
+                        if !state.modules.contains_key(&producer) {
                             let (caller, input) = if ordinary {
                                 (
                                     discovery.ordinary_module_capture_caller(producer)?,
@@ -607,44 +893,10 @@ impl PreparedCompileInputs {
                                 )?;
                                 (caller, input)
                             };
-                            let InputRequest::CaptureModule { request, .. } = &input else {
-                                return Err(fault(
-                                    "LRR-E-COMPILE-INPUT",
-                                    "module capture input variant changed",
-                                ));
-                            };
-                            let captured = self.capture.capture_module(request)?;
-                            let phase = PhaseIdentity {
-                                frame: self.generation,
-                                body: BodyKey {
-                                    definition: producer,
-                                    exact_body_bytes: input.fingerprint(),
-                                },
-                                index: phase_index,
-                            };
-                            phase_index = phase_index.checked_add(1).ok_or_else(|| {
-                                fault(
-                                    "LRR-E-DISCOVERY-LIMIT",
-                                    "standalone module phase count limit",
-                                )
-                            })?;
-                            let token = coordinator.issue(
-                                QueryKey::Outline(caller.outline),
-                                phase,
-                                input.clone(),
-                            )?;
-                            coordinator.start(&context, &token)?;
-                            coordinator.accept_module(&context, &token, &captured)?;
-                            coordinator.adopt_module(&context, &token, db, captured)?;
-                            let staged = if ordinary {
-                                discovery
-                                    .stage_ordinary_module_source(db, &input)
-                                    .map(|_| ())
-                            } else {
-                                discovery.stage_module_source(db, &input).map(|_| ())
-                            };
-                            match staged {
-                                QueryPoll::Ready(Ok(_)) => {}
+                            match self.capture_and_stage_module(
+                                discovery, db, ordinary, caller, input, &mut state,
+                            ) {
+                                QueryPoll::Ready(Ok(())) => {}
                                 QueryPoll::Ready(Err(error)) => return Err(error),
                                 QueryPoll::NeedInput(_) => {
                                     return Err(fault(
@@ -653,10 +905,9 @@ impl PreparedCompileInputs {
                                     ));
                                 }
                             }
-                            modules.insert(producer, input);
                             progress = true;
                         } else {
-                            let input = modules.get(&producer).ok_or_else(|| {
+                            let input = state.modules.get(&producer).ok_or_else(|| {
                                 fault("LRR-E-COMPILE-INPUT", "module coordinator input absent")
                             })?;
                             let completed = if ordinary {

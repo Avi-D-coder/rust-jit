@@ -204,3 +204,96 @@ resume; (7) exact demanded declaration/current parent, no new dispatch namespace
 census; (8) share existing source/parsed handles, no BodyIndex/file-scan copies.
 Exact implementation fingerprints and separate source review remain required
 after root releases V532 and code actually exists.
+
+## Released implementation handoff, then freeze
+
+Root released V532 after source checkpoint a7e64f3 and clarified that an
+already-open PreparedCompileInputs.capture may perform ordinary exact capture
+outside pure queries during an active run. The new continuation therefore uses
+require_coordinator, not a new require_source_preparation refusal. No new
+SourceCapture::open, SDK-role publication, DB guard change or runtime/root solver
+entry was added.
+
+Implemented service APIs:
+- `discover_prepared_configuration(actual SourceCompilerPreparation, db,
+  existing procedural delegate)` starts the owned continuation.
+- `resume_prepared_configuration(PendingCompilerModules, db, delegate)` consumes
+  that exact retained discovery/coordinator/request state. Held diagnostics use
+  the original actual ModulePreparationDemand.
+- `CompilerModulePreparation::Complete(SourceDiscovery)` means the existing
+  ordinary discovery driver actually sealed; it does not publish/admit a solver
+  root. Held and NeedInput retain the opaque continuation and actual typed work.
+
+The existing discover_with wrapper and new entry share
+discover_with_coordination and capture_and_stage_module. The source coordinator
+retains DemandContext, actual phase index and exact producer->InputRequest map
+through pre-configuration and normal discovery; captured/adopted input is put in
+the map before staging, so a genuine stage NeedInput resumes without recapture.
+An exact already-adopted SyntaxProvider::module_capture lookup is reused before
+any physical read, including authentic prior work handed to this service. No
+missing adoption is inferred: absent immutable input follows actual capture,
+ExpansionCoordinator issue/start/accept/adopt and ordinary staging.
+
+The new discovery accessor selects only its retained configuration demand,
+excludes genuinely staged ancestors, follows actual ordinary staging ancestry
+back to the initial PreparedSourceView, and checks owner unit, parent DB
+selection/adoption and owning compile environment. It yields private-field
+capture input or typed MissingDeclaration/ForeignUnit/ConfiguredSourceRole/
+ParentLineage hold. Service checks the original view's exact prepared-state Weak
+owner and recorded source/Outline membership against the already-open reader.
+The existing ordinary_module_syntax_input and the accessor share extracted
+require_ordinary_module_parent_current; no weaker alternate parent check exists.
+Before capture/resume the service checks active-query exclusion, source_revision,
+actual DB ExpansionEpoch, prepared generation and compile environment identity.
+Staging precedes resume_compiler_preparation, which precedes normal poll; no
+parse-job completion, namespace completion or readiness is fabricated.
+
+Separate source pass against the fingerprints below, all eight failure modes:
+1-3. Both entries use the same source coordinator, captured declaration request
+and existing expansion/staging driver; no evaluator, assertion special case,
+method/numeric selection or solver semantics were added.
+4. Original and staged ordinary declarations share the existing source path.
+Configured-role and unrepresented parent lineage stay explicit source authority
+holds; generated normal discovery keeps its existing common driver route.
+5. Only required module/header/annotation producer work is scheduled; ordinary
+poll retains ownership of parsing/expansion. No executable-body static checking
+or pattern engine changes.
+6. Retained coordination/request state prevents repeated capture on continuation
+resume. Source/prepared metadata checks do not parse a body or rebuild a plan.
+7. The new work is coordinator preparation only: declaration enumeration and
+existing pending-route comparisons occur at module demand; ancestor traversal
+is O(source depth), recorded source membership is O(log captured source count).
+No dispatch namespace census, blanket query closure or hot installed checks.
+8. Source views/parsed data use existing shared handles. No BodyIndex copy or
+whole-file executable-node search.
+
+Independent reviewer found no actionable issue at the preceding service stamp
+184068e5 (compiler/glue unchanged below), including authority, retained staging
+state, normal driver and resume-before-poll. Final successor only reuses the
+existing exact adopted-module lookup before capture, as described above; that
+small successor still needs reviewer acknowledgment/compilation. `rustfmt
++1.99.0 --edition 2024 --check` on the two formatted owned files exited 0.
+No Cargo, tests or Git were run by this agent. No source/control test was added:
+the helper investigation was read-only when root directed stopping new internal
+control work and prioritizing unchanged upstream mains. The official #[path]
+witness above and actual held/resume/SDK/foreign/currentness controls remain
+unexecuted. New APIs have no production callers yet; source-ready is not runtime
+integration or acceptance. Parent owns any call-site adoption and real main
+validation.
+
+Frozen source SHA256:
+- service/source_preparation.rs 128f6ca1d69b47f2f73faf3684de7df444c10215e74f39636ad0d501770494e2
+- expand/source_discovery/compiler_preparation.rs 9440780663010e2306cd6ee3ff3600a494febb5486219b35e8cfffc26f4d43cb
+- expand/source_discovery.rs 1c8cfa9cf0f24af52107bb7e0192a9678662e617b74a8378a0bbc2d599a17e8a
+
+## Independent source review of the bounded service join
+
+October 20, read-only review after V532 release, before the next whole-source freeze. Exact SHA-256 stamps: `service/source_preparation.rs` `184068e567575b27cd5370fec5277850c86e58129833dfcdfcbccf5feb9679dc`; `expand/source_discovery/compiler_preparation.rs` `9440780663010e2306cd6ee3ff3600a494febb5486219b35e8cfffc26f4d43cb`; `expand/source_discovery.rs` `1c8cfa9cf0f24af52107bb7e0192a9678662e617b74a8378a0bbc2d599a17e8a`. No actionable source issue found in this bounded pass. No compilation or test body ran, so mechanical API/borrow correctness remains subject to the next actual build. Disjoint source writers were active; this is not an aggregate frozen fingerprint.
+
+Reviewed `DiscoveryCoordination::{new,require_current}`, `PreparedCompileInputs::{discover_prepared_configuration,resume_prepared_configuration,capture_and_stage_module,discover_with_coordination}`, `SourceDiscovery::prepare_pending_compiler_ordinary_module`, and the extracted `require_ordinary_module_parent_current`. A private held continuation consumes/returns the actual SourceCompilerPreparation, coordinator phases and exact producer-to-adopted-request map. Moving the optional procedural executor occurs only in the Ready branch that returns; pending iterations retain the actual preparation. The helper guards coordinator context, prepared generation/environment/unit, source revision, discovery request and actual DB ExpansionEpoch before capture. The source plan authenticates its retained demand, actual unresolved declaration, original/staged parent ancestry, owning unit and compile environment. Before effect, the service also checks the original's retained publication Weak identity and exact captured location/Outline membership against its existing reader. No fresh SourceCapture is opened by the continuation.
+
+The shared effect helper performs actual capture, issue/start/accept/adopt and staging. It records the exact adopted request before staging, so a genuine stage NeedInput retains the record and can retry staging without duplicate physical capture; a changed request for that producer is an error. Already staged ancestors are excluded from new physical-demand selection, while the retained coordinator/request map passes into the same normal discovery driver. Actual compiler preparation resumes immediately after staging; ordinary poll/namespace completion remains the existing later owner. Foreign unit, configured source role, missing declaration and unsupported parent lineage remain typed holds. Extracting the parent check preserves the original ordinary_module_syntax_input checks; SDK/macro-export source publication and active-run DB restrictions were not relaxed.
+
+Eight-mode review: (1) no assertion/expression evaluator is introduced; (2) compiler/module effects use the existing discovery/coordinator routes rather than a macro runtime; (3) no member selection, numeric inference or trait solution occurs; (4) ownership-specific source roles retain their existing holds, with no generated-source-wide exclusion; (5) only demanded source/module metadata is prepared, no executable cold-arm/pattern check is added; (6) retained adopted requests/coordination avoid recapture across pending retries and normal driver handoff, while the existing compiler configuration keeps its immutable route cache; (7) capture uses an actual demanded declaration, exact source/epoch/context checks and existing source membership table, not a dispatch-wide namespace census; (8) original/staged prepared source handles are shared, with no BodyIndex clone or whole-file executable node search. Ancestor traversal and binary membership lookup occur on the demanded preparation path, not installed guest dispatch. No measured performance conclusion follows.
+
+The new discover/resume service API had no callers at this review. Existing V532 repeatable NeedModule and ready/strict equivalence controls test configuration components only. They do not prove physical capture through this new continuation, nested staging, or a suspended VM. Required next evidence remains a real pre-poll NeedModule forced through the new API, actual stored #[path] request/caller, nested ancestor staging and subsequent demand, repeated resume without recapture, same source/epoch/prepared owner, pure-query refusal before I/O, foreign/configured-role holds and cold bodies. Preserve unchanged mod_file_with_path_attr.rs and mod_file_aux.rs; place any forcing/observer controls outside those originals. A successful service component still would not install CLI runtime input driving, refresh immutable RunMachine environments or establish trait-root admission/once-consumed guest commit.

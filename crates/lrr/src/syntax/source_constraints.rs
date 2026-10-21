@@ -23,7 +23,7 @@ use ra_ap_syntax::{
 };
 use std::{collections::BTreeMap, sync::Arc};
 
-pub(crate) const SOURCE_CONSTRAINT_SCHEMA: u32 = 15;
+pub(crate) const SOURCE_CONSTRAINT_SCHEMA: u32 = 16;
 fn overflow() -> Diagnostic {
     Diagnostic::new(
         "LRR-E-METADATA-LIMIT",
@@ -420,6 +420,7 @@ pub(crate) struct SourceConstraintPlan {
     structure: Digest,
     facts: Vec<SourceFact>,
     uses: Vec<SourceUse>,
+    relations: super::source_constraint_relations::SourceRelationPlan,
     names: Vec<(String, SourceName)>,
     // The pattern engine's own retained tree for each `let` and match-arm
     // root pattern, and every binding occurrence's position in it.
@@ -447,6 +448,9 @@ impl SourceConstraintPlan {
     }
     pub(crate) fn structure(&self) -> Digest {
         self.structure
+    }
+    pub(crate) fn relations(&self) -> &super::source_constraint_relations::SourceRelationPlan {
+        &self.relations
     }
     #[cfg(test)]
     pub(crate) fn facts(&self) -> &[SourceFact] {
@@ -843,11 +847,15 @@ impl SourceConstraintPlan {
                 .collect::<Result<Vec<_>, _>>()?;
             record_fields.insert(*node, rows.into_boxed_slice());
         }
+        let relations = super::source_constraint_relations::SourceRelationPlan::prepare(
+            body.key(), index.semantic_identity(), &facts, &uses,
+        )?;
         Ok(Self {
             body: body.key(),
             structure: index.semantic_identity(),
             facts,
             uses,
+            relations,
             names,
             trees,
             pattern_names,
@@ -1698,6 +1706,7 @@ impl StableEncode for SourceConstraintPlan {
         e.u32(SOURCE_CONSTRAINT_SCHEMA);
         e.record(&self.body);
         e.digest(self.structure);
+        e.record(&self.relations);
         e.sequence(&self.facts, |e, fact| {
             e.u8(fact.kind.tag());
             e.sequence(&fact.operands, |e, node| e.option(node, |e, n| e.u32(n.0)));

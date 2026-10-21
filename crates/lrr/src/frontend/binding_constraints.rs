@@ -27,6 +27,7 @@ use crate::{
     },
     syntax::{
         pattern_tree::{PatternLiteral, PatternNode, RangeEndpoint},
+        source_constraint_relations::{SourceNumericLeaf, SourceRelationInput, SourceRelationConsumer},
         source_constraints::{
             FactKind, PatternStep, SourceConstraintPlan, SourceOperator, TypeShape,
         },
@@ -1871,22 +1872,68 @@ impl<'a> Component<'a> {
         if self.open {
             ready!(self.static_candidate(db, node));
         }
+        // Elementary source adjacency is retained by the same SourceConstraints
+        // memo used by other consumers. Legacy solving stays on this side of
+        // the boundary: the table contains no inferred primitive or fallback.
+        let plan: &'a SourceConstraintPlan = self.plan;
+        let Some(relation) = plan.relations().inward(node) else {
+            return QueryPoll::Ready(Err(fault("source relation node absent")));
+        };
+        match relation {
+            SourceRelationInput::Numeric(leaf) => {
+                match *leaf {
+                    SourceNumericLeaf::Integer | SourceNumericLeaf::Float if scalar => {
+                        let floating = *leaf == SourceNumericLeaf::Float;
+                        if self.open {
+                            self.literal_reached(floating);
+                        } else if self.floating != floating {
+                            self.defer(node, ConstraintDemand::NumericFamily);
+                        }
+                    }
+                    SourceNumericLeaf::WrittenSuffix(Some(primitive)) if scalar => {
+                        if let Err(error) = self.constrain(node, primitive) {
+                            return QueryPoll::Ready(Err(error));
+                        }
+                    }
+                    SourceNumericLeaf::WrittenSuffix(None) if scalar => {
+                        self.defer(node, ConstraintDemand::NumericFamily);
+                    }
+                    SourceNumericLeaf::WrittenSuffix(_) => {
+                        self.defer(node, ConstraintDemand::ExpressionRelation);
+                    }
+                    _ => self.defer(node, ConstraintDemand::NumericFamily),
+                }
+                return QueryPoll::Ready(Ok(()));
+            }
+            SourceRelationInput::Pass(child) => {
+                match child {
+                    Some(child) => self.expression(Some(*child)),
+                    None => self.defer(node, ConstraintDemand::ExpressionRelation),
+                }
+                return QueryPoll::Ready(Ok(()));
+            }
+            SourceRelationInput::If { then_value, else_value, .. } => {
+                match (then_value, else_value) {
+                    (Some(then), Some(otherwise)) => {
+                        self.expression(Some(*then));
+                        self.expression(Some(*otherwise));
+                    }
+                    _ => self.defer(node, ConstraintDemand::ExpressionRelation),
+                }
+                return QueryPoll::Ready(Ok(()));
+            }
+            SourceRelationInput::Match { operands } => {
+                let via = self.via.loose();
+                for body in operands.iter().skip(2).step_by(2) {
+                    self.expression_via(*body, via.clone());
+                }
+                return QueryPoll::Ready(Ok(()));
+            }
+            SourceRelationInput::Boundary { .. } => {}
+        }
         match fact.kind() {
             // A lexically typed literal states its Type (above) and nothing else.
             FactKind::Literal if self.open && (fact.suffix().is_some() || fact.flag() || fact.byte_length().is_some()) => {}
-            FactKind::Integer | FactKind::Float if scalar && self.open => {
-                self.literal_reached(fact.kind() == FactKind::Float)
-            }
-            FactKind::Integer if scalar && !self.floating => {}
-            FactKind::Float if scalar && self.floating => {}
-            FactKind::SuffixedInteger | FactKind::SuffixedFloat if scalar => match fact.suffix() {
-                Some(primitive) => {
-                    if let Err(error) = self.constrain(node, primitive) {
-                        return QueryPoll::Ready(Err(error));
-                    }
-                }
-                None => self.defer(node, ConstraintDemand::NumericFamily),
-            },
             FactKind::Path => {
                 let observed = ready!(db.fetch(
                     &SyntaxProvider,
@@ -1932,10 +1979,6 @@ impl<'a> Component<'a> {
                     self.defer(node, ConstraintDemand::SelectedDeclaration);
                 }
             }
-            FactKind::Parenthesis | FactKind::Block => match fact.operand(0) {
-                Some(child) => self.expression(Some(child)),
-                None => self.defer(node, ConstraintDemand::ExpressionRelation),
-            },
             FactKind::Prefix => match fact.operation() {
                 Some(SourceOperator::Negate | SourceOperator::Not) if scalar => {
                     self.expression(fact.operand(0))
@@ -1955,20 +1998,6 @@ impl<'a> Component<'a> {
                 // bool and unit results cannot hold a numeric variable.
                 _ => self.defer(node, ConstraintDemand::ExpressionRelation),
             },
-            FactKind::If => match (fact.operand(1), fact.operand(2)) {
-                (Some(then), Some(otherwise)) => {
-                    self.expression(Some(then));
-                    self.expression(Some(otherwise));
-                }
-                _ => self.defer(node, ConstraintDemand::ExpressionRelation),
-            },
-            // The arms' values are the match's value.
-            FactKind::Match => {
-                let via = self.via.loose();
-                for body in fact.operands().iter().skip(2).step_by(2) {
-                    self.expression_via(*body, via.clone());
-                }
-            }
             FactKind::Borrow => match self.via.steps.first() {
                 Some(Step::Deref) => {
                     let via = self.via.unwrap(Step::Deref).expect("checked step");
@@ -2111,9 +2140,6 @@ impl<'a> Component<'a> {
             }
             FactKind::MethodCall => ready!(self.method_inward(db, node)),
             FactKind::LangCall => ready!(self.lang_inward(db, node)),
-            FactKind::Integer | FactKind::Float => {
-                self.defer(node, ConstraintDemand::NumericFamily)
-            }
             _ => self.defer(node, ConstraintDemand::ExpressionRelation),
         }
         QueryPoll::Ready(Ok(()))
@@ -2122,7 +2148,9 @@ impl<'a> Component<'a> {
     /// What each consumer of the expression's value says about its Type.
     fn outward(&mut self, db: &mut Database, node: NodeId) -> QueryPoll<()> {
         let plan: &'a SourceConstraintPlan = self.plan;
-        let uses = plan.uses(node);
+        let Some(uses) = plan.relations().outward(node) else {
+            return QueryPoll::Ready(Err(fault("source relation node absent")));
+        };
         if uses.is_empty() {
             if node == NodeId(0) {
                 // The body root's value is the function result.
@@ -2134,14 +2162,39 @@ impl<'a> Component<'a> {
             return QueryPoll::Ready(Ok(()));
         }
         let scalar = self.via.is_scalar();
-        for edge in uses {
+        for relation in uses {
+            let edge = relation.edge;
+            match relation.consumer {
+                SourceRelationConsumer::Pass => {
+                    self.expression(Some(edge.parent));
+                    continue;
+                }
+                SourceRelationConsumer::IfValue { has_else } => {
+                    if has_else { self.expression(Some(edge.parent)); }
+                    else { self.defer(edge.parent, ConstraintDemand::ExpressionRelation); }
+                    continue;
+                }
+                SourceRelationConsumer::MatchValue => {
+                    self.expression_via(Some(edge.parent), self.via.loose());
+                    continue;
+                }
+                SourceRelationConsumer::Discard => continue,
+                SourceRelationConsumer::LetInitializer { pattern } => {
+                    self.pattern_via(pattern, self.via.clone());
+                    continue;
+                }
+                SourceRelationConsumer::ReturnValue => {
+                    ready!(self.result(db, edge.parent, self.key.body.definition));
+                    continue;
+                }
+                SourceRelationConsumer::Boundary(_) => {}
+            }
             let parent = match self.fact(edge.parent) {
                 Ok(fact) => fact,
                 Err(error) => return QueryPoll::Ready(Err(error)),
             };
             let other = |ordinal: u32| parent.operand(if ordinal == 0 { 1 } else { 0 });
             match parent.kind() {
-                FactKind::Parenthesis | FactKind::Block => self.expression(Some(edge.parent)),
                 FactKind::Prefix => match parent.operation() {
                     Some(SourceOperator::Negate | SourceOperator::Not) if scalar => {
                         self.expression(Some(edge.parent))
@@ -2199,7 +2252,6 @@ impl<'a> Component<'a> {
                     Some(SourceOperator::CompoundShift) => {}
                     _ => self.defer(edge.parent, ConstraintDemand::ExpressionRelation),
                 },
-                FactKind::Discard => {}
                 // A cast constrains its result, not a named operand. Only a
                 // literal operand (through parentheses and unary `-`/`!`)
                 // takes rustc's castable expectation from the target.
@@ -2207,11 +2259,6 @@ impl<'a> Component<'a> {
                     if scalar && !self.open && literal_operand(plan, node) {
                         ready!(self.cast_expectation(db, edge.parent));
                     }
-                }
-                // The initializer's Type is the pattern's matched Type.
-                FactKind::Let if edge.ordinal == 1 => {
-                    let via = self.via.clone();
-                    self.pattern_via(parent.operand(0), via);
                 }
                 FactKind::Call if edge.ordinal > 0 => {
                     match ready!(self.constructor(db, ConstructorSite::Expression(edge.parent))) {
@@ -2279,27 +2326,12 @@ impl<'a> Component<'a> {
                 FactKind::For if edge.ordinal == 0 => ready!(self.for_head(db, edge.parent)),
                 // A loop body's value is `()`.
                 FactKind::For => {}
-                FactKind::If if edge.ordinal > 0 => {
-                    if parent.operand(2).is_some() {
-                        self.expression(Some(edge.parent));
-                    } else {
-                        self.defer(edge.parent, ConstraintDemand::ExpressionRelation);
-                    }
-                }
                 FactKind::Match if edge.ordinal == 0 => {
                     // Every arm's pattern matches the scrutinee's Type.
                     let via = self.via.loose();
                     for pattern in parent.operands().iter().skip(1).step_by(2) {
                         self.pattern_via(*pattern, via.clone());
                     }
-                }
-                FactKind::Match if edge.ordinal % 2 == 0 => {
-                    let via = self.via.loose();
-                    self.expression_via(Some(edge.parent), via);
-                }
-                FactKind::Return => {
-                    let definition = self.key.body.definition;
-                    ready!(self.result(db, edge.parent, definition));
                 }
                 // The base of `base.f`.
                 FactKind::Field => ready!(self.field_access(db, node, edge.parent)),
@@ -3064,6 +3096,9 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedBindi
     let QueryValue::SourceConstraints(plan) = facts.value.as_ref() else {
         return QueryPoll::Ready(Err(fault("binding constraint source plan variant differs")));
     };
+    if let Err(error) = plan.relations().require_source(&key.body, plan.structure()) {
+        return QueryPoll::Ready(Err(error));
+    }
     let mut result = PreparedBindingConstraints {
         key: key.clone(),
         structure: plan.structure(),
