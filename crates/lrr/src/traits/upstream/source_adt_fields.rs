@@ -82,6 +82,27 @@ impl PreparedAdtSourceFields {
     pub(super) fn source_field_types(&self) -> impl Iterator<Item = &TyTerm> {
         self.variants.iter().flat_map(|variant| variant.fields.iter().map(|field| &field.ty))
     }
+    /// The actual declared Type of one field of a variant, as source.
+    pub(crate) fn field_term(&self, variant: u32, field: u32) -> Option<&TyTerm> {
+        self.variants.get(variant as usize)?.fields.get(field as usize).map(|field| &field.ty)
+    }
+    /// Source ordinals of the declaration's Type parameters, in written order.
+    pub(crate) fn type_parameter_ordinals(&self) -> Vec<u32> {
+        self.schema().generics.iter()
+            .filter(|parameter| parameter.kind == crate::syntax::signatures::GenericKind::Type)
+            .map(|parameter| parameter.ordinal)
+            .collect()
+    }
+    /// The declaration's variant of this name (`None`: a struct's or union's one).
+    pub(crate) fn variant_index(&self, name: Option<&str>) -> Option<u32> {
+        let mut found = self.schema().variants.iter().enumerate()
+            .filter(|(_, variant)| variant.name.as_deref() == name);
+        let (index, _) = found.next()?;
+        found.next().is_none().then(|| index as u32)
+    }
+    pub(crate) fn field_count(&self, variant: u32) -> u32 {
+        self.variants.get(variant as usize).map_or(0, |variant| variant.fields.len() as u32)
+    }
     pub(super) fn schema(&self) -> &NominalSchema {
         let QueryValue::TypeSchema(schema) = self.schema.as_ref() else { unreachable!("captured ADT schema") };
         schema

@@ -31,6 +31,8 @@ mod reached_record_update_tests;
 mod reborrow_tests;
 #[cfg(test)]
 mod ref_pattern_tests;
+#[cfg(test)]
+mod subarray_pattern_tests;
 mod render;
 pub(crate) mod retained_entry;
 mod runtime_capture;

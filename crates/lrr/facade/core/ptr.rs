@@ -157,6 +157,29 @@ impl<T: ?Sized> crate::cmp::PartialEq for *mut T {
 }
 impl<T: ?Sized> crate::cmp::Eq for *mut T {}
 
+// Raw pointers order by address (real core compares the pointers with the
+// built-in operators, which order by address).
+impl<T: ?Sized> crate::cmp::PartialOrd for *const T {
+    fn partial_cmp(&self, other: &*const T) -> crate::option::Option<crate::cmp::Ordering> {
+        crate::option::Option::Some(crate::cmp::Ord::cmp(&(*self as usize), &(*other as usize)))
+    }
+}
+impl<T: ?Sized> crate::cmp::Ord for *const T {
+    fn cmp(&self, other: &*const T) -> crate::cmp::Ordering {
+        crate::cmp::Ord::cmp(&(*self as usize), &(*other as usize))
+    }
+}
+impl<T: ?Sized> crate::cmp::PartialOrd for *mut T {
+    fn partial_cmp(&self, other: &*mut T) -> crate::option::Option<crate::cmp::Ordering> {
+        crate::option::Option::Some(crate::cmp::Ord::cmp(&(*self as usize), &(*other as usize)))
+    }
+}
+impl<T: ?Sized> crate::cmp::Ord for *mut T {
+    fn cmp(&self, other: &*mut T) -> crate::cmp::Ordering {
+        crate::cmp::Ord::cmp(&(*self as usize), &(*other as usize))
+    }
+}
+
 // Every fn pointer type selects these impls by the reserved fn-pointer
 // identity; the bodies compare code addresses and so serve any signature.
 impl crate::cmp::PartialEq for fn() {
@@ -173,4 +196,54 @@ impl crate::clone::Clone for fn() {
 
 pub struct NonNull<T: ?Sized> {
     pointer: *const T,
+}
+
+impl<T: ?Sized> NonNull<T> {
+    pub unsafe fn new_unchecked(ptr: *mut T) -> NonNull<T> {
+        NonNull { pointer: ptr as *const T }
+    }
+    pub fn new(ptr: *mut T) -> crate::option::Option<NonNull<T>> {
+        if (ptr as usize) == 0 {
+            crate::option::Option::None
+        } else {
+            crate::option::Option::Some(NonNull { pointer: ptr as *const T })
+        }
+    }
+    pub const fn as_ptr(self) -> *mut T {
+        core::intrinsics::lrr_ptr_as_mut(self.pointer)
+    }
+    pub unsafe fn as_ref<'a>(&self) -> &'a T {
+        &*self.pointer
+    }
+    pub unsafe fn as_mut<'a>(&mut self) -> &'a mut T {
+        &mut *self.as_ptr()
+    }
+    pub const fn cast<U>(self) -> NonNull<U> {
+        NonNull { pointer: core::intrinsics::lrr_ptr_retype(self.pointer) }
+    }
+    pub fn addr(self) -> usize {
+        self.pointer as usize
+    }
+}
+impl<T> NonNull<T> {
+    pub const fn dangling() -> NonNull<T> {
+        NonNull { pointer: core::intrinsics::lrr_ptr_retype(core::mem::align_of::<T>() as *const u8) }
+    }
+}
+impl<T: ?Sized> crate::clone::Clone for NonNull<T> {
+    fn clone(&self) -> NonNull<T> {
+        NonNull { pointer: self.pointer }
+    }
+}
+impl<T: ?Sized> crate::marker::Copy for NonNull<T> {}
+impl<T: ?Sized> crate::cmp::PartialEq for NonNull<T> {
+    fn eq(&self, other: &NonNull<T>) -> bool {
+        (self.pointer as usize) == (other.pointer as usize)
+    }
+}
+impl<T: ?Sized> crate::cmp::Eq for NonNull<T> {}
+impl<T: ?Sized> crate::fmt::Debug for NonNull<T> {
+    fn fmt(&self, f: &mut crate::fmt::Formatter<'_>) -> crate::fmt::Result {
+        crate::fmt::Debug::fmt(&(self.pointer as usize), f)
+    }
 }

@@ -260,6 +260,42 @@ impl<T> [T] {
         }
         true
     }
+    pub fn clone_from_slice(&mut self, src: &[T])
+    where
+        T: crate::clone::Clone,
+    {
+        if self.len() != src.len() {
+            core::panicking::panic("destination and source slices have different lengths");
+        }
+        let mut i: usize = 0;
+        while i < src.len() {
+            self[i] = src[i].clone();
+            i += 1;
+        }
+    }
+    pub fn copy_from_slice(&mut self, src: &[T])
+    where
+        T: crate::marker::Copy,
+    {
+        if self.len() != src.len() {
+            core::panicking::panic("source slice length does not match destination slice length");
+        }
+        let mut i: usize = 0;
+        while i < src.len() {
+            self[i] = src[i];
+            i += 1;
+        }
+    }
+    pub fn fill(&mut self, value: T)
+    where
+        T: crate::clone::Clone,
+    {
+        let mut i: usize = 0;
+        while i < self.len() {
+            self[i] = value.clone();
+            i += 1;
+        }
+    }
     pub fn reverse(&mut self) {
         let len = self.len();
         let mut i: usize = 0;

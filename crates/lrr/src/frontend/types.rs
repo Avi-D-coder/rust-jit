@@ -252,6 +252,9 @@ pub struct SchemaNames<'a> {
     definition: Cow<'a, crate::source::manifest::DefKey>,
     body_type: Option<&'a super::source_locals::owned_plan::type_declarations::PreparedBodyType>,
     body_owner: Option<super::source_types::LocalDeclarationOwner>,
+    /// Declared field Types already normalized by the pinned solver under the
+    /// caller's arguments (see `NominalMemberKey::normalized`).
+    normalized: Option<&'a [(u32, u32, TyTerm)]>,
 }
 /// One lookup result and, when available, its source-selected concrete type.
 /// Metadata-only graph callers cannot mint nominal schema authority.
@@ -760,7 +763,12 @@ impl<'a> SchemaNames<'a> {
             definition,
             body_type: None,
             body_owner: None,
+            normalized: None,
         }))
+    }
+    pub(crate) fn with_normalized_fields(mut self, normalized: Option<&'a [(u32, u32, TyTerm)]>) -> Self {
+        self.normalized = normalized;
+        self
     }
     pub(crate) fn definition(&self) -> &crate::source::manifest::DefKey {
         &self.definition
@@ -1366,26 +1374,32 @@ impl BoundNominalConstructor {
         selected_variant: u32,
         variant: &BoundNominalVariant,
     ) -> Result<Self, Diagnostic> {
+        // A union expression writes exactly one of its fields; it never
+        // covers the declaration, unlike a struct or variant constructor.
+        let covered = mapping
+            .written_to_declaration()
+            .len()
+            .checked_add(mapping.base_fields().len());
+        let union = variant.definition().item_kind == crate::source::manifest::ItemKind::Union;
         if mapping.definition() != variant.identity()
             || mapping.schema() != variant.schema()
             || selected_variant != variant.variant()
-            || mapping
-                .written_to_declaration()
-                .len()
-                .checked_add(mapping.base_fields().len())
-                != Some(variant.fields().len())
+            || covered.is_none_or(|covered| {
+                if union { covered > variant.fields().len() } else { covered != variant.fields().len() }
+            })
             || mapping
                 .written_to_declaration()
                 .iter()
                 .chain(mapping.base_fields())
                 .any(|field| *field as usize >= variant.fields().len())
-            || mapping
-                .written_to_declaration()
-                .iter()
-                .chain(mapping.base_fields())
-                .collect::<std::collections::BTreeSet<_>>()
-                .len()
-                != variant.fields().len()
+            || Some(
+                mapping
+                    .written_to_declaration()
+                    .iter()
+                    .chain(mapping.base_fields())
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .len(),
+            ) != covered
         {
             return Err(schema_fault(
                 "record map/specialized source variant differs",

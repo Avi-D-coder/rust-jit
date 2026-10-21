@@ -108,7 +108,7 @@ pub(super) fn alias_layouts<'cx>(cx: Cx<'cx>, bundle: &SourceFactBundle, source:
     let requested = match domain {
         D::FreeType => vec![(K::FreeType, AliasTermKind::FreeTy { def_id: id })],
         D::FreeConst => vec![(K::FreeConst, AliasTermKind::FreeConst { def_id: id })],
-        D::ProjectionType => vec![(K::ProjectionType, AliasTermKind::ProjectionTy { def_id: id })],
+        D::ProjectionType | D::TraitImplType => vec![(K::ProjectionType, AliasTermKind::ProjectionTy { def_id: id })],
         D::ProjectionConst => vec![(K::ProjectionConst, AliasTermKind::ProjectionConst { def_id: id })],
         D::InherentType => vec![(K::InherentType, AliasTermKind::InherentTy { def_id: id })],
         D::InherentConst => vec![

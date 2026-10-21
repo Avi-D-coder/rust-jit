@@ -504,6 +504,28 @@ impl NormalizedDeferredReturn {
         db: &mut Database,
         callee: &SourceCallable,
     ) -> Result<(), Diagnostic> {
+        self.require_current_in(db, callee, false)
+    }
+    /// As `require_current` for an inherited lexical environment (a closure
+    /// body's creating function). That environment outlives the call entry
+    /// that minted this proof while ordinary reached execution keeps
+    /// publishing derived callee environments, so the process-wide
+    /// publication revision is no guard here: the source revision, the
+    /// definition/signature identity and every retained namespace/source
+    /// dependency stamp still are, as for closed reference parameters.
+    pub(crate) fn require_current_inherited(
+        &self,
+        db: &mut Database,
+        callee: &SourceCallable,
+    ) -> Result<(), Diagnostic> {
+        self.require_current_in(db, callee, true)
+    }
+    fn require_current_in(
+        &self,
+        db: &mut Database,
+        callee: &SourceCallable,
+        inherited: bool,
+    ) -> Result<(), Diagnostic> {
         callee.revalidate(db)?;
         if let DeferredReturnOrigin::DeclaredGoal { guard, .. } = &self.origin {
             if callee.identity() != self.definition
@@ -536,7 +558,7 @@ impl NormalizedDeferredReturn {
         // Header equality alone cannot establish current alias meaning. Derived
         // publication also advances this epoch; conservatively demand a new mint.
         if db.source_revision() != self.source_revision
-            || db.revision() != self.query_revision
+            || (!inherited && db.revision() != self.query_revision)
             || callee.signature().fingerprint() != self.signature
             || callee.identity() != self.definition
         {
@@ -787,6 +809,100 @@ impl PreparedCallContracts {
             ));
         }
         Ok(())
+    }
+}
+impl PreparedCallContracts {
+    /// Whether the declared result is still an open template at the call: it
+    /// names generic positions (or unnormalized projections) that neither the
+    /// reached arguments nor the result context bound.
+    pub(crate) fn has_open_result(&self) -> bool {
+        self.result_descriptor.is_none()
+            && self.source_result.as_ref().is_some_and(|term| {
+                !matches!(term, TyTerm::Param(_) | TyTerm::Primitive(_)) && !closed_term(term)
+            })
+    }
+    /// The returned value's source view against the open declared result: the
+    /// same structure, with every generic position bound consistently (to the
+    /// call's own binding when it has one, otherwise to the returned value's
+    /// type) and every unnormalized projection or opaque position supplied by
+    /// the value. Regions are not runtime data and are compared erased.
+    pub(crate) fn check_open_return_source(
+        &self,
+        found: Option<&TyTerm>,
+    ) -> Result<(), Diagnostic> {
+        let (Some(template), Some(found)) = (self.source_result.as_ref(), found) else {
+            // No reached source view: the value's own descriptor stands.
+            return Ok(());
+        };
+        let mut bound: BTreeMap<ParamKey, TyTerm> = self
+            .source_substitution
+            .iter()
+            .map(|(key, term)| (*key, super::signature_subst::erase_regions(term)))
+            .collect();
+        let template = super::signature_subst::erase_regions(template);
+        let found = super::signature_subst::erase_regions(found);
+        if open_result_unifies(&template, &found, &mut bound)
+            || crate::traits::pointer_terms::same_pointer_family(&found, &template)
+        {
+            return Ok(());
+        }
+        Err(fault(
+            "LRR-E-CALL-RETURN-TYPE",
+            "returned value differs from the open declared result type",
+        ))
+    }
+}
+/// Structural agreement of a declared result template (generic positions free,
+/// regions erased) with a reached source view, binding each generic position
+/// at its first occurrence.
+fn open_result_unifies(
+    template: &TyTerm,
+    found: &TyTerm,
+    bound: &mut BTreeMap<ParamKey, TyTerm>,
+) -> bool {
+    use crate::traits::term::{ConstTerm, GenericArg};
+    match (template, found) {
+        (TyTerm::Param(key), found) => match bound.get(key) {
+            Some(prior) => prior == found || prior.admits_dyn(found),
+            None => {
+                bound.insert(*key, found.clone());
+                true
+            }
+        },
+        // No impl normalized this position at the call; the value supplies it.
+        (TyTerm::Projection(_) | TyTerm::Opaque(..) | TyTerm::Dyn(_), _) => true,
+        (TyTerm::Nominal(left, a), TyTerm::Nominal(right, b)) => {
+            left == right
+                && a.len() == b.len()
+                && a.iter().zip(b).all(|pair| match pair {
+                    (GenericArg::Type(x), GenericArg::Type(y)) => open_result_unifies(x, y, bound),
+                    (GenericArg::Region(_), GenericArg::Region(_)) => true,
+                    (GenericArg::Const(ConstTerm::Param(_)), GenericArg::Const(_)) => true,
+                    (x, y) => x == y,
+                })
+        }
+        (TyTerm::Tuple(a), TyTerm::Tuple(b)) => {
+            a.len() == b.len()
+                && a.iter().zip(b).all(|(x, y)| open_result_unifies(x, y, bound))
+        }
+        (TyTerm::Array(x, n), TyTerm::Array(y, m)) => {
+            (matches!(n, ConstTerm::Param(_)) || n == m) && open_result_unifies(x, y, bound)
+        }
+        (TyTerm::Slice(x), TyTerm::Slice(y)) => open_result_unifies(x, y, bound),
+        // A `&mut` returned at a shared-reference result reborrows shared.
+        (TyTerm::Ref(_, shared_or_mut, x), TyTerm::Ref(_, found_mut, y)) => {
+            (shared_or_mut == found_mut || !*shared_or_mut) && open_result_unifies(x, y, bound)
+        }
+        (TyTerm::Function(a), TyTerm::Function(b)) => {
+            a.value.parameters.len() == b.value.parameters.len()
+                && a.value
+                    .parameters
+                    .iter()
+                    .zip(&b.value.parameters)
+                    .all(|(x, y)| open_result_unifies(x, y, bound))
+                && open_result_unifies(&a.value.result, &b.value.result, bound)
+        }
+        (template, found) => template == found || template.admits_dyn(found),
     }
 }
 /// Pre-argument source facts: no actual arguments, substitution, layout or bound solving.

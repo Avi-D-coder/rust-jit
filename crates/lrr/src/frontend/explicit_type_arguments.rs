@@ -25,7 +25,7 @@ use crate::{
         written_type::WrittenType,
     },
     runtime::{cell::GuestStore, shape::TypeId},
-    traits::term::TyTerm,
+    traits::term::{InferVarKey, TyTerm},
     syntax::{
         thunks_let_annotations::AnnotationShape,
         body_index::{BodyIndex, ExpressionKind, NodeRole},
@@ -37,7 +37,7 @@ use ra_ap_syntax::{AstNode, ast};
 use std::sync::Arc;
 #[path = "explicit_path_arguments.rs"]
 mod paths;
-pub(crate) use paths::{PathArgumentPosition, select_path_arguments};
+pub(crate) use paths::{PathArgumentPosition, select_path_arguments, select_path_arguments_with};
 const ARC_HEADER: usize = 2 * std::mem::size_of::<usize>();
 macro_rules! ready {
     ($value:expr) => {
@@ -90,8 +90,64 @@ pub(crate) enum ExplicitType {
         term: TyTerm,
         written: Arc<WrittenType>,
     },
+    /// A written application with `_` inside it (`Iter<_>`): the structure
+    /// around each hole is known, each hole is its own source-owned inference
+    /// variable. It names no runtime Type until a pinned inference answer
+    /// closes every hole, so it has no descriptor.
+    Open(Arc<OpenTypeApplication>),
+}
+/// One actual written `_` occurrence inside an explicit Type argument.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct OpenTypeHole {
+    /// The canonical indexed `InferType` occurrence of the owning body.
+    pub(crate) site: PcKey,
+    pub(crate) range: SourceRange,
+    /// The variable this occurrence is in `OpenTypeApplication::term`.
+    pub(crate) key: InferVarKey,
+}
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct OpenTypeApplication {
+    /// The complete written structure; `WrittenType::Infer` exactly at each hole.
+    pub(crate) written: Arc<WrittenType>,
+    /// The same structure as a source term with `TyTerm::Infer(hole.key)` at
+    /// each hole, in the order of `holes`.
+    pub(crate) term: TyTerm,
+    /// Preorder holes (`written`'s `Infer` leaves, left to right).
+    pub(crate) holes: Box<[OpenTypeHole]>,
+}
+impl OpenTypeApplication {
+    /// The term with each hole replaced by the closed term the pinned
+    /// inference answered for its variable.
+    pub(crate) fn close(
+        &self,
+        solved: &dyn Fn(&InferVarKey) -> Option<TyTerm>,
+    ) -> Option<TyTerm> {
+        fn walk(term: &TyTerm, solved: &dyn Fn(&InferVarKey) -> Option<TyTerm>) -> Option<TyTerm> {
+            use crate::traits::term::GenericArg;
+            Some(match term {
+                TyTerm::Infer(key) => solved(key)?,
+                TyTerm::Nominal(identity, args) => TyTerm::Nominal(*identity, args.iter().map(|arg| match arg {
+                    GenericArg::Type(inner) => walk(inner, solved).map(GenericArg::Type),
+                    other => Some(other.clone()),
+                }).collect::<Option<Vec<_>>>()?),
+                TyTerm::Tuple(members) => TyTerm::Tuple(members.iter().map(|member| walk(member, solved)).collect::<Option<Vec<_>>>()?),
+                TyTerm::Slice(inner) => TyTerm::Slice(Box::new(walk(inner, solved)?)),
+                TyTerm::Array(inner, length) => TyTerm::Array(Box::new(walk(inner, solved)?), length.clone()),
+                TyTerm::Ref(region, mutable, inner) => TyTerm::Ref(region.clone(), *mutable, Box::new(walk(inner, solved)?)),
+                // A hole inside a fn pointer, projection or opaque Type has no
+                // closing here: the caller keeps its explicit hold.
+                TyTerm::Function(_) | TyTerm::Projection(_) | TyTerm::Opaque(..) => return None,
+                other => other.clone(),
+            })
+        }
+        walk(&self.term, solved)
+    }
 }
 impl ExplicitType {
+    /// Whether an inference hole remains in this argument.
+    pub(crate) fn is_open(&self) -> bool {
+        matches!(self, Self::Open(_))
+    }
     /// Decompose the actual retained nominal application, preserving each
     /// written argument's source/schema proof. This is positional source
     /// transport, not impl matching or runtime descriptor inference.
@@ -119,6 +175,7 @@ impl ExplicitType {
         match self {
             Self::Selected(source) => source.source(),
             Self::Written { term, .. } | Self::FrameTemplate { term, .. } | Self::Parameter(term) => term,
+            Self::Open(open) => &open.term,
         }
     }
     /// The run-local descriptor under the calling frame: a caller generic
@@ -152,6 +209,10 @@ impl ExplicitType {
                 "LRR-E-TYPE-CONTEXT",
                 "explicit caller parameter needs its calling frame's binding".into(),
             )),
+            Self::Open(_) => Err(Diagnostic::new(
+                "LRR-E-TYPE-CONTEXT",
+                "explicit Type argument with an inference hole names no runtime Type until inference closes it".into(),
+            )),
             Self::Selected(source) => source.materialize(store),
             // A type argument is one concrete Type even where the same written
             // structure at a coercion site is not (`&[u8]`, `Option<fn()>`).
@@ -167,7 +228,7 @@ impl ExplicitType {
         match self {
             Self::Selected(source) => source.heap_bytes(),
             // E006: no new retained-admission resource accounting.
-            Self::FrameTemplate { .. } => Ok(0),
+            Self::FrameTemplate { .. } | Self::Open(_) => Ok(0),
             Self::Written { term, .. } => term
                 .heap_bytes()
                 .and_then(|bytes| bytes.checked_add(std::mem::size_of::<WrittenType>()))
@@ -198,6 +259,18 @@ impl StableEncode for ExplicitType {
                 e.digest(*definition);
                 e.record(term);
                 e.record(written.as_ref());
+            }
+            Self::Open(open) => {
+                e.u8(4);
+                e.record(&open.term);
+                e.record(open.written.as_ref());
+                e.sequence(&open.holes, |e, hole| {
+                    e.record(&hole.site);
+                    e.u32(hole.range.start);
+                    e.u32(hole.range.end);
+                    e.digest(hole.key.transaction);
+                    e.u32(hole.key.ordinal);
+                });
             }
         }
     }
@@ -457,6 +530,33 @@ pub(crate) fn select_argument(
     site: &PcKey,
     range: SourceRange,
 ) -> QueryPoll<Option<SelectedTypeArgument>> {
+    select_argument_with(db, plan, key, site, range, HolePolicy::Reject)
+}
+/// What a consumer does with a `_` nested inside an explicit argument
+/// (`Iter<_>`; a whole-argument `_` is always `None`).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum HolePolicy {
+    /// The consumer has no inference to close the hole: today's typed refusal.
+    Reject,
+    /// The consumer closes holes through the pinned inference owner: keep the
+    /// written application and one source-owned variable per `_` occurrence.
+    Retain,
+}
+/// The variable of one hole: scoped by the owning expression's entry PC and
+/// named by the `_` occurrence's own indexed node.
+fn hole_key(owner: &PcKey, hole: NodeId) -> InferVarKey {
+    let mut scope = StableEncoder::new("lrr/v1/explicit-type-hole");
+    scope.record(owner);
+    InferVarKey { transaction: scope.finish(), ordinal: hole.0 }
+}
+pub(crate) fn select_argument_with(
+    db: &mut Database,
+    plan: &Arc<PreparedSourceLocalPlan>,
+    key: &PcKey,
+    site: &PcKey,
+    range: SourceRange,
+    holes: HolePolicy,
+) -> QueryPoll<Option<SelectedTypeArgument>> {
     let owner = plan.context().source();
     let index = owner.index();
     let Some(written) = checked!(owner.parsed().syntax_at(range, |node| {
@@ -471,7 +571,7 @@ pub(crate) fn select_argument(
         key.body.definition,
         &written
     )) {
-        Some(AnnotationShape::Infer) => return QueryPoll::Ready(Ok(None)),
+        Some(AnnotationShape::Infer(_)) => return QueryPoll::Ready(Ok(None)),
         Some(shape)
             if !matches!(&shape, AnnotationShape::Leaf(node) if node.0 == site.node) =>
         {
@@ -486,10 +586,47 @@ pub(crate) fn select_argument(
             let Some(term) = written.source_with(&|ordinal| Some(TyTerm::Param(
                 crate::traits::term::ParamKey { definition, ordinal }
             ))) else {
-                return QueryPoll::Ready(Err(Diagnostic::new(
+                let refused = || QueryPoll::Ready(Err(Diagnostic::new(
                     "LRR-E-UNSUPPORTED",
                     "explicit Type argument with an inference hole requires inference".into(),
                 )));
+                // Only an application over concrete named leaves can keep its
+                // holes; one over the caller's own parameters stays refused.
+                let identities = (holes == HolePolicy::Retain && !written.has_parameters())
+                    .then(|| shape.holes())
+                    .flatten();
+                let Some(identities) = identities else { return refused(); };
+                let mut rows = Vec::new();
+                for node in &identities {
+                    let Some(indexed) = index.nodes().get(node.0 as usize) else { return refused(); };
+                    let (Some(start), Some(end)) = (
+                        owner.body().range.start.checked_add(indexed.range.start),
+                        owner.body().range.start.checked_add(indexed.range.end),
+                    ) else { return refused(); };
+                    let site = checked!(index.pc(*node, Phase::Entry));
+                    rows.push(OpenTypeHole {
+                        site,
+                        range: SourceRange { start, end },
+                        key: hole_key(key, *node),
+                    });
+                }
+                let mut next = rows.iter();
+                let Some(term) = written.source_with_holes(
+                    &|_| None,
+                    &mut || next.next().map(|hole| TyTerm::Infer(hole.key)),
+                ) else { return refused(); };
+                if next.next().is_some() {
+                    return refused();
+                }
+                return QueryPoll::Ready(Ok(Some(SelectedTypeArgument {
+                    source: ExplicitType::Open(Arc::new(OpenTypeApplication {
+                        written: Arc::new(written),
+                        term,
+                        holes: rows.into_boxed_slice(),
+                    })),
+                    guards: selected,
+                    observation: None,
+                })));
             };
             return QueryPoll::Ready(Ok(Some(SelectedTypeArgument {
                 source: if written.has_parameters() {

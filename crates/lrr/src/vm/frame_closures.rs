@@ -372,16 +372,26 @@ impl Frame {
         slot: SlotId,
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
+        self.materialize_argument_as(slot, None, store)
+    }
+    /// An argument still holding an unconstrained numeric literal takes the
+    /// Type its parameter states, else rustc's fallback.
+    pub(crate) fn materialize_argument_as(
+        &mut self,
+        slot: SlotId,
+        stated: Option<TypeId>,
+        store: &mut GuestStore,
+    ) -> Result<(), Diagnostic> {
         let cell = self.cell(slot)?;
         let value = store.admit_move(cell)?;
         if !matches!(value.kind, 11 | 12) || store.effective_type(value)?.is_some() {
             return Ok(());
         }
-        let fallback = if value.kind == 11 {
+        let fallback = stated.unwrap_or(if value.kind == 11 {
             TypeId(6)
         } else {
             TypeId(15)
-        };
+        });
         let ticket = store.move_from(cell)?;
         let concrete = store.materialize_ticket(ticket, fallback)?;
         store.discard(ticket)?;

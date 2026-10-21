@@ -1565,6 +1565,9 @@ impl<'a> Component<'a> {
             if let Some(closure) = ready!(self.closure_of(db, callee, 0)) {
                 return QueryPoll::Ready(Ok(Some(Callee::Closure(closure))));
             }
+            if let Some(bound) = ready!(self.overloaded_fn_bound(db, call, callee)) {
+                return QueryPoll::Ready(Ok(Some(Callee::Bound(bound))));
+            }
             self.runtime_callee(callee);
             return QueryPoll::Ready(Ok(None));
         }
@@ -1599,6 +1602,10 @@ impl<'a> Component<'a> {
             {
                 return QueryPoll::Ready(Ok(Some(Callee::Bound(bound))));
             }
+            // A local of a Type with its own `Fn*` impl.
+            if let Some(bound) = ready!(self.overloaded_fn_bound(db, call, callee)) {
+                return QueryPoll::Ready(Ok(Some(Callee::Bound(bound))));
+            }
             self.runtime_callee(callee);
             return QueryPoll::Ready(Ok(None));
         }
@@ -1623,6 +1630,11 @@ impl<'a> Component<'a> {
         // Types are not yet closed. It is not then a function: only the
         // declaration's actual retained Fn occurrence has a signature.
         let Some(function) = ready!(Self::selected_function(db, declaration)) else {
+            // A unit struct named as the callee is a value of its Type, called
+            // through that Type's own `Fn*` impl.
+            if let Some(bound) = ready!(self.overloaded_fn_bound(db, call, callee)) {
+                return QueryPoll::Ready(Ok(Some(Callee::Bound(bound))));
+            }
             self.defer(call, ConstraintDemand::SelectedDeclaration);
             return QueryPoll::Ready(Ok(None));
         };
@@ -2740,10 +2752,19 @@ impl<'a> Component<'a> {
                 }
             }
             // Every element pattern matches the array/slice element Type.
-            PatternNode::Array { items, .. } => match self.via.unwrap(Step::Element) {
+            // A `rest @ ..` binding is a sequence of the same element Type.
+            PatternNode::Array {
+                items,
+                rest_binding,
+                ..
+            } => match self.via.unwrap(Step::Element) {
                 Some(via) => {
+                    let sequence = self.via.clone();
                     for item in items {
                         ready!(self.walk(db, root, item, via.clone()));
+                    }
+                    if let Some(binding) = rest_binding {
+                        ready!(self.walk(db, root, binding, sequence));
                     }
                 }
                 None => self.defer(root, ConstraintDemand::Binding),

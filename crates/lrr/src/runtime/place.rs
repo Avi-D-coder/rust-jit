@@ -64,6 +64,12 @@ pub enum Projection {
     /// (`a[1..3]`, `s[..2]`). The projected place is unsized (`[T]`): it can
     /// be borrowed or indexed further, never read or assigned as a value.
     Range { start: u32, end: u32 },
+    /// The sized sub-array `[T; end - start]` of an array place or of a sized
+    /// window (rustc MIR's `Subslice` projection on an array, produced by an
+    /// array pattern's `rest @ ..`). The projected place has the interned
+    /// array Type of exactly that length and stays an in-place window: it can
+    /// be borrowed (`&[T; K]`), indexed or have its elements read.
+    Subarray { start: u32, end: u32 },
     /// `*b` of a `Box<T>` place (rustc MIR's `Deref` projection on a box):
     /// the box object's single owned heap cell holding its `T`.
     BoxContents,

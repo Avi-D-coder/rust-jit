@@ -105,7 +105,9 @@ impl GuestStore {
             return Ok(None);
         }
         self.validate_reference_record(record)?;
-        record.location()?;
+        if record.elements().is_none() {
+            record.location()?;
+        }
         Ok(Some(UnsizeCoercion {
             access: if *to_mutable {
                 Access::Mutable

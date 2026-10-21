@@ -52,6 +52,8 @@ mod call_inputs;
 pub(crate) use borrows::tests::start_discovered_body;
 #[path = "run_constructors.rs"]
 mod constructors;
+#[path = "run_constructor_inputs.rs"]
+mod constructor_inputs;
 #[cfg(test)]
 #[path = "run_discarded_numeric_tests.rs"]
 mod discarded_numeric_tests;
@@ -2204,6 +2206,16 @@ impl RunMachine {
             }
             return Ok(());
         }
+        // A declared result still open at the call (`Empty<T>`, `Result<F,
+        // <F as FromStr>::Err>`): the returned value is compared with its
+        // template structurally and supplies the open positions.
+        if call.contracts.has_open_result() {
+            let found = match self.frame.return_source.as_ref() {
+                Some(found) => Some(found.clone()),
+                None => self.store.descriptor_source_term(actual),
+            };
+            return call.contracts.check_open_return_source(found.as_ref());
+        }
         // A normalized associated-type primitive result.
         if let Some(crate::traits::term::TyTerm::Primitive(primitive)) =
             call.contracts.source_result.as_ref()
@@ -3036,6 +3048,16 @@ impl RunMachine {
                     }
                     QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
                 }
+            }
+            // A record whose explicit Type argument holds a `_` settles through
+            // the pinned inference owner once its first field operand has run.
+            match self.settle_open_constructor(db, id) {
+                QueryPoll::Ready(Ok(())) => {}
+                QueryPoll::Ready(Err(error)) => {
+                    self.terminal = true;
+                    return RunPoll::Fault(error);
+                }
+                QueryPoll::NeedInput(request) => return RunPoll::NeedInput(request),
             }
             let image_finish = match self.installed.get_current(db, id) {
                 Ok(recipe) => recipe
@@ -4130,6 +4152,7 @@ impl RunMachine {
                             .call_arguments
                             .take()
                             .ok_or_else(|| call_fault("Call exit has no argument packet"))?;
+                        self.retire_call_locations()?;
                         if let Some(selected) =
                             self.pending.remove(&self.frame.call_identity(site.0))
                         {

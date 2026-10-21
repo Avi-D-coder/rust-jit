@@ -1011,35 +1011,52 @@ impl<'s> Search<'s> {
                         context,
                     });
                 }
-                // `xs @ ..` binds the element window between the fixed items
-                // (a `[T]` place, borrowed as `&[T]` under a reference mode).
+                // `xs @ ..` binds the element window between the fixed items:
+                // a `[T]` place (borrowed as `&[T]` under a reference mode) of
+                // a slice scrutinee, a sized `[T; K]` sub-array place of an
+                // array scrutinee (a fresh array by value, `&[T; K]` by
+                // reference).
                 if let Some(binding) = rest_binding {
-                    if !unsized_slice {
-                        return Err(unsupported(
-                            "array subslice binding requires its sized subarray value",
-                        )
-                        .into());
-                    }
                     let start =
-                        u64::try_from(before).map_err(|_| mismatch("slice rest overflow"))?;
-                    let end = u64::try_from(length - (fixed - before))
+                        u32::try_from(before).map_err(|_| mismatch("slice rest overflow"))?;
+                    let end = u32::try_from(length - (fixed - before))
                         .map_err(|_| mismatch("slice rest overflow"))?;
+                    let (place, source) = if unsized_slice {
+                        (
+                            self.store
+                                .project_range(
+                                    &place,
+                                    crate::runtime::place::SliceRange {
+                                        start: u64::from(start),
+                                        end: Some(u64::from(end)),
+                                        inclusive: false,
+                                    },
+                                )
+                                .map_err(place_fault)?,
+                            match &source {
+                                Some(TyTerm::Slice(element)) => {
+                                    Some(TyTerm::Slice(element.clone()))
+                                }
+                                _ => None,
+                            },
+                        )
+                    } else {
+                        (
+                            self.store
+                                .project_subarray(&place, start, end)
+                                .map_err(place_fault)?,
+                            match &source {
+                                Some(TyTerm::Array(element, _)) => Some(TyTerm::Array(
+                                    element.clone(),
+                                    crate::traits::term::ConstTerm::Value(u64::from(end - start)),
+                                )),
+                                _ => None,
+                            },
+                        )
+                    };
                     goals.push(Goal {
-                        place: self
-                            .store
-                            .project_range(
-                                &place,
-                                crate::runtime::place::SliceRange {
-                                    start,
-                                    end: Some(end),
-                                    inclusive: false,
-                                },
-                            )
-                            .map_err(place_fault)?,
-                        source: match &source {
-                            Some(TyTerm::Slice(element)) => Some(TyTerm::Slice(element.clone())),
-                            _ => None,
-                        },
+                        place,
+                        source,
                         node: binding,
                         context,
                     });

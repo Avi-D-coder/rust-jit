@@ -5,7 +5,7 @@ use super::{
     identity::DefinitionId,
     lang_names,
     model::{AllocateList, Clause, List, Symbol},
-    prepared::{self, AdtFacts, Cx, DefinitionFacts, ImplFacts, LangItems, PreparedFacts, TraitFacts},
+    prepared::{self, AdtFacts, AssociatedLeaf, Cx, DefinitionFacts, ImplFacts, LangItems, PreparedFacts, TraitFacts},
     query_facts::QueryFact,
     source_definition_headers::DefinitionHeaderRole,
     source_definition_semantics::{DefinitionBooleanQuery as D, SourceSemantic},
@@ -124,6 +124,29 @@ pub(super) fn materialize<'cx>(
                 QueryFact::Unprepared
             }
         };
+        // Relating two applications of a nominal reads its variances. Other
+        // definition kinds keep the variance fact unprepared.
+        if let Some(plan) = bundle.variance_queries(source) {
+            row.variance_queries = match super::source_variance_queries::DefinitionVarianceQueries::retain(cx, plan) {
+                Ok(variances) => QueryFact::Known(variances),
+                Err(why) => {
+                    hold(&mut unprepared, source, "variances_of", why);
+                    QueryFact::Unprepared
+                }
+            };
+        }
+        // A trait's associated type declaration: the declared own clauses.
+        if row.predicates.own.known().is_none() && let Some(own) = bundle.own_clauses(source)
+            && own.pending().is_none() && source != bundle.request().callee && source != bundle.request().caller
+        {
+            match own.encode(cx, configuration) {
+                Ok(clauses) => {
+                    let retained: List<'cx, C<'cx>> = cx.list(clauses.into_iter().map(|(clause, _)| clause).collect());
+                    row.predicates.own = QueryFact::Known(EarlyBinder::bind(cx, retained));
+                }
+                Err(why) => hold(&mut unprepared, source, "own_clauses_of", why),
+            }
+        }
         row.parent = match semantic.parent() {
             SourceSemantic::Known(parent) => match bundle.definition_id(parent) {
                 Some(parent) => QueryFact::Known(Some(parent)),
@@ -198,6 +221,7 @@ pub(super) fn materialize<'cx>(
 
     let mut implementations = BTreeMap::new();
     let mut impl_declarations = BTreeMap::new();
+    let mut associated_leaves = BTreeMap::new();
     for (&raw, source) in bundle.implementations() {
         let id = bundle.definition_id(source.canonical()).ok_or_else(|| fault("impl definition absent"))?;
         let mut row = ImplFacts::unprepared();
@@ -233,6 +257,40 @@ pub(super) fn materialize<'cx>(
                 QueryFact::Unprepared
             }
         };
+        // Each type item the impl defines is the specialization leaf of the
+        // trait's item (a source impl carries no `default` items, so its leaf
+        // is final), and its declared target is that item's `type_of`.
+        if let ImplSemantic::Known(trait_digest) = semantics.trait_definition()
+            && let Ok(rows) = source.associated().types()
+            && let Some(trait_items) = bundle.trait_associated_types(trait_digest)
+        {
+            let bindings = source.associated_bindings().type_bindings();
+            for item in rows {
+                let Ok(trait_item) = trait_items.lookup(crate::frontend::member_index::associated_name_key(&item.name)) else {
+                    continue;
+                };
+                let (Some(alias), Some(trait_item)) = (bundle.definition_id(item.alias), bundle.definition_id(trait_item)) else {
+                    continue;
+                };
+                match super::source_terms::encode_declared(cx, configuration, bindings, &item.target) {
+                    Ok(ty) => {
+                        let Some(definition) = definitions.get_mut(&alias) else { continue };
+                        // The leaf's container must be the alias's own source parent.
+                        if definition.parent.known() != Some(&Some(id)) {
+                            hold(&mut unprepared, item.alias, "parent", "impl item parent identity is unavailable");
+                            continue;
+                        }
+                        definition.ty = QueryFact::Known(EarlyBinder::bind(cx, ty));
+                        associated_leaves.insert((id, trait_item), Ok(AssociatedLeaf {
+                            item: alias,
+                            defining_node: id,
+                            finalizing_node: Some(id),
+                        }));
+                    }
+                    Err(why) => hold(&mut unprepared, item.alias, "type_of", why),
+                }
+            }
+        }
         // Reflection, unsized guarantees and specialization ancestry each need
         // their own actual query producer; none follows merely from a head.
         implementations.insert(id, row);
@@ -302,7 +360,7 @@ pub(super) fn materialize<'cx>(
     let lang = language_items(bundle)?;
     Ok(MaterializedSourceFacts {
         facts: PreparedFacts::new(cx, bundle.membership_input().clone(), definitions, traits,
-            implementations, BTreeMap::new(), impl_declarations, adts, BTreeMap::new(), lang,
+            implementations, associated_leaves, impl_declarations, adts, BTreeMap::new(), lang,
             QueryFact::Unprepared, QueryFact::Unprepared, BTreeMap::new(), BTreeMap::new()),
         unprepared,
     })
@@ -381,6 +439,23 @@ roles!(trait_role, SolverTraitLangItem, [AsyncFn, AsyncFnKindHelper, AsyncFnMut,
     Destruct, DiscriminantKind, Drop, Field, Fn, FnMut, FnOnce, FnPtrTrait,
     FusedIterator, Future, Iterator, MetaSized, PointeeSized, PointeeTrait, Sized,
     TransmuteTrait, TrivialClone, TryAsDyn, Tuple, Unpin, Unsize]);
+/// Builtin candidates whose pinned assembly begins `let ty::Coroutine(..) =
+/// self_ty.kind() else { return Err(NoSolution) }` (`solve/trait_goals.rs`
+/// `consider_builtin_{future,iterator,fused_iterator,async_iterator,coroutine}_candidate`
+/// and `solve/normalizes_to.rs` `consider_builtin_{future,iterator,async_iterator,coroutine}_candidate`).
+/// The source Type encoder (`source_terms::Encoder::ty`) never constructs
+/// `TyKind::Coroutine`, so in this source world these candidates are always
+/// `NoSolution` before any callback is consulted: they need no callback domain.
+pub(super) fn builtin_requires_coroutine_self(role: SolverTraitLangItem) -> bool {
+    matches!(
+        role,
+        SolverTraitLangItem::Future
+            | SolverTraitLangItem::Iterator
+            | SolverTraitLangItem::FusedIterator
+            | SolverTraitLangItem::AsyncIterator
+            | SolverTraitLangItem::Coroutine
+    )
+}
 roles!(projection_role, SolverProjectionLangItem, [AsyncFnKindUpvars,
     AsyncFnOnceOutput, CallOnceFuture, CallRefFuture, CoroutineReturn,
     CoroutineYield, FieldBase, FieldType, FutureOutput, Metadata]);

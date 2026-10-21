@@ -130,6 +130,7 @@ pub(crate) fn select(
                 ExplicitType::Parameter(TyTerm::Param(key)) if key.definition==pc.body.definition=>WrittenType::Parameter(key.ordinal),
                 ExplicitType::FrameTemplate{definition,written,..} if *definition==pc.body.definition=>written.as_ref().clone(),
                 ExplicitType::Parameter(_)|ExplicitType::FrameTemplate{..}=>return QueryPoll::Ready(Err(fault("annotation Type parameter belongs to another body"))),
+                ExplicitType::Open(_)=>return QueryPoll::Ready(Err(fault("annotation Type application cannot be open"))),
             }
         }
         // `()` is the unit primitive, the one canonical spelling.
@@ -158,7 +159,7 @@ pub(crate) fn select(
             mutable: *mutable,
             target: Box::new(ready!(select(db, pc, target, guards))),
         },
-        AnnotationShape::Infer => WrittenType::Infer,
+        AnnotationShape::Infer(_) => WrittenType::Infer,
         AnnotationShape::Ptr { mutable, target } => WrittenType::Ptr {
             mutable: *mutable,
             target: Box::new(ready!(select(db, pc, target, guards))),

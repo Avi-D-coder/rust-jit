@@ -17,6 +17,7 @@ pub struct Chars<'a> {
 pub struct Bytes<'a> {
     text: &'a str,
     pos: usize,
+    end: usize,
 }
 pub struct CharIndices<'a> {
     text: &'a str,
@@ -115,13 +116,41 @@ impl<'a> crate::iter::Iterator for CharIndices<'a> {
 impl<'a> crate::iter::Iterator for Bytes<'a> {
     type Item = u8;
     fn next(&mut self) -> Option<u8> {
-        let n: usize = core::intrinsics::lrr_str_len(self.text);
-        if self.pos >= n {
+        if self.pos >= self.end {
             return Option::None;
         }
         let byte: u8 = core::intrinsics::lrr_str_byte(self.text, self.pos);
         self.pos += 1;
         Option::Some(byte)
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining: usize = self.end - self.pos;
+        (remaining, Option::Some(remaining))
+    }
+}
+impl<'a> crate::iter::DoubleEndedIterator for Bytes<'a> {
+    fn next_back(&mut self) -> Option<u8> {
+        if self.pos >= self.end {
+            return Option::None;
+        }
+        self.end -= 1;
+        Option::Some(core::intrinsics::lrr_str_byte(self.text, self.end))
+    }
+}
+impl<'a> crate::iter::ExactSizeIterator for Bytes<'a> {}
+impl<'a> crate::clone::Clone for Bytes<'a> {
+    fn clone(&self) -> Bytes<'a> {
+        Bytes { text: self.text, pos: self.pos, end: self.end }
+    }
+}
+impl<'a> crate::clone::Clone for Chars<'a> {
+    fn clone(&self) -> Chars<'a> {
+        Chars { text: self.text, pos: self.pos, end: self.end }
+    }
+}
+impl<'a> crate::clone::Clone for CharIndices<'a> {
+    fn clone(&self) -> CharIndices<'a> {
+        CharIndices { text: self.text, pos: self.pos }
     }
 }
 impl<'a, P: pattern::Pattern> crate::iter::Iterator for Split<'a, P> {
@@ -387,7 +416,7 @@ impl str {
         Chars { text: self, pos: 0, end: core::intrinsics::lrr_str_len(self) }
     }
     pub fn bytes(&self) -> Bytes<'_> {
-        Bytes { text: self, pos: 0 }
+        Bytes { text: self, pos: 0, end: core::intrinsics::lrr_str_len(self) }
     }
     pub fn char_indices(&self) -> CharIndices<'_> {
         CharIndices { text: self, pos: 0 }
@@ -526,5 +555,83 @@ impl crate::cmp::Ord for str {
 impl crate::cmp::PartialOrd for str {
     fn partial_cmp(&self, other: &str) -> Option<crate::cmp::Ordering> {
         Option::Some(self.cmp(other))
+    }
+}
+
+// `str::escape_debug`, `escape_default` and `escape_unicode`: each character's
+// escape in turn. `escape_debug` escapes a leading combining mark (so the
+// mark cannot attach to a preceding character) but not later ones.
+pub struct StrEscape<'a> {
+    chars: Chars<'a>,
+    mode: u8,
+    first: bool,
+    current: crate::char::CharEscape,
+}
+pub type EscapeUnicode<'a> = StrEscape<'a>;
+pub type EscapeDefault<'a> = StrEscape<'a>;
+pub type EscapeDebug<'a> = StrEscape<'a>;
+
+impl<'a> crate::iter::Iterator for StrEscape<'a> {
+    type Item = char;
+    fn next(&mut self) -> Option<char> {
+        loop {
+            if let Option::Some(c) = self.current.next() {
+                return Option::Some(c);
+            }
+            match self.chars.next() {
+                Option::Some(ch) => {
+                    self.current = if self.mode == 0 {
+                        ch.escape_unicode()
+                    } else if self.mode == 1 {
+                        ch.escape_default()
+                    } else {
+                        let escape_grapheme_extended: bool = self.first;
+                        crate::char::lrr_escape_debug_ext(ch, escape_grapheme_extended, true, true)
+                    };
+                    self.first = false;
+                }
+                Option::None => return Option::None,
+            }
+        }
+    }
+}
+impl<'a> crate::iter::FusedIterator for StrEscape<'a> {}
+impl<'a> crate::clone::Clone for StrEscape<'a> {
+    fn clone(&self) -> StrEscape<'a> {
+        StrEscape {
+            chars: self.chars.clone(),
+            mode: self.mode,
+            first: self.first,
+            current: self.current.clone(),
+        }
+    }
+}
+impl<'a> crate::fmt::Display for StrEscape<'a> {
+    fn fmt(&self, f: &mut crate::fmt::Formatter<'_>) -> crate::fmt::Result {
+        let mut rest: StrEscape<'a> = self.clone();
+        while let Option::Some(c) = rest.next() {
+            match f.write_char(c) {
+                Result::Ok(()) => {}
+                Result::Err(e) => return Result::Err(e),
+            }
+        }
+        Result::Ok(())
+    }
+}
+impl<'a> crate::fmt::Debug for StrEscape<'a> {
+    fn fmt(&self, f: &mut crate::fmt::Formatter<'_>) -> crate::fmt::Result {
+        f.write_str("StrEscape")
+    }
+}
+
+impl str {
+    pub fn escape_unicode(&self) -> EscapeUnicode<'_> {
+        StrEscape { chars: self.chars(), mode: 0, first: true, current: crate::char::lrr_escape_empty() }
+    }
+    pub fn escape_default(&self) -> EscapeDefault<'_> {
+        StrEscape { chars: self.chars(), mode: 1, first: true, current: crate::char::lrr_escape_empty() }
+    }
+    pub fn escape_debug(&self) -> EscapeDebug<'_> {
+        StrEscape { chars: self.chars(), mode: 2, first: true, current: crate::char::lrr_escape_empty() }
     }
 }

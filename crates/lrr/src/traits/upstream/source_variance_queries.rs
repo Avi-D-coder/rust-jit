@@ -192,28 +192,70 @@ impl PreparedSourceVarianceQueries {
         }
         QueryPoll::Ready(Ok(result))
     }
-    pub(super) fn bind(&self) -> Result<DefinitionVarianceQueries<'_>, VarianceQueryPending> {
-        Ok(DefinitionVarianceQueries {
-            source: self,
-            outcome: self.outcome()?,
-        })
-    }
+
 }
 
-/// Published data has no Pending variant. Its lifetime retains the actual
-/// source query plan and its owned upstream result; no leaked allocation.
-pub(super) struct DefinitionVarianceQueries<'cx> {
-    source: &'cx PreparedSourceVarianceQueries,
-    outcome: VarianceQueryOutcome<'cx>,
+/// Source-only control view of a prepared plan (no solver context).
+#[cfg(test)]
+impl PreparedSourceVarianceQueries {
+    pub(super) fn bind(&self) -> Result<BoundVariances<'_>, VarianceQueryPending> {
+        Ok(BoundVariances { source: self, outcome: self.outcome()? })
+    }
 }
-impl<'cx> DefinitionVarianceQueries<'cx> {
-    pub(super) fn variances_of(&self) -> &'cx [Variance] {
+#[cfg(test)]
+pub(super) struct BoundVariances<'a> {
+    source: &'a PreparedSourceVarianceQueries,
+    outcome: VarianceQueryOutcome<'a>,
+}
+#[cfg(test)]
+impl<'a> BoundVariances<'a> {
+    pub(super) fn variances_of(&self) -> &'a [Variance] {
         match self.outcome {
             VarianceQueryOutcome::Known(values) => values,
             VarianceQueryOutcome::NotApplicable => panic!(
                 "asked to compute variance for actual source {:?}: {:?}",
                 self.source.key.definition,
                 self.source.header().role()
+            ),
+        }
+    }
+}
+
+/// Published data has no Pending variant. The variance vector is retained in
+/// the context's own arena, so the fact outlives no borrowed source plan.
+pub(super) struct DefinitionVarianceQueries<'cx> {
+    key: SourceVarianceQueriesKey,
+    receipt: DefinitionReceipt,
+    generic_count: Option<usize>,
+    role: DefinitionHeaderRole,
+    outcome: VarianceQueryOutcome<'cx>,
+}
+impl<'cx> DefinitionVarianceQueries<'cx> {
+    /// Retain one prepared source plan's outcome for the solver context.
+    pub(super) fn retain(
+        cx: Cx<'cx>,
+        source: &PreparedSourceVarianceQueries,
+    ) -> Result<Self, VarianceQueryPending> {
+        let outcome = match source.outcome()? {
+            VarianceQueryOutcome::Known(values) => {
+                VarianceQueryOutcome::Known(cx.retain_variances(values.to_vec()))
+            }
+            VarianceQueryOutcome::NotApplicable => VarianceQueryOutcome::NotApplicable,
+        };
+        Ok(Self {
+            key: source.key.clone(),
+            receipt: source.header().receipt().clone(),
+            generic_count: source.generic_count,
+            role: source.header().role(),
+            outcome,
+        })
+    }
+    pub(super) fn variances_of(&self) -> &'cx [Variance] {
+        match self.outcome {
+            VarianceQueryOutcome::Known(values) => values,
+            VarianceQueryOutcome::NotApplicable => panic!(
+                "asked to compute variance for actual source {:?}: {:?}",
+                self.key.definition, self.role
             ),
         }
     }
@@ -224,9 +266,9 @@ impl<'cx> DefinitionVarianceQueries<'cx> {
         impl_trait_in_trait: bool,
         inventory: &crate::db::seals::SealKey,
     ) -> Result<(), Diagnostic> {
-        if &self.source.key.inventory != inventory
-            || !receipt.same_source_metadata(self.source.header().receipt())
-            || self.source.generic_count != Some(generics.parameters.items().len())
+        if &self.key.inventory != inventory
+            || !receipt.same_source_metadata(&self.receipt)
+            || self.generic_count != Some(generics.parameters.items().len())
         {
             return Err(fault(
                 "variance query source or total generic count differs from actual definition",

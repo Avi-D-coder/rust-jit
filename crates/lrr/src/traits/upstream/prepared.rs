@@ -891,6 +891,10 @@ pub(crate) struct PreparedProvider<'cx> {
     generic_facts: &'cx ScopedCache<BTreeMap<DefinitionId, Generics<'cx, PreparedProvider<'cx>>>>,
     diagnostics: &'cx RefCell<Vec<(Span, String)>>,
     root_active: &'cx Cell<Option<Digest>>,
+    /// Relevant impls the pinned traversal reached whose compiler-query facts
+    /// are unprepared. The impl was not offered to the solver; a root that
+    /// recorded any of them has no trustworthy answer and must hold.
+    blocked: &'cx RefCell<Vec<(DefinitionId, String)>>,
 }
 pub(super) struct SourceRootGuard<'cx> { provider: PreparedProvider<'cx> }
 impl Drop for SourceRootGuard<'_> {
@@ -911,6 +915,7 @@ impl PartialEq for PreparedProvider<'_> {
             && self.configuration == b.configuration
             && std::ptr::eq(self.diagnostics, b.diagnostics)
             && std::ptr::eq(self.root_active, b.root_active)
+            && std::ptr::eq(self.blocked, b.blocked)
             && self.world == b.world
     }
 }
@@ -925,6 +930,7 @@ impl Hash for PreparedProvider<'_> {
         self.configuration.hash(h);
         std::ptr::from_ref(self.diagnostics).hash(h);
         std::ptr::from_ref(self.root_active).hash(h);
+        std::ptr::from_ref(self.blocked).hash(h);
         self.world.hash(h);
     }
 }
@@ -956,6 +962,7 @@ pub(super) fn with_provider<R>(
     let facts = OnceCell::new();
     let diagnostics = RefCell::new(Vec::new());
     let root_active = Cell::new(None);
+    let blocked = RefCell::new(Vec::new());
     let generic_facts = ScopedCache::empty();
     let elaboration = ScopedCache::empty();
     let candidate_classification = ScopedCache::empty();
@@ -968,6 +975,7 @@ pub(super) fn with_provider<R>(
         &candidate_classification,
         &diagnostics,
         &root_active,
+        &blocked,
     )?;
     let state = super::context::State::new(provider);
     let view = state.view();
@@ -1089,6 +1097,7 @@ impl<'cx> PreparedProvider<'cx> {
         candidate_classification: &'cx ScopedCache<CandidateClassificationInputs<'cx>>,
         diagnostics: &'cx RefCell<Vec<(Span, String)>>,
         root_active: &'cx Cell<Option<Digest>>,
+        blocked: &'cx RefCell<Vec<(DefinitionId, String)>>,
     ) -> Result<Self, Diagnostic> {
         let world = catalog_world(&settings.catalog)?;
         Ok(Self {
@@ -1101,7 +1110,39 @@ impl<'cx> PreparedProvider<'cx> {
             generic_facts,
             diagnostics,
             root_active,
+            blocked,
         })
+    }
+    /// Why a relevant impl cannot be offered to the solver yet: the compiler
+    /// queries `consider_impl_candidate` reads for it are unprepared. Demand
+    /// driven: an impl the pinned traversal never reaches is never examined.
+    fn impl_unprepared(self, id: DefinitionId) -> Option<String> {
+        let facts = self.data();
+        let (Some(implementation), Some(declaration)) =
+            (facts.implementations.get(&id), facts.definitions.get(&id))
+        else {
+            return Some("impl metadata was not prepared".to_string());
+        };
+        let mut why = |name: &str, known: bool| (!known).then(|| format!("compiler query {name} is unprepared"));
+        why("impl trait head", implementation.trait_ref.known().is_some())
+            .or_else(|| why("impl polarity", implementation.polarity.known().is_some()))
+            .or_else(|| why("default impl", implementation.default_impl.known().is_some()))
+            .or_else(|| why("impl super outlives", implementation.super_outlives.known().is_some()))
+            .or_else(|| why("complete impl clauses", declaration.predicates.all.known().is_some()))
+            .or_else(|| {
+                // A projection through this impl reads its specialization leaf
+                // of the trait's item: every type item must have one.
+                let reference = implementation.trait_ref.known()?.as_ref()?;
+                let trait_id = reference.skip_binder().def_id;
+                let members = facts.traits.get(&trait_id)?.associated_types.known()?;
+                members
+                    .iter()
+                    .any(|member| !facts.associated_leaves.contains_key(&(id, member)))
+                    .then(|| "specialization leaves of the impl's associated types are unprepared".to_string())
+            })
+    }
+    pub(super) fn take_blocked_impls(self) -> Vec<(DefinitionId, String)> {
+        std::mem::take(&mut self.blocked.borrow_mut())
     }
     /// Execute the pinned compiler query on actual, retained source inputs.
     /// Every reachable callback domain must already be known; callbacks never
@@ -1484,10 +1525,18 @@ impl<'cx> PreparedProvider<'cx> {
                 .traits
                 .get(&trait_id)
                 .ok_or_else(|| fault("associated leaf trait metadata is absent"))?;
-            if !trait_data
-                .associated_items
-                .checked("associated members")?
-                .contains(member)
+            // A type item belongs to its trait through the authenticated
+            // associated-type identities (validated above); any other kind of
+            // member needs the complete associated-member enumeration.
+            let is_type_member = trait_data
+                .associated_types
+                .known()
+                .is_some_and(|types| types.contains(member));
+            if !is_type_member
+                && !trait_data
+                    .associated_items
+                    .checked("associated members")?
+                    .contains(member)
             {
                 return Err(fault("associated leaf key belongs to another trait"));
             }
@@ -1757,7 +1806,7 @@ impl<'cx> SourceFacts<'cx> for PreparedProvider<'cx> {
     fn variances_of(self, _: Cx<'cx>, id: DefinitionId) -> &'cx [Variance] {
         self.definition(id)
             .variance_queries
-            .require("variances_of")
+            .require(&format!("variances_of {:?} {:?}", id, self.definition(id).name))
             .variances_of()
     }
     fn opt_alias_variances(
@@ -2182,7 +2231,16 @@ impl<'cx> SourceFacts<'cx> for PreparedProvider<'cx> {
         reference: TraitRef<Cx<'cx>>,
         f: impl FnMut(DefinitionId) -> R,
     ) -> R {
-        self.for_each_relevant_source_impl(cx, reference.def_id, reference.self_ty(), f)
+        let mut f = f;
+        self.for_each_relevant_source_impl(cx, reference.def_id, reference.self_ty(), |id| {
+            match self.impl_unprepared(id) {
+                Some(why) => {
+                    self.blocked.borrow_mut().push((id, why));
+                    R::output()
+                }
+                None => f(id),
+            }
+        })
     }
     fn for_each_blanket_impl<R: VisitorResult>(
         self,
@@ -2191,6 +2249,10 @@ impl<'cx> SourceFacts<'cx> for PreparedProvider<'cx> {
         mut f: impl FnMut(DefinitionId) -> R,
     ) -> R {
         for id in self.prepared_impls(id).blanket_impls() {
+            if let Some(why) = self.impl_unprepared(*id) {
+                self.blocked.borrow_mut().push((*id, why));
+                continue;
+            }
             ty::try_visit!(f(*id));
         }
         R::output()

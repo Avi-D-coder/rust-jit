@@ -402,3 +402,11 @@ impl<Idx: crate::cmp::PartialOrd<Idx>> RangeInclusive<Idx> {
         self.exhausted || !(self.start <= self.end)
     }
 }
+
+// Pinned library/core/src/ops/unsize.rs: marker traits through which a
+// smart-pointer type opts in to unsized coercion (`CoerceUnsized`) and to
+// dynamic-receiver dispatch (`DispatchFromDyn`). The interpreter's built-in
+// reference/`Box` unsizing does not consult them; they are the identities
+// user `impl CoerceUnsized<Ptr<U>> for Ptr<T>` declarations select.
+pub trait CoerceUnsized<T: ?Sized> {}
+pub trait DispatchFromDyn<T> {}

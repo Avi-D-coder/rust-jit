@@ -71,6 +71,9 @@ pub(super) struct SourceImplFacts {
     types: Arc<QueryValue>,
     predicates: Arc<QueryValue>,
     outlives: Arc<QueryValue>,
+    /// The impl's associated type values (leaves and `type_of` of its items).
+    associated: Arc<QueryValue>,
+    associated_bindings: SourceBindings,
 }
 impl SourceImplFacts {
     pub(super) fn canonical(&self) -> Digest { self.canonical }
@@ -83,6 +86,10 @@ impl SourceImplFacts {
     pub(super) fn predicates(&self) -> &PreparedImplSourcePredicates {
         let QueryValue::ImplSourcePredicates(plan) = self.predicates.as_ref() else { unreachable!("retained impl predicates") }; plan
     }
+    pub(super) fn associated(&self) -> &super::source_impl_associated::PreparedSourceImplAssociated {
+        let QueryValue::SourceImplAssociated(plan) = self.associated.as_ref() else { unreachable!("retained impl associated types") }; plan
+    }
+    pub(super) fn associated_bindings(&self) -> &SourceBindings { &self.associated_bindings }
     pub(super) fn outlives(&self) -> &PreparedSourceImplOutlives {
         let QueryValue::SourceImplOutlives(plan) = self.outlives.as_ref() else { unreachable!("retained impl outlives inputs") }; plan
     }
@@ -104,6 +111,8 @@ pub(super) struct SourceFactBundle {
     hierarchies: BTreeMap<Digest, Arc<QueryValue>>,
     implementations: BTreeMap<Digest, SourceImplFacts>,
     adts: BTreeMap<Digest, Arc<QueryValue>>,
+    /// Relating two applications of a nominal reads its variances.
+    variances: BTreeMap<Digest, Arc<QueryValue>>,
 }
 macro_rules! ready {
     ($value:expr) => { match $value {
@@ -160,7 +169,8 @@ impl SourceFactBundle {
         let mut result = Self { request, catalog, membership, retained, input_bindings,
             definitions: BTreeMap::new(), traits: BTreeMap::new(), associated_types: BTreeMap::new(),
             aliases: BTreeMap::new(), clauses: BTreeMap::new(),
-            own_clauses: BTreeMap::new(), hierarchies: BTreeMap::new(), implementations: BTreeMap::new(), adts: BTreeMap::new() };
+            own_clauses: BTreeMap::new(), hierarchies: BTreeMap::new(), implementations: BTreeMap::new(), adts: BTreeMap::new(),
+            variances: BTreeMap::new() };
         // Membership supplies every candidate. Type/where-clause availability
         // never deletes an actual member of a demanded bucket.
         for trait_definition in result.request.traits.iter().copied().collect::<Vec<_>>() {
@@ -176,7 +186,20 @@ impl SourceFactBundle {
                 let types = ready!(capture(db, &mut result.retained, QueryKey::ImplSourceTypes(Box::new(key.clone()))));
                 let predicates = ready!(capture(db, &mut result.retained, QueryKey::ImplSourcePredicates(Box::new(key.clone()))));
                 let outlives = ready!(capture(db, &mut result.retained, QueryKey::SourceImplOutlives(Box::new(key.clone()))));
-                let facts = SourceImplFacts { canonical, semantics, types, predicates, outlives };
+                let associated = ready!(capture(db, &mut result.retained, QueryKey::SourceImplAssociated(Box::new(key.clone()))));
+                let mut associated_bindings = SourceBindings::empty(Arc::clone(&result.catalog));
+                if let QueryValue::SourceImplAssociated(plan) = associated.as_ref()
+                    && let Ok(rows) = plan.types()
+                {
+                    let mut required = SourceRequirements::new();
+                    for row in rows {
+                        require_type(&mut required, &row.target);
+                        pending_definitions.insert(row.alias);
+                    }
+                    associated_bindings = ready!(SourceBindings::prepare(db, Arc::clone(&result.catalog), required));
+                    pending_definitions.extend(associated_bindings.definitions.keys().copied());
+                }
+                let facts = SourceImplFacts { canonical, semantics, types, predicates, outlives, associated, associated_bindings };
                 if facts.semantics().key() != &key || facts.types().key() != &key
                     || facts.predicates().key() != &key || facts.outlives().key() != &key {
                     return QueryPoll::Ready(Err(fault("source bundle impl query identity differs")));
@@ -239,6 +262,31 @@ impl SourceFactBundle {
                         inventory: inventory.clone(), definition, fields: false,
                     }))));
                     result.adts.insert(definition, adt);
+                    let variance = ready!(capture(db, &mut result.retained, QueryKey::SourceVarianceQueries(Box::new(key.clone()))));
+                    result.variances.insert(definition, variance);
+                }
+                // Projection normalization through an impl adds the trait's
+                // associated type's own clauses (`normalizes_to.rs`
+                // `own_clauses_of(alias_def_id)`): an associated type of a
+                // trait is read exactly when its alias is normalized.
+                let trait_associated = role == DefinitionHeaderRole::TypeAlias
+                    && match plan.source_parent() {
+                        SourceHeaderParent::Associated(parent) => {
+                            let parent_key = DefinitionHeaderKey { inventory: inventory.clone(), definition: *parent };
+                            let parent_header = ready!(capture(db, &mut result.retained, QueryKey::DefinitionHeaderPlan(Box::new(parent_key))));
+                            matches!(parent_header.as_ref(), QueryValue::DefinitionHeaderPlan(parent) if parent.role() == DefinitionHeaderRole::Trait)
+                        }
+                        _ => false,
+                    };
+                if trait_associated && !result.own_clauses.contains_key(&definition) {
+                    let clause_key = DeclarationSourcePredicatesKey { inventory: inventory.clone(), definition };
+                    let own = ready!(capture(db, &mut result.retained, QueryKey::SourceDeclarationClauses(Box::new(clause_key))));
+                    if let QueryValue::SourceDeclarationClauses(plan) = own.as_ref()
+                        && let Ok(bindings) = plan.bindings()
+                    {
+                        pending_definitions.extend(bindings.definitions.keys().copied());
+                    }
+                    result.own_clauses.insert(definition, own);
                 }
                 // Only the actual caller/callee own/parent clause demand is
                 // seeded here; other definitions retain independent domains.
@@ -339,6 +387,10 @@ impl SourceFactBundle {
     pub(super) fn hierarchy(&self, definition: Digest) -> Option<&PreparedSourceDeclarationClauseHierarchy> {
         let QueryValue::SourceDeclarationClauseHierarchy(plan) = self.hierarchies.get(&definition)?.as_ref() else { unreachable!("retained clause hierarchy") }; Some(plan)
     }
+    pub(super) fn variance_queries(&self, definition: Digest) -> Option<&super::source_variance_queries::PreparedSourceVarianceQueries> {
+        let QueryValue::SourceVarianceQueries(plan) = self.variances.get(&definition)?.as_ref() else { unreachable!("retained variance queries") };
+        Some(plan)
+    }
     pub(super) fn adts(&self) -> impl Iterator<Item = (Digest, &PreparedSourceAdtFacts)> {
         self.adts.iter().map(|(definition, value)| {
             let QueryValue::SourceAdtFacts(plan) = value.as_ref() else { unreachable!("retained ADT declaration") }; (*definition, plan.as_ref())
@@ -350,6 +402,7 @@ impl SourceFactBundle {
         for facts in self.implementations.values() {
             bindings.push(facts.types().bindings());
             bindings.push(facts.predicates().bindings());
+            bindings.push(facts.associated_bindings());
             if let Ok(actual) = facts.semantics().full_clause_bindings() {
                 bindings.push(actual);
             }

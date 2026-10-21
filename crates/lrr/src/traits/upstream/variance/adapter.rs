@@ -104,9 +104,13 @@ impl<'a, 'cx> VarianceSource<'a, 'cx> {
     pub(super) fn def_path_str(self, id: DefinitionId) -> String {
         format!("{id:?}")
     }
+    /// An item of this inference domain. The domain is closed under field
+    /// dependencies, so its fixed point is what the compiler's whole-crate
+    /// inference assigns each member; it may include other source crates of
+    /// the world (the facade `core`), whose variances this world derives from
+    /// source rather than from encoded crate metadata.
     pub(super) fn local_definition(self, id: DefinitionId) -> Option<DefinitionId> {
-        <DefinitionId as ty::inherent::DefId<Cx<'cx>>>::as_local(id)
-            .filter(|id| self.inputs.items.contains_key(id))
+        self.inputs.items.contains_key(&id).then_some(id)
     }
     pub(super) fn fn_sig(self, id: DefinitionId) -> ty::Binder<Cx<'cx>, ty::FnSig<Cx<'cx>>> {
         self.inputs.items[&id]

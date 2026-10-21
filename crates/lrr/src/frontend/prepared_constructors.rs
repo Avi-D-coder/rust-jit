@@ -115,7 +115,7 @@ impl PreparedRecordConstructor {
                 ExplicitType::Selected(source) => source.heap_bytes().ok()?,
                 ExplicitType::Parameter(term) => term.heap_bytes()?,
                 // E006: no new retained-admission resource accounting.
-                ExplicitType::FrameTemplate { .. } => 0,
+                ExplicitType::FrameTemplate { .. } | ExplicitType::Open(_) => 0,
                 ExplicitType::Written { term, written } => {
                     term.heap_bytes()?.checked_add(written.heap_bytes())?
                 }
@@ -253,7 +253,9 @@ pub(crate) fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<PreparedRecor
     let arguments = ready!(prepare_arguments(db, owner, key, plan));
     let source_arguments: Vec<_> = arguments
         .iter()
-        .map(|argument| argument.as_ref().map(|argument| argument.source().clone()))
+        // An open application is not yet a source argument: like a whole
+        // `_` it leaves the declaration's parameter to inference.
+        .map(|argument| argument.as_ref().filter(|argument| !argument.is_open()).map(|argument| argument.source().clone()))
         .collect();
     let completed = environment.macros().source_environment();
     let members = if arguments.is_empty() {
@@ -369,11 +371,14 @@ fn prepare_arguments(
         }
         Err(error) => return QueryPoll::Ready(Err(error)),
     };
-    match super::explicit_type_arguments::select_path_arguments(
+    // The record constructor is the one consumer that closes a nested `_`
+    // (`Iter<_>`) through pinned inference at its field boundary.
+    match super::explicit_type_arguments::select_path_arguments_with(
         db,
         owner,
         &site,
         super::explicit_type_arguments::PathArgumentPosition::Constructor,
+        super::explicit_type_arguments::HolePolicy::Retain,
     ) {
         QueryPoll::Ready(Ok(Some(selected))) => {
             for guard in &selected.guards {

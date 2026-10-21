@@ -30,6 +30,34 @@ pub(super) fn owning_read(
     Ok((cell, mode))
 }
 
+/// The common owning-read mode of a sized sub-array window's elements
+/// (`None` for any other place). Each element is admitted by the same
+/// owning-read rule an `[a, b, c]` pattern's element bindings use.
+pub(super) fn window_read_mode(
+    store: &GuestStore,
+    place: &crate::runtime::place::Place,
+) -> Result<Option<IntrinsicRead>, Diagnostic> {
+    let Some(len) = place.subarray_len() else {
+        return Ok(None);
+    };
+    let mut common = None;
+    for index in 0..len {
+        let element = store
+            .project_index(place, ValueRepr::unsigned(TypeId(13), u64::from(index))?)
+            .map_err(place_fault)?;
+        let (_, mode) = owning_read(store, &element)?;
+        match common {
+            None => common = Some(mode),
+            Some(previous) if previous != mode => {
+                return Err(transaction("sub-array elements disagree on their read mode"));
+            }
+            Some(_) => {}
+        }
+    }
+    // An empty window has no element to read.
+    Ok(Some(common.unwrap_or(IntrinsicRead::CopyScalar)))
+}
+
 impl Frame {
     /// Ordinary Value-namespace classification of a reached tree's plain
     /// identifiers, supplied by the dispatcher for exactly this PC.
@@ -195,6 +223,12 @@ impl Frame {
         self.preflight_pattern_test(owner, tree, result, retry, store)?;
         let skip = self.pattern_solution(owner, retry)?;
         let matched = found.is_some();
+        // The search is pure over the store. A selected sub-array window's
+        // `[T; K]` Type is interned here, before any guard view or publication
+        // resolves its place.
+        for staged in found.iter().flatten() {
+            store.ensure_subarray_type(&staged.place).map_err(place_fault)?;
+        }
         store.reserve_owning_read_result(self.slot(result)?.cell.is_none(), false)?;
         self.prepare_write(result, store)?;
         let ticket = store.ticket(ValueRepr::boolean(matched))?;
@@ -340,7 +374,10 @@ impl Frame {
             self.preflight_declaration(staged.binding)?;
             match staged.mode {
                 DefaultBindingMode::Move => {
-                    let (_, mode) = owning_read(store, &staged.place)?;
+                    let mode = match window_read_mode(store, &staged.place)? {
+                        Some(mode) => mode,
+                        None => owning_read(store, &staged.place)?.1,
+                    };
                     match mode {
                         IntrinsicRead::CopyScalar => {}
                         IntrinsicRead::Move if guard_view => {
@@ -385,6 +422,11 @@ impl Frame {
             (ticket, staged.source.clone())
         } else {
             match staged.mode {
+                DefaultBindingMode::Move if staged.place.subarray_len().is_some() => {
+                    // A non-Copy sub-array moves its elements into a fresh
+                    // `[T; K]`; a Copy one was replicated during preparation.
+                    (self.move_subarray(&staged.place, store)?, staged.source.clone())
+                }
                 DefaultBindingMode::Move => {
                     let (cell, mode) = owning_read(store, &staged.place)?;
                     let ticket = match mode {
@@ -446,6 +488,30 @@ impl Frame {
         self.set_binding_source_view(staged.binding, source)?;
         Ok(())
     }
+    /// The by-value binding of a non-Copy sub-array window: its elements move,
+    /// in order, into a fresh array value.
+    fn move_subarray(
+        &mut self,
+        place: &crate::runtime::place::Place,
+        store: &mut GuestStore,
+    ) -> Result<TicketId, Diagnostic> {
+        let len = place
+            .subarray_len()
+            .ok_or_else(|| transaction("sub-array move requires a sub-array place"))?;
+        let build = store.begin_subarray_build(place).map_err(place_fault)?;
+        for index in 0..len {
+            let element = store
+                .project_index(place, ValueRepr::unsigned(TypeId(13), u64::from(index))?)
+                .map_err(place_fault)?;
+            let (cell, mode) = owning_read(store, &element)?;
+            if mode != IntrinsicRead::Move {
+                return Err(transaction("sub-array element lacks its prepared Copy transfer"));
+            }
+            let ticket = store.move_from(cell)?;
+            store.subarray_push(&build, index, ticket)?;
+        }
+        store.subarray_finish(build)
+    }
     fn retire_pattern_binding(
         &mut self,
         binding: NodeId,
@@ -456,10 +522,16 @@ impl Frame {
             .get_mut(binding.0 as usize)
             .and_then(Option::take)
         {
-            store.admit_discard(cell)?;
-            if matches!(store.state(cell)?, CellState::Live(_)) {
-                let ticket = store.begin_drop(cell)?;
-                store.discard(ticket)?;
+            // A by-value Copy aggregate binding (`[T; K]`, a tuple) is plain
+            // data: no destructor is scheduled for its fields.
+            if store.holds_plain_aggregate(cell)? {
+                store.release_plain_aggregate(cell)?;
+            } else {
+                store.admit_discard(cell)?;
+                if matches!(store.state(cell)?, CellState::Live(_)) {
+                    let ticket = store.begin_drop(cell)?;
+                    store.discard(ticket)?;
+                }
             }
             store.retire_cell(cell)?;
         }

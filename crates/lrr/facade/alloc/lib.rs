@@ -4,6 +4,7 @@
 #![no_std]
 
 
+pub mod alloc;
 pub mod borrow;
 pub mod boxed;
 pub mod collections;

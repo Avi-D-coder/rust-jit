@@ -76,6 +76,11 @@ impl RunMachine {
                     && crate::frontend::call_contracts::closed_term(&context));
             if !ready {return QueryPoll::Ready(Err(unsupported("record source application requires its inferred result Type context")));}
         }
+        // A `_` inside the explicit application is settled by the pinned
+        // inference owner after the first field operand (`settle_open_constructor`).
+        if source.prepared().arguments().iter().flatten().any(|argument| argument.is_open()) {
+            return QueryPoll::Ready(self.frame.prepare_open_nominal_constructor(source));
+        }
         if source.prepared().bound().is_some() {
             return QueryPoll::Ready(
                 self.frame
@@ -95,7 +100,7 @@ impl RunMachine {
             _ if !source.prepared().arguments().is_empty() => {
                 let mut args = Vec::new();
                 for argument in source.prepared().arguments() {
-                    let Some(argument) = argument else {
+                    let Some(argument) = argument.as_ref().filter(|argument| !argument.is_open()) else {
                         return QueryPoll::Ready(Err(unsupported(
                             "record Type argument hole requires actual field/result inference",
                         )));
@@ -119,17 +124,18 @@ impl RunMachine {
             },
             definition,
             arguments,
-            selection: NominalMemberSelection::Variant(variant_name.map(str::to_owned)),
+            selection: NominalMemberSelection::Variant(variant_name.map(str::to_owned)), normalized: None,
         };
         if let Some(cached) = self.nominal.records.get(&key) {
             if cached.same_source(&source) {
-                if let Err(error) = cached.require_current(db) {
-                    return QueryPoll::Ready(Err(error));
+                // A stale guard (inputs grown by a later inference root) is
+                // rebuilt from the member selection below, never trusted.
+                if cached.require_current(db).is_ok() {
+                    return QueryPoll::Ready(
+                        self.frame
+                            .prepare_installed_nominal_constructor(cached.clone(), &mut self.store),
+                    );
                 }
-                return QueryPoll::Ready(
-                    self.frame
-                        .prepare_installed_nominal_constructor(cached.clone(), &mut self.store),
-                );
             }
         }
         let (member, guard) = match self.nominal_member(db, key.clone(), None) {

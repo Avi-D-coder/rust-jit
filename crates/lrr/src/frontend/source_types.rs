@@ -2223,6 +2223,47 @@ pub(super) fn deferred_alias_type(
     };
     QueryPoll::Ready(substitution.apply(&term).map(Some))
 }
+/// The declared target of one alias (`type Item = &'a T;` of a trait impl),
+/// resolved in its own declaration context: the written target over the
+/// declaration's source parameters (`ParamKey { definition, ordinal }`, the
+/// alias's own and those it inherits from its impl), unapplied. This reads the
+/// retained alias syntax through the same actual declaration generics the
+/// pinned parameter layout uses; it never reparses display text.
+pub(crate) fn alias_declared_target(
+    db: &mut Database, graph: &NameNamespaces, sources: &[&PreparedSourceView],
+    definition: crate::core::digest::Digest,
+) -> QueryPoll<Option<TyTerm>> {
+    use ra_ap_syntax::{AstNode, ast};
+    let declaration = match db.fetch(&SyntaxProvider, QueryKey::DeclarationGenerics(definition)) {
+        QueryPoll::Ready(Ok(value)) => value.value,
+        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+    };
+    let QueryValue::DeclarationGenerics(generics) = declaration.as_ref() else {
+        return QueryPoll::Ready(Err(fault("alias declared target generic query differs")));
+    };
+    let Some((_, header, context, parsed)) = generics.source_parts() else {
+        return QueryPoll::Ready(Ok(None));
+    };
+    let alias = match parsed.syntax_at(context.range, |node| ast::TypeAlias::can_cast(node.kind())) {
+        Ok(Some(node)) => ast::TypeAlias::cast(node).expect("checked alias syntax"),
+        Ok(None) => return QueryPoll::Ready(Ok(None)),
+        Err(error) => return QueryPoll::Ready(Err(error)),
+    };
+    let Some(target) = alias.ty() else { return QueryPoll::Ready(Ok(None)); };
+    let owner = WrittenTypeDeclaration::declaration(super::type_name_namespace::SourceTypeOwner {
+        definition, scope: &context.scope, header,
+    }, generics.parameters(), alias.syntax(), None);
+    match resolve_actual_type(db, graph, sources, &owner, &target) {
+        // A shorthand projection target (`type Item = I::Item;`) is resolved
+        // through the impl's own bounds, whose syntax this alias declaration
+        // context does not contain: the declaration name receipt refuses it.
+        // That target stays unprepared (a typed hold when selection reaches
+        // the impl) until the impl-bound join exists; it is never guessed.
+        QueryPoll::Ready(Err(error)) if error.code == "LRR-E-TYPE-CONTEXT" => QueryPoll::Ready(Ok(None)),
+        other => other,
+    }
+}
 /// One actual source Type application and the declaration parameters whose
 /// values this occurrence still needs. It is metadata, not an inference engine
 /// or a calling-frame parameter binding. Repeated/compound occurrences stay in

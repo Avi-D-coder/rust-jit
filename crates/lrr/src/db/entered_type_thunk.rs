@@ -26,7 +26,7 @@ use std::sync::Arc;
 fn object(shape: &AnnotationShape) -> bool {
     match shape {
         AnnotationShape::Dyn(_) => true,
-        AnnotationShape::Leaf(_) | AnnotationShape::Infer => false,
+        AnnotationShape::Leaf(_) | AnnotationShape::Infer(_) => false,
         AnnotationShape::Tuple(members) => members.iter().any(object),
         AnnotationShape::Generic(_, arguments) => arguments.iter().any(object),
         AnnotationShape::Array(inner, _) | AnnotationShape::Slice(inner) => object(inner),

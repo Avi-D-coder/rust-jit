@@ -195,6 +195,10 @@ enum ConstructionResult {
     /// A generic nominal whose completed parameter-typed fields determine its
     /// type arguments at finish.
     PendingNominal,
+    /// A record whose explicit Type argument holds a `_`: the guard knows only
+    /// its declared field count until the reached inference settles it
+    /// (`settle_open_constructor`), before the first field moves in.
+    OpenNominal,
 }
 #[derive(Clone)]
 enum ConstructionMapping {
@@ -249,6 +253,8 @@ enum ConstructorBinding {
     },
     Nominal(Box<crate::frontend::types::BoundNominalConstructor>),
     PreparedNominal(crate::frontend::prepared_constructors::PreparedRecordConstructorHandle),
+    /// A prepared record with an open explicit argument, not yet settled.
+    OpenNominal(crate::frontend::prepared_constructors::PreparedRecordConstructorHandle),
 }
 struct PreparedConstructor {
     pc: PcKey,
@@ -3481,24 +3487,33 @@ impl Frame {
         &self,
         plan: &crate::syntax::constructors::ConstructorPlan,
     ) -> Result<SlotId, Diagnostic> {
+        if self.pc.phase != 0 || self.constructor_start.is_some() {
+            return Err(invalid(
+                "constructor preparation requires the exact entered source plan",
+            ));
+        }
+        let guard = self.constructor_plan_guard(plan)?;
+        self.preflight_constructor_start(guard)?;
+        Ok(guard)
+    }
+    /// The guard slot of the plan's constructor expression in this body.
+    fn constructor_plan_guard(
+        &self,
+        plan: &crate::syntax::constructors::ConstructorPlan,
+    ) -> Result<SlotId, Diagnostic> {
         if &plan.origin().body_key != self.body.body()
             || plan.profile() != self.body.profile()
             || plan.node().0 != self.pc.node
-            || self.pc.phase != 0
-            || self.constructor_start.is_some()
         {
             return Err(invalid(
                 "constructor preparation requires the exact entered source plan",
             ));
         }
-        let guard = self
-            .body
+        self.body
             .nodes()
             .get(plan.node().0 as usize)
             .and_then(|node| node.constructor_guard)
-            .ok_or_else(|| invalid("prepared constructor guard absent"))?;
-        self.preflight_constructor_start(guard)?;
-        Ok(guard)
+            .ok_or_else(|| invalid("prepared constructor guard absent"))
     }
     /// Install dispatcher-bound runtime facts without starting guest allocation.
     pub fn prepare_structural_constructor(
@@ -3664,6 +3679,7 @@ impl Frame {
             crate::core::digest::StableEncode::fingerprint(plan),
             &bound,
             store,
+            false,
         )?;
         self.constructor_start = Some(PreparedConstructor {
             pc: self.pc.clone(),
@@ -3731,6 +3747,7 @@ impl Frame {
             prepared.plan_identity(),
             source.ready_bound()?,
             store,
+            false,
         )?;
         let base_place = self.record_base_place(prepared.plan())?;
         self.constructor_start = Some(PreparedConstructor {
@@ -3746,6 +3763,113 @@ impl Frame {
         }
         Ok(())
     }
+    /// A prepared record whose explicit Type argument still holds a `_`. No
+    /// descriptor, hint or source view exists yet: they come from one pinned
+    /// inference answer once the first field operand has executed.
+    pub(crate) fn prepare_open_nominal_constructor(
+        &mut self,
+        source: crate::frontend::prepared_constructors::PreparedRecordConstructorHandle,
+    ) -> Result<(), Diagnostic> {
+        let prepared = source.prepared();
+        if prepared.key() != &self.pc {
+            return Err(invalid("installed constructor source PC differs"));
+        }
+        let guard = self.admit_constructor_plan(prepared.plan())?;
+        let base_place = self.record_base_place(prepared.plan())?;
+        self.constructor_start = Some(PreparedConstructor {
+            pc: self.pc.clone(),
+            guard,
+            binding: ConstructorBinding::OpenNominal(source),
+            hints: Vec::new(),
+            source_operands: None,
+            base_place,
+        });
+        Ok(())
+    }
+    /// The unsettled record constructor guarded by this slot, if any.
+    pub(crate) fn open_constructor(
+        &self,
+        id: SlotId,
+    ) -> Result<Option<crate::frontend::prepared_constructors::PreparedRecordConstructorHandle>, Diagnostic> {
+        let Some(active) = self.constructor_slot(id)?.construction.as_ref() else {
+            return Ok(None);
+        };
+        Ok(match (&active.result, &active.mapping) {
+            (ConstructionResult::OpenNominal, Some(ConstructionMapping::Prepared(source))) if !active.cleaning => {
+                Some(source.clone())
+            }
+            _ => None,
+        })
+    }
+    /// Settle an open record constructor with the closed arguments pinned
+    /// inference answered. `source` is the record's ready binding under them.
+    /// Afterwards the construction is exactly one begun with those arguments,
+    /// except that fields whose operands already executed take no hint.
+    pub(crate) fn settle_open_constructor(
+        &mut self,
+        id: SlotId,
+        source: crate::frontend::prepared_constructors::PreparedRecordConstructorHandle,
+        args: &[(TypeId, crate::traits::term::TyTerm)],
+        store: &mut GuestStore,
+    ) -> Result<(), Diagnostic> {
+        let active = self
+            .constructor_slot(id)?
+            .construction
+            .clone()
+            .filter(|active| !active.cleaning && matches!(active.result, ConstructionResult::OpenNominal))
+            .ok_or_else(|| invalid("open constructor guard absent"))?;
+        let prepared = source.prepared();
+        // Settlement runs at the first field's operand phase of the same record.
+        if prepared.key().body != self.pc.body || prepared.key().node != self.pc.node {
+            return Err(invalid("settled constructor source PC differs"));
+        }
+        let bound = source.ready_bound()?;
+        let variant = bound.variant();
+        if args.len() != variant.type_parameters() as usize {
+            return Err(Diagnostic::new(
+                "LRR-E-TYPE-CONTEXT",
+                "record Type arguments require their complete declaration/default context".into(),
+            ));
+        }
+        let result = self
+            .body
+            .nodes()
+            .get(self.pc.node as usize)
+            .and_then(|node| node.value)
+            .ok_or_else(|| invalid("record constructor result absent"))?;
+        let ids: Vec<TypeId> = args.iter().map(|(ty, _)| *ty).collect();
+        let source_args = args
+            .iter()
+            .map(|(_, term)| crate::traits::term::GenericArg::Type(term.clone()))
+            .collect();
+        let source_view = crate::traits::term::TyTerm::Nominal(variant.identity(), source_args);
+        self.preflight_source_view(result, Some(&source_view))?;
+        let ty = store.settle_open_nominal_construction(active.guard, variant, &ids)?;
+        self.declared_hint(result, Some(ty))?;
+        self.set_source_view(result, Some(source_view))?;
+        // Hints for the fields not yet executed, exactly as the closed start.
+        let (_, hints, partial) = self.prepare_nominal_hints(
+            prepared.plan(),
+            prepared.plan_identity(),
+            bound,
+            store,
+            true,
+        )?;
+        for (slot, hint) in hints {
+            self.slots[slot.0 as usize].hint = Some(hint);
+        }
+        for (slot, written) in partial {
+            self.set_partial_hint(slot, written, Some(id))?;
+        }
+        let slot = &mut self.slots[id.0 as usize];
+        let active = slot
+            .construction
+            .as_mut()
+            .ok_or_else(|| invalid("open constructor guard absent"))?;
+        active.result = ConstructionResult::Bound(ty);
+        active.mapping = Some(ConstructionMapping::Prepared(source));
+        Ok(())
+    }
     /// Source binding is immutable. Only runtime hints/materialized descriptors
     /// and the pending frame facts are prepared at each reached construction.
     fn prepare_nominal_hints(
@@ -3754,6 +3878,7 @@ impl Frame {
         plan_identity: crate::core::digest::Digest,
         bound: &crate::frontend::types::BoundNominalConstructor,
         store: &mut GuestStore,
+        settled: bool,
     ) -> Result<
         (
             SlotId,
@@ -3762,7 +3887,13 @@ impl Frame {
         ),
         Diagnostic,
     > {
-        let guard = self.admit_constructor_plan(plan)?;
+        // A settled open constructor is already started: only the plan identity
+        // is checked, at whichever operand phase settlement runs.
+        let guard = if settled {
+            self.constructor_plan_guard(plan)?
+        } else {
+            self.admit_constructor_plan(plan)?
+        };
         if bound.mapping().constructor() != plan_identity
             || !matches!(plan.kind(), crate::syntax::constructors::ConstructorKind::Record { fields, rest, .. }
                 if fields.len() == bound.mapping().written_to_declaration().len()
@@ -3792,7 +3923,13 @@ impl Frame {
             // never an installed operand constraint.
             hints.push((field.operand.value, TypeId(0)));
         }
-        self.admit_constructor_hints(&hints)?;
+        // A settled open constructor starts after its first operand executed:
+        // that operand's storage exists, so it takes no hint.
+        let executed = |frame: &Self, slot: SlotId| {
+            settled && frame.slot(slot).is_ok_and(|slot| slot.cell.is_some())
+        };
+        let admitted: Vec<_> = hints.iter().copied().filter(|(slot, _)| !executed(self, *slot)).collect();
+        self.admit_constructor_hints(&admitted)?;
         // A generic constructor without type context hints only its concrete
         // fields; its parameter-typed fields determine their arguments.
         let args = self.nominal_context_args(guard, bound.variant(), store)?;
@@ -3802,6 +3939,9 @@ impl Frame {
             .map_err(|_| crate::runtime::arena::resource())?;
         let mut partial = Vec::new();
         for (hint, ordinal) in hints.iter().zip(bound.mapping().written_to_declaration()) {
+            if executed(self, hint.0) {
+                continue;
+            }
             let field = &bound.variant().fields()[*ordinal as usize];
             match (&args, field) {
                 (Some(args), field) => typed.push((hint.0, field.materialize(store, args)?)),
@@ -3916,6 +4056,26 @@ impl Frame {
                 let bound = source.ready_bound()?;
                 let total = self.preflight_nominal_mapping(guard, bound, 0)?;
                 self.begin_nominal_with_mapping(guard, bound, mapping, total, store)?
+            }
+            ConstructorBinding::OpenNominal(source) => {
+                self.preflight_constructor_start(guard)?;
+                // The guard holds the declaration's every field (a union
+                // expression writes only one of them).
+                let prepared = source.prepared();
+                let declared = match (prepared.pending_fields(), prepared.bound()) {
+                    (Some(fields), _) => fields.len(),
+                    (None, Some(bound)) => bound.variant().fields().len(),
+                    _ => return Err(invalid("open record constructor has no declared field list")),
+                };
+                let owned = store.begin_open_nominal_construction(declared)?;
+                self.slots[guard.0 as usize].construction = Some(ActiveConstruction {
+                    guard: owned,
+                    result: ConstructionResult::OpenNominal,
+                    cleaning: false,
+                    mapping: Some(ConstructionMapping::Prepared(source)),
+                    source_operands: None,
+                    base_place: None,
+                });
             }
         }
         self.slots[guard.0 as usize]
@@ -4211,6 +4371,12 @@ impl Frame {
                 store.intern_type(store.observed_construction_key(active.guard)?)?
             }
             ConstructionResult::PendingNominal => store.intern_pending_nominal(active.guard)?,
+            ConstructionResult::OpenNominal => {
+                return Err(Diagnostic::new(
+                    "LRR-E-TYPE-CONTEXT",
+                    "record Type argument hole was never settled by inference".into(),
+                ));
+            }
         };
         self.preflight_write_type(destination, ty, store)?;
         let cell = self.prepare_write(destination, store)?;
@@ -4267,6 +4433,12 @@ impl Frame {
                 if let Some(cell) = self.slot(destination)?.cell {
                     store.validate_constructor_destination(cell, ty)?;
                 }
+            }
+            ConstructionResult::OpenNominal => {
+                return Err(Diagnostic::new(
+                    "LRR-E-TYPE-CONTEXT",
+                    "record Type argument hole was never settled by inference".into(),
+                ));
             }
             ConstructionResult::PendingNominal => {
                 self.preflight_temporary_slot(destination)?;

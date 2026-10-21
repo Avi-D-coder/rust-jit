@@ -103,19 +103,28 @@ impl GenericEnv {
                     {
                         true
                     }
+                    // A written nominal/tuple/array result: closed, or an open
+                    // template over this call's own generic positions
+                    // (`Empty<T>`, `Vec<T>`, `Result<F, <F as FromStr>::Err>`)
+                    // when the reached arguments and result context bound none
+                    // (or only some) of them, or a projection has no selectable
+                    // impl yet. An open template is admitted structurally:
+                    // every free position must be one of this definition's own
+                    // generics. The returned value, not this identity check,
+                    // then supplies the open positions.
                     (
                         Some(
                             source @ (TyTerm::Nominal(..) | TyTerm::Tuple(..) | TyTerm::Array(..)),
                         ),
                         None,
-                    ) => crate::frontend::call_contracts::closed_term(source),
+                    ) => Self::declared_result_admitted(signature, source),
                     // A closed `&[T]`/`&mut [T]` result: a slice reference
                     // carries its own element window; the return boundary
                     // checks the returned value against the source Type.
                     (Some(source @ TyTerm::Ref(_, _, pointee)), None)
                         if matches!(pointee.as_ref(), TyTerm::Slice(_) | TyTerm::Str) =>
                     {
-                        crate::frontend::call_contracts::closed_term(source)
+                        Self::declared_result_admitted(signature, source)
                     }
                     // A closed `&'static T` result names no parameter
                     // region, so no closed-reference proof relates it to
@@ -123,11 +132,18 @@ impl GenericEnv {
                     (
                         Some(source @ TyTerm::Ref(crate::traits::term::RegionTerm::Static, _, _)),
                         None,
-                    ) => crate::frontend::call_contracts::closed_term(source),
+                    ) => Self::declared_result_admitted(signature, source),
                     // A closed fn-pointer result (E-R5-008); the return
                     // boundary checks the returned value against it.
                     (Some(source @ TyTerm::Function(_)), None) => {
-                        crate::frontend::call_contracts::closed_term(source)
+                        Self::declared_result_admitted(signature, source)
+                    }
+                    // A written associated-type or opaque result that no
+                    // impl normalized at the call: the declared projection
+                    // template (over this definition's own generics) stays
+                    // open and the returned value supplies it.
+                    (Some(source @ (TyTerm::Projection(_) | TyTerm::Opaque(..))), None) => {
+                        Self::declared_result_admitted(signature, source)
                     }
                     // A normalized associated-type result; the return
                     // boundary checks the returned value against it.
@@ -274,6 +290,106 @@ impl GenericEnv {
                 .ok_or_else(|| invalid("closed reference retained size overflow"))?;
         }
         Ok(bytes)
+    }
+    /// A declared written result whose source term is closed, or whose free
+    /// generic positions are all this definition's own: type and const
+    /// parameters (including those inside projection and opaque arguments and
+    /// fn-pointer binders), never another declaration's parameter, an
+    /// inference variable or a placeholder from a transaction. Regions are
+    /// metadata, so lifetime positions only need an owning definition or a
+    /// local/static identity.
+    fn declared_result_admitted<'a>(signature: &FunctionSignature, source: &'a TyTerm) -> bool {
+        use crate::traits::term::{ConstTerm, GenericArg, RegionTerm};
+        if crate::frontend::call_contracts::closed_term(source) {
+            return true;
+        }
+        let owns = |key: &ParamKey, kind: GenericKind| {
+            key.definition == signature.definition
+                && signature
+                    .generics
+                    .iter()
+                    .any(|parameter| parameter.ordinal == key.ordinal && parameter.kind == kind)
+        };
+        let region_ok = |region: &RegionTerm, binders: usize| match region {
+            RegionTerm::Static | RegionTerm::Local { .. } => true,
+            RegionTerm::Param(key) => key.definition == signature.definition,
+            RegionTerm::Bound { depth, .. } => (*depth as usize) < binders,
+            RegionTerm::Placeholder(_) => false,
+        };
+        let const_ok = |constant: &ConstTerm, binders: usize| match constant {
+            ConstTerm::Value(_) => true,
+            ConstTerm::Param(key) => owns(key, GenericKind::Const),
+            ConstTerm::Bound { depth, .. } => (*depth as usize) < binders,
+            ConstTerm::Placeholder(_) => false,
+        };
+        let mut work = vec![(source, 0usize)];
+        while let Some((term, binders)) = work.pop() {
+            let arguments = |args: &'a [GenericArg], work: &mut Vec<(&'a TyTerm, usize)>| -> bool {
+                for arg in args {
+                    match arg {
+                        GenericArg::Type(ty) => work.push((ty, binders)),
+                        GenericArg::Region(region) => {
+                            if !region_ok(region, binders) {
+                                return false;
+                            }
+                        }
+                        GenericArg::Const(constant) => {
+                            if !const_ok(constant, binders) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+                true
+            };
+            match term {
+                TyTerm::Primitive(_) | TyTerm::Str | TyTerm::Never | TyTerm::Dyn(_) => {}
+                TyTerm::Param(key) => {
+                    if !owns(key, GenericKind::Type) {
+                        return false;
+                    }
+                }
+                TyTerm::Bound { depth, .. } => {
+                    if (*depth as usize) >= binders {
+                        return false;
+                    }
+                }
+                TyTerm::Infer(_) | TyTerm::Placeholder(_) => return false,
+                TyTerm::Ref(region, _, target) => {
+                    if !region_ok(region, binders) {
+                        return false;
+                    }
+                    work.push((target, binders));
+                }
+                TyTerm::Slice(element) => work.push((element, binders)),
+                TyTerm::Array(element, length) => {
+                    if !const_ok(length, binders) {
+                        return false;
+                    }
+                    work.push((element, binders));
+                }
+                TyTerm::Tuple(fields) => work.extend(fields.iter().map(|field| (field, binders))),
+                TyTerm::Nominal(_, args) | TyTerm::Opaque(_, args) => {
+                    if !arguments(args, &mut work) {
+                        return false;
+                    }
+                }
+                TyTerm::Projection(key) => {
+                    work.push((&key.trait_ref.self_ty, binders));
+                    if !arguments(&key.trait_ref.args, &mut work)
+                        || !arguments(&key.item_args, &mut work)
+                    {
+                        return false;
+                    }
+                }
+                TyTerm::Function(function) => {
+                    let inner = binders + 1;
+                    work.extend(function.value.parameters.iter().map(|ty| (ty, inner)));
+                    work.push((function.value.result.as_ref(), inner));
+                }
+            }
+        }
+        true
     }
     /// Whether the call's source result is the declared symbolic result
     /// under the call's source bindings (`-> &mut T` with `T = S`).
@@ -428,7 +544,7 @@ impl GenericEnv {
             return Err(invalid("lexical generic environment declaration changed"));
         }
         if let Some(proof) = &self.normalized_return {
-            proof.require_current(db, owner)?;
+            proof.require_current_inherited(db, owner)?;
         }
         if let Some(proof) = &self.closed_references {
             proof.require_current(db, owner)?;

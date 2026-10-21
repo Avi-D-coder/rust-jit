@@ -259,6 +259,11 @@ pub(crate) enum PatternStep {
         slot: u32,
         from_end: u32,
     },
+    /// The subsequence an array or slice pattern's `rest @ ..` binds: a
+    /// sequence of the matched Type's own element Type (of another length), so
+    /// it projects no component. Like any non-reference pattern step it
+    /// states the references the default binding mode dereferences first.
+    Rest,
 }
 /// The written structure of an annotation or cast target Type node: which
 /// child Type a projection step selects. Named Types stay with the entered
@@ -1229,13 +1234,22 @@ fn record_occurrences(
             record_occurrences(inner, root, steps, occurrences, structural);
             steps.pop();
         }
-        PatternNode::Array { items, .. } => {
+        PatternNode::Array {
+            items,
+            rest_binding,
+            ..
+        } => {
             *structural += 1;
             steps.push(PatternStep::Element);
             for item in items {
                 record_occurrences(item, root, steps, occurrences, structural);
             }
             steps.pop();
+            if let Some(binding) = rest_binding {
+                steps.push(PatternStep::Rest);
+                record_occurrences(binding, root, steps, occurrences, structural);
+                steps.pop();
+            }
         }
         PatternNode::Or(alternatives) => {
             for alternative in alternatives {
@@ -1754,6 +1768,7 @@ impl StableEncode for SourceConstraintPlan {
                         e.u32(*slot);
                         e.u32(*from_end);
                     }
+                    PatternStep::Rest => e.u8(6),
                 });
                 e.bool(occurrence.by_reference);
                 e.bool(occurrence.mutable);

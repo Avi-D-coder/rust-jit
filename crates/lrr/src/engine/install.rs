@@ -96,6 +96,89 @@ impl InstalledRecipes {
         }
         Ok(recipe)
     }
+    /// Demand-driven source publication grows the candidate sets of scope
+    /// certificate selections that an earlier installed phase read (a reached
+    /// inference root certifying more of the world). That supersedes the phase's
+    /// captured inputs without changing what its ordinary lowering answers.
+    /// Renew only when the freshly demanded recipe is identical operation for
+    /// operation; any difference is a genuine source change and stays stale.
+    fn renew_installed(&mut self, db: &mut Database, id: RecipeId, key: &PcKey) -> QueryPoll<()> {
+        use crate::core::digest::StableEncode;
+        let stale = match self.get_current(db, id) {
+            Ok(_) => return QueryPoll::Ready(Ok(())),
+            Err(error) if error.prepared_input_change.is_some() => error,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let index = (id.0 - 1) as usize;
+        let fresh = match db.fetch(&SyntaxProvider, QueryKey::Thunk(key.clone())) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(_)) => return QueryPoll::Ready(Err(stale)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let QueryValue::Thunk(recipe) = fresh.value.as_ref() else {
+            return QueryPoll::Ready(Err(stale));
+        };
+        if !fresh.cacheable
+            || recipe.recipe().key != *key
+            || recipe.recipe().fingerprint() != self.entries[index].recipe.recipe().fingerprint()
+        {
+            return QueryPoll::Ready(Err(stale));
+        }
+        self.entries[index].recipe = Arc::new(recipe.as_ref().clone());
+        match self.renew_constructor_guard(db, id) {
+            QueryPoll::Ready(Ok(())) => QueryPoll::Ready(Ok(())),
+            other => other,
+        }
+    }
+    /// Demand-driven source publication (the scope certificate candidate sets a
+    /// reached inference root grows) can supersede the guard an installed record
+    /// constructor captured, without changing what that constructor's prepared
+    /// query answers. Renew the guard only when the freshly demanded query value
+    /// is identical; any difference is a genuine source change and stays stale.
+    pub(crate) fn renew_constructor_guard(
+        &mut self,
+        db: &mut Database,
+        id: RecipeId,
+    ) -> QueryPoll<()> {
+        use crate::core::digest::StableEncode;
+        let Some(index) = id.0.checked_sub(1).map(|index| index as usize) else {
+            return QueryPoll::Ready(Err(fault("LRR-E-INTERNAL-IR", "installed recipe ID is zero")));
+        };
+        let Some(constructor) = self.entries.get(index).and_then(|entry| entry.constructor.as_ref()) else {
+            return QueryPoll::Ready(Ok(()));
+        };
+        if constructor.inputs.require_current(db).is_ok() {
+            return QueryPoll::Ready(Ok(()));
+        }
+        let key = constructor.source.prepared().key().clone();
+        let before = StableEncode::fingerprint(constructor.source.prepared());
+        let demand = QueryKey::BoundRecordConstructor(key.clone());
+        let fresh = match db.fetch(&SyntaxProvider, demand.clone()) {
+            QueryPoll::Ready(Ok(value)) => value,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let unchanged = fresh.cacheable
+            && matches!(fresh.value.as_ref(), QueryValue::BoundRecordConstructor(value)
+                if StableEncode::fingerprint(value.as_ref()) == before);
+        if !unchanged {
+            return QueryPoll::Ready(Err(fault(
+                "LRR-E-INTERNAL-SNAPSHOT",
+                "installed record constructor source changed",
+            )));
+        }
+        let inputs = match db.prepare_input_guard(&SyntaxProvider, &demand, fresh.fingerprint) {
+            QueryPoll::Ready(Ok(inputs)) => inputs,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let source = match PreparedRecordConstructorHandle::from_query(fresh.value, &key) {
+            Ok(source) => source,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        self.entries[index].constructor = Some(InstalledRecordConstructor { source, inputs });
+        QueryPoll::Ready(Ok(()))
+    }
     pub(crate) fn prepared_constructor(
         &self,
         db: &Database,
@@ -148,8 +231,16 @@ impl InstalledRecipes {
                 "installed PC table belongs to another source publication",
             )));
         }
-        if let Some(id) = self.by_pc.get(&key) {
-            return QueryPoll::Ready(self.get_current(db, *id).map(|_| *id));
+        if let Some(id) = self.by_pc.get(&key).copied() {
+            // A reached inference root this constructor's preparation ran (and
+            // the input publication it requested) can supersede the guard the
+            // installed constructor captured without changing what it answers.
+            match self.renew_installed(db, id, &key) {
+                QueryPoll::Ready(Ok(())) => {}
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+            return QueryPoll::Ready(self.get_current(db, id).map(|_| id));
         }
         let outcome = match db.fetch(&SyntaxProvider, QueryKey::Thunk(key.clone())) {
             QueryPoll::Ready(Ok(outcome)) => outcome,

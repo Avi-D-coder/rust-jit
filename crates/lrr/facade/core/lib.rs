@@ -40,6 +40,7 @@ pub mod mem;
 pub mod num;
 pub mod ops;
 mod ops_impls;
+mod range_impls;
 pub mod option;
 pub mod panic;
 pub mod panicking;

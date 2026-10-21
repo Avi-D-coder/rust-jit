@@ -1,7 +1,9 @@
-// `std::env`. The process environment is outside the interpreter's
-// current profile; the names resolve.
+// `std::env`. The interpreter runs one guest program and has no argument
+// vector of its own, so `args()` yields exactly the program name (`argv[0]`),
+// as a process started without arguments does. The rest of the process
+// environment is outside the interpreter's current profile; the names resolve.
 pub struct Args {
-    position: usize,
+    inner: crate::vec::IntoIter<crate::string::String>,
 }
 pub struct Vars {
     position: usize,
@@ -12,7 +14,9 @@ pub enum VarError {
 }
 
 pub fn args() -> Args {
-    core::intrinsics::lrr_unsupported("std::env::args")
+    let mut argv: crate::vec::Vec<crate::string::String> = crate::vec::Vec::new();
+    argv.push(crate::string::String::from("main"));
+    Args { inner: argv.into_iter() }
 }
 pub fn var(key: &str) -> Result<crate::string::String, VarError> {
     core::intrinsics::lrr_unsupported("std::env::var")
@@ -27,6 +31,15 @@ pub fn vars() -> Vars {
 impl Iterator for Args {
     type Item = crate::string::String;
     fn next(&mut self) -> Option<crate::string::String> {
-        core::intrinsics::lrr_unsupported("std::env::Args::next")
+        self.inner.next()
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
     }
 }
+impl DoubleEndedIterator for Args {
+    fn next_back(&mut self) -> Option<crate::string::String> {
+        self.inner.next_back()
+    }
+}
+impl ExactSizeIterator for Args {}

@@ -3,8 +3,9 @@
 //! desugars it to an `Fn*` call on the callee; here the callee evaluates once
 //! as a place (a temporary place for a value callee), the dispatcher selects
 //! the callee from that place's reached callable type (`TypeKey::Callable`:
-//! a function item's source function or a closure's body), and the written
-//! arguments then cross the ordinary call boundary.
+//! a function item's source function or a closure's body; any other Type
+//! through its own `Fn`/`FnMut`/`FnOnce` impl), and the written arguments
+//! then cross the ordinary call boundary.
 use super::{draft, error, id_for, intrinsic_place_receiver, return_pc};
 use crate::{
     core::diagnostic::Diagnostic,

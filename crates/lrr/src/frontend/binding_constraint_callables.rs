@@ -274,6 +274,89 @@ impl<'a> Component<'a> {
         QueryPoll::Ready(Ok(None))
     }
 
+    /// The signature a callee value states through its own `Fn*` impl
+    /// (rustc's overloaded call): the callee's static Type, through its
+    /// references, is a nominal Type whose `Fn`, `FnMut` or `FnOnce` impl
+    /// (tried in that order, with an argument tuple of the call's arity)
+    /// declares the argument tuple and the result. Stated only when one impl
+    /// fits and its parts are closed Types; otherwise the call's Types are the
+    /// reached values' own.
+    pub(super) fn overloaded_fn_bound(
+        &mut self,
+        db: &mut Database,
+        call: NodeId,
+        callee: NodeId,
+    ) -> QueryPoll<Option<Arc<FnBound>>> {
+        let arity = match self.fact(call) {
+            Ok(fact) => fact.operands().len().saturating_sub(1),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let Some(mut ty) = ready!(self.expression_type(db, callee)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        while let TyTerm::Ref(_, _, inner) = ty {
+            ty = *inner;
+        }
+        let TyTerm::Nominal(identity, arguments) = ty else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        if !arguments.is_empty() {
+            return QueryPoll::Ready(Ok(None));
+        }
+        let Some(environment) = ready!(self.environment(db)) else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let members = match environment.member_index() {
+            Ok(members) => members,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        for (name, method) in [("Fn", "call"), ("FnMut", "call_mut"), ("FnOnce", "call_once")] {
+            let Some(trait_key) = ready!(self.core_trait(db, "ops", name)) else {
+                continue;
+            };
+            let mut functions = Vec::new();
+            for (_, function) in members.trait_method(Ok(identity), trait_key, method) {
+                if !functions.contains(&function) {
+                    functions.push(function);
+                }
+            }
+            let mut fitting = Vec::new();
+            for function in functions {
+                // The method's parameter after its receiver is the tuple.
+                let elements = match ready!(self.quiet_parameter_term(db, call, function, 1)) {
+                    Some(TyTerm::Tuple(elements)) => elements,
+                    Some(TyTerm::Primitive(PrimitiveType::Unit)) => Vec::new(),
+                    _ => continue,
+                };
+                if elements.len() == arity {
+                    fitting.push((function, elements));
+                }
+            }
+            match fitting.as_slice() {
+                [] => continue,
+                [(function, elements)] => {
+                    let Some(result) = ready!(self.quiet_result_term(db, call, *function)) else {
+                        return QueryPoll::Ready(Ok(None));
+                    };
+                    let result = ready!(self.normalize_projections(db, &result));
+                    if !crate::frontend::call_contracts::closed_term(&result)
+                        || !elements
+                            .iter()
+                            .all(crate::frontend::call_contracts::closed_term)
+                    {
+                        return QueryPoll::Ready(Ok(None));
+                    }
+                    return QueryPoll::Ready(Ok(Some(Arc::new(FnBound {
+                        params: elements.iter().cloned().map(Some).collect(),
+                        result: Some(result),
+                    }))));
+                }
+                _ => return QueryPoll::Ready(Ok(None)),
+            }
+        }
+        QueryPoll::Ready(Ok(None))
+    }
+
     /// An argument of a call through a callable value: it takes the written
     /// parameter Type of the signature, deref-coerced as any argument is.
     pub(super) fn bound_argument(
@@ -361,13 +444,27 @@ impl<'a> Component<'a> {
     ) -> QueryPoll<Option<(NodeId, Digest, Arc<FnBound>)>> {
         let plan = self.plan;
         let saved = (self.pending, self.unrecorded);
-        for edge in plan.uses(closure) {
-            let Some(parent) = plan.fact(edge.parent) else {
-                continue;
-            };
-            if parent.kind() != FactKind::Call || edge.ordinal == 0 {
-                continue;
+        // The closure's uses as an argument: written there, or lent
+        // (`&mut |x| ..`, `(|x| ..)`) where the argument position's expected
+        // Type reaches the closure through the borrow (rustc's rvalue
+        // expectation of a reference's referent).
+        let mut positions = Vec::new();
+        let mut expressions = vec![closure];
+        while let Some(expression) = expressions.pop() {
+            for edge in plan.uses(expression) {
+                let Some(parent) = plan.fact(edge.parent) else {
+                    continue;
+                };
+                match parent.kind() {
+                    FactKind::Call if edge.ordinal != 0 => positions.push(*edge),
+                    FactKind::Borrow | FactKind::Parenthesis if expression != edge.parent => {
+                        expressions.push(edge.parent)
+                    }
+                    _ => {}
+                }
             }
+        }
+        for edge in positions {
             // A constructor call's arguments are its fields, not parameters.
             if ready!(self.constructor(db, ConstructorSite::Expression(edge.parent))).is_some() {
                 continue;

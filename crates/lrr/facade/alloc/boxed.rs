@@ -82,6 +82,28 @@ impl<T: ?Sized + PartialEq> PartialEq for Box<T> {
     }
 }
 impl<T: ?Sized + Eq> Eq for Box<T> {}
+impl<T: ?Sized + PartialOrd> PartialOrd for Box<T> {
+    fn partial_cmp(&self, other: &Box<T>) -> Option<core::cmp::Ordering> {
+        PartialOrd::partial_cmp(&**self, &**other)
+    }
+    fn lt(&self, other: &Box<T>) -> bool {
+        PartialOrd::lt(&**self, &**other)
+    }
+    fn le(&self, other: &Box<T>) -> bool {
+        PartialOrd::le(&**self, &**other)
+    }
+    fn gt(&self, other: &Box<T>) -> bool {
+        PartialOrd::gt(&**self, &**other)
+    }
+    fn ge(&self, other: &Box<T>) -> bool {
+        PartialOrd::ge(&**self, &**other)
+    }
+}
+impl<T: ?Sized + Ord> Ord for Box<T> {
+    fn cmp(&self, other: &Box<T>) -> core::cmp::Ordering {
+        Ord::cmp(&**self, &**other)
+    }
+}
 
 impl<T: ?Sized + core::fmt::Debug> core::fmt::Debug for Box<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -105,5 +127,83 @@ pub fn box_assume_init_into_vec_unsafe<T, const N: usize>(
 impl<T: ?Sized + core::hash::Hash> core::hash::Hash for Box<T> {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         core::hash::Hash::hash(&**self, state)
+    }
+}
+
+// `ThinBox` (unstable `thin_box`): an owning pointer that is one machine word
+// for any `T`, sized or not. The interpreter has no pointer-with-header
+// allocation, so the word points at a leaked cell holding the ordinary (fat)
+// `Box<T>`; dereferencing follows both indirections. Dropping takes the `Box`
+// out of its cell and drops it, running the contents' destructor exactly once.
+pub struct ThinBox<T: ?Sized> {
+    ptr: *const core::cell::UnsafeCell<Option<Box<T>>>,
+}
+
+impl<T: ?Sized> ThinBox<T> {
+    fn lrr_from_box(inner: Box<T>) -> ThinBox<T> {
+        let cell: &'static core::cell::UnsafeCell<Option<Box<T>>> =
+            core::intrinsics::lrr_box_leak(Box::new(core::cell::UnsafeCell::new(Option::Some(inner))));
+        ThinBox {
+            ptr: cell as *const core::cell::UnsafeCell<Option<Box<T>>>,
+        }
+    }
+    fn lrr_cell(&self) -> &core::cell::UnsafeCell<Option<Box<T>>> {
+        unsafe { &*self.ptr }
+    }
+}
+
+impl<T> ThinBox<T> {
+    pub fn new(value: T) -> ThinBox<T> {
+        ThinBox::lrr_from_box(Box::new(value))
+    }
+}
+
+impl<Dyn: ?Sized> ThinBox<Dyn> {
+    pub fn new_unsize<T>(value: T) -> ThinBox<Dyn>
+    where
+        T: core::marker::Unsize<Dyn>,
+    {
+        let inner: Box<Dyn> = Box::new(value);
+        // Built here rather than through `lrr_from_box`: the interpreter does
+        // not yet carry an unsized `Dyn` through that nested generic call.
+        let cell: &'static core::cell::UnsafeCell<Option<Box<Dyn>>> =
+            core::intrinsics::lrr_box_leak(Box::new(core::cell::UnsafeCell::new(Option::Some(inner))));
+        ThinBox {
+            ptr: cell as *const core::cell::UnsafeCell<Option<Box<Dyn>>>,
+        }
+    }
+}
+
+impl<T: ?Sized> Deref for ThinBox<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        match self.lrr_cell().lrr_get() {
+            Option::Some(contents) => &**contents,
+            Option::None => core::panicking::panic("ThinBox contents already dropped"),
+        }
+    }
+}
+impl<T: ?Sized> DerefMut for ThinBox<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        match self.lrr_cell().lrr_get_mut() {
+            Option::Some(contents) => &mut **contents,
+            Option::None => core::panicking::panic("ThinBox contents already dropped"),
+        }
+    }
+}
+impl<T: ?Sized> Drop for ThinBox<T> {
+    fn drop(&mut self) {
+        let old = self.lrr_cell().lrr_replace(Option::None);
+        core::mem::drop(old);
+    }
+}
+impl<T: ?Sized + core::fmt::Debug> core::fmt::Debug for ThinBox<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Debug::fmt(&**self, f)
+    }
+}
+impl<T: ?Sized + core::fmt::Display> core::fmt::Display for ThinBox<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Display::fmt(&**self, f)
     }
 }

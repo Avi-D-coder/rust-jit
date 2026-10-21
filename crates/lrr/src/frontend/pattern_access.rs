@@ -214,7 +214,7 @@ pub(crate) fn prepare(
                         selection: ordinal.map_or(
                             NominalMemberSelection::Named,
                             NominalMemberSelection::Positional,
-                        ),
+                        ), normalized: None,
                     };
                     let member = ready!(db.fetch(
                         &SyntaxProvider,
@@ -232,7 +232,7 @@ pub(crate) fn prepare(
                         pc: key.owner.clone(),
                         definition: *definition,
                         arguments: arguments.clone(),
-                        selection: NominalMemberSelection::Variant(None),
+                        selection: NominalMemberSelection::Variant(None), normalized: None,
                     };
                     let variant = ready!(bound_variant(db, variant_key));
                     let args = type_arguments(arguments);
@@ -456,7 +456,7 @@ impl Walker<'_> {
                     pc: self.key.owner.clone(),
                     definition,
                     arguments: arguments.clone(),
-                    selection: NominalMemberSelection::Variant(variant_name.clone()),
+                    selection: NominalMemberSelection::Variant(variant_name.clone()), normalized: None,
                 };
                 let value = ready!(db.fetch(
                     &SyntaxProvider,

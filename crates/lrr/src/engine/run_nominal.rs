@@ -59,6 +59,19 @@ pub(super) struct NominalRunFacts {
         crate::frontend::nominal_member_goals::NominalMemberKey,
         crate::frontend::prepared_constructors::PreparedRecordConstructorHandle,
     >,
+    /// Declared field Types the pinned owner normalized, per exact application.
+    pub(super) normalized: BTreeMap<
+        (
+            crate::core::digest::Digest,
+            Vec<crate::traits::term::GenericArg>,
+            crate::frontend::nominal_member_goals::NominalMemberSelection,
+            bool,
+        ),
+        (
+            Vec<(u32, u32, crate::traits::term::TyTerm)>,
+            Arc<crate::traits::upstream::ReachedCallResponse>,
+        ),
+    >,
     /// Current pure member specializations; runtime representation is an
     /// additional guard key, never part of the memo request.
     members: BTreeMap<
@@ -257,15 +270,39 @@ impl RunMachine {
         runtime: Option<crate::runtime::shape::TypeId>,
     ) -> QueryPoll<(Arc<QueryValue>, Arc<crate::db::memo::PreparedInputGuard>)> {
         let cache_key = (key.clone(), runtime);
+        let mut retained = None;
         if let Some((value, guard)) = self.nominal.members.get(&cache_key) {
-            return match guard.require_current(db) {
-                Ok(()) => QueryPoll::Ready(Ok((Arc::clone(value), Arc::clone(guard)))),
-                Err(error) => QueryPoll::Ready(Err(error)),
-            };
+            match guard.require_current(db) {
+                Ok(()) => return QueryPoll::Ready(Ok((Arc::clone(value), Arc::clone(guard)))),
+                // A later reached inference root grows scope certificate
+                // candidate sets this selection read. The selection stays valid
+                // exactly when the demanded member is identical (below).
+                Err(error) if error.prepared_input_change.is_some() => retained = Some(Arc::clone(value)),
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            }
         }
-        let demand = QueryKey::NominalMember(Box::new(key));
+        let demand = QueryKey::NominalMember(Box::new(key.clone()));
         let fetched = match db.fetch(&SyntaxProvider, demand.clone()) {
             QueryPoll::Ready(Ok(value)) => value,
+            // The declaration binder could not normalize a projection-typed
+            // field under these arguments: the pinned owner's normalization of
+            // exactly those fields is the answer, joined into the same member
+            // binder. Anything it does not fully answer keeps this refusal.
+            QueryPoll::Ready(Err(error))
+                if key.normalized.is_none()
+                    && crate::frontend::nominal_member_goals::is_pending_projection(&error) =>
+            {
+                match self.normalized_member_fields(db, &key, false) {
+                    QueryPoll::Ready(Ok(Some(normalized))) if !normalized.is_empty() => {
+                        let mut normalized_key = key;
+                        normalized_key.normalized = Some(normalized);
+                        return self.nominal_member(db, normalized_key, runtime);
+                    }
+                    QueryPoll::Ready(Ok(_)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::Ready(Err(other)) => return QueryPoll::Ready(Err(other)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                }
+            }
             QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
@@ -275,6 +312,15 @@ impl RunMachine {
             QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
         };
         let value = fetched.value;
+        if let Some(previous) = retained {
+            use crate::core::digest::StableEncode;
+            let same = matches!((previous.as_ref(), value.as_ref()),
+                (QueryValue::NominalMember(old), QueryValue::NominalMember(new))
+                    if StableEncode::fingerprint(old.as_ref()) == StableEncode::fingerprint(new.as_ref()));
+            if !same {
+                return QueryPoll::Ready(Err(call_fault("nominal member selection changed during the run")));
+            }
+        }
         self.nominal
             .members
             .insert(cache_key, (Arc::clone(&value), Arc::clone(&guard)));
@@ -339,7 +385,7 @@ impl RunMachine {
             arguments,
             selection: crate::frontend::nominal_member_goals::NominalMemberSelection::Variant(
                 target.variant_name().map(str::to_owned),
-            ),
+            ), normalized: None,
         };
         // This helper is used while selecting a cold target; its result and
         // exact guard are retained by the call-site cache. Database memo hits
@@ -407,7 +453,7 @@ impl RunMachine {
             },
             definition,
             arguments,
-            selection,
+            selection, normalized: None,
         };
         let (selected, _guard) = match self.nominal_member(db, key, Some(runtime)) {
             QueryPoll::Ready(Ok(value)) => value,
@@ -682,8 +728,19 @@ impl RunMachine {
             context,
             source_arguments,
         );
-        let bound = if let Some(bound) = self.nominal.call_bindings.get(&binding_key) {
-            Arc::clone(bound)
+        // A reached inference root's demand-driven publication supersedes the
+        // guard a retained binding captured; the binding is re-derived from the
+        // (re-executed) source queries instead of being trusted or refused.
+        let retained = match self.nominal.call_bindings.get(&binding_key) {
+            Some(bound) => match bound.require_current(db) {
+                Ok(()) => Some(Arc::clone(bound)),
+                Err(error) if error.prepared_input_change.is_some() => None,
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            },
+            None => None,
+        };
+        let bound = if let Some(bound) = retained {
+            bound
         } else {
             let bound =
                 match self.bind_constructor_application(db, &target, binding_key.3.as_deref()) {

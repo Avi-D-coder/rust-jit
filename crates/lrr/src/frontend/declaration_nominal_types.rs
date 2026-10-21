@@ -319,15 +319,27 @@ impl SchemaNames<'_> {
         if self.schema.scope.owner.is_some() {
             return self.current_query(db, sources, query);
         }
-        let term = match self.actual_field_type(db, sources, field) {
-            QueryPoll::Ready(Ok(Some(term))) => term,
-            QueryPoll::Ready(Ok(None)) => {
-                return QueryPoll::Ready(Ok(SchemaTypeName::deferred()));
-            }
-            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        // A field the pinned solver already normalized under these arguments
+        // needs neither the declared term nor this module's normalizer.
+        let solved = self.normalized.and_then(|normalized| {
+            self.schema.variants.iter().enumerate().find_map(|(variant, recipe)| {
+                let field_index = recipe.fields.iter().position(|actual| actual == field)?;
+                normalized.iter().find(|(v, f, _)| *v as usize == variant && *f as usize == field_index)
+                    .map(|(_, _, term)| term.clone())
+            })
+        });
+        let (term, normalize) = match solved {
+            Some(term) => (term, false),
+            None => match self.actual_field_type(db, sources, field) {
+                QueryPoll::Ready(Ok(Some(term))) => (term, true),
+                QueryPoll::Ready(Ok(None)) => {
+                    return QueryPoll::Ready(Ok(SchemaTypeName::deferred()));
+                }
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            },
         };
-        let term = if crate::frontend::associated_types::contains_projection(&term) {
+        let term = if normalize && crate::frontend::associated_types::contains_projection(&term) {
             match crate::frontend::associated_types::normalize_template(
                 db, self.graph, sources, members, &term, bindings,
             ) {

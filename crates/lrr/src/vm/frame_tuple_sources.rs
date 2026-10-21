@@ -63,7 +63,7 @@ impl Frame {
             ConstructionResult::Observed(_) => {
                 std::borrow::Cow::Owned(store.observed_construction_key(active.guard)?)
             }
-            ConstructionResult::PendingNominal => return Ok(false),
+            ConstructionResult::PendingNominal | ConstructionResult::OpenNominal => return Ok(false),
         };
         match key.as_ref() {
             TypeKey::Tuple(members) if members.len() == operands.len() => {

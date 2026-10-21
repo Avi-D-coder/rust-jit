@@ -312,7 +312,7 @@ impl Database {
         key: &QueryKey,
         expected: Digest,
     ) -> QueryPoll<PreparedInputGuard> {
-        match self.capture_input_closure(key, expected) {
+        let captured = match self.capture_input_closure(key, expected) {
             Ok(guard) => QueryPoll::Ready(Ok(guard)),
             Err(CaptureFailure::Invalid(error)) => QueryPoll::Ready(Err(error)),
             Err(CaptureFailure::Missing {
@@ -323,7 +323,21 @@ impl Database {
                 // rechecks the root and every edge before returning any guard.
                 self.repair_input_closure(provider, key, expected, missing, missing_expected)
             }
+        };
+        // A provider that embeds this guard in its value depends on exactly the
+        // inputs the guard attests, not only on the child query answers they
+        // produced. Without the direct stamps, a child that is recomputed after
+        // demand-driven publication (a scope certificate selection gaining a
+        // candidate seal) returns an identical answer, cuts the revalidation off,
+        // and leaves the embedded guard attached to superseded stamps. Recording
+        // them makes the embedding provider re-execute and capture a current
+        // guard; its answer stays identical.
+        if let QueryPoll::Ready(Ok(guard)) = &captured {
+            for stamp in &guard.inputs {
+                self.record(stamp.clone());
+            }
         }
+        captured
     }
     fn repair_input_closure(
         &mut self,

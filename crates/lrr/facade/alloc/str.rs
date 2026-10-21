@@ -6,6 +6,22 @@ pub use core::str::{
 use crate::string::String;
 
 impl str {
+    // The bytes of a `&str` as a byte slice. A `&str` is a range of the
+    // interpreter's immutable string pool and a `&[u8]` is a window of byte
+    // cells, so the slice is a copy held for the rest of the run (like the
+    // string pool itself); the text is immutable, so the copy is never
+    // observably different from the original.
+    pub fn as_bytes(&self) -> &[u8] {
+        let n: usize = core::intrinsics::lrr_str_len(self);
+        let mut bytes: crate::vec::Vec<u8> = crate::vec::Vec::new();
+        let mut i: usize = 0;
+        while i < n {
+            bytes.push(core::intrinsics::lrr_str_byte(self, i));
+            i += 1;
+        }
+        let kept = core::intrinsics::lrr_box_leak(crate::boxed::Box::new(bytes));
+        core::intrinsics::lrr_vec_as_slice(kept)
+    }
     pub fn to_uppercase(&self) -> String {
         let mut out = String::new();
         let mut it = self.chars();

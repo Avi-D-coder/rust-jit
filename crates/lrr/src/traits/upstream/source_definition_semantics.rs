@@ -65,6 +65,8 @@ pub(crate) enum SourceAliasDomain {
     ProjectionConst,
     InherentType,
     InherentConst,
+    /// An associated type of a trait impl.
+    TraitImplType,
 }
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 #[repr(u32)]
@@ -419,6 +421,13 @@ impl PreparedSourceDefinitionSemantics {
                 } else {
                     SourceAliasDomain::InherentConst
                 }),
+                // A trait impl's associated type is a `ProjectionTy` alias term
+                // (pinned `AliasTyKind::new_from_def_id`): normalization through
+                // the impl checks its argument layout. Its constants stay
+                // outside the type-member producer.
+                Some(ImplTraitIdentityResult::Trait(_)) if role == Role::TypeAlias => {
+                    Known(SourceAliasDomain::TraitImplType)
+                }
                 Some(ImplTraitIdentityResult::Trait(_)) => NotApplicable,
                 _ => Pending(P::Parent),
             },

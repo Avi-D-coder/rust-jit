@@ -157,10 +157,20 @@ impl WrittenType {
     }
     /// The same declared Type substitution for pure source consumers.
     pub(crate) fn source_with(&self, parameter: &dyn Fn(u32) -> Option<TyTerm>) -> Option<TyTerm> {
+        self.source_with_holes(parameter, &mut || None)
+    }
+    /// As `source_with`, with each `Infer` leaf (in preorder) standing for the
+    /// next term `hole` supplies: an explicit argument's `_` occurrence keeps
+    /// its own source-owned inference variable. `None` while a leaf has none.
+    pub(crate) fn source_with_holes(
+        &self,
+        parameter: &dyn Fn(u32) -> Option<TyTerm>,
+        hole: &mut dyn FnMut() -> Option<TyTerm>,
+    ) -> Option<TyTerm> {
         Some(match self {
-            Self::Frame { definition, template } => template.source_with(&|ordinal| {
+            Self::Frame { definition, template } => template.source_with_holes(&|ordinal| {
                 Some(TyTerm::Param(crate::traits::term::ParamKey { definition: *definition, ordinal }))
-            })?,
+            }, hole)?,
             Self::Primitive(primitive) => TyTerm::Primitive(*primitive),
             Self::Nominal(source) => source.source().clone(),
             Self::Tuple(members) if members.is_empty() => {
@@ -169,11 +179,11 @@ impl WrittenType {
             Self::Tuple(members) => TyTerm::Tuple(
                 members
                     .iter()
-                    .map(|member| member.source_with(parameter))
+                    .map(|member| member.source_with_holes(parameter, hole))
                     .collect::<Option<Vec<_>>>()?,
             ),
             Self::Array(element, len) => TyTerm::Array(
-                Box::new(element.source_with(parameter)?),
+                Box::new(element.source_with_holes(parameter, hole)?),
                 ConstTerm::Value(u64::from(*len)),
             ),
             Self::Generic {
@@ -185,13 +195,15 @@ impl WrittenType {
                 written
                     .iter()
                     .map(|arg| {
-                        arg.source_with(parameter)
+                        arg.source_with_holes(parameter, hole)
                             .map(crate::traits::term::GenericArg::Type)
                     })
                     .collect::<Option<Vec<_>>>()?,
             ),
             Self::Str => TyTerm::Str,
-            Self::Slice(element) => TyTerm::Slice(Box::new(element.source_with(parameter)?)),
+            Self::Slice(element) => {
+                TyTerm::Slice(Box::new(element.source_with_holes(parameter, hole)?))
+            }
             Self::Ref {
                 region,
                 mutable,
@@ -199,20 +211,21 @@ impl WrittenType {
             } => TyTerm::Ref(
                 region.clone(),
                 *mutable,
-                Box::new(target.source_with(parameter)?),
+                Box::new(target.source_with_holes(parameter, hole)?),
             ),
-            Self::Infer => return None,
+            Self::Infer => return hole(),
             Self::Dyn(schema) => TyTerm::Dyn(*schema),
             Self::Parameter(index) => parameter(*index)?,
-            Self::Ptr { mutable, target } => {
-                crate::traits::pointer_terms::raw_pointer(*mutable, target.source_with(parameter)?)
-            }
+            Self::Ptr { mutable, target } => crate::traits::pointer_terms::raw_pointer(
+                *mutable,
+                target.source_with_holes(parameter, hole)?,
+            ),
             Self::FnPtr { params, result } => crate::traits::pointer_terms::fn_pointer(
                 params
                     .iter()
-                    .map(|param| param.source_with(parameter))
+                    .map(|param| param.source_with_holes(parameter, hole))
                     .collect::<Option<Vec<_>>>()?,
-                result.source_with(parameter)?,
+                result.source_with_holes(parameter, hole)?,
             ),
         })
     }

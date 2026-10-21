@@ -1,6 +1,6 @@
 //! One resumable publication for every pattern owner. Search already selected
 //! these bindings; publication never matches, parses or asks a source query.
-use super::pattern_engine_frame::owning_read;
+use super::pattern_engine_frame::{owning_read, window_read_mode};
 use super::*;
 use crate::{
     core::digest::Digest,
@@ -8,8 +8,20 @@ use crate::{
         IntrinsicRead,
         aggregate_copy::{AggregateCopy, CopyProgress},
     },
-    vm::pattern::{DefaultBindingMode, matcher::Staged},
+    vm::pattern::{
+        DefaultBindingMode,
+        matcher::{Staged, copy_place, place_fault},
+    },
 };
+
+/// A Copy sub-array window being replicated into a fresh `[T; K]`, one
+/// element per advance (an aggregate element through its resumable Copy).
+struct SubarrayWork {
+    build: crate::runtime::cell::subarray::SubarrayBuild,
+    len: u32,
+    next: u32,
+    copy: Option<(CellId, AggregateCopy)>,
+}
 
 pub(super) struct Publication {
     owner: NodeId,
@@ -22,6 +34,7 @@ pub(super) struct Publication {
     preparing: bool,
     next: usize,
     copy: Option<(CellId, AggregateCopy)>,
+    sub: Option<SubarrayWork>,
     transfers: Vec<Option<TicketId>>,
 }
 
@@ -45,8 +58,79 @@ impl Frame {
             preparing: true,
             next: 0,
             copy: None,
+            sub: None,
             transfers,
         })
+    }
+    /// One step of a by-value sub-array binding's preparation. Non-Copy
+    /// elements move at publication instead, like any non-Copy value binding.
+    fn prepare_subarray(
+        &mut self,
+        publication: &mut Publication,
+        store: &mut GuestStore,
+    ) -> Result<(), Diagnostic> {
+        let index = publication.next;
+        let place = copy_place(&publication.staged[index].place);
+        let Some(work) = publication.sub.as_mut() else {
+            let mode = window_read_mode(store, &place)?
+                .ok_or_else(|| invalid("sub-array preparation lacks its window"))?;
+            if mode == IntrinsicRead::Move {
+                publication.next = index
+                    .checked_add(1)
+                    .ok_or_else(|| invalid("pattern preparation cursor overflow"))?;
+                return Ok(());
+            }
+            let len = place
+                .subarray_len()
+                .ok_or_else(|| invalid("sub-array preparation lacks its window"))?;
+            publication.sub = Some(SubarrayWork {
+                build: store.begin_subarray_build(&place).map_err(place_fault)?,
+                len,
+                next: 0,
+                copy: None,
+            });
+            return Ok(());
+        };
+        if work.next == work.len {
+            let work = publication
+                .sub
+                .take()
+                .ok_or_else(|| invalid("sub-array preparation work absent"))?;
+            publication.transfers[index] = Some(store.subarray_finish(work.build)?);
+            publication.next = index
+                .checked_add(1)
+                .ok_or_else(|| invalid("pattern preparation cursor overflow"))?;
+            return Ok(());
+        }
+        let element = store
+            .project_index(&place, ValueRepr::unsigned(TypeId(13), u64::from(work.next))?)
+            .map_err(place_fault)?;
+        let (cell, mode) = owning_read(store, &element)?;
+        if let Some((expected, copy)) = &mut work.copy {
+            if cell != *expected || mode != IntrinsicRead::CopyAggregate {
+                return Err(invalid("sub-array aggregate Copy source changed"));
+            }
+            if let CopyProgress::Complete(ticket) = self.advance_copy_work(copy, store)? {
+                store.subarray_push(&work.build, work.next, ticket)?;
+                work.copy = None;
+                work.next += 1;
+            }
+            return Ok(());
+        }
+        match mode {
+            IntrinsicRead::CopyScalar => {
+                let ticket = store.copy_from(cell)?;
+                store.subarray_push(&work.build, work.next, ticket)?;
+                work.next += 1;
+            }
+            IntrinsicRead::CopyAggregate => {
+                work.copy = Some((cell, AggregateCopy::begin(store, cell)?));
+            }
+            IntrinsicRead::Move => {
+                return Err(invalid("sub-array elements disagree on their read mode"));
+            }
+        }
+        Ok(())
     }
     pub(super) fn advance_pattern_publication(
         &mut self,
@@ -68,8 +152,19 @@ impl Frame {
             return Err(invalid("pattern transfer preparation count changed"));
         }
         if publication.preparing {
+            if publication
+                .staged
+                .get(publication.next)
+                .is_some_and(|staged| {
+                    staged.mode == DefaultBindingMode::Move
+                        && staged.place.subarray_len().is_some()
+                })
+            {
+                self.prepare_subarray(publication, store)?;
+                return Ok(false);
+            }
             let Some(staged) = publication.staged.get(publication.next) else {
-                if publication.copy.is_some() {
+                if publication.copy.is_some() || publication.sub.is_some() {
                     return Err(invalid("pattern preparation ended with active Copy work"));
                 }
                 publication.preparing = false;

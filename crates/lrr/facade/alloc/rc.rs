@@ -53,10 +53,7 @@ impl<T> Rc<T> {
     }
     pub fn get_mut(this: &mut Rc<T>) -> Option<&mut T> {
         if this.ptr.strong.get() == 1 && this.ptr.weak.get() == 0 {
-            match this.ptr.value.lrr_get_mut() {
-                Option::Some(value) => Option::Some(value),
-                Option::None => Option::None,
-            }
+            this.ptr.value.lrr_get_mut().as_mut()
         } else {
             Option::None
         }
@@ -231,3 +228,5 @@ impl<T: ?Sized + core::hash::Hash> core::hash::Hash for Rc<T> {
         core::hash::Hash::hash(&**self, state)
     }
 }
+
+impl<T> core::clone::Share for Rc<T> {}

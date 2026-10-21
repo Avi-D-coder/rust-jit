@@ -28,3 +28,13 @@ impl<A: Clone, B: Clone, C: Clone, D: Clone> Clone for (A, B, C, D) {
         (self.0.clone(), self.1.clone(), self.2.clone(), self.3.clone())
     }
 }
+
+// Pinned library/core/src/clone.rs:`Share` (unstable `share_trait`): a `Clone`
+// whose clone is another alias of the same underlying resource. `share` is
+// final in core and defined through `Clone::clone`.
+pub trait Share: Clone {
+    fn share(&self) -> Self {
+        Clone::clone(self)
+    }
+}
+impl<T: ?Sized> Share for &T {}

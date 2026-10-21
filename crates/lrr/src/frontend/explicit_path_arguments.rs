@@ -1,7 +1,7 @@
 //! Indexed path argument selection shared by constructor constraints, record
 //! preparation and ordinary call entry. Syntax is retained by SourceConstraints;
 //! named leaves use the existing entered Type service, never displayed text.
-use super::{ExplicitType, fault, select_argument};
+use super::{ExplicitType, HolePolicy, fault, select_argument_with};
 use crate::{
     core::diagnostic::Diagnostic,
     db::{
@@ -52,6 +52,17 @@ pub(crate) fn select_path_arguments(
     owner: &Arc<PreparedSourceLocalPlan>,
     key: &PcKey,
     position: PathArgumentPosition,
+) -> QueryPoll<Option<SelectedPathArguments>> {
+    select_path_arguments_with(db, owner, key, position, HolePolicy::Reject)
+}
+/// As `select_path_arguments`, for a consumer that closes nested `_` holes
+/// through pinned inference (`HolePolicy::Retain`).
+pub(crate) fn select_path_arguments_with(
+    db: &mut Database,
+    owner: &Arc<PreparedSourceLocalPlan>,
+    key: &PcKey,
+    position: PathArgumentPosition,
+    holes: HolePolicy,
 ) -> QueryPoll<Option<SelectedPathArguments>> {
     ready!(owner.require_current(db));
     let facts = ready!(db.fetch(
@@ -126,7 +137,7 @@ pub(crate) fn select_path_arguments(
             ),
         };
         let site = checked!(source.index().pc(*node, Phase::Entry));
-        let selected = ready!(select_argument(db, owner, key, &site, range));
+        let selected = ready!(select_argument_with(db, owner, key, &site, range, holes));
         result.arguments.push(match selected {
             Some(selected) => {
                 result.guards.extend(selected.guards);

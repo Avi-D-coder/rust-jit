@@ -65,6 +65,18 @@ pub mod f64 {
         MIN_EXP, MIN_POSITIVE, NAN, NEG_INFINITY, RADIX,
     };
 }
+// `std::alloc`: the allocation API (real std re-exports `alloc::alloc`).
+pub mod alloc {
+    pub use alloc_crate::alloc::{alloc, alloc_zeroed, dealloc, handle_alloc_error, realloc};
+    pub use alloc_crate::alloc::{AllocError, Allocator, Global, GlobalAlloc, Layout, LayoutError, System};
+}
+// `std::os::raw`: the C type aliases (real std re-exports `core::ffi`).
+pub mod os {
+    pub mod raw {
+        pub use core::ffi::{c_char, c_double, c_float, c_int, c_long, c_longlong, c_schar, c_short};
+        pub use core::ffi::{c_uchar, c_uint, c_ulong, c_ulonglong, c_ushort, c_void};
+    }
+}
 pub mod task {
     pub use core::task::{Context, Poll, RawWaker, Waker};
 }

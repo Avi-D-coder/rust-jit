@@ -168,7 +168,7 @@ impl RunMachine {
             },
             definition: *definition,
             arguments: arguments.clone(),
-            selection: NominalMemberSelection::Variant(template.name.clone()),
+            selection: NominalMemberSelection::Variant(template.name.clone()), normalized: None,
         };
         let (member, guard) = match self.nominal_member(db, key.clone(), Some(ty)) {
             QueryPoll::Ready(Ok(member)) => member,

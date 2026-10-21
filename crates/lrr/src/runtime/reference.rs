@@ -93,7 +93,13 @@ impl ReferenceRecord {
         slice: TypeId,
         len: u32,
     ) -> Result<Self, Diagnostic> {
-        let location = self.location()?;
+        // A sized sub-array reference (`&[T; K]` of an array pattern's
+        // `rest @ ..`) already names a window of its array: the slice view
+        // keeps exactly that window.
+        let (location, start, len) = match &self.lease {
+            ReferenceLease::Elements(elements) => (&elements.base, elements.start, elements.len),
+            _ => (self.location()?, 0, len),
+        };
         let mut enclosing = Vec::new();
         enclosing
             .try_reserve_exact(location.enclosing.len())
@@ -117,7 +123,7 @@ impl ReferenceRecord {
                     final_cell: location.final_cell,
                     source_projections,
                 },
-                start: 0,
+                start,
                 len,
             }),
         })

@@ -166,7 +166,7 @@ pub(crate) fn prepare_nominal(
         .as_ref()
         .expect("checked actual source catalog")
         .root();
-    let root_crate = root.outline.crate_key;
+
     let configuration_key = SolverConfigurationKey::from_source(root);
     let mut result = PreparedNominalVariances {
         key: key.clone(),
@@ -203,10 +203,6 @@ pub(crate) fn prepare_nominal(
         if plan.pending().is_some() {
             result.fields.push(query);
             pending!(VariancePending::Fields);
-        }
-        if plan.schema().scope.crate_key != root_crate {
-            result.fields.push(query);
-            pending!(VariancePending::Foreign);
         }
         let dependencies = match field_dependencies(plan) {
             Ok(dependencies) => dependencies,
@@ -279,9 +275,6 @@ pub(crate) fn prepare_nominal(
                     .bindings()
                     .map_err(|_| VariancePending::Fields)?
                     .definitions[&plan.key().definition];
-                if !<DefinitionId as ty::inherent::DefId<Cx<'_>>>::is_local(id) {
-                    return Err(VariancePending::Foreign);
-                }
                 if !matches!(
                     plan.kind(),
                     AdtKind::Struct | AdtKind::Enum | AdtKind::Union

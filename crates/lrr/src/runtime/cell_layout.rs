@@ -63,6 +63,12 @@ pub(crate) struct DeclarationFacts {
     /// Discriminant value per variant (enums).
     pub discriminants: Vec<i128>,
     pub library: Option<LibraryLayout>,
+    /// The declaration's field Types cannot be stated generically (a field
+    /// projects through a parameter: `ManuallyDrop<T::Item>`). Every instance's
+    /// field Types are then installed by the coordinator from the pinned
+    /// owner's normalization (`install_layout_instance`); `variants` only
+    /// carries the declaration's shape.
+    pub instance_supplied: bool,
 }
 
 /// A nominal declaration whose facts are needed.
@@ -70,6 +76,8 @@ pub(crate) struct DeclarationFacts {
 pub(crate) struct LayoutDemand {
     pub identity: crate::core::digest::Digest,
     pub definition: DefKey,
+    /// The nominal descriptor whose layout asked.
+    pub instance: TypeId,
 }
 
 #[derive(Default)]
@@ -97,6 +105,16 @@ impl GuestStore {
         facts: DeclarationFacts,
     ) {
         self.layouts.declarations.insert(identity, Arc::new(facts));
+    }
+
+    /// Whether the declaration's facts are installed.
+    pub(crate) fn layout_declaration_installed(&self, identity: crate::core::digest::Digest) -> bool {
+        self.layouts.declarations.contains_key(&identity)
+    }
+    /// Install the instantiated field Types of one nominal descriptor whose
+    /// declaration is `instance_supplied`.
+    pub(crate) fn install_layout_instance(&mut self, ty: TypeId, variants: Vec<Vec<TypeId>>) {
+        self.layouts.instances.insert(ty, Arc::new(variants));
     }
 
     /// Whether a pointer to `target` is a fat pointer.
@@ -134,6 +152,7 @@ impl GuestStore {
                         return Ok(Some(LayoutDemand {
                             identity: *identity,
                             definition: definition.clone(),
+                            instance: ty,
                         }));
                     };
                     // Library types stated directly never look at their fields.
@@ -142,6 +161,13 @@ impl GuestStore {
                         Some(LibraryShape::Pointer { .. } | LibraryShape::Fixed { .. })
                     ) {
                         continue;
+                    }
+                    if declaration.instance_supplied && !self.layouts.instances.contains_key(&ty) {
+                        return Ok(Some(LayoutDemand {
+                            identity: *identity,
+                            definition: definition.clone(),
+                            instance: ty,
+                        }));
                     }
                     if !self.layouts.instances.contains_key(&ty) {
                         let mut variants = Vec::with_capacity(declaration.variants.len());

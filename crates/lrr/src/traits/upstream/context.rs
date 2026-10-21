@@ -85,6 +85,7 @@ pub(crate) struct StateRef<'cx, F: SourceFacts<'cx>> {
     generic_parameters: &'cx InternPool<'cx, Vec<GenericParameter<'cx, F>>>,
     adt_field_lists: &'cx InternPool<'cx, Vec<super::model::AdtField<'cx,F>>>,
     adt_variant_lists: &'cx InternPool<'cx, Vec<super::model::AdtVariant<'cx,F>>>,
+    variance_lists: &'cx InternPool<'cx, Vec<rustc_type_ir::Variance>>,
     symbol_strings: &'cx InternPool<'cx, String>,
 }
 impl<'cx, F: SourceFacts<'cx>> StateRef<'cx, F> {
@@ -126,6 +127,7 @@ pub(crate) struct State<'cx, F: SourceFacts<'cx>> {
     generic_parameters: InternPool<'cx, Vec<GenericParameter<'cx, F>>>,
     adt_field_lists: InternPool<'cx, Vec<super::model::AdtField<'cx,F>>>,
     adt_variant_lists: InternPool<'cx, Vec<super::model::AdtVariant<'cx,F>>>,
+    variance_lists: InternPool<'cx, Vec<rustc_type_ir::Variance>>,
     symbol_strings: InternPool<'cx, String>,
 }
 impl<'cx, F: SourceFacts<'cx>> State<'cx, F> {
@@ -160,6 +162,7 @@ impl<'cx, F: SourceFacts<'cx>> State<'cx, F> {
             generic_parameters: InternPool::default(),
             adt_field_lists: InternPool::default(),
             adt_variant_lists: InternPool::default(),
+            variance_lists: InternPool::default(),
             symbol_strings: InternPool::default(),
         }
     }
@@ -201,6 +204,7 @@ impl<'cx, F: SourceFacts<'cx>> State<'cx, F> {
             generic_parameters: &self.generic_parameters,
             adt_field_lists: &self.adt_field_lists,
             adt_variant_lists: &self.adt_variant_lists,
+            variance_lists: &self.variance_lists,
             symbol_strings: &self.symbol_strings,
         }
     }
@@ -1021,6 +1025,9 @@ impl<'cx,F:SourceFacts<'cx>> Context<'cx,F> {
     }
     pub(super) fn retain_adt_variants(self, variants:Vec<super::model::AdtVariant<'cx,F>>)->&'cx [super::model::AdtVariant<'cx,F>] {
         self.state.adt_variant_lists.intern(variants).value().as_slice()
+    }
+    pub(super) fn retain_variances(self, variances:Vec<rustc_type_ir::Variance>)->&'cx [rustc_type_ir::Variance] {
+        self.state.variance_lists.intern(variances).value().as_slice()
     }
     pub(super) fn retain_adt_symbol(self, text:&str)->super::model::Symbol<'cx> {
         super::model::Symbol(self.state.symbol_strings.intern(text.to_owned()).value().as_str())

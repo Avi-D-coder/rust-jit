@@ -170,6 +170,9 @@ impl<'a> Component<'a> {
                 }
             }
             let step = match *written {
+                // A `rest @ ..` binds a sequence of the matched Type's own
+                // element Type: only the references peeled above separate them.
+                PatternStep::Rest => continue,
                 PatternStep::Deref => Step::Deref,
                 PatternStep::Field(position) => Step::Field(position),
                 PatternStep::Element => Step::Element,

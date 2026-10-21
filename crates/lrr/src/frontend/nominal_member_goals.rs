@@ -28,6 +28,10 @@ pub struct NominalMemberKey {
     pub(crate) definition: Digest,
     pub(crate) arguments: Vec<GenericArg>,
     pub(crate) selection: NominalMemberSelection,
+    /// Declared field Types the pinned solver already normalized under exactly
+    /// these arguments: `(variant, field, instantiated normalized Type)`. The
+    /// binder reads them instead of normalizing a projection field itself.
+    pub(crate) normalized: Option<Vec<(u32, u32, crate::traits::term::TyTerm)>>,
 }
 impl NominalMemberKey {
     pub(crate) fn heap_bytes(&self) -> Option<usize> {
@@ -42,6 +46,9 @@ impl NominalMemberKey {
         }
         if let NominalMemberSelection::Variant(Some(name)) = &self.selection {
             bytes = bytes.checked_add(name.capacity())?;
+        }
+        for (_, _, term) in self.normalized.iter().flatten() {
+            bytes = bytes.checked_add(term.heap_bytes()?)?;
         }
         Some(bytes)
     }
@@ -63,6 +70,13 @@ impl StableEncode for NominalMemberKey {
                 e.u32(*field);
             }
         }
+        e.option(&self.normalized, |e, fields| {
+            e.sequence(fields, |e, (variant, field, term)| {
+                e.u32(*variant);
+                e.u32(*field);
+                e.record(term);
+            })
+        });
     }
 }
 #[derive(Debug, Clone)]
@@ -133,11 +147,15 @@ impl StableEncode for PreparedNominalMember {
 fn fault(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-TYPE-SCHEMA", message.into())
 }
+const PENDING_PROJECTION: &str =
+    "nominal member requires further source Type argument/projection binding";
 fn pending() -> Diagnostic {
-    Diagnostic::new(
-        "LRR-E-UNSUPPORTED",
-        "nominal member requires further source Type argument/projection binding".into(),
-    )
+    Diagnostic::new("LRR-E-UNSUPPORTED", PENDING_PROJECTION.into())
+}
+/// The binder could not normalize a projection-typed declared field under
+/// these arguments (the pinned solver's normalization is the answer instead).
+pub(crate) fn is_pending_projection(error: &Diagnostic) -> bool {
+    error.code == "LRR-E-UNSUPPORTED" && error.message == PENDING_PROJECTION
 }
 macro_rules! ready {
     ($value:expr) => {
@@ -187,6 +205,7 @@ pub(crate) fn prepare(
         &sources,
         schema
     ));
+    let names = names.with_normalized_fields(key.normalized.as_deref());
     let members = checked!(completed.member_index());
     // The query identity preserves all source arguments. This existing binder
     // currently consumes Type parameters only; const support remains pending.

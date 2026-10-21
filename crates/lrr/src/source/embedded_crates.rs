@@ -91,6 +91,7 @@ pub fn standard_facade_crates(profile: &ProfileIdentity) -> Vec<EmbeddedCrate> {
                 facade_file!(["num"], "core/num.rs"),
                 facade_file!(["ops"], "core/ops.rs"),
                 facade_file!(["ops_impls"], "core/ops_impls.rs"),
+                facade_file!(["range_impls"], "core/range_impls.rs"),
                 facade_file!(["option"], "core/option.rs"),
                 facade_file!(["panic"], "core/panic.rs"),
                 facade_file!(["panicking"], "core/panicking.rs"),
@@ -111,6 +112,7 @@ pub fn standard_facade_crates(profile: &ProfileIdentity) -> Vec<EmbeddedCrate> {
             "alloc",
             vec![
                 facade_file!([], "alloc/lib.rs"),
+                facade_file!(["alloc"], "alloc/alloc.rs"),
                 facade_file!(["borrow"], "alloc/borrow.rs"),
                 facade_file!(["boxed"], "alloc/boxed.rs"),
                 facade_file!(["collections"], "alloc/collections.rs"),

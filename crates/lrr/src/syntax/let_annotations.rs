@@ -38,8 +38,10 @@ pub(crate) enum AnnotationShape {
         mutable: bool,
         target: Box<AnnotationShape>,
     },
-    /// `_` inside a written structure.
-    Infer,
+    /// `_` inside a written structure. The canonical indexed Syntax node of
+    /// this exact `InferType` occurrence is its source identity (`None` only
+    /// if the body index holds no node for it).
+    Infer(Option<NodeId>),
     /// `dyn Trait`: the principal trait `PathType`'s canonical Syntax node.
     Dyn(NodeId),
     /// `*const T` / `*mut T` (E-R5-008).
@@ -53,6 +55,37 @@ pub(crate) enum AnnotationShape {
         params: Vec<AnnotationShape>,
         result: Box<AnnotationShape>,
     },
+}
+impl AnnotationShape {
+    /// The source identity of every `_` occurrence, in preorder. This is the
+    /// order `WrittenType::Infer` leaves appear in the selected written Type.
+    /// `None` if any occurrence has no indexed node.
+    pub(crate) fn holes(&self) -> Option<Vec<NodeId>> {
+        fn walk(shape: &AnnotationShape, out: &mut Vec<NodeId>) -> bool {
+            match shape {
+                AnnotationShape::Infer(node) => match node {
+                    Some(node) => {
+                        out.push(*node);
+                        true
+                    }
+                    None => false,
+                },
+                AnnotationShape::Leaf(_) | AnnotationShape::Dyn(_) => true,
+                AnnotationShape::Tuple(members) | AnnotationShape::Generic(_, members) => {
+                    members.iter().all(|member| walk(member, out))
+                }
+                AnnotationShape::Array(inner, _) | AnnotationShape::Slice(inner) => walk(inner, out),
+                AnnotationShape::Ref { target, .. } | AnnotationShape::Ptr { target, .. } => {
+                    walk(target, out)
+                }
+                AnnotationShape::FnPtr { params, result } => {
+                    params.iter().all(|param| walk(param, out)) && walk(result, out)
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(self, &mut out).then_some(out)
+    }
 }
 pub(crate) struct LetAnnotationSite {
     pub(crate) range: SourceRange,
@@ -113,7 +146,15 @@ impl ParsedFile {
         index: &BodyIndex,
         path: &ast::PathType,
     ) -> Result<Option<NodeId>, Diagnostic> {
-        let absolute = range(path.syntax().text_range());
+        Self::syntax_type_node(body, index, path.syntax())
+    }
+    /// The canonical indexed Syntax node of any written Type occurrence.
+    fn syntax_type_node(
+        body: &BodyHandle,
+        index: &BodyIndex,
+        syntax: &ra_ap_syntax::SyntaxNode,
+    ) -> Result<Option<NodeId>, Diagnostic> {
+        let absolute = range(syntax.text_range());
         let relative = SourceRange {
             start: absolute
                 .start
@@ -321,7 +362,9 @@ impl ParsedFile {
                     result: Box::new(result),
                 }
             }
-            ast::Type::InferType(_) => AnnotationShape::Infer,
+            ast::Type::InferType(infer) => {
+                AnnotationShape::Infer(Self::syntax_type_node(body, index, infer.syntax())?)
+            }
             ast::Type::DynTraitType(object) => {
                 // The principal trait: the first trait bound; auto-trait and
                 // region bounds add no runtime structure.

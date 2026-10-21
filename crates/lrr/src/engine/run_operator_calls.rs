@@ -25,6 +25,80 @@ pub(super) struct OperatorMethod {
 }
 
 impl RunMachine {
+    /// The boundary types of an operator-shaped call's formed arguments (the
+    /// self reference an overloaded operator or call forms, the operands, an
+    /// argument tuple) and the closed reference evidence their closed
+    /// reference parameters consume. Shared by every call the dispatcher
+    /// forms arguments for: operators and overloaded value calls.
+    pub(super) fn formed_call_arguments(
+        &self,
+        hints: &[Option<ArgumentHint>],
+        formed: &[crate::vm::frame::operator_calls_frame::OperatorArgument],
+    ) -> Result<(Vec<ArgumentType>, Vec<Option<ClosedReferenceArgument>>), Diagnostic> {
+        let arguments: Vec<_> = formed
+            .iter()
+            .map(|argument| {
+                let view = self.frame.bound_view(&argument.source, &self.store);
+                // A view naming a declared `dyn Trait` position crosses the
+                // boundary as the value's concrete runtime Type.
+                let source = if view.contains_dyn() {
+                    self.store
+                        .descriptor_source_term(argument.descriptor)
+                        .filter(|term| !term.contains_dyn())
+                        .unwrap_or(view)
+                } else {
+                    view
+                };
+                ArgumentType {
+                    source,
+                    descriptor: argument.descriptor,
+                }
+            })
+            .collect();
+        // Only closed reference parameters consume their actual evidence.
+        let mut references = Vec::new();
+        if arguments
+            .iter()
+            .any(|argument| matches!(argument.source, crate::traits::term::TyTerm::Ref(..)))
+        {
+            for (ordinal, argument) in formed.iter().enumerate() {
+                let closed = hints[ordinal]
+                    .as_ref()
+                    .is_some_and(|hint| hint.closed_reference.is_some());
+                references.push(
+                    if closed && matches!(argument.source, crate::traits::term::TyTerm::Ref(..)) {
+                        Some(match argument.slot {
+                            // An operand slot retains its reference's source
+                            // view; one bound by a pattern from a tuple of
+                            // references may not, and then the operand's own
+                            // reached type states it, as for a formed reference.
+                            Some(slot)
+                                if self
+                                    .frame
+                                    .source_view_ref(slot)
+                                    .is_ok_and(|view| view.is_some()) =>
+                                ClosedReferenceArgument::capture(
+                                    &self.frame,
+                                    slot,
+                                    &self.store,
+                                )?,
+                            _ => ClosedReferenceArgument::capture_formed(
+                                &self.store,
+                                argument.cell,
+                                &arguments[ordinal].source,
+                            )?,
+                        })
+                    } else {
+                        None
+                    },
+                );
+            }
+        }
+        Ok((arguments, references))
+    }
+}
+
+impl RunMachine {
     pub(super) fn operator_parameter_hints(
         &self,
         db: &mut Database,
@@ -94,6 +168,14 @@ impl RunMachine {
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             }
         }
+        // A call's callee value that takes its own `Fn*` impl is called
+        // through it (rustc's overloaded call): its autoderef walk stops
+        // here, before any `Deref` step.
+        if let Some(callee_type) = ready!(self.frame.pending_callee_deref(&self.store)) {
+            if poll!(self.overloaded_call_kind(db, callee_type)).is_some() {
+                return QueryPoll::Ready(self.frame.decline_coercion(callee_type));
+            }
+        }
         if self.prepared_call.is_some() || self.frame.call_arguments.is_some() {
             return QueryPoll::Ready(Err(call_fault(
                 "an operator method cannot interleave a sealed call",
@@ -140,65 +222,7 @@ impl RunMachine {
         }
         // The method was selected for the operands' reached types: they cross
         // the boundary in their monomorphic views.
-        let arguments: Vec<_> = formed
-            .iter()
-            .map(|argument| {
-                let view = self.frame.bound_view(&argument.source, &self.store);
-                // A view naming a declared `dyn Trait` position crosses the
-                // boundary as the value's concrete runtime Type.
-                let source = if view.contains_dyn() {
-                    self.store
-                        .descriptor_source_term(argument.descriptor)
-                        .filter(|term| !term.contains_dyn())
-                        .unwrap_or(view)
-                } else {
-                    view
-                };
-                ArgumentType {
-                    source,
-                    descriptor: argument.descriptor,
-                }
-            })
-            .collect();
-        // Only closed reference parameters consume their actual evidence.
-        let mut references = Vec::new();
-        if arguments
-            .iter()
-            .any(|argument| matches!(argument.source, crate::traits::term::TyTerm::Ref(..)))
-        {
-            for (ordinal, argument) in formed.iter().enumerate() {
-                let closed = hints[ordinal]
-                    .as_ref()
-                    .is_some_and(|hint| hint.closed_reference.is_some());
-                references.push(
-                    if closed && matches!(argument.source, crate::traits::term::TyTerm::Ref(..)) {
-                        Some(ready!(match argument.slot {
-                            // An operand slot retains its reference's source
-                            // view; one bound by a pattern from a tuple of
-                            // references may not, and then the operand's own
-                            // reached type states it, as for a formed reference.
-                            Some(slot)
-                                if self
-                                    .frame
-                                    .source_view_ref(slot)
-                                    .is_ok_and(|view| view.is_some()) =>
-                                ClosedReferenceArgument::capture(
-                                    &self.frame,
-                                    slot,
-                                    &self.store,
-                                ),
-                            _ => ClosedReferenceArgument::capture_formed(
-                                &self.store,
-                                argument.cell,
-                                &arguments[ordinal].source,
-                            ),
-                        }))
-                    } else {
-                        None
-                    },
-                );
-            }
-        }
+        let (arguments, references) = ready!(self.formed_call_arguments(hints, &formed));
         let result_hint = match demand.destination {
             Some(destination) => ready!(self.call_result_source_hint(destination)),
             None => None,

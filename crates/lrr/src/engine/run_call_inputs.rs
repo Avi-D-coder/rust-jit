@@ -541,67 +541,12 @@ impl RunMachine {
                 "reached input source span belongs to another body",
             ));
         }
-        let caller_environment = self.frame.shared_generic_context();
-        let caller_callable = self
-            .calls
-            .last()
-            .map(|call| Arc::clone(&call.call.callee))
-            .or_else(|| self.root_source.as_ref().map(Arc::clone));
-        let mut caller = CallerSourceContext {
-            body_definition: pc.body.definition,
-            generic_definition: None,
-            signature: None,
-            application: None,
-            substitutions: BTreeMap::new(),
-        };
-        if let Some(environment) = &caller_environment {
-            caller.generic_definition = Some(environment.definition().definition);
-            caller.signature = Some(environment.signature_key());
-            caller.application = environment.application_identity();
-            for parameter in &environment.definition().generics {
-                if parameter.kind != GenericKind::Type {
-                    continue;
-                }
-                let key = ParamKey {
-                    definition: environment.definition().definition,
-                    ordinal: parameter.ordinal,
-                };
-                if let Some(source) = environment.symbolic_binding(key) {
-                    caller.substitutions.insert(key, source.clone());
-                }
-            }
-        }
+        let (caller, caller_environment, caller_callable) = self.reached_caller(&pc);
         // Use actual body/source attachments to turn retained BodySpan into a
         // real source site. Missing joins remain pending, never fabricated spans.
         let caller_source = db.input(&InputKey::DefinitionSource(pc.body.definition));
         let caller_body = db.input(&InputKey::DefinitionBody(pc.body.definition));
-        let source_site = match (caller_source.as_deref(), caller_body.as_deref()) {
-            (Some(InputValue::DefinitionSource(parse)), Some(InputValue::DefinitionBody(body)))
-                if body.key() == pc.body
-                    && span.relative_start <= span.relative_end
-                    && span.relative_end <= body.range.len()
-                    && self
-                        .frame
-                        .runtime_call
-                        .as_ref()
-                        .is_none_or(|call| call.source() == parse) =>
-            {
-                Some(SourceCallSite {
-                    origin: parse.content,
-                    start: body
-                        .range
-                        .start
-                        .checked_add(span.relative_start)
-                        .ok_or_else(|| call_fault("reached input source offset overflow"))?,
-                    end: body
-                        .range
-                        .start
-                        .checked_add(span.relative_end)
-                        .ok_or_else(|| call_fault("reached input source offset overflow"))?,
-                })
-            }
-            _ => None,
-        };
+        let source_site = self.reached_source_site(&span, caller_source.as_deref(), caller_body.as_deref())?;
         let mut scope = StableEncoder::new("lrr/v1/reached-call-input-variables");
         scope.record(&pc);
         scope.option(&identity.1, |e, ordinal| e.u32(*ordinal));
@@ -793,6 +738,89 @@ impl RunMachine {
         };
         packet.require_current(self, db, result_hint)?;
         Ok(packet)
+    }
+}
+
+impl RunMachine {
+    /// The caller side of a reached source root: the executing callable, its
+    /// generic environment and the symbolic substitutions of that environment.
+    /// Shared by every consumer of the pinned root (calls and constructors).
+    pub(super) fn reached_caller(
+        &self,
+        pc: &PcKey,
+    ) -> (
+        CallerSourceContext,
+        Option<Arc<GenericEnv>>,
+        Option<Arc<SourceCallable>>,
+    ) {
+        let caller_environment = self.frame.shared_generic_context();
+        let caller_callable = self
+            .calls
+            .last()
+            .map(|call| Arc::clone(&call.call.callee))
+            .or_else(|| self.root_source.as_ref().map(Arc::clone));
+        let mut caller = CallerSourceContext {
+            body_definition: pc.body.definition,
+            generic_definition: None,
+            signature: None,
+            application: None,
+            substitutions: BTreeMap::new(),
+        };
+        if let Some(environment) = &caller_environment {
+            caller.generic_definition = Some(environment.definition().definition);
+            caller.signature = Some(environment.signature_key());
+            caller.application = environment.application_identity();
+            for parameter in &environment.definition().generics {
+                if parameter.kind != GenericKind::Type {
+                    continue;
+                }
+                let key = ParamKey {
+                    definition: environment.definition().definition,
+                    ordinal: parameter.ordinal,
+                };
+                if let Some(source) = environment.symbolic_binding(key) {
+                    caller.substitutions.insert(key, source.clone());
+                }
+            }
+        }
+        (caller, caller_environment, caller_callable)
+    }
+    /// The real source site of a retained body span, from the actual source and
+    /// body attachments; absent attachments stay pending, never fabricated.
+    pub(super) fn reached_source_site(
+        &self,
+        span: &BodySpan,
+        caller_source: Option<&InputValue>,
+        caller_body: Option<&InputValue>,
+    ) -> Result<Option<SourceCallSite>, Diagnostic> {
+        let pc = self.frame.pc();
+        Ok(        match (caller_source, caller_body) {
+            (Some(InputValue::DefinitionSource(parse)), Some(InputValue::DefinitionBody(body)))
+                if body.key() == pc.body
+                    && span.relative_start <= span.relative_end
+                    && span.relative_end <= body.range.len()
+                    && self
+                        .frame
+                        .runtime_call
+                        .as_ref()
+                        .is_none_or(|call| call.source() == parse) =>
+            {
+                Some(SourceCallSite {
+                    origin: parse.content,
+                    start: body
+                        .range
+                        .start
+                        .checked_add(span.relative_start)
+                        .ok_or_else(|| call_fault("reached input source offset overflow"))?,
+                    end: body
+                        .range
+                        .start
+                        .checked_add(span.relative_end)
+                        .ok_or_else(|| call_fault("reached input source offset overflow"))?,
+                })
+            }
+            _ => None,
+        })
     }
 }
 

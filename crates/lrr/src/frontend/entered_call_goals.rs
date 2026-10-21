@@ -996,7 +996,8 @@ fn written_target(
 
 /// Future pure memo provider. No source capture/publication, body entry, child
 /// BodyStructure, executable argument preparation or normal runtime work occurs.
-/// An actual const/static declaration is a value operand, not a source Fn.
+/// An actual const/static (or unit struct) declaration is a value operand, not
+/// a source Fn.
 /// Its initializer remains cold until the ordinary callee expression executes.
 fn item_value_syntax_guard(
     db: &mut Database,
@@ -1019,7 +1020,14 @@ fn item_value_syntax_guard(
     if range(item.syntax().text_range()) != declaration.context().range {
         return QueryPoll::Ready(Err(fault("value callee actual declaration range differs")));
     }
-    if !matches!(item, ast::Item::Const(_) | ast::Item::Static(_)) {
+    // A unit struct named as the callee is a value of its Type, called through
+    // that Type's `Fn*` impl; a tuple struct's call is its constructor.
+    let value = match &item {
+        ast::Item::Const(_) | ast::Item::Static(_) => true,
+        ast::Item::Struct(declaration) => declaration.field_list().is_none(),
+        _ => false,
+    };
+    if !value {
         return QueryPoll::Ready(Ok(None));
     }
     QueryPoll::Ready(Ok(Some(Arc::new(ready!(db.prepare_input_guard(

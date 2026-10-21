@@ -795,7 +795,12 @@ impl<'a> Component<'a> {
         ) {
             return QueryPoll::Ready(Ok(None));
         }
-        self.selected_constructor(db, callee)
+        // A unit struct or variant named as the callee is a value, not a
+        // constructor: its call is an overloaded call of that value.
+        let found = ready!(self.selected_constructor(db, callee));
+        QueryPoll::Ready(Ok(
+            found.filter(|constructed| constructed.shape != FieldShape::Unit)
+        ))
     }
     /// The constructor a value path selects through the ordinary Value goal.
     fn selected_constructor(
@@ -1049,7 +1054,8 @@ impl<'a> Component<'a> {
                     return QueryPoll::Ready(Err(fault("constraint record arguments differ")));
                 };
                 (!selected.arguments().is_empty()).then(|| selected.arguments().iter().map(|argument|
-                    argument.as_ref().map(|argument| argument.source().clone())).collect::<Vec<_>>())
+                    // An open application is decided at the construction boundary.
+                    argument.as_ref().filter(|argument| !argument.is_open()).map(|argument| argument.source().clone())).collect::<Vec<_>>())
             } else if let Some(selected) = ready!(super::super::explicit_type_arguments::select_path_arguments(
                 db, plan, &entry(self.key, node),
                 super::super::explicit_type_arguments::PathArgumentPosition::Constructor,

@@ -390,6 +390,9 @@ impl Frame {
                 let ty = self.place_type(*place, store)?;
                 match store.type_descriptor(ty)?.key.as_ref() {
                     TypeKey::Callable { .. } | TypeKey::Function { .. } => None,
+                    // The dispatcher found the callee takes its own `Fn*`
+                    // impl: the walk ends here, the call is overloaded.
+                    _ if self.declined_coercion == Some((self.pc.fingerprint(), ty)) => None,
                     _ => Some(OperatorKind::Deref(false)),
                 }
             }
@@ -934,7 +937,7 @@ impl Frame {
     }
     /// Reference source of a location this operation forms: its pointee's
     /// view, under this operator node's local region.
-    fn formed_reference_source(
+    pub(super) fn formed_reference_source(
         &self,
         mutable: bool,
         pointee: TyTerm,
@@ -1661,6 +1664,25 @@ impl Frame {
                     matches!(access, crate::ir::op::BorrowAccess::Mutable),
                 )
             }))
+    }
+    /// The Type of the callee place whose autoderef step is demanded (not
+    /// yet entered): a value call's `CalleeDeref`; `None` for any other
+    /// operator activation.
+    pub(crate) fn pending_callee_deref(
+        &self,
+        store: &GuestStore,
+    ) -> Result<Option<TypeId>, Diagnostic> {
+        let Some(activation) = self
+            .operator_activation
+            .as_ref()
+            .filter(|activation| activation.stage == Stage::Demanded)
+        else {
+            return Ok(None);
+        };
+        let Op::CalleeDeref { place } = &activation.expected else {
+            return Ok(None);
+        };
+        self.place_type(*place, store).map(Some)
     }
     /// The dispatcher found no `Deref` chain from the borrowed Type to the
     /// Type the borrow expects (a conversion other than deref coercion):

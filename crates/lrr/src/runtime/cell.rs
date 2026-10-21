@@ -34,6 +34,8 @@ pub mod constant_instantiation;
 pub(crate) mod pattern_constants;
 #[path = "cell_construction_cleanup.rs"]
 mod construction_cleanup;
+#[path = "cell_open_construction.rs"]
+mod open_construction;
 #[path = "cell_closures.rs"]
 mod closures;
 #[path = "cell_reference_return.rs"]
@@ -42,6 +44,10 @@ mod reference_return;
 mod run_session;
 #[path = "cell_unsizing.rs"]
 mod unsizing;
+#[path = "cell_subarray.rs"]
+pub(crate) mod subarray;
+#[path = "cell_plain_release.rs"]
+mod plain_release;
 #[path = "str_storage.rs"]
 pub mod str_storage;
 use super::{
@@ -1483,11 +1489,22 @@ impl GuestStore {
                 else {
                     return Err(lease_fault());
                 };
+                // A sized sub-array reference (`&[T; K]`) names the array Type
+                // of exactly its window length instead.
+                let view = match self.types.descriptor(reference.target)?.key.as_ref() {
+                    TypeKey::Array { len: window, .. } if *window == elements.len => {
+                        self.types.find(&TypeKey::Array {
+                            element,
+                            len: elements.len,
+                        })
+                    }
+                    _ => self.types.find(&TypeKey::Slice { element }),
+                };
                 if elements
                     .start
                     .checked_add(elements.len)
                     .is_none_or(|end| end > len)
-                    || self.types.find(&TypeKey::Slice { element }) != Some(reference.target)
+                    || view != Some(reference.target)
                 {
                     return Err(lease_fault());
                 }
@@ -1789,6 +1806,15 @@ impl GuestStore {
                 }
             }
         };
+        // A reference to a sized sub-array (`&[T; K]` made by an array
+        // pattern's `rest @ ..`) designates a sized element window.
+        let mut sized = match (place.root, window) {
+            (PlaceRoot::Deref(id), Some(_)) => matches!(
+                self.types.descriptor(self.references.get(id)?.target)?.key.as_ref(),
+                TypeKey::Array { .. }
+            ),
+            _ => false,
+        };
         let count = prefix
             .len()
             .checked_add(place.projections.len())
@@ -1817,14 +1843,25 @@ impl GuestStore {
             let key = self.types.descriptor(ty)?.key.as_ref();
             // An array, or a vector's element cells, is a sequence place.
             let sequence = match projection {
-                Projection::Range { .. } | Projection::Index(_) => {
+                Projection::Range { .. } | Projection::Subarray { .. } | Projection::Index(_) => {
                     self.sequence_shape(target, ty)?
                 }
                 _ => None,
             };
             let field = match (projection, key, window) {
                 // A range narrows the element window of the same array cell.
-                (Projection::Range { start, end }, _, current) if sequence.is_some() => {
+                (
+                    Projection::Range { start, end } | Projection::Subarray { start, end },
+                    _,
+                    current,
+                ) if sequence.is_some() => {
+                    // A sized sub-array window exists only inside an array.
+                    if matches!(projection, Projection::Subarray { .. })
+                        && !matches!(key, TypeKey::Array { .. })
+                    {
+                        return Err(invalid().into());
+                    }
+                    sized = matches!(projection, Projection::Subarray { .. });
                     let (_, len) = sequence.ok_or_else(invalid)?;
                     let (base, available) = current.unwrap_or((0, len));
                     if start > end || *end > available {
@@ -1848,6 +1885,7 @@ impl GuestStore {
                         }));
                     }
                     window = None;
+                    sized = false;
                     start.checked_add(*index).ok_or_else(resource)?
                 }
                 (_, _, Some(_)) => return Err(invalid().into()),
@@ -1931,7 +1969,15 @@ impl GuestStore {
         };
         // A window's Type is its array's `[T]` view, interned with the array.
         let ty = match window {
-            Some(_) => match self.sequence_shape(target, ty)? {
+            Some((_, window_len)) => match self.sequence_shape(target, ty)? {
+                // A sized sub-array window has the array Type of its length.
+                Some((element, _)) if sized => self
+                    .types
+                    .find(&TypeKey::Array {
+                        element,
+                        len: window_len,
+                    })
+                    .ok_or_else(invalid)?,
                 Some((element, _)) => self
                     .types
                     .find(&TypeKey::Slice { element })
@@ -1955,6 +2001,12 @@ impl GuestStore {
             window,
             interior,
         })
+    }
+    /// Whether a unique borrow of the place would be admitted: the place's
+    /// whole chain of locations is writable. Performs no mutation.
+    pub(crate) fn place_writable(&self, place: &Place) -> Result<bool, PlaceFailure> {
+        self.resolve_place_windowed(place, PlaceUse::Value)
+            .map(|resolved| resolved.writable)
     }
     /// Publish a checked run-owned lease only after validation and quota reservation.
     pub fn borrow(&mut self, place: &Place, access: Access) -> Result<RefId, PlaceFailure> {

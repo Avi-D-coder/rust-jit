@@ -151,6 +151,10 @@ impl PreparedSourceAliasLayouts {
                 result.layouts.push((K::InherentConstSelf, self_form()));
                 result.layouts.push((K::InherentConstImpl, ordinary));
             }
+            // The impl item's generics are its impl's parameters then its own:
+            // the compiler's ordinary projection layout. Its trait membership is
+            // already authenticated by the semantic domain.
+            D::TraitImplType => result.layouts.push((K::ProjectionType, ordinary)),
             D::ProjectionConst => {
                 // Q77 currently authenticates type members only. The actual
                 // constant member identity/parent join is a separate producer.

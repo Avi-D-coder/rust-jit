@@ -716,3 +716,176 @@ fn primitive_alias_return_refuses_stale_supplied_namespace_catalogue_before_mint
             .all(|event| !matches!(event.key, QueryKey::BodyStructure(_) | QueryKey::Thunk(_)))
     );
 }
+
+const OPEN_RESULT: &str =
+    "struct W<T>(Option<T>);fn main(){}fn open<T>()->W<T>{W(None)}fn pair<A,B>()->(A,W<B>){loop{}}fn same<T>()->(T,T){loop{}}";
+
+/// A declared written result whose generics no argument or result context
+/// bound stays an open template. Its identity is admitted structurally (every
+/// free position is the definition's own generic), never by closedness alone.
+#[test]
+fn open_written_result_over_own_generics_is_admitted_structurally_all_editions() {
+    use crate::traits::term::{GenericArg, InferVarKey, ProjectionKey, TraitRef};
+    for edition in [2015, 2018, 2021, 2024] {
+        let (mut db, view, graph) = source(OPEN_RESULT, edition);
+        for name in ["open", "pair"] {
+            let (callee, accepted) = contracts(&mut db, &view, &graph, name);
+            let declared = accepted.source_result.clone().expect("declared result");
+            assert!(
+                !crate::frontend::call_contracts::closed_term(&declared),
+                "{name} {edition}: unbound generics keep the result open"
+            );
+            if let Err(error) = GenericEnv::capture_current(&mut db, &callee, &accepted) {
+                panic!("{name} {edition}: open own-generic result refused: {error:?}");
+            }
+        }
+        let (callee, accepted) = contracts(&mut db, &view, &graph, "open");
+        let Some(TyTerm::Nominal(identity, _)) = accepted.source_result.clone() else {
+            panic!("declared nominal result")
+        };
+        let own = ParamKey {
+            definition: callee.signature().definition,
+            ordinal: 0,
+        };
+        let with_argument = |db: &mut Database, argument: TyTerm| {
+            let mut forged = contracts(db, &view, &graph, "open").1;
+            forged.source_result = Some(TyTerm::Nominal(identity, vec![GenericArg::Type(argument)]));
+            forged
+        };
+        // An associated projection over the call's own parameter stays open.
+        let projection = |self_ty: TyTerm| {
+            TyTerm::Projection(Box::new(ProjectionKey {
+                trait_ref: TraitRef {
+                    trait_key: Digest::of_bytes(b"open result trait"),
+                    self_ty,
+                    args: Vec::new(),
+                },
+                item: Digest::of_bytes(b"open result item"),
+                item_args: Vec::new(),
+            }))
+        };
+        let forged = with_argument(&mut db, projection(TyTerm::Param(own)));
+        assert!(
+            GenericEnv::capture_current(&mut db, &callee, &forged).is_ok(),
+            "{edition}: projection over an own parameter is an open template"
+        );
+        // Another declaration's parameter, an unknown ordinal, an inference
+        // variable and a projection over a foreign parameter are not.
+        let foreign = ParamKey {
+            definition: Digest::of_bytes(b"another declaration"),
+            ordinal: 0,
+        };
+        for (label, argument) in [
+            ("foreign definition", TyTerm::Param(foreign)),
+            (
+                "unknown ordinal",
+                TyTerm::Param(ParamKey {
+                    ordinal: 9,
+                    ..own
+                }),
+            ),
+            (
+                "inference variable",
+                TyTerm::Infer(InferVarKey {
+                    transaction: Digest::of_bytes(b"open result transaction"),
+                    ordinal: 0,
+                }),
+            ),
+            ("foreign projection", projection(TyTerm::Param(foreign))),
+        ] {
+            let forged = with_argument(&mut db, argument);
+            assert!(
+                GenericEnv::capture_current(&mut db, &callee, &forged).is_err(),
+                "{edition}: {label} must not be admitted as the declared result"
+            );
+        }
+    }
+}
+
+/// A closure body inherits its creating function's environment and runs after
+/// ordinary execution has published derived callee environments. The call-entry
+/// proof still demands a fresh mint after any publication; the inherited view
+/// only keeps its source-revision, identity and dependency-stamp guards.
+#[test]
+fn inherited_lexical_environment_survives_derived_publication_but_not_changed_source() {
+    let (mut db, view, graph) = source(WITNESS, 2024);
+    let (callee, accepted) = contracts(&mut db, &view, &graph, "chosen");
+    let environment = GenericEnv::capture_current(&mut db, &callee, &accepted).unwrap();
+    environment.require_current(&mut db, &callee).unwrap();
+    let old = db.revision();
+    let mut discovery = crate::expand::source_discovery::SourceDiscovery::new(
+        vec![view.share()],
+        view.outline().root_scope.clone(),
+        crate::source::manifest::Namespace::Type,
+        Digest::of_bytes(b"inherited-environment-derived-publication"),
+        1,
+    )
+    .unwrap();
+    assert!(matches!(
+        discovery.poll().unwrap(),
+        crate::expand::source_discovery::SourceDiscoveryStep::Sealed(_)
+    ));
+    discovery.publish(&mut db).unwrap();
+    assert!(db.revision() > old);
+    assert!(GenericEnv::capture_current(&mut db, &callee, &accepted).is_err());
+    environment.require_current(&mut db, &callee).unwrap();
+    // A changed alias target is a changed retained dependency, not a publication.
+    let (mut newer, new_view, new_graph) = source(&WITNESS.replace("i64=bool", "i64=u64"), 2024);
+    let (new_callee, _) = contracts(&mut newer, &new_view, &new_graph, "chosen");
+    assert_eq!(
+        new_callee.signature().fingerprint(),
+        callee.signature().fingerprint()
+    );
+    assert!(environment.require_current(&mut newer, &new_callee).is_err());
+}
+
+/// The return boundary compares the returned value's source view with the open
+/// declared result structurally: one generic position, one type.
+#[test]
+fn returned_value_is_compared_structurally_with_the_open_declared_result() {
+    use crate::traits::term::GenericArg;
+    let (mut db, view, graph) = source(OPEN_RESULT, 2024);
+    let (_, open) = contracts(&mut db, &view, &graph, "open");
+    let Some(TyTerm::Nominal(wrapper, _)) = open.source_result.clone() else {
+        panic!("declared nominal result")
+    };
+    assert!(open.has_open_result());
+    let prim = |p| TyTerm::Primitive(p);
+    let wrapped = |argument| TyTerm::Nominal(wrapper, vec![GenericArg::Type(argument)]);
+    assert!(
+        open.check_open_return_source(Some(&wrapped(prim(PrimitiveType::U8))))
+            .is_ok()
+    );
+    assert!(
+        open.check_open_return_source(Some(&wrapped(wrapped(prim(PrimitiveType::I32)))))
+            .is_ok()
+    );
+    // Another nominal, a bare primitive and a tuple are not `W<_>`.
+    for wrong in [
+        TyTerm::Nominal(Digest::of_bytes(b"another nominal"), Vec::new()),
+        prim(PrimitiveType::U8),
+        TyTerm::Tuple(vec![prim(PrimitiveType::U8)]),
+    ] {
+        assert!(open.check_open_return_source(Some(&wrong)).is_err(), "{wrong:?}");
+    }
+    // No reached source view: the value's own descriptor stands.
+    assert!(open.check_open_return_source(None).is_ok());
+    let (_, same) = contracts(&mut db, &view, &graph, "same");
+    assert!(same.has_open_result());
+    let pair = |a, b| TyTerm::Tuple(vec![a, b]);
+    assert!(
+        same.check_open_return_source(Some(&pair(
+            prim(PrimitiveType::U8),
+            prim(PrimitiveType::U8)
+        )))
+        .is_ok()
+    );
+    assert!(
+        same.check_open_return_source(Some(&pair(
+            prim(PrimitiveType::U8),
+            prim(PrimitiveType::U16)
+        )))
+        .is_err(),
+        "one generic position cannot be two types"
+    );
+}

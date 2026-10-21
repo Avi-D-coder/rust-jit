@@ -400,6 +400,13 @@ impl Provider for SyntaxProvider {
                     QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
                 };
             }
+            QueryKey::SourceImplAssociated(key) => {
+                return match crate::traits::upstream::source_impl_associated::PreparedSourceImplAssociated::prepare(db,key) {
+                    QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::SourceImplAssociated(Box::new(value))),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                };
+            }
             QueryKey::SourceImplOutlives(key) => {
                 return match crate::traits::upstream::source_impl_outlives::PreparedSourceImplOutlives::prepare(db,key) {
                     QueryPoll::Ready(Ok(value)) => Provided::pure(QueryValue::SourceImplOutlives(Box::new(value))),

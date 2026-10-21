@@ -15,6 +15,7 @@ use super::{
     root_response::export_root_response,
     root_variables::RootVariables,
     source_caller_clauses::PreparedSourceCallerClauses,
+    source_adt_fields::CurrentAdtSourceFields,
     source_definition_headers::DefinitionHeaderKey,
     source_fact_bundle::{SourceFactBundle, SourceFactRequest},
     source_factory,
@@ -57,15 +58,47 @@ struct ReachedCallCurrent {
     application: Option<Arc<VerifiedCallerApplication>>,
     environment: Option<Arc<GenericEnv>>,
     caller_callable: Arc<SourceCallable>,
-    callee_callable: Arc<SourceCallable>,
+    subject: ReachedSubject,
     descriptor: super::root_input::CallerSourceContext,
+}
+/// What the reached root is for. Both share one inference owner, relation
+/// application, fulfillment and response export; they differ only in the
+/// actual declaration that authenticates the packet's formals.
+#[derive(Clone)]
+pub(crate) enum ReachedSubject {
+    /// The selected function: its actual signature authenticates the formals.
+    Callable(Arc<SourceCallable>),
+    /// A record constructor of this nominal variant: the actual declaration's
+    /// source field Types authenticate the formals.
+    Adt(Arc<CurrentAdtSourceFields>, u32),
+}
+impl ReachedSubject {
+    fn identity(&self) -> Digest {
+        match self {
+            Self::Callable(callable) => callable.identity(),
+            Self::Adt(fields, _) => fields.plan().key().definition,
+        }
+    }
+    /// The signature identity of a function, the declaration receipt of a nominal.
+    fn fingerprint(&self) -> Digest {
+        match self {
+            Self::Callable(callable) => callable.signature().fingerprint(),
+            Self::Adt(fields, _) => fields.fingerprint(),
+        }
+    }
+    fn revalidate(&self, db: &mut Database) -> Result<(), Diagnostic> {
+        match self {
+            Self::Callable(callable) => callable.revalidate(db),
+            Self::Adt(fields, _) => fields.require_current(db),
+        }
+    }
 }
 impl ReachedCallResponse {
     pub(crate) fn require_current(&self, db: &mut Database) -> Result<(), Diagnostic> {
         self.current.bundle.require_current(db)?;
         self.current.caller.require_current(db)?;
         self.current.caller_callable.revalidate(db)?;
-        self.current.callee_callable.revalidate(db)?;
+        self.current.subject.revalidate(db)?;
         if let Some(application) = &self.current.application {
             application
                 .require_current(
@@ -167,9 +200,28 @@ pub(crate) fn poll_reached_call(
     caller_callable: &Arc<SourceCallable>,
     callee_callable: &Arc<SourceCallable>,
 ) -> QueryPoll<ReachedCallOutcome> {
+    poll_reached_root(
+        db,
+        inventory,
+        packet,
+        caller_environment,
+        caller_callable,
+        &ReachedSubject::Callable(Arc::clone(callee_callable)),
+    )
+}
+/// The one reached source root for a selected function or a record
+/// constructor's nominal declaration.
+pub(crate) fn poll_reached_root(
+    db: &mut Database,
+    inventory: &SealKey,
+    packet: &SourceRootCallInput<'_>,
+    caller_environment: Option<&Arc<GenericEnv>>,
+    caller_callable: &Arc<SourceCallable>,
+    subject: &ReachedSubject,
+) -> QueryPoll<ReachedCallOutcome> {
     if caller_callable.identity() != packet.caller.body_definition
-        || callee_callable.identity() != packet.callee
-        || callee_callable.signature().fingerprint() != packet.signature
+        || subject.identity() != packet.callee
+        || subject.fingerprint() != packet.signature
     {
         return QueryPoll::Ready(Err(fault(
             "reached source callable/signature identity differs",
@@ -177,46 +229,28 @@ pub(crate) fn poll_reached_call(
     }
     if let Err(error) = caller_callable
         .revalidate(db)
-        .and_then(|()| callee_callable.revalidate(db))
+        .and_then(|()| subject.revalidate(db))
     {
         return QueryPoll::Ready(Err(error));
     }
-    // Authenticate each formal to its declared parameter/result or actual
-    // explicit source generic key. The VM retains actual argument occurrences.
-    let mut arguments = 0usize;
-    let mut result = false;
-    for relation in packet.relations {
-        let valid = match relation.kind {
-            SourceCallRelationKind::Equal => match &relation.formal {
-                TyTerm::Param(key) => packet.parameters.get(key) == Some(&relation.actual),
-                _ => false,
-            },
-            SourceCallRelationKind::Coerce => {
-                let valid = callee_callable
-                    .signature()
-                    .parameters
-                    .get(arguments)
-                    .and_then(|parameter| parameter.symbolic.as_ref())
-                    == Some(&relation.formal);
-                arguments += 1;
-                valid
+    match subject {
+        ReachedSubject::Callable(callee_callable) => {
+            if let Err(error) = authenticate_callable(packet, callee_callable) {
+                return QueryPoll::Ready(Err(error));
             }
-            SourceCallRelationKind::CoerceResult => {
-                let valid = !result
-                    && callee_callable.signature().result_symbolic.as_ref()
-                        == Some(&relation.formal);
-                result = true;
-                valid
-            }
-        };
-        if !valid {
-            return QueryPoll::Ready(Err(fault(
-                "reached relation formal is not the actual declaration",
-            )));
         }
-    }
-    if arguments != callee_callable.signature().parameters.len() {
-        return QueryPoll::Ready(Err(fault("reached argument relation coverage differs")));
+        ReachedSubject::Adt(fields, variant) => {
+            // Every formal is one of this variant's actual declared field Types.
+            let plan = fields.plan();
+            let declared: Vec<_> = (0..plan.field_count(*variant))
+                .filter_map(|field| plan.field_term(*variant, field))
+                .collect();
+            if packet.relations.iter().any(|relation| !declared.contains(&&relation.formal)) {
+                return QueryPoll::Ready(Err(fault(
+                    "reached relation formal is not an actual declared field",
+                )));
+            }
+        }
     }
     let Some(catalog) = db.input(&InputKey::DiscoverySeal(inventory.clone())) else {
         return QueryPoll::NeedInput(InputRequest::Discover {
@@ -340,7 +374,7 @@ pub(crate) fn poll_reached_call(
             application: application.clone(),
             environment: caller_environment.cloned(),
             caller_callable: Arc::clone(caller_callable),
-            callee_callable: Arc::clone(callee_callable),
+            subject: subject.clone(),
             descriptor: packet.caller.clone(),
         });
         let output = configuration.with_source_context(
@@ -357,7 +391,7 @@ pub(crate) fn poll_reached_call(
                     let reasons: Vec<_> = materialized
                         .unprepared
                         .iter()
-                        .filter(|hold| hold.definition == source)
+                        .filter(|hold| hold.definition == source || hold.query.starts_with("clauses_of") || hold.query.starts_with("impl_super"))
                         .collect();
                     return Ok(held(
                         "callback-domain",
@@ -365,7 +399,7 @@ pub(crate) fn poll_reached_call(
                     ));
                 }
                 provider.publish(materialized.facts)?;
-                execute(
+                let outcome = execute(
                     cx,
                     packet,
                     &caller,
@@ -375,7 +409,14 @@ pub(crate) fn poll_reached_call(
                     configuration,
                     &current,
                     &mut promote,
-                )
+                );
+                // A relevant impl the traversal withheld may have changed any
+                // outcome (a missing candidate reads as NoSolution): hold.
+                let blocked = provider.take_blocked_impls();
+                if !blocked.is_empty() {
+                    return Ok(held("relevant-impl-unprepared", format!("{blocked:?}")));
+                }
+                outcome
             },
         );
         if !promote.is_empty() {
@@ -385,6 +426,48 @@ pub(crate) fn poll_reached_call(
         }
         return QueryPoll::Ready(output.and_then(|value| value));
     }
+}
+
+/// Authenticate each formal to its declared parameter/result or actual
+/// explicit source generic key. The VM retains actual argument occurrences.
+fn authenticate_callable(
+    packet: &SourceRootCallInput<'_>,
+    callee_callable: &Arc<SourceCallable>,
+) -> Result<(), Diagnostic> {
+    let mut arguments = 0usize;
+    let mut result = false;
+    for relation in packet.relations {
+        let valid = match relation.kind {
+            SourceCallRelationKind::Equal => match &relation.formal {
+                TyTerm::Param(key) => packet.parameters.get(key) == Some(&relation.actual),
+                _ => false,
+            },
+            SourceCallRelationKind::Coerce => {
+                let valid = callee_callable
+                    .signature()
+                    .parameters
+                    .get(arguments)
+                    .and_then(|parameter| parameter.symbolic.as_ref())
+                    == Some(&relation.formal);
+                arguments += 1;
+                valid
+            }
+            SourceCallRelationKind::CoerceResult => {
+                let valid = !result
+                    && callee_callable.signature().result_symbolic.as_ref()
+                        == Some(&relation.formal);
+                result = true;
+                valid
+            }
+        };
+        if !valid {
+            return Err(fault("reached relation formal is not the actual declaration"));
+        }
+    }
+    if arguments != callee_callable.signature().parameters.len() {
+        return Err(fault("reached argument relation coverage differs"));
+    }
+    Ok(())
 }
 
 /// Check actual compiler-query slots for the bounded normal source profile.
@@ -424,7 +507,8 @@ fn require_callback_domains(
                 SolverTraitLangItem::DiscriminantKind
                     | SolverTraitLangItem::Sized
                     | SolverTraitLangItem::MetaSized
-            ) {
+            ) && !source_factory::builtin_requires_coroutine_self(role)
+            {
                 return Err((
                     *source,
                     format!(
@@ -457,20 +541,19 @@ fn require_callback_domains(
             definition.predicates.explicit_implied,
             "explicit implied clauses"
         );
+        // Each impl's own queries (head, polarity, default, super outlives,
+        // complete clauses) are read only when the pinned traversal reaches it
+        // for a goal: `PreparedProvider::for_each_relevant_impl` withholds an
+        // unprepared relevant impl and records it, and the root then holds
+        // (`poll_reached_root`). Examining a whole bucket here would refuse
+        // goals whose Self never reaches the unprepared members.
         for implementation in *known!(row.implementations, "complete relevant impl bucket") {
-            let metadata = facts
-                .implementations
-                .get(implementation)
-                .ok_or_else(|| (*source, "impl metadata missing".to_string()))?;
-            let declaration = facts
-                .definitions
-                .get(implementation)
-                .ok_or_else(|| (*source, "impl declaration missing".to_string()))?;
-            known!(metadata.trait_ref, "impl trait head");
-            known!(metadata.polarity, "impl polarity");
-            known!(metadata.default_impl, "default impl");
-            known!(metadata.super_outlives, "impl super outlives");
-            known!(declaration.predicates.all, "complete impl clauses");
+            if !facts.implementations.contains_key(implementation) {
+                return Err((*source, "impl metadata missing".to_string()));
+            }
+            if !facts.definitions.contains_key(implementation) {
+                return Err((*source, "impl declaration missing".to_string()));
+            }
         }
     }
     Ok(())

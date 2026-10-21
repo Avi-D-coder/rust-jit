@@ -189,6 +189,35 @@ impl<'cx> Encoder<'_, 'cx> {
         Ok(())
     }
 
+    /// A runtime-derived nominal term (a descriptor's source term, or a written
+    /// application) lists Type and Const arguments only: runtime types do not
+    /// record regions. Under a reached source root, each omitted region slot of
+    /// the declaration's real layout is the erased `'static`, the repo's one
+    /// runtime erasure convention (`descriptor_source_term`, the written
+    /// annotation kernels). This is deliberate and sound for this interpreter:
+    /// it is looser than rustc and never stricter (AGENTS.md, "Looser than
+    /// rustc"), implements no borrow or region checker, and a region never
+    /// changes which value executes. Declared (non-root) encoding stays exact:
+    /// it never fills a slot. A term that already lists any region is not
+    /// runtime-erased and is encoded exactly as written.
+    fn complete_erased_regions<'t>(&self, id: DefinitionId, args: &'t [GenericArg])
+        -> std::borrow::Cow<'t, [GenericArg]> {
+        use std::borrow::Cow;
+        if self.inference.is_none() || args.iter().any(|arg| matches!(arg, GenericArg::Region(_))) {
+            return Cow::Borrowed(args);
+        }
+        let Some(kinds) = self.cx.services().source_argument_kinds(id) else { return Cow::Borrowed(args); };
+        if kinds.len() <= args.len() { return Cow::Borrowed(args); }
+        let mut provided = args.iter();
+        let completed = kinds.iter().map(|kind| match kind {
+            BoundKind::Region => Some(GenericArg::Region(RegionTerm::Static)),
+            _ => provided.next().cloned(),
+        }).collect::<Option<Vec<_>>>();
+        match completed {
+            Some(completed) if provided.next().is_none() => Cow::Owned(completed),
+            _ => Cow::Borrowed(args),
+        }
+    }
     fn parameter(&self, key: term::ParamKey, kind: BoundKind) -> Result<SourceParameter, SourceTypePending> {
         self.cx.services().source_parameter(key, kind).ok_or(SourceTypePending::ParameterLayout)
     }
@@ -247,6 +276,7 @@ impl<'cx> Encoder<'_, 'cx> {
             TyTerm::Param(key) => TyKind::Param(self.parameter(*key, BoundKind::Type)?),
             TyTerm::Nominal(definition, args) => {
                 let id = *self.bindings.definitions.get(definition).ok_or(SourceTypePending::SourceDefinition)?;
+                let args = self.complete_erased_regions(id, args);
                 let args = args.iter().map(|arg| self.arg(arg, binders)).collect::<Result<Vec<_>, _>>()?;
                 self.require_arguments(id, &args)?;
                 TyKind::Adt(AdtDefinition { context: self.cx, definition: id }, self.cx.list(args))

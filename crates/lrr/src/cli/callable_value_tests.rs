@@ -408,6 +408,99 @@ fn callable_autoderef_uses_source_deref_once_before_arguments_across_macro_origi
     );
 }
 
+#[test]
+fn overloaded_call_selects_the_types_own_fn_impl_in_rustc_order_across_macro_origins() {
+    // An LRR route/effect control, outside imported originals. A callee of a
+    // user Type implementing the `Fn*` traits is called through rustc's
+    // lookup order (`Fn`, then `FnMut`, then `FnOnce`) by the ordinary call
+    // boundary: its argument evaluates exactly once, before the impl's body,
+    // and a consumed callee drops inside the call, identically handwritten,
+    // emitted by a macro or wrapped.
+    let prefix = r#"
+        #![feature(unboxed_closures, fn_traits)]
+        struct All;
+        struct Mutable;
+        struct Once(i32);
+        impl Fn<(i32,)> for All {
+            extern "rust-call" fn call(&self, (x,): (i32,)) -> i32 { println!("Fn"); x + 1 }
+        }
+        impl FnMut<(i32,)> for All {
+            extern "rust-call" fn call_mut(&mut self, (x,): (i32,)) -> i32 { println!("FnMut"); x + 2 }
+        }
+        impl FnOnce<(i32,)> for All {
+            type Output = i32;
+            extern "rust-call" fn call_once(self, (x,): (i32,)) -> i32 { println!("FnOnce"); x + 3 }
+        }
+        impl FnMut<(i32,)> for Mutable {
+            extern "rust-call" fn call_mut(&mut self, (x,): (i32,)) -> i32 { println!("FnMut"); x + 2 }
+        }
+        impl FnOnce<(i32,)> for Mutable {
+            type Output = i32;
+            extern "rust-call" fn call_once(self, (x,): (i32,)) -> i32 { println!("FnOnce"); x + 3 }
+        }
+        impl Drop for Once { fn drop(&mut self) { println!("drop"); } }
+        impl FnOnce<(i32, i32)> for Once {
+            type Output = i32;
+            extern "rust-call" fn call_once(self, (a, b): (i32, i32)) -> i32 {
+                println!("call_once");
+                self.0 + a + b
+            }
+        }
+        fn argument() -> i32 { println!("argument"); 9 }
+        macro_rules! invoke { ($f:expr, $($a:expr),*) => { $f($($a),*) } }
+        macro_rules! wrapper { ($f:expr, $($a:expr),*) => { invoke!($f, $($a),*) } }
+    "#;
+    let scenarios = [
+        ("let all = All;", "all", "argument()", 10, "argument\nFn\n"),
+        ("let mut m = Mutable;", "m", "argument()", 11, "argument\nFnMut\n"),
+        ("let once = Once(1);", "once", "argument(), 5", 15, "argument\ncall_once\ndrop\n"),
+    ];
+    for (declaration, callee, arguments, expected, output) in scenarios {
+        for expression in [
+            format!("{callee}({arguments})"),
+            format!("invoke!({callee}, {arguments})"),
+            format!("wrapper!({callee}, {arguments})"),
+        ] {
+            for edition in [2015, 2024] {
+                let text = format!(
+                    "{prefix} fn main() {{
+                        {declaration}
+                        assert_eq!({expression}, {expected});
+                    }}"
+                );
+                let report = completed_with_standard_facade(&text, edition);
+                assert_eq!(report.output.stdout, output, "{expression} in {edition}");
+            }
+        }
+    }
+}
+
+#[test]
+fn overloaded_call_result_and_arguments_type_numeric_literals_from_the_impl() {
+    // An LRR control, outside imported originals. The impl's declared
+    // argument tuple and result state the Types the source numeric constraint
+    // service relates a call's literals to, for a local callee and for a unit
+    // struct named as the callee: the later `30` is an `i64`, which no
+    // reached value of the call's operands could state before the comparison.
+    let prefix = r#"
+        #![feature(unboxed_closures, fn_traits)]
+        struct Two;
+        impl FnOnce<(u8, i64)> for Two {
+            type Output = i64;
+            extern "rust-call" fn call_once(self, (a, b): (u8, i64)) -> i64 { a as i64 * b }
+        }
+    "#;
+    for body in [
+        "let t = Two; let r = t(5, 6); let wide = &30; assert!(r == *wide);",
+        "let wide = &30; assert!(Two(5, 6) == *wide);",
+    ] {
+        for edition in [2015, 2024] {
+            let text = format!("{prefix} fn main() {{ {body} }}");
+            completed_with_standard_facade(&text, edition);
+        }
+    }
+}
+
 fn completed_with_standard_facade(text: &str, edition: u16) -> crate::engine::run::RunReport {
     match super::crate_graph::format_trait_facade_tests::run("callee-autoderef", text, edition) {
         Ok(StandaloneOutcome::Completed(report)) => report,

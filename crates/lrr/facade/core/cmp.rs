@@ -260,6 +260,16 @@ impl PartialEq for () {
     }
 }
 impl Eq for () {}
+impl PartialOrd for () {
+    fn partial_cmp(&self, _other: &()) -> Option<Ordering> {
+        Option::Some(Ordering::Equal)
+    }
+}
+impl Ord for () {
+    fn cmp(&self, _other: &()) -> Ordering {
+        Ordering::Equal
+    }
+}
 impl<A: PartialEq> PartialEq for (A,) {
     fn eq(&self, other: &(A,)) -> bool {
         self.0 == other.0

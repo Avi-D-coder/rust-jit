@@ -1123,6 +1123,22 @@ impl MemberIndex {
                 .map(move |ordinal| &layer.impls[*ordinal])
         })
     }
+    /// The impl block with this associated-scope owner declared in `module`.
+    /// The owner is the impl header's identity, which two modules can share
+    /// when they spell one header (`impl<'a, T> Iterator for Iter<'a, T>`): the
+    /// module of its associated type aliases tells the declarations apart.
+    pub(crate) fn impl_members(&self, identity: Digest, scope: &ScopeKey) -> Option<&ImplMembers> {
+        self.layers().find_map(|layer| {
+            layer.impls.iter().find(|members| {
+                members.identity == identity
+                    && members.types.values().all(|alias| {
+                        self.layers().find_map(|layer| layer.type_aliases.get(alias)).is_some_and(|row| {
+                            row.scope.crate_key == scope.crate_key && row.scope.module_path == scope.module_path
+                        })
+                    })
+            })
+        })
+    }
     /// The world's index, then the local layer of entered bodies' impls.
     fn layers(&self) -> impl Iterator<Item = &MemberIndex> {
         std::iter::successors(Some(self), |layer| layer.next.get().map(|next| &**next))
