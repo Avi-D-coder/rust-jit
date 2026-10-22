@@ -38,7 +38,7 @@ pub fn argument_forest(
             "attribute argument range is outside its owning item/meta",
         ));
     }
-    let spans: BTreeMap<_, _> = forest.spans().iter().map(|s| (s.key(), s)).collect();
+    let spans: BTreeMap<_, _> = forest.span_keys().iter().copied().zip(forest.spans()).collect();
     let mut pending: Vec<_> = forest.roots().iter().collect();
     let mut found = None;
     while let Some(token) = pending.pop() {
@@ -79,7 +79,6 @@ pub(crate) fn prune_tree(
     forest: &TokenForest,
     root: &TokenTree,
 ) -> Result<TokenForest, Diagnostic> {
-    let spans: BTreeMap<_, _> = forest.spans().iter().map(|s| (s.key(), s)).collect();
     let mut needed = BTreeSet::new();
     let mut pending = vec![root];
     while let Some(token) = pending.pop() {
@@ -101,14 +100,29 @@ pub(crate) fn prune_tree(
             }
         }
     }
-    let selected_spans: Vec<_> = needed.into_iter().map(|key| spans[&key].clone()).collect();
-    let contexts: BTreeMap<_, _> = forest.contexts().iter().map(|c| (c.key(), c)).collect();
-    let mut needed: BTreeSet<_> = selected_spans.iter().map(|s| s.context).collect();
+    // The forest's cached key indexes locate each record without hashing the
+    // whole table, and the selected rows (already in ascending key order, as
+    // `BTreeSet` iterates) keep their keys instead of being hashed again.
+    let selected_spans: Vec<(Key, _)> = needed
+        .into_iter()
+        .map(|key| {
+            forest
+                .span_by_key(&key)
+                .map(|record| (key, record.clone()))
+                .ok_or_else(|| fault("missing argument span"))
+        })
+        .collect::<Result<_, _>>()?;
+    let context = |key: &Key| {
+        forest
+            .context_keys()
+            .binary_search(key)
+            .ok()
+            .map(|position| &forest.contexts()[position])
+    };
+    let mut needed: BTreeSet<_> = selected_spans.iter().map(|(_, s)| s.context).collect();
     let mut pending: Vec<_> = needed.iter().copied().collect();
     while let Some(key) = pending.pop() {
-        let record = contexts
-            .get(&key)
-            .ok_or_else(|| fault("missing argument context"))?;
+        let record = context(&key).ok_or_else(|| fault("missing argument context"))?;
         if let Some(parent) = record.parent
             && needed.insert(parent)
         {
@@ -117,9 +131,13 @@ pub(crate) fn prune_tree(
     }
     let selected_contexts = needed
         .into_iter()
-        .map(|key| contexts[&key].clone())
-        .collect();
-    TokenForest::new(vec![root.clone()], selected_contexts, selected_spans)
+        .map(|key| {
+            context(&key)
+                .map(|record| (key, record.clone()))
+                .ok_or_else(|| fault("missing argument context"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    TokenForest::new_keyed(vec![root.clone()], selected_contexts, selected_spans)
         .map_err(|e| fault(&e.to_string()))
 }
 
@@ -148,17 +166,15 @@ pub fn macro_argument_contents(delimited: &TokenForest) -> Result<TokenForest, D
     else {
         return Err(fault("attribute arguments require one group"));
     };
-    TokenForest::new(
-        vec![TokenTree::Group {
+    // The tables are unchanged and already canonical: no re-hashing.
+    delimited
+        .with_roots(vec![TokenTree::Group {
             delimiter: crate::syntax::token_wire::Delimiter::Invisible,
             open: *open,
             close: *close,
             children: children.clone(),
-        }],
-        delimited.contexts().to_vec(),
-        delimited.spans().to_vec(),
-    )
-    .map_err(|e| fault(&e.to_string()))
+        }])
+        .map_err(|e| fault(&e.to_string()))
 }
 
 #[derive(Debug, Clone)]
@@ -191,7 +207,7 @@ pub fn item_without_applied_attribute(
     if !inputs.item.contains(attribute) || !attribute.contains(selected.range) {
         return Err(fault("applied attribute range is outside item"));
     }
-    let spans: BTreeMap<_, _> = forest.spans().iter().map(|s| (s.key(), s)).collect();
+    let spans: BTreeMap<_, _> = forest.span_keys().iter().copied().zip(forest.spans()).collect();
     let token_range = |token: &TokenTree| -> Result<crate::syntax::spans::SourceRange, Diagnostic> {
         let (first, last) = match token {
             TokenTree::Group { open, close, .. } => (*open, *close),

@@ -108,6 +108,14 @@ impl ParsedFile {
         pc: &PcKey,
     ) -> Result<Option<LetAnnotationSite>, Diagnostic> {
         let node = NodeId(pc.node);
+        // A closure's written `-> T` is the annotation of its body's value,
+        // entered with the closure's call frame (its Commit phase).
+        if index.nodes().get(pc.node as usize).is_some_and(|candidate| {
+            candidate.role
+                == NodeRole::Expression(crate::syntax::body_index::ExpressionKind::Closure)
+        }) {
+            return self.closure_result_site(body, index, pc);
+        }
         if index
             .nodes()
             .get(pc.node as usize)
@@ -127,6 +135,41 @@ impl ParsedFile {
             return Ok(None);
         }
         let Some(ty) = statement.ty() else {
+            return Ok(None);
+        };
+        if annotation_hint(self, Some(ty.clone()), pc.body.definition)?.is_some() {
+            return Ok(None);
+        }
+        let Some(shape) = self.annotation_shape(body, index, pc.body.definition, &ty)? else {
+            return Ok(None);
+        };
+        Ok(Some(LetAnnotationSite {
+            range: range(ty.syntax().text_range()),
+            shape,
+        }))
+    }
+    /// The written `-> T` of the closure at this PC's call-frame start
+    /// (`Commit`) when it needs the entered Type service. A closure with
+    /// pattern parameters starts its frame through the pattern plan.
+    fn closure_result_site(
+        &self,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        pc: &PcKey,
+    ) -> Result<Option<LetAnnotationSite>, Diagnostic> {
+        if crate::ir::pc::Phase::from_code(pc.phase) != crate::ir::pc::Phase::Commit {
+            return Ok(None);
+        }
+        let Some(closure) = self
+            .entered_node_syntax(body, index, NodeId(pc.node))?
+            .and_then(ast::ClosureExpr::cast)
+        else {
+            return Ok(None);
+        };
+        if crate::syntax::body_index::closure_runs_patterns(&closure) {
+            return Ok(None);
+        }
+        let Some(ty) = closure.ret_type().and_then(|ret| ret.ty()) else {
             return Ok(None);
         };
         if annotation_hint(self, Some(ty.clone()), pc.body.definition)?.is_some() {

@@ -100,6 +100,10 @@ pub enum ConstTerm {
     Bound { depth: u32, index: u32 },
     Value(u64),
     Param(ParamKey),
+    /// A const inference variable of a source component (never in a declared
+    /// or runtime term): the length of an array whose size a callee's const
+    /// parameter states.
+    Infer(InferVarKey),
 }
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub enum RegionTerm {
@@ -266,6 +270,11 @@ impl StableEncode for ConstTerm {
             Self::Param(p) => {
                 e.u32(1);
                 e.record(p)
+            }
+            Self::Infer(key) => {
+                e.u32(4);
+                e.digest(key.transaction);
+                e.u32(key.ordinal);
             }
         }
     }

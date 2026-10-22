@@ -162,11 +162,19 @@ fn generated_rows(
     let actual = candidates
         .next()
         .ok_or_else(|| invalid("retained generated declaration node absent"))?;
+    // The unit carries its macro's definition edition (a library macro is
+    // edition 2024); the retained tree is parsed in the owning source's. Token
+    // editions live in the spans; the header rows join modulo that profile.
+    let unit_header_in_owner_profile = {
+        let mut header = unit_header.clone();
+        header.profile = actual.header.profile.clone();
+        header
+    };
     if candidates.next().is_some()
         || actual.body.as_ref().map(|body| body.range) != Some(anchor.body_range())
         || actual.def_key.item_kind != selected.item_kind
         || actual.def_key.declared_name != selected.declared_name
-        || !actual.header.same_semantics(unit_header)
+        || !actual.header.same_semantics(&unit_header_in_owner_profile)
     {
         return Err(invalid("retained generated declaration node differs"));
     }
@@ -426,6 +434,14 @@ impl Database {
             .start
             .checked_sub(context.range.start)
             .ok_or_else(|| invalid("generated declaration unit header differs"))?;
+        // The unit carries the call edition of the expansion that wrote it (a
+        // nested library macro call is edition 2024); the retained tree is in
+        // the owning source's profile. Rows join modulo that profile.
+        let header = &{
+            let mut header = header.clone();
+            header.profile = current_header.profile.clone();
+            header
+        };
         if !current_header.same_semantics(header)
             || current_context.scope != context.scope
             || current_context.range != anchor.declaration_range()

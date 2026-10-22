@@ -174,9 +174,7 @@ impl SourceDeriveSelection {
         };
         let site = self
             .registry
-            .spans()
-            .iter()
-            .find(|span| span.key() == self.site)
+            .span_by_key(&self.site)
             .ok_or_else(|| fault("builtin derive site absent"))?;
         let item = TokenForest::decode(
             &self
@@ -191,14 +189,15 @@ impl SourceDeriveSelection {
         };
         // The site's context chain joins the item's own records.
         let mut contexts = std::collections::BTreeMap::new();
-        for row in item.contexts() {
-            contexts.insert(row.key(), row.clone());
+        for (key, row) in item.context_keys().iter().zip(item.contexts()) {
+            contexts.insert(*key, row.clone());
         }
         let registry_contexts: std::collections::BTreeMap<_, _> = self
             .registry
-            .contexts()
+            .context_keys()
             .iter()
-            .map(|row| (row.key(), row))
+            .copied()
+            .zip(self.registry.contexts())
             .collect();
         let mut pending = vec![site.context];
         while let Some(key) = pending.pop() {
@@ -214,10 +213,10 @@ impl SourceDeriveSelection {
             contexts.insert(key, (*row).clone());
         }
         let mut spans = std::collections::BTreeMap::new();
-        for row in item.spans() {
-            spans.insert(row.key(), row.clone());
+        for (key, row) in item.span_keys().iter().zip(item.spans()) {
+            spans.insert(*key, row.clone());
         }
-        spans.insert(site.key(), site.clone());
+        spans.insert(self.site, site.clone());
         let input = TokenForest::new(
             item.roots().to_vec(),
             contexts.into_values().collect(),

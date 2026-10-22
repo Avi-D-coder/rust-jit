@@ -705,7 +705,7 @@ impl ConstantSourceAdmission {
         source: &PreparedSourceView,
     ) -> Result<(), Diagnostic> {
         if source.selection() != &self.selection
-            || db.source_view_namespace_stamps()? != self.stamps
+            || db.source_view_namespace_census()?.stamps() != &self.stamps
         {
             return Err(fault(
                 "constant admitted publication or input membership changed",

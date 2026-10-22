@@ -64,7 +64,7 @@ impl Repr {
     }
 }
 
-fn align_up(value: u64, align: u64) -> u64 {
+pub(crate) fn align_up(value: u64, align: u64) -> u64 {
     let align = align.max(1);
     value.div_ceil(align).saturating_mul(align)
 }
@@ -154,6 +154,10 @@ impl Layout {
 pub enum StructKind {
     /// Fields laid out from offset 0.
     Sized,
+    /// As `Sized`, but the last field may be unsized and so stays last: only
+    /// the fields before it are reordered (rustc `StructKind::MaybeUnsized`,
+    /// the kind of every tuple type).
+    MaybeUnsized,
     /// Fields laid out after an enum tag of `size` bytes and `align`.
     Prefixed { size: u64, align: u64 },
 }
@@ -200,12 +204,17 @@ fn univariant_biased(
     let mut align = 1u64;
     let mut order: Vec<usize> = (0..fields.len()).collect();
     if !repr.inhibit_struct_field_reordering() && fields.len() > 1 {
-        let largest_niche_size = fields
+        // An unsized-capable last field is excluded from the heuristics too.
+        let considered = match kind {
+            StructKind::MaybeUnsized => &fields[..fields.len() - 1],
+            _ => fields,
+        };
+        let largest_niche_size = considered
             .iter()
             .map(Layout::niche_available)
             .max()
             .unwrap_or(0);
-        let max_field_align = fields.iter().map(|f| f.align).max().unwrap_or(1);
+        let max_field_align = considered.iter().map(|f| f.align).max().unwrap_or(1);
         // Groups fields by alignment, or a size-derived pseudo-alignment.
         let group_key = |f: &Layout| -> u64 {
             if let Some(pack) = pack {
@@ -224,8 +233,12 @@ fn univariant_biased(
                 size_as_align
             }
         };
+        let optimizing = match kind {
+            StructKind::MaybeUnsized => order.len() - 1,
+            _ => order.len(),
+        };
         match kind {
-            StructKind::Sized => order.sort_by_key(|&index| {
+            StructKind::Sized | StructKind::MaybeUnsized => order[..optimizing].sort_by_key(|&index| {
                 let field = &fields[index];
                 let niche_size = field.niche_available();
                 let niche_key = if bias_start { !niche_size } else { niche_size };

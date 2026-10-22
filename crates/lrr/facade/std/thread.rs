@@ -81,7 +81,10 @@ pub type Result<T> = core::result::Result<T, crate::boxed::Box<dyn core::any::An
 // storage holds the value in an `Option`: initialisation is lazy and happens at
 // the first access, and the value lives until the program ends.
 pub struct LocalKey<T: 'static> {
-    inner: fn(*mut Option<T>) -> *const T,
+    // The accessor yields the slot by reference. std's accessor returns a raw
+    // pointer to the same slot; the facade keeps the reference the accessor
+    // body already holds (`&STORAGE.value` or `STORAGE.get(..)`).
+    inner: fn(*mut Option<T>) -> &'static T,
 }
 pub struct AccessError;
 
@@ -118,32 +121,27 @@ fn panic_access_error() -> ! {
 }
 
 impl<T: 'static> LocalKey<T> {
-    pub const unsafe fn new(inner: fn(*mut Option<T>) -> *const T) -> LocalKey<T> {
+    pub const unsafe fn new(inner: fn(*mut Option<T>) -> &'static T) -> LocalKey<T> {
         LocalKey { inner: inner }
+    }
+    // The slot, initializing it on first access.
+    fn slot(&'static self) -> &'static T {
+        let init: *mut Option<T> = core::ptr::null_mut();
+        (self.inner)(init)
     }
     pub fn with<F, R>(&'static self, f: F) -> R
     where
         F: FnOnce(&T) -> R,
     {
-        let init: *mut Option<T> = core::ptr::null_mut();
-        let slot = (self.inner)(init);
-        match unsafe { slot.as_ref() } {
-            Option::Some(value) => f(value),
-            Option::None => panic_access_error(),
-        }
+        let value: &'static T = self.slot();
+        f(value)
     }
     pub fn try_with<F, R>(&'static self, f: F) -> core::result::Result<R, AccessError>
     where
         F: FnOnce(&T) -> R,
     {
-        // The accessor is reached through a fn pointer, so its parameter type
-        // reaches the argument only through this annotation.
-        let init: *mut Option<T> = core::ptr::null_mut();
-        let slot = (self.inner)(init);
-        match unsafe { slot.as_ref() } {
-            Option::Some(value) => core::result::Result::Ok(f(value)),
-            Option::None => core::result::Result::Err(AccessError),
-        }
+        let value: &'static T = self.slot();
+        core::result::Result::Ok(f(value))
     }
     fn initialize_with<F, R>(&'static self, init: T, f: F) -> R
     where
@@ -151,11 +149,8 @@ impl<T: 'static> LocalKey<T> {
     {
         let mut init = Option::Some(init);
         let provided: *mut Option<T> = &mut init;
-        let slot = (self.inner)(provided);
-        match unsafe { slot.as_ref() } {
-            Option::Some(reference) => f(init, reference),
-            Option::None => panic_access_error(),
-        }
+        let reference: &'static T = (self.inner)(provided);
+        f(init, reference)
     }
 }
 
@@ -173,16 +168,19 @@ impl<T: 'static> LocalKey<core::cell::Cell<T>> {
     where
         T: Copy,
     {
-        self.with(|cell| cell.get())
+        let cell: &'static core::cell::Cell<T> = self.slot();
+        cell.get()
     }
     pub fn take(&'static self) -> T
     where
         T: Default,
     {
-        self.with(|cell| cell.take())
+        let cell: &'static core::cell::Cell<T> = self.slot();
+        cell.take()
     }
     pub fn replace(&'static self, value: T) -> T {
-        self.with(|cell| cell.replace(value))
+        let cell: &'static core::cell::Cell<T> = self.slot();
+        cell.replace(value)
     }
 }
 
@@ -191,13 +189,15 @@ impl<T: 'static> LocalKey<core::cell::RefCell<T>> {
     where
         F: FnOnce(&T) -> R,
     {
-        self.with(|cell| f(&*cell.borrow()))
+        let cell = self.slot();
+        f(&*cell.borrow())
     }
     pub fn with_borrow_mut<F, R>(&'static self, f: F) -> R
     where
         F: FnOnce(&mut T) -> R,
     {
-        self.with(|cell| f(&mut *cell.borrow_mut()))
+        let cell = self.slot();
+        f(&mut *cell.borrow_mut())
     }
     pub fn set(&'static self, value: T) {
         self.initialize_with(core::cell::RefCell::new(value), |value, cell| {
@@ -210,10 +210,12 @@ impl<T: 'static> LocalKey<core::cell::RefCell<T>> {
     where
         T: Default,
     {
-        self.with(|cell| cell.replace(T::default()))
+        let cell = self.slot();
+        cell.replace(T::default())
     }
     pub fn replace(&'static self, value: T) -> T {
-        self.with(|cell| cell.replace(value))
+        let cell = self.slot();
+        cell.replace(value)
     }
 }
 
@@ -235,7 +237,7 @@ pub mod local_impl {
             }
         }
         // `i` is the value `LocalKey::set` offers for the initial one, or null.
-        pub fn get(&'static self, i: *mut Option<T>, f: impl FnOnce() -> T) -> *const T {
+        pub fn get(&'static self, i: *mut Option<T>, f: impl FnOnce() -> T) -> &'static T {
             let slot = self.value.lrr_get_mut();
             if slot.is_none() {
                 let provided = if i.is_null() {
@@ -250,8 +252,8 @@ pub mod local_impl {
                 *slot = Option::Some(value);
             }
             match slot {
-                Option::Some(value) => value as *const T,
-                Option::None => core::ptr::null(),
+                Option::Some(value) => unsafe { &*(value as *const T) },
+                Option::None => panic_access_error(),
             }
         }
     }

@@ -186,6 +186,17 @@ pub struct DiscoveryInput {
         crate::frontend::runtime_macro_plan::RuntimeNoItemProof,
     )>,
     pub(crate) scope: Option<CertifiedScope>,
+    /// The payload fingerprint, computed once: a published catalog is
+    /// immutable and every dependent query records its fingerprint. A clone
+    /// starts empty because it may be modified before it is published.
+    pub(crate) payload_digest: PayloadDigest,
+}
+#[derive(Debug, Default)]
+pub(crate) struct PayloadDigest(std::sync::OnceLock<Digest>);
+impl Clone for PayloadDigest {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
 }
 impl DiscoveryInput {
     /// Exact privately minted primary or contained facet. A contained Type
@@ -258,7 +269,15 @@ impl DiscoveryInput {
                 .take_while(|proof| proof.scope().scope == bucket.scope)
             {
                 let candidate = proof.scope();
-                if selected.is_some_and(|old| old.edition != candidate.edition) {
+                if let Some(old) = selected
+                    && old.edition != candidate.edition
+                {
+                    // A scope certified under several editions (library macro
+                    // tokens of another edition name items of this scope) has one
+                    // declared-name answer when the facets agree on this bucket.
+                    if old.lookup(bucket)? == candidate.lookup(bucket)? {
+                        continue;
+                    }
                     return Err(crate::core::diagnostic::Diagnostic::new(
                         "LRR-E-QUERY-REQUEST",
                         "sealed bucket requires profile-specific query identity".into(),
@@ -572,9 +591,11 @@ impl DiscoveryInput {
     /// Entire existing publication payload, excluding only the new completion
     /// receipt itself. Used only at cold source-catalog admission/reader setup.
     pub(crate) fn catalog_payload_fingerprint(&self) -> Digest {
-        let mut e = StableEncoder::new(<Self as StableEncode>::DOMAIN);
-        self.encode_catalog_payload(&mut e);
-        e.finish()
+        *self.payload_digest.0.get_or_init(|| {
+            let mut e = StableEncoder::new(<Self as StableEncode>::DOMAIN);
+            self.encode_catalog_payload(&mut e);
+            e.finish()
+        })
     }
     fn encode_catalog_payload(&self, e: &mut StableEncoder) {
         e.record(&self.seal);
@@ -638,7 +659,9 @@ impl DiscoveryInput {
 impl StableEncode for DiscoveryInput {
     const DOMAIN: &'static str = "lrr/v4/discovery-input/type-scope-receipts-v1";
     fn encode_fields(&self, e: &mut StableEncoder) {
-        self.encode_catalog_payload(e);
+        // The payload is encoded once per catalog (it is large and every
+        // dependent query fingerprints it); its digest stands for it.
+        e.digest(self.catalog_payload_fingerprint());
         // Preserve exact existing Scope/TestCatalog encodings. Only the new
         // genuine source-catalog publication carries this typed extension.
         if let Some(completion) = &self.impl_catalog {

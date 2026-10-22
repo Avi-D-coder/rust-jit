@@ -158,21 +158,18 @@ impl ParsedFile {
                     type_ref,
                     trait_ref,
                 }) if cursor.qualifier().is_none() => {
-                    let Some(ty) = type_ref.and_then(|ty| match ty {
-                        ast::Type::PathType(path) => path.path(),
-                        _ => None,
-                    }) else {
+                    let Some(ty) = type_ref else {
                         return Ok(WrittenValuePath::Refused(
                             "qualified value path anchor requires structural type integration",
                         ));
                     };
-                    let Some(ty) = self.anchor_spelling(&ty, anchor, cfg, false)? else {
+                    let Some(ty) = self.anchor_type_spelling(&ty, anchor, cfg, false)? else {
                         return Ok(WrittenValuePath::Refused(
                             "qualified value path anchor requires further type integration",
                         ));
                     };
                     match trait_ref.and_then(|tr| tr.path()) {
-                        Some(tr) => match self.anchor_spelling(&tr, anchor, cfg, false)? {
+                        Some(tr) => match self.anchor_spelling_with(&tr, anchor, cfg, false, true)? {
                             Some(tr) => format!("<{ty} as {tr}>"),
                             None => {
                                 return Ok(WrittenValuePath::Refused(
@@ -458,6 +455,71 @@ impl ParsedFile {
             !matches!(&*text, "$crate" | "Self" | "self" | "super" | "crate")
         })
     }
+    /// The root of a qualified path (two or more segments) that a block's
+    /// inline module names: the nearest enclosing block binding that name in
+    /// the Type namespace is a `mod` item. The path then continues inside that
+    /// module, whatever its length, through the one qualified body-module
+    /// kernel (the root is the lexical alias `entered_macros` binds to the
+    /// hoisted module), so a constant, constructor or function of the module
+    /// is selected as if it were written with the module's full path. A module
+    /// item is searched only up to the nearest enclosing module: an item list
+    /// does not see the lexical scope of the block that contains it.
+    pub(crate) fn block_module_root(
+        path: &ast::Path,
+        edition: u16,
+        cfg: &crate::source::snapshot::CfgSet,
+    ) -> Result<Option<ast::NameRef>, Diagnostic> {
+        if path.qualifier().is_none() {
+            return Ok(None);
+        }
+        let mut root = path.clone();
+        while let Some(parent) = root.qualifier() {
+            root = parent;
+        }
+        let Some(segment) = root.segment() else {
+            return Ok(None);
+        };
+        if segment.coloncolon_token().is_some() || segment.generic_arg_list().is_some() {
+            return Ok(None);
+        }
+        let Some(name) = segment.name_ref().filter(|name| {
+            !matches!(&*name.text(), "$crate" | "Self" | "self" | "super" | "crate")
+        }) else {
+            return Ok(None);
+        };
+        let wanted = MacroName::parse(name.text().as_ref(), edition)?;
+        for ancestor in path.syntax().ancestors() {
+            if ast::ItemList::can_cast(ancestor.kind()) {
+                break;
+            }
+            let Some(list) = ast::StmtList::cast(ancestor) else {
+                continue;
+            };
+            for statement in list.statements() {
+                let ast::Stmt::Item(item) = statement else {
+                    continue;
+                };
+                if !statement_cfg(item.syntax(), cfg)?.0 {
+                    continue;
+                }
+                let (declared, module) = match &item {
+                    ast::Item::Module(item) => (item.name(), item.item_list().is_some()),
+                    ast::Item::Struct(item) => (item.name(), false),
+                    ast::Item::Enum(item) => (item.name(), false),
+                    ast::Item::Union(item) => (item.name(), false),
+                    ast::Item::Trait(item) => (item.name(), false),
+                    ast::Item::TypeAlias(item) => (item.name(), false),
+                    _ => continue,
+                };
+                if declared.is_some_and(|declared| {
+                    MacroName::parse(declared.text(), edition).is_ok_and(|declared| declared == wanted)
+                }) {
+                    return Ok(module.then_some(name));
+                }
+            }
+        }
+        Ok(None)
+    }
     /// Whether a block-level `use` may bind the root of a three-or-more
     /// segment path; the entered lexical Value goal then resolves the path
     /// from that binding (`lookup_qualified_module`), never the module route.
@@ -540,7 +602,10 @@ impl ParsedFile {
                     ast::Item::Struct(item) => item.name(),
                     ast::Item::Enum(item) => item.name(),
                     ast::Item::Union(item) => item.name(),
-                    ast::Item::Module(item) => item.name(),
+                    // An inline module is bound by its lexical import alias
+                    // (`enclosing_import_may_bind`); an out-of-line one is not
+                    // hoisted and stays a block item.
+                    ast::Item::Module(item) if item.item_list().is_none() => item.name(),
                     ast::Item::TypeAlias(item) => item.name(),
                     ast::Item::Trait(item) => item.name(),
                     _ => None,

@@ -2476,6 +2476,9 @@ impl GeneratedMacroCatalog {
                 && compiler.select(&definition)?.is_some()
             {
                 request = request.with_compiler(compiler)?;
+            } else if let Some(kind) = context.provider.library_builtin(&definition) {
+                request =
+                    request.with_library_builtin(context.provider, kind, parents, call_scope)?;
             } else {
                 let owner = context.definition_owner(&definition)?;
                 request = request.with_enclosing(owner, parents)?;

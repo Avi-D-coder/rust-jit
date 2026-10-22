@@ -22,9 +22,42 @@ use crate::{
 };
 use std::sync::{Mutex, OnceLock};
 
-fn mode() -> Option<&'static str> {
-    static MODE: OnceLock<Option<String>> = OnceLock::new();
-    MODE.get_or_init(|| std::env::var("LRR_SCR_SHADOW").ok()).as_deref()
+/// Which service decides an unsuffixed numeric literal's Type (`LRR_SCR_SHADOW`).
+/// The legacy static service (`binding_constraints::Component`) decides every
+/// literal by default. The component rows are an opt-in second opinion until the
+/// catalog can be requested lazily (solving needs the impl catalog, whose
+/// discovery suspends the machine, so it is requested before the first
+/// operation and costs every run that enables it).
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum ComponentMode {
+    /// Legacy decides; the rows are not built.
+    Legacy,
+    /// Build and report the rows next to the legacy answer (`census`).
+    Census,
+    /// Solve the rows through the pinned owner and report (`solve`).
+    Solve,
+    /// Solve, and let the pinned owner decide a literal the legacy service left
+    /// without a static answer (`apply`). A legacy answer is never replaced.
+    Apply,
+}
+impl ComponentMode {
+    const DEFAULT: Self = Self::Legacy;
+    fn solves(self) -> bool {
+        matches!(self, Self::Solve | Self::Apply)
+    }
+}
+fn mode() -> Option<ComponentMode> {
+    static MODE: OnceLock<ComponentMode> = OnceLock::new();
+    let mode = *MODE.get_or_init(|| match std::env::var("LRR_SCR_SHADOW").as_deref() {
+        Ok("census") => ComponentMode::Census,
+        Ok("solve") => ComponentMode::Solve,
+        Ok("apply") => ComponentMode::Apply,
+        Ok("off") | Ok("legacy") => ComponentMode::Legacy,
+        // Any other value (including an empty one) is the census, as before.
+        Ok(_) => ComponentMode::Census,
+        Err(_) => ComponentMode::DEFAULT,
+    });
+    (mode != ComponentMode::Legacy).then_some(mode)
 }
 
 /// Literals a solved component already answered: its other literals share the
@@ -53,7 +86,7 @@ impl RunMachine {
         };
         // Solving needs the impl catalog; discovery suspends, so request it
         // before the first operation runs (no prepared input is in flight).
-        if (mode == "solve" || mode == "apply")
+        if mode.solves()
             && self.frame.counters.operations_started == 0
             && let Some(inventory) = self.impl_catalog.clone()
             && db.input(&crate::db::dependency::InputKey::DiscoverySeal(inventory.clone())).is_none()
@@ -79,6 +112,13 @@ impl RunMachine {
         let Some((spelling, hint, destination)) = literal else {
             return QueryPoll::Ready(Ok(()));
         };
+        // `apply` consults the rows only for a literal the legacy service left
+        // without a static answer; every other literal costs nothing here.
+        if mode == ComponentMode::Apply
+            && !matches!(hint, crate::ir::op::HintRecipe::None | crate::ir::op::HintRecipe::RelatedNumeric(_))
+        {
+            return QueryPoll::Ready(Ok(()));
+        }
         let pc = self.frame.pc().clone();
         let key = PcKey {
             body: pc.body.clone(),
@@ -92,7 +132,7 @@ impl RunMachine {
             .ok()
             .and_then(|answers| answers.get(&(key.body.definition, key.node)).copied());
         if let Some(leaf) = cached {
-            if mode == "apply" && matches!(hint, crate::ir::op::HintRecipe::None) {
+            if mode == ComponentMode::Apply && matches!(hint, crate::ir::op::HintRecipe::None | crate::ir::op::HintRecipe::RelatedNumeric(_)) {
                 if let Err(error) = self.apply_leaf(destination, leaf) {
                     return QueryPoll::Ready(Err(error));
                 }
@@ -106,10 +146,37 @@ impl RunMachine {
         if !first {
             return QueryPoll::Ready(Ok(()));
         }
-        let rows = match rows::build(db, &key) {
+        let solving = mode.solves();
+        // The solve rounds run inside the row build: a method call or field
+        // access states its rows once the pinned owner has resolved its base.
+        let mut last: Option<ScrAnswer> = None;
+        let built = if solving {
+            let mut round = |db: &mut Database, rows: &ComponentRows| {
+                let started = std::time::Instant::now();
+                let outcome = self.solve_component(db, &key, rows);
+                if std::env::var_os("LRR_SCR_DEBUG").is_some() {
+                    eprintln!("SCR-DEBUG solve node={} took {:?}", key.node, started.elapsed());
+                }
+                match outcome {
+                    QueryPoll::Ready(Ok((answer, values))) => {
+                        last = Some(answer);
+                        QueryPoll::Ready(Ok(values))
+                    }
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                }
+            };
+            rows::build_with(db, &key, Some(&mut round))
+        } else {
+            rows::build(db, &key)
+        };
+        let rows = match built {
             QueryPoll::Ready(Ok(Some(rows))) => rows,
             QueryPoll::Ready(Ok(None)) => return QueryPoll::Ready(Ok(())),
             QueryPoll::Ready(Err(error)) => {
+                if let Ok(mut seen) = seen().lock() {
+                    seen.remove(&(key.body.definition, key.node));
+                }
                 eprintln!("SCR-SHADOW node={} lit={spelling} rows-error {}: {}", key.node, error.code, error.message);
                 return QueryPoll::Ready(Ok(()));
             }
@@ -121,38 +188,28 @@ impl RunMachine {
                 return QueryPoll::NeedInput(input);
             }
         };
-        let solved = if mode == "solve" || mode == "apply" {
-            match self.solve_component(db, &key, &rows) {
-                QueryPoll::Ready(Ok(answer)) => {
-                    if let Ok(mut answers) = answered().lock() {
-                        for (node, _) in &rows.literals {
-                            answers.entry((key.body.definition, node.0)).or_insert(None);
-                        }
-                        for (node, leaf) in &answer.literals {
-                            answers.insert((key.body.definition, node.0), *leaf);
-                        }
-                        answers.insert((key.body.definition, key.node), answer.leaf);
-                    }
-                    // `apply`: the pinned owner decides a literal the legacy
-                    // service left without a static answer. The reached
-                    // slot hint is the ordinary hint route; a legacy answer
-                    // (a primitive or reached-sibling evidence) is never
-                    // replaced, so the two can only be compared, not mixed.
-                    if mode == "apply" && matches!(hint, crate::ir::op::HintRecipe::None) {
-                        if let Err(error) = self.apply_leaf(destination, answer.leaf) {
-                            return QueryPoll::Ready(Err(error));
-                        }
-                    }
-                    Some(answer.text)
+        let solved = if solving {
+            let answer = last.unwrap_or_else(|| ScrAnswer::text("not-solved"));
+            if let Ok(mut answers) = answered().lock() {
+                for (node, _) in &rows.literals {
+                    answers.entry((key.body.definition, node.0)).or_insert(None);
                 }
-                QueryPoll::Ready(Err(error)) => Some(format!("error {}: {}", error.code, error.message.chars().take(160).collect::<String>())),
-                QueryPoll::NeedInput(input) => {
-                    if let Ok(mut seen) = seen().lock() {
-                        seen.remove(&(key.body.definition, key.node));
-                    }
-                    return QueryPoll::NeedInput(input);
+                for (node, leaf) in &answer.literals {
+                    answers.insert((key.body.definition, node.0), *leaf);
+                }
+                answers.insert((key.body.definition, key.node), answer.leaf);
+            }
+            // `apply`: the pinned owner decides a literal the legacy
+            // service left without a static answer. The reached
+            // slot hint is the ordinary hint route; a legacy answer
+            // (a primitive or reached-sibling evidence) is never
+            // replaced, so the two can only be compared, not mixed.
+            if mode == ComponentMode::Apply && matches!(hint, crate::ir::op::HintRecipe::None | crate::ir::op::HintRecipe::RelatedNumeric(_)) {
+                if let Err(error) = self.apply_leaf(destination, answer.leaf) {
+                    return QueryPoll::Ready(Err(error));
                 }
             }
+            Some(answer.text)
         } else {
             None
         };
@@ -176,7 +233,12 @@ impl RunMachine {
 
     /// Run the rows through the pinned owner; the leaf literal's answer or a
     /// typed reason it has none.
-    fn solve_component(&mut self, db: &mut Database, key: &PcKey, rows: &ComponentRows) -> QueryPoll<ScrAnswer> {
+    fn solve_component(
+        &mut self,
+        db: &mut Database,
+        key: &PcKey,
+        rows: &ComponentRows,
+    ) -> QueryPoll<(ScrAnswer, Option<BTreeMap<InferVarKey, TyTerm>>)> {
         macro_rules! ready {
             ($value:expr) => {
                 match $value {
@@ -187,7 +249,7 @@ impl RunMachine {
             };
         }
         let Some(inventory) = self.impl_catalog.clone() else {
-            return QueryPoll::Ready(Ok(ScrAnswer::text("no-catalog")));
+            return QueryPoll::Ready(Ok((ScrAnswer::text("no-catalog"), None)));
         };
         // Catalog discovery suspends the machine. Only the very first
         // operation may do that without disturbing in-flight prepared inputs
@@ -195,11 +257,11 @@ impl RunMachine {
         if db.input(&crate::db::dependency::InputKey::DiscoverySeal(inventory.clone())).is_none()
             && self.frame.counters.operations_started != 0
         {
-            return QueryPoll::Ready(Ok(ScrAnswer::text("catalog-not-yet-published")));
+            return QueryPoll::Ready(Ok((ScrAnswer::text("catalog-not-yet-published"), None)));
         }
         let (caller, caller_environment, caller_callable) = self.reached_caller(key);
         let Some(caller_callable) = caller_callable else {
-            return QueryPoll::Ready(Ok(ScrAnswer::text("no-caller-callable")));
+            return QueryPoll::Ready(Ok((ScrAnswer::text("no-caller-callable"), None)));
         };
         let span = match self.frame.body.span(NodeId(key.node)) {
             Ok(span) => span,
@@ -209,22 +271,25 @@ impl RunMachine {
         let caller_body = db.input(&crate::db::dependency::InputKey::DefinitionBody(key.body.definition));
         let site = match self.reached_source_site(&span, caller_source.as_deref(), caller_body.as_deref()) {
             Ok(Some(site)) => site,
-            Ok(None) => return QueryPoll::Ready(Ok(ScrAnswer::text("no-source-site"))),
+            Ok(None) => return QueryPoll::Ready(Ok((ScrAnswer::text("no-source-site"), None))),
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
         // Variables, scoped by the leaf's entry.
         let transaction = rows.transaction;
         let var = |ordinal: u32| InferVarKey { transaction, ordinal };
         let mut variables = BTreeMap::new();
+        let mut const_variables = Vec::new();
         for (ordinal, family) in rows.vars.iter().enumerate() {
-            variables.insert(
-                var(ordinal as u32),
-                match family {
-                    RowFamily::Type => SourceVariableFamily::Type,
-                    RowFamily::Integer => SourceVariableFamily::Integer,
-                    RowFamily::Float => SourceVariableFamily::Float,
-                },
-            );
+            let family = match family {
+                RowFamily::Type => SourceVariableFamily::Type,
+                RowFamily::Integer => SourceVariableFamily::Integer,
+                RowFamily::Float => SourceVariableFamily::Float,
+                RowFamily::Const => {
+                    const_variables.push(var(ordinal as u32));
+                    continue;
+                }
+            };
+            variables.insert(var(ordinal as u32), family);
         }
         fn term(row: &RowTerm, var: &dyn Fn(u32) -> InferVarKey) -> TyTerm {
             match row {
@@ -250,21 +315,39 @@ impl RunMachine {
             .deferred
             .iter()
             .map(|row| match row {
-                DeferredRow::Deref { operand, result, .. } => DeferredRelation {
-                    kind: DeferredRelationKind::Deref,
-                    first: term(operand, &var),
-                    second: term(operand, &var),
-                    result: term(result, &var),
-                    site,
-                },
+                DeferredRow::Deref { operand, result, .. } => {
+                    let first = term(operand, &var);
+                    let projection = rows.deref_trait.map(|trait_key| {
+                        TyTerm::Projection(Box::new(crate::traits::term::ProjectionKey {
+                            trait_ref: crate::traits::term::TraitRef {
+                                trait_key,
+                                self_ty: first.clone(),
+                                args: Vec::new(),
+                            },
+                            item: crate::frontend::member_index::associated_name_key("Target"),
+                            item_args: Vec::new(),
+                        }))
+                    });
+                    DeferredRelation {
+                        kind: DeferredRelationKind::Deref,
+                        second: first.clone(),
+                        first,
+                        result: term(result, &var),
+                        projection,
+                        site,
+                    }
+                }
                 DeferredRow::Binary { kind, lhs, rhs, result, .. } => DeferredRelation {
                     kind: match kind {
                         BinaryRowKind::Arithmetic => DeferredRelationKind::Arithmetic,
                         BinaryRowKind::Comparison => DeferredRelationKind::Comparison,
+                        BinaryRowKind::Compound => DeferredRelationKind::Compound,
+                        BinaryRowKind::Shift => DeferredRelationKind::Shift,
                     },
                     first: term(lhs, &var),
                     second: term(rhs, &var),
                     result: term(result, &var),
+                    projection: None,
                     site,
                 },
             })
@@ -278,21 +361,32 @@ impl RunMachine {
                 callee: row.callee,
                 signature: fingerprint.finish(),
                 parameters: row.generics.iter().map(|(key, ordinal)| (*key, TyTerm::Infer(var(*ordinal)))).collect(),
+                constants: row
+                    .constants
+                    .iter()
+                    .map(|(key, ordinal)| (*key, crate::traits::term::ConstTerm::Infer(var(*ordinal))))
+                    .collect(),
             });
         }
         let literals: Vec<InferVarKey> = rows.literals.iter().map(|(_, ordinal)| var(*ordinal)).collect();
         // The component's owner is the caller body: its own generics are rigid.
         let mut parameters = BTreeMap::new();
+        let mut constants = BTreeMap::new();
         if let Some(environment) = &caller_environment {
             for generic in &environment.definition().generics {
-                if generic.kind != GenericKind::Type {
-                    continue;
-                }
                 let parameter = ParamKey {
                     definition: environment.definition().definition,
                     ordinal: generic.ordinal,
                 };
-                parameters.insert(parameter, TyTerm::Param(parameter));
+                match generic.kind {
+                    GenericKind::Type => {
+                        parameters.insert(parameter, TyTerm::Param(parameter));
+                    }
+                    GenericKind::Const => {
+                        constants.insert(parameter, crate::traits::term::ConstTerm::Param(parameter));
+                    }
+                    _ => {}
+                }
             }
         }
         let mut digest = StableEncoder::new("lrr/v1/component-rows");
@@ -317,7 +411,13 @@ impl RunMachine {
             deferred: &deferred,
             sites: &sites,
             literals: &literals,
-            closed: rows.holes.is_empty(),
+            const_variables: &const_variables,
+            constants: &constants,
+            closed: rows.is_closed(),
+            deref_trait: rows.deref_trait,
+            eq_trait: rows.eq_trait,
+            into_iter_trait: rows.into_iter_trait,
+            index_trait: rows.index_trait,
         };
         let packet = SourceRootCallInput {
             callee: key.body.definition,
@@ -361,22 +461,43 @@ impl RunMachine {
                         (*node, found)
                     })
                     .collect();
-                ScrAnswer {
-                    leaf: primitive,
-                    literals,
-                    text: format!("{answer} closed={}", response.closed),
-                }
+                (
+                    ScrAnswer {
+                        leaf: primitive,
+                        literals,
+                        text: format!("{answer} closed={}", response.closed),
+                    },
+                    Some(response.values),
+                )
             }
-            ReachedCallOutcome::Held(hold) => ScrAnswer::text(format!(
-                "held {}: {}",
-                hold.stage,
-                hold.reason.chars().take(120).collect::<String>()
-            )),
-            ReachedCallOutcome::Failed(failures) => ScrAnswer::text(format!(
-                "failed {}",
-                failures.first().map(|failure| failure.predicate.chars().take(120).collect::<String>()).unwrap_or_default()
-            )),
-            ReachedCallOutcome::Overflow(_) => ScrAnswer::text("overflow"),
+            ReachedCallOutcome::Held(hold) => (
+                ScrAnswer::text(format!(
+                    "held {}: {}",
+                    hold.stage,
+                    hold.reason.chars().take(120).collect::<String>()
+                )),
+                None,
+            ),
+            ReachedCallOutcome::Failed(failures) => {
+                if std::env::var_os("LRR_SCR_DEBUG").is_some() {
+                    for failure in &failures {
+                        let equation = failure
+                            .ordinal
+                            .and_then(|ordinal| rows.equations.get(ordinal))
+                            .map(|row| format!("node={} {:?} == {:?}", row.node.0, row.left, row.right))
+                            .unwrap_or_default();
+                        eprintln!("SCR-DEBUG failure ordinal={:?} {equation} :: {}", failure.ordinal, failure.predicate);
+                    }
+                }
+                (
+                    ScrAnswer::text(format!(
+                        "failed {}",
+                        failures.first().map(|failure| failure.predicate.chars().take(120).collect::<String>()).unwrap_or_default()
+                    )),
+                    None,
+                )
+            }
+            ReachedCallOutcome::Overflow(_) => (ScrAnswer::text("overflow"), None),
         }))
     }
 }
@@ -394,7 +515,7 @@ impl ScrAnswer {
     }
 }
 
-fn report(_mode: &str, spelling: &str, hint: &crate::ir::op::HintRecipe, rows: &ComponentRows, solved: Option<&str>) {
+fn report(_mode: ComponentMode, spelling: &str, hint: &crate::ir::op::HintRecipe, rows: &ComponentRows, solved: Option<&str>) {
     let holes: Vec<&str> = {
         let mut why: Vec<&str> = rows.holes.iter().map(|hole| hole.why.as_str()).collect();
         why.sort_unstable();

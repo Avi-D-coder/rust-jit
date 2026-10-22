@@ -562,9 +562,18 @@ impl RunMachine {
                 match self.associated_value_path(db, path) {
                     QueryPoll::Ready(Ok(Some(constant))) => constant,
                     QueryPoll::Ready(Ok(None)) => {
-                        return QueryPoll::Ready(Err(unsupported(format!(
-                            "value path `{path}` has no unique accessible declaration"
-                        ))));
+                        // An associated function (`Type::f`, `<Type as Trait>::f`)
+                        // is a function item value of its own.
+                        match self.associated_function_value(db, path) {
+                            QueryPoll::Ready(Ok(Some(function))) => function,
+                            QueryPoll::Ready(Ok(None)) => {
+                                return QueryPoll::Ready(Err(unsupported(format!(
+                                    "value path `{path}` has no unique accessible declaration"
+                                ))));
+                            }
+                            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                        }
                     }
                     QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                     QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
@@ -600,6 +609,47 @@ impl RunMachine {
             return QueryPoll::Ready(Err(call_fault("associated value qualifier is not its retained occurrence")));
         }
         QueryPoll::Ready(Ok(selected))
+    }
+    /// The associated function a type-relative written path selects through
+    /// the same `CallResolver` route a call of that path uses; `None` when
+    /// the path selects no unique source function.
+    fn associated_function_value(
+        &self,
+        db: &mut Database,
+        path: &str,
+    ) -> QueryPoll<Option<crate::core::digest::Digest>> {
+        let Some(graph) = &self.graph else {
+            return QueryPoll::Ready(Ok(None));
+        };
+        let sources: Vec<_> = self.sources.iter().collect();
+        let resolver = match CallResolver::new(graph, &sources) {
+            Ok(resolver) => resolver.with_members(self.members.as_deref()),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        match resolver.source_function(db, self.frame.pc().body.definition, path) {
+            QueryPoll::Ready(Ok(crate::frontend::callables::CallSelection::Source(callee))) => {
+                QueryPoll::Ready(Ok(Some(callee.identity())))
+            }
+            // Several impls differing by the trait's arguments: the value has
+            // no argument to select by, so the trait's defaulted ones apply.
+            QueryPoll::Ready(Ok(crate::frontend::callables::CallSelection::TypeRelative)) => {
+                match resolver.anchored_default_function(db, self.frame.pc().body.definition, path) {
+                    QueryPoll::Ready(Ok(Some(function))) => match resolver
+                        .select_member_function(db, function)
+                    {
+                        QueryPoll::Ready(Ok(callee)) => QueryPoll::Ready(Ok(Some(callee.identity()))),
+                        QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                    },
+                    QueryPoll::Ready(Ok(None)) => QueryPoll::Ready(Ok(None)),
+                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                }
+            }
+            QueryPoll::Ready(Ok(_)) => QueryPoll::Ready(Ok(None)),
+            QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+        }
     }
     fn associated_value_path(
         &self,

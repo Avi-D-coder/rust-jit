@@ -320,7 +320,7 @@ impl GenericEnv {
             ConstTerm::Value(_) => true,
             ConstTerm::Param(key) => owns(key, GenericKind::Const),
             ConstTerm::Bound { depth, .. } => (*depth as usize) < binders,
-            ConstTerm::Placeholder(_) => false,
+            ConstTerm::Placeholder(_) | ConstTerm::Infer(_) => false,
         };
         let mut work = vec![(source, 0usize)];
         while let Some((term, binders)) = work.pop() {

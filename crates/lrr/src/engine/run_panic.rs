@@ -81,7 +81,7 @@ impl RunMachine {
                         self.abandon_return(returning)?;
                     }
                 }
-                CallContinuation::Site { .. } => {
+                CallContinuation::Site { .. } | CallContinuation::Termination => {
                     self.frame.status = crate::vm::frame::FrameStatus::Panicked;
                 }
                 // The operator's own operation becomes the panicking one.

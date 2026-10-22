@@ -120,6 +120,13 @@ pub enum BuiltinKind {
     Gca,
     TestBinderConstraints,
     ViewType,
+    /// `core::mem::offset_of!`: a library macro whose body is compiler
+    /// `builtin # offset_of(..)` syntax, expanded here (see `expand_offset_of`).
+    OffsetOf,
+    /// `core::macros::builtin::type_ascribe!`: body is `builtin # type_ascribe(..)`.
+    TypeAscribe,
+    /// `core::pin::pin!`: body uses `super let` (see `expand_pin`).
+    Pin,
 }
 
 /// Which component implements a builtin.
@@ -170,6 +177,9 @@ const BUILTINS: &[(&str, BuiltinKind)] = &[
     ("trace_macros", BuiltinKind::TraceMacros),
     ("unreachable", BuiltinKind::Unreachable),
     ("view_type", BuiltinKind::ViewType),
+    ("offset_of", BuiltinKind::OffsetOf),
+    ("type_ascribe", BuiltinKind::TypeAscribe),
+    ("pin", BuiltinKind::Pin),
 ];
 
 /// Classify a builtin by its rustc builtin name: the argument of
@@ -195,14 +205,13 @@ impl BuiltinKind {
         match self {
             Assert | CorePanic | StdPanic | Unreachable | FormatArgs | ConstFormatArgs
             | FormatArgsNl | Line | Column | File | ModulePath | Stringify | Cfg | CompileError
-            | Gca => BuiltinDisposition::Adapter,
+            | Gca | OffsetOf | CfgSelect | TypeAscribe | Pin => BuiltinDisposition::Adapter,
             Concat | ConcatBytes | Env | OptionEnv | Include | IncludeBytes | IncludeStr => {
                 BuiltinDisposition::HandledByLrr
             }
             Asm
             | GlobalAsm
             | NakedAsm
-            | CfgSelect
             | LogSyntax
             | TraceMacros
             | PatternType
@@ -276,6 +285,24 @@ pub struct BuiltinCallSite {
     pub cfg: BTreeSet<(String, Option<String>)>,
     /// `$crate` display names by defining unit.
     pub crate_names: BTreeMap<Key, String>,
+    /// Whether `line`/`column`/`file`/`module_path` name the outermost
+    /// expansion's physical call site. A call whose ancestry carries no
+    /// physical location (a generated call whose whole chain lies outside the
+    /// consumer's own file) still has its edition and configuration; asking
+    /// such a call for its location is an explicit failure, not a fake value.
+    pub located: bool,
+}
+
+impl BuiltinCallSite {
+    fn location<T>(&self, value: impl FnOnce() -> T) -> Result<T, AdapterError> {
+        if self.located {
+            Ok(value())
+        } else {
+            Err(fault(
+                "the builtin's physical call-site location is unavailable for this generated call",
+            ))
+        }
+    }
 }
 
 impl BuiltinFacts for BuiltinCallSite {
@@ -283,16 +310,16 @@ impl BuiltinFacts for BuiltinCallSite {
         Ok(self.edition)
     }
     fn line(&self) -> Result<u32, AdapterError> {
-        Ok(self.line)
+        self.location(|| self.line)
     }
     fn column(&self) -> Result<u32, AdapterError> {
-        Ok(self.column)
+        self.location(|| self.column)
     }
     fn file(&self) -> Result<String, AdapterError> {
-        Ok(self.file.clone())
+        self.location(|| self.file.clone())
     }
     fn module_path(&self) -> Result<String, AdapterError> {
-        Ok(self.module_path.clone())
+        self.location(|| self.module_path.clone())
     }
     fn cfg(&self, name: &str, value: Option<&str>) -> Result<bool, AdapterError> {
         Ok(self
@@ -485,13 +512,16 @@ pub fn expand_builtin(
         }
         CompileError => Ok(Err(compile_error(children, call_site))),
         Gca => expand_gca(&mut out, &args),
+        OffsetOf => expand_offset_of(&mut out, &args),
+        CfgSelect => expand_cfg_select(&mut out, &args, facts),
+        TypeAscribe => expand_type_ascribe(&mut out, &args),
+        Pin => expand_pin(&mut out, &args),
         Concat | ConcatBytes | Env | OptionEnv | Include | IncludeBytes | IncludeStr => Err(fault(
             format!("`{}!` is expanded by LRR's compile-input path", kind.name()),
         )),
         Asm
         | GlobalAsm
         | NakedAsm
-        | CfgSelect
         | LogSyntax
         | TraceMacros
         | PatternType
@@ -675,6 +705,23 @@ fn expression_prefix(
     out: &mut Output,
     trees: &[TokenTree],
 ) -> Result<Result<usize, BuiltinFailure>, AdapterError> {
+    fragment_prefix(out, trees, parser::PrefixEntryPoint::Expr, "expected expression")
+}
+
+/// Count of leading top-level trees forming one `$ty` fragment.
+fn type_prefix(
+    out: &mut Output,
+    trees: &[TokenTree],
+) -> Result<Result<usize, BuiltinFailure>, AdapterError> {
+    fragment_prefix(out, trees, parser::PrefixEntryPoint::Ty, "expected type")
+}
+
+fn fragment_prefix(
+    out: &mut Output,
+    trees: &[TokenTree],
+    entry: parser::PrefixEntryPoint,
+    expected: &str,
+) -> Result<Result<usize, BuiltinFailure>, AdapterError> {
     if trees.is_empty() {
         return Ok(Ok(0));
     }
@@ -695,7 +742,7 @@ fn expression_prefix(
     let result = mbe::expect_fragment(
         scratch.database(),
         &mut iter,
-        parser::PrefixEntryPoint::Expr,
+        entry,
         tt::DelimSpan::from_single(open),
     );
     if let Some(error) = result.err {
@@ -709,7 +756,7 @@ fn expression_prefix(
     if consumed == 0 {
         return Ok(Err(failure(
             BuiltinFailureKind::Syntax,
-            "expected expression",
+            expected,
             trees.first().map(first_span),
         )));
     }
@@ -727,6 +774,270 @@ fn first_span(tree: &TokenTree) -> Key {
 
 fn is_str_literal(tree: &TokenTree) -> bool {
     matches!(tree, TokenTree::Literal { token_text, .. } if tts::unquote_str(token_text).is_some())
+}
+
+/// rustc `cfg_select::expand_cfg_select` (`parse_cfg_select`): arms
+/// `<cfg predicate> => { tokens }` / `=> expression,`, then an optional `_`
+/// wildcard arm; the expansion is the tokens of the first arm whose predicate
+/// holds, else the wildcard's. Every arm's predicate is parsed, selected or not.
+fn expand_cfg_select(out: &mut Output, args: &Args<'_>, facts: &dyn BuiltinFacts) -> Outcome {
+    let mut rest: &[TokenTree] = args.children;
+    let mut selected: Option<Vec<TokenTree>> = None;
+    let mut wildcard: Option<Vec<TokenTree>> = None;
+    let fat_arrow = |trees: &[TokenTree]| {
+        trees.windows(2).position(|pair| {
+            matches!(
+                pair,
+                [
+                    TokenTree::Punct { scalar: '=', spacing: Spacing::Joint, .. },
+                    TokenTree::Punct { scalar: '>', .. },
+                ]
+            )
+        })
+    };
+    while !rest.is_empty() {
+        let Some(arrow) = fat_arrow(rest) else {
+            return Ok(Err(failure(
+                BuiltinFailureKind::Syntax,
+                "expected `=>` after a cfg_select predicate",
+                Some(first_span(&rest[0])),
+            )));
+        };
+        let (predicate, after) = (&rest[..arrow], &rest[arrow + 2..]);
+        let is_wildcard =
+            matches!(predicate, [TokenTree::Ident { text, .. }] if text == "_");
+        let Some(first) = after.first() else {
+            return Ok(Err(failure(
+                BuiltinFailureKind::Syntax,
+                "expected the tokens of a cfg_select branch",
+                Some(args.close),
+            )));
+        };
+        let (tokens, consumed) = match first {
+            TokenTree::Group { delimiter: Delimiter::Brace, children, .. } => {
+                (children.clone(), 1)
+            }
+            _ => match expression_prefix(out, after)? {
+                Ok(n) => (after[..n].to_vec(), n),
+                Err(failure) => return Ok(Err(failure)),
+            },
+        };
+        rest = &after[consumed..];
+        if let Some(TokenTree::Punct { scalar: ',', .. }) = rest.first() {
+            rest = &rest[1..];
+        }
+        if is_wildcard {
+            if wildcard.is_none() {
+                wildcard = Some(tokens);
+            }
+            continue;
+        }
+        let entry = match cfg::parse(predicate) {
+            Ok(entry) => entry,
+            Err((message, span)) => {
+                return Ok(Err(failure(
+                    BuiltinFailureKind::Syntax,
+                    message,
+                    Some(span.unwrap_or(first_span(&predicate[0]))),
+                )));
+            }
+        };
+        if wildcard.is_none()
+            && selected.is_none()
+            && cfg::eval(&entry, &mut |name, value| facts.cfg(name, value))?
+        {
+            selected = Some(tokens);
+        }
+    }
+    match selected.or(wildcard) {
+        Some(tokens) => out.finish(tokens),
+        None => Ok(Err(failure(
+            BuiltinFailureKind::Syntax,
+            "none of the predicates in this `cfg_select` evaluated to true",
+            Some(out.call_site),
+        ))),
+    }
+}
+
+/// `pin!($value:expr $(,)?)`: the library macro binds the value with
+/// `super let` (a local that outlives the macro's block) and pins a `&mut` to
+/// it. The stable form of the same construct, `Pin { __pointer: &mut { $value } }`,
+/// is the macro's pre-`super let` definition: the value is moved into a
+/// temporary whose `&mut` lives as long as a `let`-initializer temporary does
+/// (rustc's temporary lifetime extension), which is where `super let` puts it.
+fn expand_pin(out: &mut Output, args: &Args<'_>) -> Outcome {
+    let syntax = |message: &str, at: Key| {
+        failure(BuiltinFailureKind::Syntax, message.to_owned(), Some(at))
+    };
+    if args.children.is_empty() {
+        return Ok(Err(syntax("this macro expects one expression", out.call_site)));
+    }
+    let consumed = match expression_prefix(out, args.children)? {
+        Ok(n) => n,
+        Err(failure) => return Ok(Err(failure)),
+    };
+    let (value, rest) = args.children.split_at(consumed);
+    let rest = match rest.first() {
+        Some(TokenTree::Punct { scalar: ',', .. }) => &rest[1..],
+        _ => rest,
+    };
+    if let Some(extra) = rest.first() {
+        return Ok(Err(syntax("unexpected tokens after the expression", first_span(extra))));
+    }
+    let def_site = out.def_site()?;
+    let call = out.call_site_ctxt()?;
+    // `$crate` carries the defining crate; the segments after it and the field
+    // are plain names that resolve through that crate's module members, so
+    // they take the transparent call-site context (an item path whose segments
+    // carry an opaque def-site mark would need a hygiene adjustment join).
+    let mut tokens = vec![ident("$crate", def_site)];
+    for component in ["pin", "Pin"] {
+        tokens.push(punct(':', Spacing::Joint, call));
+        tokens.push(punct(':', Spacing::Alone, call));
+        tokens.push(ident(component, call));
+    }
+    let mut fields = vec![
+        ident("__pointer", call),
+        punct(':', Spacing::Alone, call),
+        punct('&', Spacing::Alone, call),
+        ident("mut", call),
+    ];
+    fields.push(group(Delimiter::Brace, call, value.to_vec()));
+    tokens.push(group(Delimiter::Brace, call, fields));
+    out.finish(tokens)
+}
+
+/// `type_ascribe!($expr:expr, $ty:ty)`: rustc lowers `builtin # type_ascribe`
+/// to `ExprKind::Type`, a coercion site that checks the expression against the
+/// type and yields it with adjustments applied. As ordinary source that is a
+/// `let` with the type annotation (the same coercion site) in a block that
+/// yields the binding; the binding's name carries this expansion's def-site
+/// mark, so neither operand can name it.
+fn expand_type_ascribe(out: &mut Output, args: &Args<'_>) -> Outcome {
+    let syntax = |message: &str, at: Key| {
+        failure(BuiltinFailureKind::Syntax, message.to_owned(), Some(at))
+    };
+    if args.children.is_empty() {
+        return Ok(Err(syntax("this macro expects an expression and a type", out.call_site)));
+    }
+    let consumed = match expression_prefix(out, args.children)? {
+        Ok(n) => n,
+        Err(failure) => return Ok(Err(failure)),
+    };
+    let (expression, rest) = args.children.split_at(consumed);
+    let rest = match rest.first() {
+        Some(TokenTree::Punct { scalar: ',', .. }) => &rest[1..],
+        Some(other) => return Ok(Err(syntax("expected `,` after the expression", first_span(other)))),
+        None => return Ok(Err(syntax("expected a type", args.close))),
+    };
+    let consumed = match type_prefix(out, rest)? {
+        Ok(n) => n,
+        Err(failure) => return Ok(Err(failure)),
+    };
+    let (ty, rest) = rest.split_at(consumed);
+    let rest = match rest.first() {
+        Some(TokenTree::Punct { scalar: ',', .. }) => &rest[1..],
+        _ => rest,
+    };
+    if let Some(extra) = rest.first() {
+        return Ok(Err(syntax("unexpected tokens after the type", first_span(extra))));
+    }
+        let call = out.call_site_ctxt()?;
+    // The binding is a reserved-spelling local at the caller's context: the
+    // entered local-name service resolves a binding and its use only within
+    // one transparent context, and no source operand spells it.
+    let binding = "__lrr_type_ascribed";
+    let mut body = vec![
+        ident("let", call),
+        ident(binding, call),
+        punct(':', Spacing::Alone, call),
+    ];
+    body.extend(ty.iter().cloned());
+    body.push(punct('=', Spacing::Alone, call));
+    body.extend(expression.iter().cloned());
+    body.push(punct(';', Spacing::Alone, call));
+    body.push(ident(binding, call));
+    out.finish(vec![group(Delimiter::Brace, call, body)])
+}
+
+/// `mem::offset_of!($Container:ty, $($fields:expr)+)`: the library macro's body
+/// is compiler `builtin # offset_of(Container, a.b.0)` syntax, which rustc lowers
+/// to a constant from the type's layout. The tokens become an ordinary call of
+/// the facade wrapper `$crate::mem::lrr_offset_of_in::<Container>("a.b.0")`,
+/// whose layout intrinsic answers from the interpreter's one layout algorithm.
+/// The dotted path is taken from the written tokens exactly as the pinned
+/// parser reads `builtin # offset_of` fields (`0.1.1`, `0. 1`, `0 .1` all name
+/// the same path), so numeric floats lexed from spaced tuple indices are split.
+fn expand_offset_of(out: &mut Output, args: &Args<'_>) -> Outcome {
+    let syntax = |message: &str, at: Key| {
+        failure(BuiltinFailureKind::Syntax, message.to_owned(), Some(at))
+    };
+    if args.children.is_empty() {
+        return Ok(Err(syntax(
+            "this macro expects a container type and a (nested) field path",
+            out.call_site,
+        )));
+    }
+    let consumed = match type_prefix(out, args.children)? {
+        Ok(n) => n,
+        Err(failure) => return Ok(Err(failure)),
+    };
+    let (container, rest) = args.children.split_at(consumed);
+    let rest = match rest.first() {
+        Some(TokenTree::Punct { scalar: ',', .. }) => &rest[1..],
+        Some(other) => return Ok(Err(syntax("expected `,` after the container type", first_span(other)))),
+        None => return Ok(Err(syntax("expected a field path", args.close))),
+    };
+    fn spell(trees: &[TokenTree], text: &mut String) -> Result<(), Key> {
+        for tree in trees {
+            match tree {
+                TokenTree::Ident { text: name, raw, .. } => {
+                    if *raw {
+                        text.push_str("r#");
+                    }
+                    text.push_str(name);
+                }
+                TokenTree::Literal { token_text, span } => {
+                    if !token_text.bytes().all(|b| b.is_ascii_digit() || b == b'.') {
+                        return Err(*span);
+                    }
+                    text.push_str(token_text);
+                }
+                TokenTree::Punct { scalar: '.', .. } => text.push('.'),
+                TokenTree::Punct { span, .. } => return Err(*span),
+                // An `expr` fragment of the library macro, wrapped in a group.
+                TokenTree::Group { delimiter: Delimiter::Invisible | Delimiter::Parenthesis, children, .. } => {
+                    spell(children, text)?
+                }
+                TokenTree::Group { open, .. } => return Err(*open),
+            }
+        }
+        Ok(())
+    }
+    let mut path = String::new();
+    if let Err(at) = spell(rest, &mut path) {
+        return Ok(Err(syntax("expected a field path of names and tuple indices", at)));
+    }
+    if path.is_empty() || path.split('.').any(str::is_empty) {
+        return Ok(Err(syntax("expected a field path of names and tuple indices", args.close)));
+    }
+    let def_site = out.def_site()?;
+    let call = out.call_site_ctxt()?;
+    let mut tokens = std_path(def_site, &["mem", "lrr_offset_of_in"]);
+    tokens.push(punct(':', Spacing::Joint, def_site));
+    tokens.push(punct(':', Spacing::Alone, def_site));
+    tokens.push(punct('<', Spacing::Alone, def_site));
+    tokens.extend(container.iter().cloned());
+    tokens.push(punct('>', Spacing::Alone, def_site));
+    tokens.push(group(
+        Delimiter::Parenthesis,
+        call,
+        vec![TokenTree::Literal {
+            token_text: string_literal(&path),
+            span: def_site,
+        }],
+    ));
+    out.finish(tokens)
 }
 
 /// rustc `gca::expand` (`rustc_builtin_macros/src/gca.rs`): exactly one

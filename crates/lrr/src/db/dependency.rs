@@ -375,12 +375,16 @@ impl DependencyStamp {
     pub fn heap_bytes(&self) -> usize {
         match self {
             Self::Query { key, .. } => key.heap_bytes(),
-            Self::Input { key, .. } => match key {
-                InputKey::ScopeMembers(k) | InputKey::ScopeBlockers(k) => k.heap_bytes(),
-                InputKey::NameCandidates(k) => k.scope.heap_bytes() + k.name.capacity(),
-                InputKey::CompileEnv(k) => k.capacity(),
-                _ => 0,
-            },
+            Self::Input { key, .. } => Self::input_heap_bytes(key),
+        }
+    }
+    /// `heap_bytes` of an input stamp, without constructing the stamp.
+    pub(crate) fn input_heap_bytes(key: &InputKey) -> usize {
+        match key {
+            InputKey::ScopeMembers(k) | InputKey::ScopeBlockers(k) => k.heap_bytes(),
+            InputKey::NameCandidates(k) => k.scope.heap_bytes() + k.name.capacity(),
+            InputKey::CompileEnv(k) => k.capacity(),
+            _ => 0,
         }
     }
     pub fn same_key(&self, other: &Self) -> bool {

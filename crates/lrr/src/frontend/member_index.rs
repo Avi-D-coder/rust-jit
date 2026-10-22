@@ -20,6 +20,9 @@ use crate::{
 };
 use ra_ap_syntax::ast::{self, HasModuleItem};
 use std::collections::{BTreeMap, BTreeSet};
+#[path = "trait_arg_shapes.rs"]
+pub(crate) mod shapes;
+pub(crate) use shapes::ArgShape;
 
 /// A builtin self type of an inherent or trait impl (`impl i32`, `impl str`,
 /// `impl<T> [T]`, `impl<T, const N: usize> [T; N]`), as the facade core declares.
@@ -133,6 +136,13 @@ pub struct ImplMembers {
     pub trait_path: Option<Vec<ImportSegment>>,
     /// The trait's resolved definition, when it resolves to a source trait.
     pub trait_definition: Option<Digest>,
+    /// The Type arguments written on the implemented trait (`Mul<&i32>` ->
+    /// `[&i32]`), as shapes; fewer than the trait's parameters when the
+    /// header omits defaulted ones. `None` when not retained (block-local
+    /// impls): every position is then `Any`.
+    pub trait_arguments: Option<Vec<ArgShape>>,
+    /// The impl's self type as a shape (`Any` when it names none).
+    pub self_shape: ArgShape,
     /// Associated functions by name (definition identities).
     pub functions: BTreeMap<String, Digest>,
     /// Associated types (`type Name = Target;`) by name (alias identities).
@@ -142,6 +152,37 @@ pub struct ImplMembers {
     /// A blanket impl (`impl<T: Bound> Trait for T`): the resolved trait
     /// definitions bounding its self parameter (unresolved bounds are `None`).
     pub blanket: Option<Vec<Option<Digest>>>,
+}
+impl ImplMembers {
+    /// The shape of the implemented trait's `position`th Type argument: as
+    /// written, else (omitted) the trait's default, which is the impl's self
+    /// type when `default_is_self` (`trait Mul<Rhs = Self>`), else `Any`.
+    pub(crate) fn trait_argument(&self, position: usize, default_is_self: bool) -> ArgShape {
+        match &self.trait_arguments {
+            None => ArgShape::Any,
+            Some(written) => match written.get(position) {
+                Some(shape) => shape.clone(),
+                None if default_is_self => self.self_shape.clone(),
+                None => ArgShape::Any,
+            },
+        }
+    }
+    /// Whether the impl's trait arguments may be `wanted` (`None`: any Type).
+    pub(crate) fn admits_trait_arguments(
+        &self,
+        wanted: &[Option<ArgShape>],
+        defaults_are_self: &[bool],
+    ) -> bool {
+        wanted.iter().enumerate().all(|(position, wanted)| {
+            wanted.as_ref().is_none_or(|wanted| {
+                self.trait_argument(
+                    position,
+                    defaults_are_self.get(position).copied().unwrap_or(false),
+                )
+                .admits(wanted)
+            })
+        })
+    }
 }
 /// The member row selected by the existing associated-constant candidate
 /// loop. This retains provider identity; it is not a closed generic
@@ -211,6 +252,9 @@ pub struct MemberIndex {
     /// Every associated function each trait declares (required or
     /// provided), by name: the declaration a trait-path call names.
     trait_declarations: BTreeMap<Digest, BTreeMap<String, Digest>>,
+    /// The trait declaring each trait method (built on first use from
+    /// `trait_declarations`).
+    declaration_traits: std::sync::OnceLock<BTreeMap<Digest, Digest>>,
     /// The trait definitions of the run's world.
     traits: BTreeSet<Digest>,
     /// Associated type aliases of trait impls, by alias identity.
@@ -506,6 +550,13 @@ impl MemberIndex {
             // Trait definitions of this outline; the core facade's
             // `marker::Copy` and `ops::Drop` are the run's lang traits.
             let core = crate::facade::unit(&outline.profile, "core");
+            // Impl headers repeat the same few paths (`Add`, `i32`, `Self`'s
+            // type) in the same modules; `graph` is immutable, so each
+            // (scope, path) is resolved once per outline.
+            #[allow(clippy::type_complexity)]
+            let resolved_paths: std::cell::RefCell<
+                BTreeMap<ScopeKey, BTreeMap<(bool, Vec<ImportSegment>), Option<Digest>>>,
+            > = std::cell::RefCell::new(BTreeMap::new());
             // Module-level type aliases of this outline, by identity.
             let module_aliases: BTreeMap<Digest, &crate::syntax::outline::ItemOutline> = outline
                 .items
@@ -710,18 +761,30 @@ impl MemberIndex {
                             _ => None,
                         });
                     }
-                    Ok(
-                        match graph.lookup_source_path(
-                            Namespace::Type,
-                            &segments,
-                            absolute,
-                            &scope,
-                            edition,
-                        )? {
-                            NameLookup::Defined(definition) => Some(definition.identity),
-                            _ => None,
-                        },
-                    )
+                    let key = (absolute, segments);
+                    if let Some(known) = resolved_paths
+                        .borrow()
+                        .get(&scope)
+                        .and_then(|paths| paths.get(&key))
+                    {
+                        return Ok(*known);
+                    }
+                    let found = match graph.lookup_source_path(
+                        Namespace::Type,
+                        &key.1,
+                        absolute,
+                        &scope,
+                        edition,
+                    )? {
+                        NameLookup::Defined(definition) => Some(definition.identity),
+                        _ => None,
+                    };
+                    resolved_paths
+                        .borrow_mut()
+                        .entry(scope.clone())
+                        .or_default()
+                        .insert(key, found);
+                    Ok(found)
                 };
                 // A `$crate` root keeps the spelling of the crate it names.
                 let spell_dollar = |mut segments: Vec<ImportSegment>| {
@@ -847,6 +910,34 @@ impl MemberIndex {
                     _ => None,
                 };
                 let blanket = blanket_bounds(&implementation, &resolve)?;
+                // The impl's own type and const parameters are `Any` in shapes.
+                let impl_parameters: BTreeSet<String> =
+                    ast::HasGenericParams::generic_param_list(&implementation)
+                        .into_iter()
+                        .flat_map(|list| list.type_or_const_params().collect::<Vec<_>>())
+                        .filter_map(|parameter| match parameter {
+                            ast::TypeOrConstParam::Type(parameter) => {
+                                ast::HasName::name(&parameter).map(|name| name.text().to_string())
+                            }
+                            ast::TypeOrConstParam::Const(parameter) => {
+                                ast::HasName::name(&parameter).map(|name| name.text().to_string())
+                            }
+                        })
+                        .collect();
+                let shape_resolve = |path: Option<ast::Path>| -> Result<Option<Digest>, Diagnostic> {
+                    // A type alias names another Type: not a shape of its own.
+                    Ok(resolve(path)?.filter(|identity| !module_aliases.contains_key(identity)))
+                };
+                let self_shape = match implementation.self_ty() {
+                    Some(ty) => shapes::shape_of(&ty, &impl_parameters, None, &shape_resolve)?,
+                    None => ArgShape::Any,
+                };
+                let trait_arguments = shapes::trait_argument_shapes(
+                    &implementation,
+                    &impl_parameters,
+                    &self_shape,
+                    &shape_resolve,
+                )?;
                 let ordinal = index.impls.len();
                 let functions = functions.remove(&identity).unwrap_or_default();
                 let types = types.remove(&identity).unwrap_or_default();
@@ -875,6 +966,8 @@ impl MemberIndex {
                     self_pointee,
                     trait_path,
                     trait_definition,
+                    trait_arguments: Some(trait_arguments),
+                    self_shape,
                     functions,
                     types,
                     consts,
@@ -1045,6 +1138,25 @@ impl MemberIndex {
             })
             .filter_map(|members| provided(members).map(|function| (members, function)))
             .collect()
+    }
+    /// The trait that declares the associated function `function` (a trait
+    /// method declaration, required or provided).
+    pub(crate) fn trait_of_declaration(&self, function: Digest) -> Option<Digest> {
+        self.layers().find_map(|layer| {
+            layer
+                .declaration_traits
+                .get_or_init(|| {
+                    layer
+                        .trait_declarations
+                        .iter()
+                        .flat_map(|(definition, declarations)| {
+                            declarations.values().map(|function| (*function, *definition))
+                        })
+                        .collect()
+                })
+                .get(&function)
+                .copied()
+        })
     }
     /// Whether `key` is a trait definition of the run's world.
     pub fn is_trait(&self, key: Digest) -> bool {

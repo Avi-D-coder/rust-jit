@@ -226,15 +226,40 @@ impl<'owner, 'cx> PreparedRootRelations<'owner, 'cx> {
             let parameter = parameters
                 .from_upstream(index)
                 .map_err(RootRelationsPreparationError::Source)?;
-            // The reached packet currently owns Type arguments. An absent
-            // region/const argument requires its real producer; never guess
-            // erased/static regions, zero constants or fresh unrelated values.
-            if parameter.kind() != BoundKind::Type {
-                return Err(RootRelationsPending::MissingArgument {
-                    parameter: parameter.source(),
-                    kind: parameter.kind(),
+            // The reached packet owns Type arguments. A region is erased to
+            // `'static` (the interpreter's one runtime erasure convention; it
+            // is looser than rustc and never changes which value executes). A
+            // const argument comes only from a source component's own rows;
+            // never guess zero constants or fresh unrelated values.
+            match parameter.kind() {
+                BoundKind::Type => {}
+                BoundKind::Region => {
+                    arguments.push(Arg::Region(cx.intern_region(ty::RegionKind::ReStatic)));
+                    continue;
                 }
-                .into());
+                BoundKind::Const => {
+                    let value = input
+                        .component
+                        .and_then(|component| component.constants.get(&parameter.source()))
+                        .ok_or(RootRelationsPending::MissingArgument {
+                            parameter: parameter.source(),
+                            kind: parameter.kind(),
+                        })?;
+                    let value = source_terms::encode_root_const(
+                        owner,
+                        variables,
+                        configuration,
+                        layouts.type_bindings(),
+                        value,
+                    )
+                    .map_err(|pending| RootRelationsPending::Type {
+                        relation: None,
+                        side: RootRelationSide::Argument(parameter.source()),
+                        pending,
+                    })?;
+                    arguments.push(Arg::Const(value));
+                    continue;
+                }
             }
             let term = input.parameters.get(&parameter.source()).ok_or(
                 RootRelationsPending::MissingArgument {
@@ -256,7 +281,8 @@ impl<'owner, 'cx> PreparedRootRelations<'owner, 'cx> {
             })?;
             arguments.push(Arg::Type(value));
         }
-        if input.parameters.len() != arguments.len() {
+        let type_arguments = arguments.iter().filter(|argument| matches!(argument, Arg::Type(_))).count();
+        if input.parameters.len() != type_arguments {
             return Err(RootRelationsPending::ParameterMap.into());
         }
         let arguments: model::Args<'cx, PreparedProvider<'cx>> = cx.list(arguments);
@@ -597,6 +623,7 @@ impl<'owner, 'cx> SourceRootApplication<'owner, 'cx> {
         callee: Digest,
         signature: Digest,
         parameters: &std::collections::BTreeMap<ParamKey, crate::traits::term::TyTerm>,
+        constants: &std::collections::BTreeMap<ParamKey, crate::traits::term::ConstTerm>,
     ) -> Result<Self, RootRelationsPreparationError> {
         let owner = self.owner;
         let cx = owner.interner;
@@ -623,12 +650,34 @@ impl<'owner, 'cx> SourceRootApplication<'owner, 'cx> {
             let parameter = declared
                 .from_upstream(index)
                 .map_err(RootRelationsPreparationError::Source)?;
-            if parameter.kind() != BoundKind::Type {
-                return Err(RootRelationsPending::MissingArgument {
-                    parameter: parameter.source(),
-                    kind: parameter.kind(),
+            match parameter.kind() {
+                BoundKind::Type => {}
+                BoundKind::Region => {
+                    arguments.push(Arg::Region(cx.intern_region(ty::RegionKind::ReStatic)));
+                    continue;
                 }
-                .into());
+                BoundKind::Const => {
+                    let value = constants.get(&parameter.source()).ok_or(
+                        RootRelationsPending::MissingArgument {
+                            parameter: parameter.source(),
+                            kind: parameter.kind(),
+                        },
+                    )?;
+                    let value = source_terms::encode_root_const(
+                        owner,
+                        self.variables,
+                        configuration,
+                        bindings,
+                        value,
+                    )
+                    .map_err(|pending| RootRelationsPending::Type {
+                        relation: None,
+                        side: RootRelationSide::Argument(parameter.source()),
+                        pending,
+                    })?;
+                    arguments.push(Arg::Const(value));
+                    continue;
+                }
             }
             let term = parameters.get(&parameter.source()).ok_or(
                 RootRelationsPending::MissingArgument {
@@ -644,7 +693,8 @@ impl<'owner, 'cx> SourceRootApplication<'owner, 'cx> {
                 })?;
             arguments.push(Arg::Type(value));
         }
-        if parameters.len() != arguments.len() {
+        let type_arguments = arguments.iter().filter(|argument| matches!(argument, Arg::Type(_))).count();
+        if parameters.len() != type_arguments {
             return Err(RootRelationsPending::ParameterMap.into());
         }
         Ok(Self {

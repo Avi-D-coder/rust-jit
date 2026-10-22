@@ -57,7 +57,13 @@ pub(crate) fn inline_module_layout(
     let mut bytes = 0usize;
     for wanted in module_path {
         let mut selected = None;
-        for module in parent.children().filter_map(ast::Module::cast) {
+        // A module declared in a block of this module's items is one of its
+        // modules (`outline::module_segment`).
+        let mut candidates: Vec<_> = parent.children().filter_map(ast::Module::cast).collect();
+        if wanted.starts_with("__lrr_block_") {
+            candidates.extend(super::outline::block_modules(&parent, cfg_values)?);
+        }
+        for module in candidates {
             work = work
                 .checked_add(1)
                 .ok_or_else(|| error("inline module layout work limit"))?;
@@ -67,7 +73,7 @@ pub(crate) fn inline_module_layout(
             let text = name.text();
             let name = super::ast_adapter::semantic_name(text)
                 .ok_or_else(|| error("inline module canonical name unavailable"))?;
-            if &name != wanted {
+            if &super::outline::module_segment(&module, &name) != wanted {
                 continue;
             }
             let (enabled, override_path) = attributes(&module, cfg_values)?;
@@ -273,6 +279,7 @@ pub(crate) fn external_module_declarations_from_tree(
         .syntax()
         .children()
         .filter_map(ast::Module::cast)
+        .chain(super::outline::block_modules(tree.syntax(), cfg_values)?)
         .map(|m| (m, Vec::<String>::new(), false, Vec::<String>::new()))
         .collect();
     let mut result = Vec::new();
@@ -287,7 +294,7 @@ pub(crate) fn external_module_declarations_from_tree(
         let text = name.text();
         let name = super::ast_adapter::semantic_name(text)
             .ok_or_else(|| error("module name unavailable"))?;
-        module_path.push(name.clone());
+        module_path.push(super::outline::module_segment(&module, &name));
         if let Some(items) = module.item_list() {
             let (mut child_directory, child_file_relative) = if let Some(path) = path_override {
                 if directory.is_empty() {
@@ -308,6 +315,7 @@ pub(crate) fn external_module_declarations_from_tree(
                     .syntax()
                     .children()
                     .filter_map(ast::Module::cast)
+                    .chain(super::outline::block_modules(items.syntax(), cfg_values)?)
                     .map(|m| {
                         (
                             m,

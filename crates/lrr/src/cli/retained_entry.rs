@@ -91,6 +91,16 @@ pub(crate) fn prepare(
             let _ = admit_retained_body(db, discovery, source, other);
         }
     }
+    // The crate's other module files (`mod x;`, `#[path]`) are sources of the
+    // same crate: their reached callees join the same admission, so a standard
+    // or user macro in them attaches its completed expansion exactly like the
+    // root file's.
+    admit_sibling_module_bodies(db, discovery, source)?;
+    // rustc makes an `impl` or `trait` written in a body global the moment its
+    // owner is nameable. A body holding one publishes its local containers
+    // (the member index layer) when its environment is prepared, so the bodies
+    // that hold any are prepared with the entry instead of when first entered.
+    prepare_container_bearing_bodies(db, discovery, source, definition)?;
     let selected = ready(discovery.entry_function(db, entry))?;
     let CallSelection::Source(selected) = selected else {
         return Err(Diagnostic::new(
@@ -129,6 +139,7 @@ pub(crate) fn prepare_test_bodies(
     }
     admit_generated_bodies(db, discovery)?;
     let mut prepared_sources = std::collections::BTreeSet::new();
+    let mut crates = std::collections::BTreeSet::new();
     for definition in tests {
         let Some(source) = sources.iter().find(|source| {
             source
@@ -146,6 +157,12 @@ pub(crate) fn prepare_test_bodies(
                 }
             }
         }
+        // The crate's other module files and its bodies holding block-level
+        // impls/traits join the same preparation as the entry's (`prepare`).
+        if crates.insert(source.selection().outline.crate_key) {
+            admit_sibling_module_bodies(db, discovery, source)?;
+            prepare_container_bearing_bodies(db, discovery, source, *definition)?;
+        }
         let Ok(body) = admit_retained_body(db, discovery, source, *definition) else {
             continue;
         };
@@ -153,6 +170,109 @@ pub(crate) fn prepare_test_bodies(
         admitted.insert(*definition, body);
     }
     Ok(admitted)
+}
+/// Retained admission of the macro-bearing function bodies of every other
+/// original source of the entry's crate (its out-of-line module files). A body
+/// whose assembly is unavailable keeps its original publication and reports its
+/// own diagnostic only if it is ever reached.
+fn admit_sibling_module_bodies(
+    db: &mut Database,
+    discovery: &SourceDiscovery,
+    source: &PreparedSourceView,
+) -> Result<(), Diagnostic> {
+    let completed = ready(discovery.completed_source_environment(db))?;
+    for owner in completed.sources() {
+        if owner.selection() == source.selection()
+            || owner.selection().outline.crate_key != source.selection().outline.crate_key
+            || owner
+                .declaration_inventory(Default::default())?
+                .generated_origin()
+                .is_some()
+        {
+            continue;
+        }
+        for other in macro_bearing_bodies(owner)? {
+            let _ = admit_retained_body(db, discovery, owner, other);
+        }
+    }
+    Ok(())
+}
+/// Prepare every body of the entry's crate that declares a block-level `impl`
+/// or `trait`, so their members are selectable before the body runs. Only such
+/// bodies are prepared: nothing else about a cold body is inspected, and a body
+/// whose preparation is unavailable keeps its own diagnostic for when it is
+/// reached.
+fn prepare_container_bearing_bodies(
+    db: &mut Database,
+    discovery: &SourceDiscovery,
+    source: &PreparedSourceView,
+    entry: crate::core::digest::Digest,
+) -> Result<(), Diagnostic> {
+    let completed = ready(discovery.completed_source_environment(db))?;
+    for owner in completed.sources() {
+        if owner.selection().outline.crate_key != source.selection().outline.crate_key
+            || owner
+                .declaration_inventory(Default::default())?
+                .generated_origin()
+                .is_some()
+        {
+            continue;
+        }
+        for definition in container_bearing_bodies(owner)? {
+            if definition == entry {
+                continue;
+            }
+            let Ok(body) = admit_retained_body(db, discovery, owner, definition) else {
+                continue;
+            };
+            let _ = ready(db.prepare_source_local_plan(discovery, &[owner], &body));
+        }
+    }
+    Ok(())
+}
+/// Original item bodies whose blocks hold at least one `impl` or `trait` item.
+fn container_bearing_bodies(
+    source: &PreparedSourceView,
+) -> Result<Vec<crate::core::digest::Digest>, Diagnostic> {
+    use crate::syntax::declaration_scan::DeclarationScopeKind;
+    let scan = source.declaration_inventory(Default::default())?;
+    let scopes = scan.lexical_scopes();
+    // The innermost lexical scope around a declaration decides whether it is
+    // written in a block (a module item list, even one inside a body, is not).
+    let in_block = |range: crate::syntax::spans::SourceRange| {
+        scopes
+            .iter()
+            .filter(|scope| scope.range.contains(range) && scope.range != range)
+            .min_by_key(|scope| scope.range.end - scope.range.start)
+            .is_some_and(|scope| {
+                matches!(
+                    scope.kind,
+                    DeclarationScopeKind::Block | DeclarationScopeKind::Closure
+                )
+            })
+    };
+    let ranges: Vec<_> = scan
+        .impls()
+        .iter()
+        .map(|row| row.range)
+        .chain(scan.traits().iter().map(|row| row.range))
+        .filter(|range| in_block(*range))
+        .collect();
+    if ranges.is_empty() {
+        return Ok(Vec::new());
+    }
+    Ok(source
+        .outline()
+        .items
+        .iter()
+        .filter_map(|item| {
+            let body = item.body.as_ref()?;
+            ranges
+                .iter()
+                .any(|range| body.range.start <= range.start && range.end <= body.range.end)
+                .then(|| item.def_key.fingerprint())
+        })
+        .collect())
 }
 /// Shared retained admission for one original source function body.
 fn admit_retained_body(
@@ -218,7 +338,7 @@ fn is_generated_function(db: &mut Database, definition: crate::core::digest::Dig
         return false;
     };
     matches!(db.input(&InputKey::GeneratedSyntax(parse.content)).as_deref(),
-        Some(InputValue::GeneratedSyntax(unit)) if unit.definitions.get(&definition).is_some_and(|key| key.item_kind == crate::source::manifest::ItemKind::Function))
+        Some(InputValue::GeneratedSyntax(unit)) if unit.definitions.get(&definition).is_some_and(|key| matches!(key.item_kind, crate::source::manifest::ItemKind::Function | crate::source::manifest::ItemKind::Constant | crate::source::manifest::ItemKind::Static)))
 }
 /// Original item bodies that contain at least one macro producer.
 fn macro_bearing_bodies(

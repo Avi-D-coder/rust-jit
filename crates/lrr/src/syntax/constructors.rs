@@ -163,6 +163,24 @@ pub(crate) fn range_inclusive_new_path(profile: &ProfileIdentity) -> String {
         crate::frontend::callables::dollar_crate_segment(crate::facade::unit(profile, "core"))
     )
 }
+/// The three calls of `expr?`'s lowering (rustc's `match Try::branch(expr)
+/// { Continue(v) => v, Break(r) => return FromResidual::from_residual(r) }`),
+/// each a `$crate`-rooted path into the profile's `core`: the operand's
+/// `Try::branch`, the extraction of the `Break` residual from the matched
+/// `ControlFlow`, and the enclosing function's `FromResidual::from_residual`.
+pub(crate) struct TryCallPaths {
+    pub(crate) branch: String,
+    pub(crate) break_residual: String,
+    pub(crate) from_residual: String,
+}
+pub(crate) fn try_call_paths(profile: &ProfileIdentity) -> TryCallPaths {
+    let core = crate::frontend::callables::dollar_crate_segment(crate::facade::unit(profile, "core"));
+    TryCallPaths {
+        branch: format!("{core}::ops::Try::branch"),
+        break_residual: format!("{core}::ops::ControlFlow::__try_break_residual"),
+        from_residual: format!("{core}::ops::FromResidual::from_residual"),
+    }
+}
 /// Sealed source/index pairing. Consumers resolve types and evaluate child PCs
 /// later; capture performs neither operation, including for a zero-length repeat.
 #[derive(Debug, Clone, Eq, PartialEq)]

@@ -139,6 +139,22 @@ pub(super) fn encode_root_type<'owner, 'cx>(
     Encoder { bindings, cx: variables.context(), configuration, inference: Some(variables) }.ty(term, &[])
 }
 
+/// A const generic argument of a root call site: a component const variable,
+/// a known length or the caller's own rigid const parameter. The expected
+/// Type of every supported const generic is `usize`.
+pub(super) fn encode_root_const<'owner, 'cx>(
+    owner: &'owner super::infer::delegate::SolverContext<'cx>,
+    variables: &'owner super::root_variables::RootVariables<'owner, 'cx>,
+    configuration: &'owner PreparedSolverConfiguration,
+    bindings: super::source_bindings::SourceTypeBindings<'owner>,
+    term: &ConstTerm,
+) -> Result<ty::Const<Cx<'cx>>, SourceTypePending> {
+    variables.require_owner(owner)?;
+    let cx = variables.context();
+    let usize_ty = cx.ty(TyKind::Uint(UintTy::Usize));
+    Encoder { bindings, cx, configuration, inference: Some(variables) }.constant(term, Some(usize_ty), &[])
+}
+
 fn encode_predicate_using<'cx>(encoder: &Encoder<'_, 'cx>, predicate: &crate::traits::predicate::PredicateResult)
     -> Result<model::Clause<'cx, prepared::PreparedProvider<'cx>>, SourceTypePending> {
     use crate::traits::predicate::PredicateResult;
@@ -256,6 +272,9 @@ impl<'cx> Encoder<'_, 'cx> {
             ConstTerm::Bound { depth, index } => { self.bound(*depth, *index, BoundKind::Const, binders)?;
                 ConstKind::Bound(BoundVarIndexKind::Bound(DebruijnIndex::from_u32(*depth)), BoundConst::new(BoundVar::from_u32(*index))) },
             ConstTerm::Placeholder(_) => return Err(SourceTypePending::Placeholder),
+            ConstTerm::Infer(key) => {
+                return self.inference.ok_or(SourceTypePending::Inference)?.const_variable(*key);
+            }
         };
         Ok(ty::Const::new(self.cx, kind))
     }

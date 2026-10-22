@@ -232,14 +232,29 @@ impl RunMachine {
         // that declaration and selects its impl by all evaluated arguments,
         // including the receiver's actual Self application even when the
         // method has no other arguments (`select_deferred_trait_call`).
-        let deferred = match (alternatives.functions.as_slice(), alternatives.same_trait) {
+        let mut deferred = match (alternatives.functions.as_slice(), alternatives.same_trait) {
             ([_], _) => None,
             (_, Some(trait_key)) if syntax.is_empty() => members
                 .trait_declaration(trait_key, method)
                 .map(|declaration| (trait_key, declaration)),
             _ => None,
         };
+        // An argument written as an unsuffixed literal (`c.add(&7)`) rules
+        // impls out before it is evaluated: one survivor is the call's impl.
+        let mut early = None;
+        if deferred.is_some() {
+            match self.early_alternative(db, site, &alternatives.functions, arguments, 0) {
+                QueryPoll::Ready(Ok(Some(function))) => {
+                    early = Some(function);
+                    deferred = None;
+                }
+                QueryPoll::Ready(Ok(None)) => {}
+                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+            }
+        }
         let function = match (alternatives.functions.as_slice(), &deferred) {
+            _ if early.is_some() => early.expect("checked"),
             ([function], _) => *function,
             (functions, Some(_)) => functions[0],
             // Inherent impls of different instantiations: the receiver's
@@ -373,18 +388,35 @@ impl RunMachine {
                     arguments: arguments.to_vec(),
                     alternatives: alternatives.functions,
                     result_self: None,
-                    expected: Vec::new(),
                 },
             }));
         }
-        self.prepare_selected_argument_call(db, callee, syntax, arguments)
+        // A trait-provided body's trait parameters (`Rhs`) that every impl for
+        // the receiver's type agrees on are fixed before the arguments.
+        let literals = match self.written_literals(db, site, &callee, arguments.len()) {
+            QueryPoll::Ready(Ok(literals)) => literals,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let extra = match super::trait_parameters::agreed_trait_bindings(
+            self.members.as_ref(),
+            &mut self.store,
+            &callee,
+            self_type,
+            &[],
+            &literals,
+        ) {
+            Ok(extra) => extra,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        self.prepare_selected_argument_call_with(db, callee, syntax, extra, arguments)
             .map(MethodCall::Selected)
     }
 
 }
 
 /// The self-type bucket of a closed source type, as the impl index keys it.
-fn probe_bucket(
+pub(super) fn probe_bucket(
     term: &crate::traits::term::TyTerm,
 ) -> Option<Result<crate::core::digest::Digest, crate::frontend::member_index::BuiltinSelf>> {
     use crate::frontend::member_index::BuiltinSelf;

@@ -479,6 +479,9 @@ mod operator_dispatch_tests;
 #[path = "box_tests.rs"]
 mod box_tests;
 #[cfg(test)]
+#[path = "try_operator_tests.rs"]
+mod try_operator_tests;
+#[cfg(test)]
 #[path = "trait_path_call_tests.rs"]
 mod trait_path_call_tests;
 #[cfg(test)]
@@ -526,6 +529,9 @@ mod local_item_tests;
 #[cfg(test)]
 #[path = "local_impl_tests.rs"]
 mod local_impl_tests;
+#[cfg(test)]
+#[path = "module_scope_tests.rs"]
+mod module_scope_tests;
 #[cfg(test)]
 #[path = "int_method_tests.rs"]
 mod int_method_tests;

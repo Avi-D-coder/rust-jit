@@ -166,10 +166,11 @@ impl Packet {
                     return Err(fault("completed report identity differs"));
                 }
                 output = report.output.clone();
+                let status = report.exit_code;
                 (
                     serde_json::to_value(report)
                         .map_err(|_| fault("capture completed serialization"))?,
-                    0,
+                    status,
                 )
             }
             RunPoll::Panicked(report) => {

@@ -28,6 +28,12 @@ pub const fn size_of<T>() -> usize {
     core::intrinsics::lrr_size_of()
 }
 
+// `offset_of!(Container, a.b.0)` is lowered by the adapter's builtin expander to
+// a call of this wrapper, whose frame binds the container type.
+pub const fn lrr_offset_of_in<T: ?Sized>(path: &str) -> usize {
+    core::intrinsics::lrr_offset_of(path)
+}
+
 pub const fn size_of_val<T: ?Sized>(val: &T) -> usize {
     core::intrinsics::lrr_size_of_val(val)
 }

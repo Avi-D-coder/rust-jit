@@ -292,10 +292,6 @@ fn resolve_named_at(
             }
         }
     } else {
-        let stamps = match db.lexical_namespace_stamps() {
-            Ok(stamps) => stamps,
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        };
         super::type_name_namespace::lookup_name(
             db,
             super::type_name_namespace::SourceTypeOwner {
@@ -304,7 +300,7 @@ fn resolve_named_at(
                 header: &signature.header,
             },
             sources,
-            &stamps,
+            super::type_name_namespace::NamespaceStamps::Lexical,
             name,
         )
     };

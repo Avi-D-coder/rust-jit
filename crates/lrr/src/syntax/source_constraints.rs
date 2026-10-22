@@ -1535,6 +1535,17 @@ fn classify(
                 }
             }
         }
+        // `expr?` has the value `<TypeOf(expr) as Try>::Output`: stated to this
+        // service as the call of the declaring facade's hidden `__try_output`
+        // on the operand (`Result<T, E>`, `Option<T>` and `ControlFlow<B, C>`
+        // declare it with their `Try::Output`), so selection, generic
+        // parameter inference and numeric constraints follow the ordinary
+        // method-call relation.
+        ast::Expr::TryExpr(operator) => {
+            fact.kind = FactKind::MethodCall;
+            written.fields.push((node, canonical("__try_output")));
+            expr_edge(body, index, operator.expr(), fact)?;
+        }
         ast::Expr::BlockExpr(block) => {
             // A label, async/gen/try or `move` changes the block's
             // result relation (break values, futures, Try wrapping); those

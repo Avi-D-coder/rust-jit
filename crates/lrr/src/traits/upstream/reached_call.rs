@@ -333,6 +333,7 @@ pub(crate) fn poll_reached_root(
         }
         for row in component.deferred {
             input_types.extend([row.first.clone(), row.second.clone(), row.result.clone()]);
+            input_types.extend(row.projection.clone());
         }
     }
     let extra_callees: BTreeSet<Digest> = packet
@@ -354,6 +355,14 @@ pub(crate) fn poll_reached_root(
     }
     let mut demanded = potential_numeric_traits(packet, &clauses);
     if let Some(component) = packet.component {
+        // The traits whose projections the rows normalize (`Deref::Target`,
+        // `IntoIterator::Item`, `Index::Output`) and the comparison operator
+        // trait are read before any row fires.
+        demanded.extend(
+            [component.deref_trait, component.eq_trait, component.into_iter_trait, component.index_trait]
+                .into_iter()
+                .flatten(),
+        );
         // Each selected call site's clauses name the traits its generic
         // Type variables may be asked about.
         for site in component.sites {
@@ -376,6 +385,7 @@ pub(crate) fn poll_reached_root(
         }
     }
     let mut seeds = BTreeSet::new();
+    let mut late_traits = BTreeSet::new();
     loop {
         let mut promote = BTreeSet::new();
         // Finite immutable metadata dependency closure. This never evaluates a
@@ -385,17 +395,21 @@ pub(crate) fn poll_reached_root(
         // because their child goals are not known before the solver runs.
         let mut closing = seeds.clone();
         let bundle = loop {
-            let bundle = ready!(SourceFactBundle::prepare(
-                db,
-                Arc::clone(&catalog),
-                SourceFactRequest {
-                    caller: packet.caller.body_definition,
-                    callee: packet.callee,
-                    extra_callees: extra_callees.clone(),
-                    traits: demanded.clone(),
-                    input_types: input_types.clone(),
-                }
-            ));
+            let request = SourceFactRequest {
+                caller: packet.caller.body_definition,
+                callee: packet.callee,
+                extra_callees: extra_callees.clone(),
+                traits: demanded.clone(),
+                input_types: input_types.clone(),
+            };
+            // A source component's request is usually covered by the bundle an
+            // earlier component of the same body demanded; a call or constructor
+            // root prepares its own.
+            let bundle = if packet.component.is_some() {
+                ready!(SourceFactBundle::prepare_cached(db, Arc::clone(&catalog), request))
+            } else {
+                Arc::new(ready!(SourceFactBundle::prepare(db, Arc::clone(&catalog), request)))
+            };
             let mut next = demanded.clone();
             for trait_definition in closing.clone() {
                 for source in bucket_clause_traits(&bundle, trait_definition) {
@@ -429,7 +443,6 @@ pub(crate) fn poll_reached_root(
             Ok(layouts) => layouts,
             Err(why) => return QueryPoll::Ready(Ok(held("generic-layouts", why))),
         };
-        let bundle = Arc::new(bundle);
         let current = Arc::new(ReachedCallCurrent {
             bundle: Arc::clone(&bundle),
             caller: Arc::clone(&caller),
@@ -459,6 +472,9 @@ pub(crate) fn poll_reached_root(
                         "callback-domain",
                         format!("{why}; source_producer_holds={reasons:?}"),
                     ));
+                }
+                if packet.component.is_some() {
+                    SourceFactBundle::remember(&bundle);
                 }
                 provider.publish(materialized.facts)?;
                 let outcome = match packet.component {
@@ -490,7 +506,18 @@ pub(crate) fn poll_reached_root(
                 // outcome (a missing candidate reads as NoSolution): hold.
                 let blocked = provider.take_blocked_impls();
                 if !blocked.is_empty() {
-                    return Ok(held("relevant-impl-unprepared", format!("{blocked:?}")));
+                    // A goal named a trait the root did not demand: demand it and
+                    // run again; only other withheld impls hold the root.
+                    let (absent, withheld): (Vec<_>, Vec<_>) = blocked
+                        .into_iter()
+                        .partition(|(_, why)| why == super::prepared::MISSING_TRAIT_INDEX);
+                    late_traits.extend(absent.iter().map(|(id, _)| id.source()));
+                    if !late_traits.is_empty() && withheld.is_empty() {
+                        return Ok(held("trait-demand", "a goal named an undemanded trait"));
+                    }
+                    if !withheld.is_empty() {
+                        return Ok(held("relevant-impl-unprepared", format!("{withheld:?}")));
+                    }
                 }
                 outcome
             },
@@ -499,6 +526,14 @@ pub(crate) fn poll_reached_root(
             demanded.extend(promote.iter().copied());
             seeds.extend(promote);
             continue;
+        }
+        if !late_traits.is_empty() {
+            // Terminates: each pass adds a trait the bundle did not hold.
+            let before = demanded.len();
+            demanded.extend(late_traits.iter().copied());
+            if demanded.len() > before {
+                continue;
+            }
         }
         return QueryPoll::Ready(output.and_then(|value| value));
     }

@@ -1113,10 +1113,13 @@ impl RunMachine {
         // A longer path is lexical when the goal continued it from a
         // block-level `use`; one whose root is no such binding is the module
         // route's (the goal marks it qualified).
+        // `module::item` whose root a block's inline module names continues
+        // from that binding exactly like a longer path: the goal selected the
+        // item itself (neither rooted nor qualified).
         QueryPoll::Ready(Ok(if deep {
             !goal.is_qualified_path()
         } else {
-            goal.rooted().is_some()
+            goal.rooted().is_some() || !goal.is_qualified_path()
         }))
     }
     /// `Root::function(..)` where the entered Value goal bound `Root`

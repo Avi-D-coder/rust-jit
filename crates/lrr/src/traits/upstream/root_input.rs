@@ -52,6 +52,8 @@ pub(crate) struct ComponentSiteInput {
     pub(crate) callee: Digest,
     pub(crate) signature: Digest,
     pub(crate) parameters: BTreeMap<ParamKey, TyTerm>,
+    /// The callee's const generic arguments: component const variables.
+    pub(crate) constants: BTreeMap<ParamKey, crate::traits::term::ConstTerm>,
 }
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum DeferredRelationKind {
@@ -61,6 +63,10 @@ pub(crate) enum DeferredRelationKind {
     Arithmetic,
     /// Builtin comparison: both operands share one Type.
     Comparison,
+    /// Builtin compound assignment: both operands share one Type.
+    Compound,
+    /// Builtin shift: the result has the left operand's Type.
+    Shift,
 }
 /// A structural relation that fires only after earlier rows resolved the
 /// operand Types (rustc's `structurally_resolve_type` points).
@@ -70,6 +76,9 @@ pub(crate) struct DeferredRelation {
     pub(crate) first: TyTerm,
     pub(crate) second: TyTerm,
     pub(crate) result: TyTerm,
+    /// For a dereference: `<first as Deref>::Target`, the overloaded step a
+    /// resolved non-reference operand takes.
+    pub(crate) projection: Option<TyTerm>,
     pub(crate) site: SourceCallSite,
 }
 /// Source-component extras of a root packet. The owner (`ReachedSubject::
@@ -79,8 +88,23 @@ pub(crate) struct ComponentInput<'a> {
     pub(crate) sites: &'a [ComponentSiteInput],
     /// The component's unsuffixed numeric literal variables.
     pub(crate) literals: &'a [InferVarKey],
+    /// The component's const inference variables (array lengths).
+    pub(crate) const_variables: &'a [InferVarKey],
+    /// The executing body's own const generic parameters (rigid).
+    pub(crate) constants: &'a BTreeMap<ParamKey, crate::traits::term::ConstTerm>,
     /// No typed hole: the variables are closed, so rustc's fallback applies.
     pub(crate) closed: bool,
+    /// `core::ops::Deref`: the trait whose impls an overloaded dereference
+    /// reads (demanded before any row fires).
+    pub(crate) deref_trait: Option<Digest>,
+    /// `core::cmp::PartialEq`: a comparison of operands that are not both
+    /// builtin scalars is the obligation `lhs: PartialEq<rhs>`.
+    pub(crate) eq_trait: Option<Digest>,
+    /// `core::iter::IntoIterator`: a `for` loop's pattern takes `<head as
+    /// IntoIterator>::Item`.
+    pub(crate) into_iter_trait: Option<Digest>,
+    /// `core::ops::Index`: an index expression takes `<base as Index<idx>>::Output`.
+    pub(crate) index_trait: Option<Digest>,
 }
 
 /// Borrowed from the immutable reached-call packet, never from guest slots.

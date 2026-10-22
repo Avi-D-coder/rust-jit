@@ -10,7 +10,7 @@ use std::{collections::{BTreeMap, BTreeSet}, sync::Arc};
 pub(super) enum DefinitionKind { Nominal, Trait, Impl, Declaration }
 /// Actual declaration demands and still-symbolic associated member demands
 /// occupy different indexes. A legacy member name key is never a DefId.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub(super) struct SourceRequirements {
     definitions: BTreeMap<Digest, DefinitionKind>,
     projections: BTreeSet<(Digest, Digest)>,
@@ -19,6 +19,14 @@ impl SourceRequirements {
     pub(super) fn new() -> Self { Self::default() }
     pub(super) fn insert(&mut self, definition: Digest, kind: DefinitionKind) {
         self.definitions.insert(definition, kind);
+    }
+    /// Whether every demand of `other` is also a demand of `self`.
+    pub(super) fn covers(&self, other: &Self) -> bool {
+        other
+            .definitions
+            .iter()
+            .all(|(definition, kind)| self.definitions.get(definition) == Some(kind))
+            && other.projections.is_subset(&self.projections)
     }
 }
 impl From<BTreeMap<Digest, DefinitionKind>> for SourceRequirements {

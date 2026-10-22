@@ -111,10 +111,19 @@ impl SourceSyntaxAssembly {
             .iter()
             .find(|item| item.def_key.fingerprint() == definition)
             .ok_or_else(|| fault("selected assembly body is not an original declaration"))?;
-        if original.def_key.item_kind != ItemKind::Function || original.body.is_none() {
-            return Err(fault(
-                "selected assembly body requires an original function",
-            ));
+        // A function body, or the initializer of an original `const`/`static`:
+        // the same retained assembly attaches the calls their text owns.
+        let owners = match original.def_key.item_kind {
+            ItemKind::Function => BodyOwners::Functions,
+            ItemKind::Constant | ItemKind::Static => BodyOwners::Entered,
+            _ => {
+                return Err(fault(
+                    "selected assembly body requires an original function, constant or static",
+                ));
+            }
+        };
+        if original.body.is_none() {
+            return Err(fault("selected assembly body has no body"));
         }
         let range = self
             .originals
@@ -122,7 +131,7 @@ impl SourceSyntaxAssembly {
             .find(|anchor| anchor.original_definition() == definition)
             .and_then(OriginalDeclarationAnchor::body_range)
             .ok_or_else(|| fault("selected assembly body anchor absent"))?;
-        self.first_call_within(range, BodyOwners::Functions)?
+        self.first_call_within(range, owners)?
             .map(|index| self.binding_invocation(index))
             .transpose()
     }

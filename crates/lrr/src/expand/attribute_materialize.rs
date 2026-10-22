@@ -145,7 +145,7 @@ fn materialize_for(
     if applied.is_some_and(|index| index >= inputs.attributes.len()) {
         return Err(fault("applied attribute index out of range"));
     }
-    let spans: BTreeMap<_, _> = forest.spans().iter().map(|s| (s.key(), s)).collect();
+    let spans: BTreeMap<_, _> = forest.span_keys().iter().copied().zip(forest.spans()).collect();
     let mut pending: Vec<_> = forest.roots().iter().collect();
     let mut candidate = None;
     while let Some(token) = pending.pop() {

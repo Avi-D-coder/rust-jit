@@ -2347,3 +2347,46 @@ fn main() {
 "###,
     );
 }
+
+/// A reached call's closed parameter view may list the region arguments of its
+/// written/declared type (`Iter<'_, i64>` from `slice::iter`), while a runtime
+/// descriptor records none: the callee-entry parameter admission compares the
+/// view up to regions, so a second `iter().sum()` in one function (the first
+/// call interned `&i64`, which switches the next contract to a closed view)
+/// and a user function taking `Iter<'_, T>` both run. Type and const arguments
+/// still compare exactly.
+#[test]
+fn region_bearing_parameter_views_admit_region_free_descriptors() {
+    for edition in [2015, 2018, 2021, 2024] {
+        let source = r####"use std::slice::Iter;
+fn total(it: Iter<'_, i64>) -> i64 { it.sum() }
+fn main() {
+    let a = [1i64, 2, 3, 4];
+    let b = a.iter().sum::<i64>();
+    let c = a.iter().sum::<i64>();
+    assert!(b == c);
+    assert_eq!(10i64, [1i64, 2, 3, 4].iter().sum());
+    let p = a.iter().product::<i64>();
+    let q = [5i64, 6].iter().sum::<i64>();
+    let v = vec![7i64, 8, 9];
+    let r = v.iter().sum::<i64>();
+    println!("{} {} {} {} {} {}", b, c, p, q, r, a.iter().count());
+    println!("{} {}", total(a.iter()), total(v.iter()));
+    println!("{:?} {:?}", a.iter().max(), v.iter().min());
+    println!("{}", (1..4i64).sum::<i64>() + (1..4i64).sum::<i64>());
+}
+"####;
+        match run("region_views", source, edition) {
+            Ok(StandaloneOutcome::Completed(report)) => assert_eq!(
+                report.output.stdout,
+                "10 10 24 11 24 4\n10 24\nSome(4) Some(7)\n12\n",
+                "edition {edition}"
+            ),
+            Ok(StandaloneOutcome::Panicked(report)) => {
+                panic!("edition {edition} panicked: {:?}", report.panic)
+            }
+            Ok(_) => panic!("edition {edition}: unexpected outcome"),
+            Err(error) => panic!("edition {edition}: {error}"),
+        }
+    }
+}

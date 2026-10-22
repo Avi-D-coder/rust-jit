@@ -297,6 +297,8 @@ impl PreparedSourceLocalPlan {
                 self_pointee,
                 trait_path,
                 trait_definition,
+                trait_arguments: None,
+                self_shape: crate::frontend::member_index::ArgShape::Any,
                 functions,
                 types,
                 consts,
@@ -409,7 +411,11 @@ impl PreparedSourceLocalPlan {
                 };
                 // Completion of the module-name observation is not needed to
                 // read a defined name; an absent one falls to builtin names.
-                let _ = ready!(prefix.module_name(db));
+                // A path keyword (`crate::S`) roots the path in a module and
+                // names no member to observe.
+                if !matches!(prefix.use_name.as_ref().map(|used| used.name.as_str()), Some("crate" | "super" | "self")) {
+                    let _ = ready!(prefix.module_name(db));
+                }
                 QueryPoll::Ready(through_module_graph(self).or_else(|_| Ok(HeaderTarget::Unresolved)))
             }
             LocalTypePrefixSelection::Parameter(_) => {

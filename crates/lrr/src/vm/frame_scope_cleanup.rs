@@ -5,6 +5,13 @@ use crate::{
     vm::cleanup::{CleanupMachine, CleanupProgress},
 };
 
+/// Scope-exit cursors count down through the retained per-scope owner groups
+/// of the indexed body (`BodyIndex::scope_slots`/`scope_nodes`, ascending
+/// ordinals): `Guards`, `Slots` and `Bindings` hold how many group members
+/// remain, so the member visited next is `group[next - 1]`. A scope exit
+/// therefore visits exactly its own owners, in the same descending ordinal
+/// order the former whole-frame scan produced. `Guard`, `DiscardSlot` and
+/// `Parameters` hold frame slot or parameter ordinals directly.
 #[derive(Clone, Copy)]
 enum Stage {
     Guards {
@@ -122,7 +129,9 @@ struct Witness {
     entered: bool,
 }
 pub(super) struct Activation {
-    pc: crate::core::digest::Digest,
+    /// The exact operation this activation is bound to (compared directly:
+    /// equal keys, not a hash of them, bind the continuation).
+    pc: PcKey,
     boundary: Boundary,
     target: ScopeId,
     scope: ScopeId,
@@ -160,7 +169,7 @@ impl Frame {
             return Err(invalid("control cleanup cannot resume as an opcode"));
         };
         if self.copy_activation.is_some()
-            || active.pc != self.pc.fingerprint()
+            || active.pc != self.pc
             || *operation_index as usize != index
             || Some(*expected) != CleanupOperation::from_op(op)
         {
@@ -184,15 +193,15 @@ impl Frame {
     fn first_cleanup_stage(&self, scope: ScopeId) -> Result<Stage, Diagnostic> {
         self.bindings_first(scope)?;
         Ok(Stage::Guards {
-            next: self.slots.len(),
+            next: self.body.scope_slots(scope).len(),
             selected: None,
         })
     }
     fn first_cleanup_storage(&self, scope: ScopeId) -> Result<Stage, Diagnostic> {
         Ok(if self.bindings_first(scope)? {
-            Stage::Bindings(self.bindings.len())
+            Stage::Bindings(self.body.scope_nodes(scope).len())
         } else {
-            Stage::Slots(self.slots.len())
+            Stage::Slots(self.body.scope_slots(scope).len())
         })
     }
     fn after_cleanup_storage(&self, scope: ScopeId) -> Stage {
@@ -348,7 +357,7 @@ impl Frame {
             return Err(invalid("another operation activation is already active"));
         }
         self.cleanup_activation = Some(Activation {
-            pc: self.pc.fingerprint(),
+            pc: self.pc.clone(),
             boundary: Boundary::Operation {
                 operation_index,
                 expected,
@@ -370,7 +379,7 @@ impl Frame {
                 return Err(invalid("return cleanup requires an actual returned frame"));
             }
             if let Some(active) = &self.cleanup_activation {
-                if active.pc != self.pc.fingerprint()
+                if active.pc != self.pc
                     || !matches!(active.boundary, Boundary::Return)
                 {
                     return Err(invalid("return cleanup boundary changed during suspension"));
@@ -381,7 +390,7 @@ impl Frame {
                 };
                 self.preflight_cleanup_scope(scope)?;
                 self.cleanup_activation = Some(Activation {
-                    pc: self.pc.fingerprint(),
+                    pc: self.pc.clone(),
                     boundary: Boundary::Return,
                     target: self.root_scope(),
                     scope,
@@ -406,7 +415,7 @@ impl Frame {
                 return Err(invalid("panic cleanup requires an actual guest panic"));
             }
             if let Some(active) = &self.cleanup_activation {
-                if active.pc != self.pc.fingerprint() || !matches!(active.boundary, Boundary::Panic)
+                if active.pc != self.pc || !matches!(active.boundary, Boundary::Panic)
                 {
                     return Err(invalid("panic cleanup boundary changed during suspension"));
                 }
@@ -417,7 +426,7 @@ impl Frame {
                 };
                 self.preflight_cleanup_scope(scope)?;
                 self.cleanup_activation = Some(Activation {
-                    pc: self.pc.fingerprint(),
+                    pc: self.pc.clone(),
                     boundary: Boundary::Panic,
                     target: self.root_scope(),
                     scope,
@@ -684,43 +693,56 @@ impl Frame {
                         };
                     }
                     Stage::Guards { next, mut selected } => {
-                        let index = next - 1;
-                        let slot = self
-                            .slots
-                            .get(index)
-                            .ok_or_else(|| invalid("cleanup guard cursor invalid"))?;
-                        if slot.scope == active.scope
-                            && let Some(construction) = &slot.construction
-                        {
-                            let latest =
-                                selected.and_then(|index| self.slots[index].construction.as_ref());
-                            if latest.is_none_or(|latest| {
-                                latest.guard.bits() < construction.guard.bits()
-                            }) {
-                                selected = Some(index);
+                        // No side effects: walk the scope's whole slot group
+                        // once, selecting the construction with the latest guard.
+                        let group = self.body.scope_slots(active.scope);
+                        if next > group.len() {
+                            return Err(invalid("cleanup guard cursor invalid"));
+                        }
+                        for &ordinal in group[..next].iter().rev() {
+                            let index = ordinal as usize;
+                            let slot = self
+                                .slots
+                                .get(index)
+                                .ok_or_else(|| invalid("cleanup guard cursor invalid"))?;
+                            if let Some(construction) = &slot.construction {
+                                let latest = selected
+                                    .and_then(|index| self.slots[index].construction.as_ref());
+                                if latest.is_none_or(|latest| {
+                                    latest.guard.bits() < construction.guard.bits()
+                                }) {
+                                    selected = Some(index);
+                                }
                             }
                         }
-                        active.stage = Stage::Guards {
-                            next: index,
-                            selected,
-                        };
+                        active.stage = Stage::Guards { next: 0, selected };
                     }
                     Stage::Guard(index) => self.start_cleanup_guard(&mut active, index, store)?,
                     Stage::Slots(0) => {
                         active.stage = if self.bindings_first(active.scope)? {
                             self.after_cleanup_storage(active.scope)
                         } else {
-                            Stage::Bindings(self.bindings.len())
+                            Stage::Bindings(self.body.scope_nodes(active.scope).len())
                         };
                     }
-                    Stage::Slots(next) => {
-                        let index = next - 1;
-                        let slot = self
-                            .slots
-                            .get(index)
-                            .ok_or_else(|| invalid("cleanup slot cursor invalid"))?;
-                        if slot.scope == active.scope {
-                            if let Some(cell) = slot.cell {
+                    Stage::Slots(mut next) => {
+                        // Slots without a cell are cleared inline (their order
+                        // and effects are those of one transition each); the
+                        // first slot owning a cell ends this transition.
+                        while next > 0 {
+                            let index = *self
+                                .body
+                                .scope_slots(active.scope)
+                                .get(next - 1)
+                                .ok_or_else(|| invalid("cleanup slot cursor invalid"))?
+                                as usize;
+                            let slot = self
+                                .slots
+                                .get(index)
+                                .ok_or_else(|| invalid("cleanup slot cursor invalid"))?;
+                            active.stage = Stage::Slots(next);
+                            let owning = slot.cell;
+                            if let Some(cell) = owning {
                                 self.start_cleanup_owner(
                                     &mut active,
                                     Owner::Slot(index),
@@ -730,32 +752,46 @@ impl Frame {
                             } else {
                                 self.clear_cleanup_slot(index)?;
                             }
+                            next -= 1;
+                            if owning.is_some() {
+                                break;
+                            }
                         }
-                        active.stage = Stage::Slots(index);
+                        active.stage = Stage::Slots(next);
                     }
                     Stage::Bindings(0) => {
                         active.stage = if self.bindings_first(active.scope)? {
-                            Stage::Slots(self.slots.len())
+                            Stage::Slots(self.body.scope_slots(active.scope).len())
                         } else {
                             self.after_cleanup_storage(active.scope)
                         };
                     }
-                    Stage::Bindings(next) => {
-                        let index = next - 1;
-                        let node = self
-                            .body
-                            .nodes()
-                            .get(index)
-                            .ok_or_else(|| invalid("cleanup binding cursor invalid"))?;
-                        if node.scope == active.scope {
-                            if let Some(cell) = self.bindings.get(index).copied().flatten() {
+                    Stage::Bindings(mut next) => {
+                        // Nodes holding neither a binding nor a source view
+                        // need no transition: clearing an absent view is a
+                        // no-op. The first node owning a binding cell ends this
+                        // transition.
+                        while next > 0 {
+                            let index = *self
+                                .body
+                                .scope_nodes(active.scope)
+                                .get(next - 1)
+                                .ok_or_else(|| invalid("cleanup binding cursor invalid"))?
+                                as usize;
+                            active.stage = Stage::Bindings(next);
+                            let owning = self.bindings.get(index).copied().flatten();
+                            if let Some(cell) = owning {
                                 self.start_cleanup_owner(
                                     &mut active,
                                     Owner::Binding(index),
                                     cell,
                                     store,
                                 )?;
-                            } else {
+                            } else if self
+                                .binding_sources
+                                .get(index)
+                                .is_none_or(|source| source.is_some())
+                            {
                                 self.set_binding_source_view(
                                     NodeId(u32::try_from(index).map_err(|_| {
                                         invalid("binding source cleanup index overflow")
@@ -763,8 +799,12 @@ impl Frame {
                                     None,
                                 )?;
                             }
+                            next -= 1;
+                            if owning.is_some() {
+                                break;
+                            }
                         }
-                        active.stage = Stage::Bindings(index);
+                        active.stage = Stage::Bindings(next);
                     }
                     Stage::Parameters(0) => active.stage = Stage::Finish,
                     Stage::Parameters(next) => {
@@ -849,7 +889,7 @@ impl Frame {
     ) -> Result<bool, Diagnostic> {
         match &self.cleanup_activation {
             Some(active) => {
-                if active.pc != self.pc.fingerprint()
+                if active.pc != self.pc
                     || !matches!(active.boundary, Boundary::Control(_))
                 {
                     return Err(invalid("control cleanup resumed at a different exit"));
@@ -897,7 +937,7 @@ impl Frame {
                     .ok_or_else(|| invalid("control cleanup lost target"))?;
                 self.preflight_cleanup_scope(scope)?;
                 self.cleanup_activation = Some(Activation {
-                    pc: self.pc.fingerprint(),
+                    pc: self.pc.clone(),
                     boundary: Boundary::Control(ControlExit {
                         destination,
                         ticket,
@@ -1154,5 +1194,249 @@ impl Frame {
             .as_ref()
             .unwrap();
         (replacement.target, replacement.old, replacement.unit)
+    }
+}
+
+/// Differential control: the retained per-scope owner groups a scope exit
+/// walks must reproduce, for every scope of every body, the exact descending
+/// sequence the former whole-frame scans visited, and the frame's slot homes
+/// must equal the former per-call node walk. The references below are the
+/// removed production scans, kept only here.
+#[cfg(test)]
+mod owner_group_tests {
+    use super::*;
+    use crate::{
+        core::{digest::Digest, profile::ProfileIdentity},
+        ir::pc::Phase,
+        source::snapshot::{CfgSet, SourceBlob},
+        syntax::{
+            body_index::{ExpressionKind, NodeRole},
+            parse::ParsedFile,
+        },
+    };
+
+    /// The removed `Frame::new` node walk, verbatim in effect.
+    fn reference_slot_homes(body: &BodyIndex) -> Vec<(ScopeId, Option<NodeId>)> {
+        let mut homes = vec![(ScopeId(0), None); body.slot_count() as usize];
+        for node in body.nodes() {
+            let result_scope = if matches!(
+                node.role,
+                NodeRole::Expression(
+                    ExpressionKind::Block
+                        | ExpressionKind::Const
+                        | ExpressionKind::While
+                        | ExpressionKind::Loop
+                        | ExpressionKind::For
+                )
+            ) {
+                body.scopes()[node.scope.0 as usize].parent.unwrap_or(node.scope)
+            } else {
+                node.scope
+            };
+            if let Some(id) = node.value {
+                if node
+                    .extended_to
+                    .as_ref()
+                    .is_some_and(|extension| !extension.constructors.is_empty())
+                {
+                    homes[id.0 as usize].1 = Some(node.id);
+                }
+                homes[id.0 as usize].0 = if let Some(extension) = node
+                    .extended_to
+                    .as_ref()
+                    .filter(|e| e.constructors.is_empty())
+                {
+                    extension.scope
+                } else if let Some(clause) = node.boolean_scope.or(node.clause_scope) {
+                    body.scopes()[clause.0 as usize].parent.unwrap_or(node.scope)
+                } else {
+                    result_scope
+                };
+            }
+            for (ordinal, id) in node.runtime_temporaries.into_iter().enumerate() {
+                let Some(id) = id else { continue };
+                let scope = if node.role == NodeRole::Statement {
+                    node.statement_scope.unwrap_or(node.scope)
+                } else if node.role == NodeRole::Expression(ExpressionKind::For) && ordinal == 1 {
+                    node.condition_scope.unwrap_or(node.scope)
+                } else if let Some(closure) = node.closure_scope {
+                    closure
+                } else {
+                    node.scope
+                };
+                homes[id.0 as usize].0 = scope;
+                assert_eq!(body.slot_kind(SlotId(id.0 + 1)).unwrap(), SlotKind::Place);
+                homes[id.0 as usize + 1].0 = scope;
+            }
+            let scalar_scope = node.closure_scope.unwrap_or(node.scope);
+            for id in &node.runtime_scalar_slots {
+                homes[id.0 as usize].0 = scalar_scope;
+                assert_eq!(body.slot_kind(SlotId(id.0 + 1)).unwrap(), SlotKind::Place);
+                homes[id.0 as usize + 1].0 = scalar_scope;
+            }
+            if let Some(id) = node.constructor_guard {
+                homes[id.0 as usize].0 = node.scope;
+            }
+            if let Some(id) = node.place {
+                homes[id.0 as usize].0 = result_scope;
+            }
+        }
+        homes
+    }
+
+    /// The removed `Stage::Guards`/`Stage::Slots` cursor: every frame slot
+    /// from the last down, filtered by scope.
+    fn scanned_slots(frame: &Frame, scope: ScopeId) -> Vec<usize> {
+        (0..frame.slots.len())
+            .rev()
+            .filter(|&index| frame.slots[index].scope == scope)
+            .collect()
+    }
+
+    /// The removed `Stage::Bindings` cursor.
+    fn scanned_nodes(frame: &Frame, scope: ScopeId) -> Vec<usize> {
+        (0..frame.bindings.len())
+            .rev()
+            .filter(|&index| frame.body.nodes()[index].scope == scope)
+            .collect()
+    }
+
+    fn check(body: &BodyIndex, label: &str) -> (usize, usize) {
+        let mut store = GuestStore::for_epoch(1).unwrap();
+        let entry = body.pc(NodeId(0), Phase::Entry).unwrap();
+        let frame = Frame::new(body.clone(), entry, &mut store).unwrap();
+        let homes = reference_slot_homes(body);
+        assert_eq!(frame.slots.len(), homes.len(), "{label}");
+        for (index, (scope, extension)) in homes.iter().enumerate() {
+            assert_eq!(frame.slots[index].scope, *scope, "{label} slot {index} scope");
+            assert_eq!(
+                frame.slots[index].conditional_extension, *extension,
+                "{label} slot {index} conditional extension"
+            );
+        }
+        let mut slot_total = 0;
+        let mut node_total = 0;
+        for scope in body.scopes() {
+            let slots: Vec<usize> = body
+                .scope_slots(scope.id)
+                .iter()
+                .rev()
+                .map(|&ordinal| ordinal as usize)
+                .collect();
+            assert_eq!(slots, scanned_slots(&frame, scope.id), "{label} slots of {:?}", scope.id);
+            let nodes: Vec<usize> = body
+                .scope_nodes(scope.id)
+                .iter()
+                .rev()
+                .map(|&ordinal| ordinal as usize)
+                .collect();
+            assert_eq!(nodes, scanned_nodes(&frame, scope.id), "{label} nodes of {:?}", scope.id);
+            slot_total += slots.len();
+            node_total += nodes.len();
+        }
+        // Every slot and node belongs to exactly one scope's group.
+        assert_eq!(slot_total, frame.slots.len(), "{label}");
+        assert_eq!(node_total, frame.bindings.len(), "{label}");
+        // The groups of an absent scope are empty, never a panic.
+        assert!(body.scope_slots(ScopeId(u32::MAX)).is_empty());
+        assert!(body.scope_nodes(ScopeId(u32::MAX)).is_empty());
+        (slot_total, node_total)
+    }
+
+    fn bodies_of(source: &str, edition: u16, label: &str) -> (usize, usize, usize) {
+        let Ok(blob) = SourceBlob::new(source.as_bytes().to_vec()) else {
+            return (0, 0, 0);
+        };
+        let Ok(parsed) = ParsedFile::parse(
+            &blob,
+            ProfileIdentity {
+                edition,
+                ..ProfileIdentity::current()
+            },
+        ) else {
+            return (0, 0, 0);
+        };
+        let Ok(outline) = parsed.outline(Digest::of_bytes(label.as_bytes()), vec![], &CfgSet::guest_default())
+        else {
+            return (0, 0, 0);
+        };
+        let (mut bodies, mut slots, mut nodes) = (0, 0, 0);
+        for item in &outline.items {
+            let Some(handle) = item.body.as_ref() else { continue };
+            let Ok(index) = parsed.index_body(handle, Default::default()) else {
+                continue;
+            };
+            let (s, n) = check(&index, label);
+            bodies += 1;
+            slots += s;
+            nodes += n;
+        }
+        (bodies, slots, nodes)
+    }
+
+    #[test]
+    fn scope_owner_groups_reproduce_the_removed_whole_frame_scans() {
+        // Hand-written bodies covering loops (`for` iteration scopes), clauses
+        // (`if let`/`while let`/`match` guards), closures, let-else, labeled
+        // blocks, constructor guards and conditional temporary extension.
+        const SOURCES: &[&str] = &[
+            "fn main() { let mut s = 0u64; for i in 0..4u64 { let t = i + 1; s += t; } while s < 9 { s += 1; } \
+             let v = loop { break s; }; let _ = v; }",
+            "struct D(u8); impl Drop for D { fn drop(&mut self) {} } \
+             fn main() { let _a = D(1); { let _b = D(2); let _ = D(3); } let (x, y) = (D(4), D(5)); \
+             let z = if let Some(d) = Some(D(6)) { d.0 } else { 0 }; match Some(D(7)) { Some(d) if d.0 > 1 => {}, _ => {} } \
+             let _ = (x, y, z); }",
+            "fn f(v: Option<(u8, u8)>) -> u8 { let Some((a, b)) = v else { return 0 }; \
+             let c = |p: (u8, u8)| p.0 + a; 'o: loop { loop { break 'o; } } c((a, b)) }",
+            "struct P { a: Vec<u8>, b: String } fn main() { let p = P { a: vec![1], b: String::new() }; \
+             let r = &P { a: vec![2], b: String::new() }; let q = &mut [1, 2, 3][..]; let _ = (p, r, q); \
+             let t = &(String::new(), 1); let _ = t; let l = 'blk: { if true { break 'blk 1; } 2 }; let _ = l; }",
+            "const C: [u8; 2] = [1, 2]; static S: u8 = 3; fn main() { let a = [0u8; 3]; let _ = (C, S, a); let v: Vec<u8> = Vec::new(); \
+             let w = v.iter().map(|x| *x).count(); let _ = w; assert_eq!(w, 0); }",
+        ];
+        let (mut bodies, mut slots, mut nodes) = (0, 0, 0);
+        for (ordinal, source) in SOURCES.iter().enumerate() {
+            for edition in [2015, 2018, 2021, 2024] {
+                let (b, s, n) = bodies_of(source, edition, &format!("owner-groups-{ordinal}-{edition}"));
+                bodies += b;
+                slots += s;
+                nodes += n;
+            }
+        }
+        assert!(bodies >= 15, "hand-written bodies indexed: {bodies}");
+        // Unchanged official programs: drop, move, closure, loop and match
+        // programs exercise the same scope kinds with real shapes.
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/upstream/rustc-checkout/tests/ui");
+        let mut programs = 0;
+        for directory in [
+            "drop", "moves", "closures", "match", "for-loop-while", "pattern", "block-result", "binding",
+            "destructuring-assignment", "let-else", "loops", "nll", "expr", "union", "structs-enums",
+        ] {
+            let Ok(entries) = std::fs::read_dir(root.join(directory)) else { continue };
+            let mut files: Vec<_> = entries
+                .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+                .filter(|path| path.extension().is_some_and(|extension| extension == "rs"))
+                .collect();
+            files.sort();
+            for path in files {
+                let Ok(source) = std::fs::read_to_string(&path) else { continue };
+                let edition = source
+                    .lines()
+                    .find_map(|line| line.strip_prefix("//@ edition:"))
+                    .and_then(|edition| edition.trim().parse::<u16>().ok())
+                    .unwrap_or(2021);
+                let label = path.display().to_string();
+                let (b, s, n) = bodies_of(&source, edition, &label);
+                if b > 0 {
+                    programs += 1;
+                }
+                bodies += b;
+                slots += s;
+                nodes += n;
+            }
+        }
+        assert!(programs >= 30, "official programs indexed: {programs}");
+        eprintln!("scope owner groups checked: {bodies} bodies in {programs} official programs, {slots} slots, {nodes} nodes");
+        assert!(bodies >= 100 && slots > 500 && nodes > 1000, "{bodies} bodies, {slots} slots, {nodes} nodes");
     }
 }

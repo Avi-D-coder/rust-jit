@@ -139,11 +139,9 @@ fn main() { println!(\"{} {}\", one(), two()); }
     );
 }
 
-/// Known gap: a block-level `mod` is a container whose members are not yet
-/// collected (`modules/mod-inside-fn`): "lexical item callee requires body
-/// namespace integration".
+/// A block-level `mod` is a module of the enclosing module (E-R5-015,
+/// `modules/mod-inside-fn`); its block binds the written name to it.
 #[test]
-#[ignore = "block-level mod items: lexical item callee requires body namespace integration"]
 fn module_function_body_local_module_is_callable() {
     prints(
         "mod-inside-fn",

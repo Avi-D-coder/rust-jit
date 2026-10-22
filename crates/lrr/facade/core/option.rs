@@ -10,6 +10,12 @@ pub enum Option<T> {
 }
 
 impl<T> Option<T> {
+    // `<Option<T> as Try>::Output`, stated for the interpreter's static
+    // `expr?` typing (never called). Not part of the real `Option`.
+    #[doc(hidden)]
+    pub fn __try_output(self) -> T {
+        core::intrinsics::lrr_unsupported("Option::__try_output")
+    }
     pub const fn is_some(&self) -> bool {
         match self {
             Option::Some(_) => true,
@@ -386,6 +392,28 @@ impl<T: crate::cmp::Ord> crate::cmp::Ord for Option<T> {
             (Option::None, Option::None) => crate::cmp::Ordering::Equal,
             (Option::None, Option::Some(_)) => crate::cmp::Ordering::Less,
             (Option::Some(_), Option::None) => crate::cmp::Ordering::Greater,
+        }
+    }
+}
+
+// `?` on an `Option`: `None` short-circuits with the residual `Option<Infallible>`.
+impl<T> crate::ops::Try for Option<T> {
+    type Output = T;
+    type Residual = Option<crate::convert::Infallible>;
+    fn from_output(output: T) -> Self {
+        Option::Some(output)
+    }
+    fn branch(self) -> crate::ops::ControlFlow<Option<crate::convert::Infallible>, T> {
+        match self {
+            Option::Some(value) => crate::ops::ControlFlow::Continue(value),
+            Option::None => crate::ops::ControlFlow::Break(Option::None),
+        }
+    }
+}
+impl<T> crate::ops::FromResidual<Option<crate::convert::Infallible>> for Option<T> {
+    fn from_residual(residual: Option<crate::convert::Infallible>) -> Self {
+        match residual {
+            Option::None => Option::None,
         }
     }
 }

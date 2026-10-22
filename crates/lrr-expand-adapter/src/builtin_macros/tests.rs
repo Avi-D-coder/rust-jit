@@ -31,6 +31,7 @@ fn facts(edition: Edition) -> BuiltinCallSite {
         .into_iter()
         .collect(),
         crate_names: [(CORE, "core".to_owned())].into_iter().collect(),
+        located: true,
     }
 }
 
@@ -245,7 +246,7 @@ fn builtin_names_follow_rustc_register_bang() {
     );
     assert_eq!(
         builtin_kind("cfg_select").map(BuiltinKind::disposition),
-        Some(BuiltinDisposition::Unsupported)
+        Some(BuiltinDisposition::Adapter)
     );
     for (name, kind) in BUILTINS {
         assert_eq!(kind.name(), *name);
@@ -276,6 +277,94 @@ fn gca_requires_exactly_one_expression() {
         let failure = expand_in(BuiltinKind::Gca, text, Edition::E2021).unwrap_err();
         assert_eq!(failure.kind, BuiltinFailureKind::Syntax, "{text}");
     }
+}
+
+// ----- cfg_select! ---------------------------------------------------------
+
+#[test]
+fn cfg_select_expands_the_first_branch_whose_predicate_holds() {
+    // Facts: `unix`, `target_os = "macos"`. rustc cfg_select.rs `pop_first_match`.
+    let pick = |text: &str| render(&expand(BuiltinKind::CfgSelect, text));
+    assert_eq!(
+        pick("cfg_select! { windows => { 1 } unix => { 2 } _ => { 3 } };"),
+        "2"
+    );
+    assert_eq!(
+        pick("cfg_select! { windows => { fn a() {} } _ => { fn b() {} } };"),
+        "fn b ( ) { }"
+    );
+    assert_eq!(
+        pick("cfg_select! { all(unix, target_os = \"macos\") => 4, _ => 5 };"),
+        "4"
+    );
+    assert_eq!(pick("cfg_select! { not(unix) => { 1 } _ => { 9 } };"), "9");
+    // The wildcard is used only when no predicate holds, and a later arm
+    // after it is unreachable.
+    assert_eq!(
+        pick("cfg_select! { windows => { 1 } _ => { 7 } unix => { 8 } };"),
+        "7"
+    );
+}
+
+#[test]
+fn cfg_select_without_a_matching_branch_is_a_syntax_failure() {
+    let failure = expand_in(
+        BuiltinKind::CfgSelect,
+        "cfg_select! { windows => { 1 } };",
+        Edition::E2021,
+    )
+    .unwrap_err();
+    assert_eq!(failure.kind, BuiltinFailureKind::Syntax);
+}
+
+// ----- type_ascribe! -------------------------------------------------------
+
+#[test]
+fn type_ascribe_is_an_annotated_let_yielding_its_binding() {
+    assert_eq!(
+        render(&expand(BuiltinKind::TypeAscribe, "type_ascribe!(&x, &[i32; 3]);")),
+        "{ let __lrr_type_ascribed : & [ i32 ; 3 ] = & x ; __lrr_type_ascribed }"
+    );
+    assert_eq!(
+        render(&expand(BuiltinKind::TypeAscribe, "type_ascribe!(1, u8);")),
+        "{ let __lrr_type_ascribed : u8 = 1 ; __lrr_type_ascribed }"
+    );
+    for text in ["type_ascribe!();", "type_ascribe!(1);", "type_ascribe!(1, u8, 2);"] {
+        let failure = expand_in(BuiltinKind::TypeAscribe, text, Edition::E2021).unwrap_err();
+        assert_eq!(failure.kind, BuiltinFailureKind::Syntax, "{text}");
+    }
+}
+
+// ----- pin! ----------------------------------------------------------------
+
+#[test]
+fn pin_pins_a_mutable_borrow_of_a_moved_temporary() {
+    assert_eq!(
+        render(&expand(BuiltinKind::Pin, "pin!(S(A, 1),);")),
+        "$crate :: pin :: Pin { __pointer : & mut { S ( A , 1 ) } }"
+    );
+    let failure = expand_in(BuiltinKind::Pin, "pin!();", Edition::E2021).unwrap_err();
+    assert_eq!(failure.kind, BuiltinFailureKind::Syntax);
+}
+
+// ----- offset_of! ----------------------------------------------------------
+
+#[test]
+fn offset_of_becomes_a_call_of_the_layout_wrapper() {
+    let call = |text: &str| render(&expand(BuiltinKind::OffsetOf, text));
+    assert_eq!(
+        call("offset_of!(S, a);"),
+        "$crate :: mem :: lrr_offset_of_in :: < S > ( \"a\" )"
+    );
+    // Spaced tuple indices lex to different tokens but name one path.
+    assert_eq!(
+        call("offset_of!(((u8, u8), u8), 0 . 1.0);"),
+        "$crate :: mem :: lrr_offset_of_in :: < ( ( u8 , u8 ) , u8 ) > ( \"0.1.0\" )"
+    );
+    assert_eq!(
+        call("offset_of!(Foo<A, B>, x.y);"),
+        "$crate :: mem :: lrr_offset_of_in :: < Foo < A , B >> ( \"x.y\" )"
+    );
 }
 
 // ----- assert! -------------------------------------------------------------

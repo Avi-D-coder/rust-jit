@@ -556,7 +556,7 @@ impl ConstantPathSelection {
         views: &[&PreparedSourceView],
     ) -> Result<(), Diagnostic> {
         if caller.selection() != self.site.source()
-            || db.source_view_namespace_stamps()? != self.stamps
+            || db.source_view_namespace_census()?.stamps() != &self.stamps
         {
             return Err(fault("constant path caller/input membership changed"));
         }

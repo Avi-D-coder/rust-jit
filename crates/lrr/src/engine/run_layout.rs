@@ -229,9 +229,35 @@ impl RunMachine {
         };
         let library =
             crate::facade::library_layouts::library_layout(self.frame.body.profile(), &demand.definition);
+        // The field names of the (first) variant, for `offset_of!` paths.
+        let field_names = schema
+            .variants
+            .first()
+            .map(|variant| variant.fields.iter().map(|field| field.name.clone()).collect())
+            .unwrap_or_default();
+        let maybe_unsized_tail = schema
+            .variants
+            .first()
+            .and_then(|variant| variant.fields.last())
+            .is_some_and(|last| {
+                let [tail] = last.ty.as_slice() else {
+                    return false;
+                };
+                let relaxed = |tokens: &[crate::syntax::ast_adapter::TokenRecipe]| {
+                    tokens
+                        .windows(2)
+                        .any(|pair| pair[0].text == "?" && pair[1].text == "Sized")
+                };
+                schema.generics.iter().any(|parameter| {
+                    parameter.name == tail.text && relaxed(&parameter.bounds)
+                }) || (schema.generics.iter().any(|parameter| parameter.name == tail.text)
+                    && relaxed(&schema.header.tokens))
+            });
         QueryPoll::Ready(Ok(DeclarationFacts {
             kind,
             repr,
+            field_names,
+            maybe_unsized_tail,
             variants,
             discriminants,
             library,
@@ -258,7 +284,8 @@ impl RunMachine {
             | LibraryFunction::NeedsDrop
             | LibraryFunction::VariantCount
             | LibraryFunction::Zeroed
-            | LibraryFunction::Transmute => {
+            | LibraryFunction::Transmute
+            | LibraryFunction::OffsetOf => {
                 match self.frame.enclosing_type_arguments(function.type_arguments()) {
                     Ok(types) => types,
                     Err(error) => return QueryPoll::Ready(Err(error)),

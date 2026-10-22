@@ -1974,10 +1974,12 @@ fn component_rows_state_every_relation_or_name_the_hole() {
         assert!(rows.holes.is_empty(), "{edition}: {:?}", rows.holes);
         assert_eq!(rows.literals.len(), 3, "{edition}: 5, 1 and 6 share one component");
         assert!(rows.deferred.len() >= 2, "{edition}: `+` and `==` are structural rows");
-        // A method call on the variable is not yet a stated relation.
+        // A method call on the variable states its relations only once the
+        // pinned owner has resolved the receiver's Type: until a probe round
+        // answers it, the component is open.
         let rows = component_rows("fn main() { let x = 5; let s = x.to_string(); }", edition, 0);
         assert!(
-            rows.holes.iter().any(|hole| hole.why.contains("MethodCall")),
+            rows.holes.iter().any(|hole| hole.why.contains("unresolved base type")),
             "{edition}: {:?}",
             rows.holes
         );
@@ -1992,5 +1994,47 @@ fn component_rows_state_every_relation_or_name_the_hole() {
         );
         assert!(rows.holes.is_empty(), "{edition}: {:?}", rows.holes);
         assert_eq!(rows.sites.len(), 2, "{edition}");
+    }
+}
+
+/// Record fields, array elements, assignments, casts and `_` annotations state
+/// their relations directly; a field access, method call or index waits for
+/// the owner's resolved base Type (a probe) and keeps the component open.
+#[test]
+fn component_rows_cover_aggregates_assignments_casts_and_probes() {
+    for edition in [2015, 2018, 2021, 2024] {
+        let rows = component_rows(
+            "struct P { x: isize, y: u8 }\nfn main() { let p = P { x: 3, y: 4 }; }",
+            edition,
+            0,
+        );
+        assert!(rows.holes.is_empty(), "{edition}: {:?}", rows.holes);
+        assert!(rows.probes_pending() == 0, "{edition}");
+        let rows = component_rows("fn main() { let a = [1, 2, 3]; }", edition, 0);
+        assert!(rows.holes.is_empty(), "{edition}: {:?}", rows.holes);
+        assert_eq!(rows.literals.len(), 3, "{edition}: array elements share one Type");
+        let rows = component_rows("fn main() { let mut x = 1; x = 2; }", edition, 0);
+        assert!(rows.holes.is_empty(), "{edition}: {:?}", rows.holes);
+        assert_eq!(rows.literals.len(), 2, "{edition}: an assignment shares one Type");
+        let rows = component_rows("fn main() { let x = 5 as u8; }", edition, 0);
+        assert!(rows.holes.is_empty(), "{edition}: {:?}", rows.holes);
+        let rows = component_rows("struct W<T>(T);\nfn main() { let b: W<_> = W(5); }", edition, 0);
+        assert!(
+            rows.holes.iter().all(|hole| !hole.why.contains("annotation")),
+            "{edition}: a written `_` is a fresh variable, {:?}",
+            rows.holes
+        );
+        let rows = component_rows("struct P { x: u16 }\nfn main() { let p = P { x: 1 }; let q = p.x + 2; }", edition, 1);
+        assert!(
+            rows.holes.iter().any(|hole| hole.why.contains("unresolved base type")),
+            "{edition}: a field access waits for its base: {:?}",
+            rows.holes
+        );
+        let rows = component_rows("fn main() { let a = [1, 2]; let b = a[0]; }", edition, 0);
+        assert!(
+            rows.holes.iter().any(|hole| hole.why.contains("unresolved base type")),
+            "{edition}: an index waits for its base: {:?}",
+            rows.holes
+        );
     }
 }

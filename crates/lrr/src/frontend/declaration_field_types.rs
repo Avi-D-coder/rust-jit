@@ -621,7 +621,13 @@ impl DeclarationFieldTypes {
                 fields.push(HeaderField {
                     parameter,
                     range: field_range,
-                    tokens: tokens(field.syntax(), None),
+                    // A parameter's Type is compared with the signature's, which
+                    // spells a generated `$crate` root with its crate's segment.
+                    tokens: if parameter.is_some() {
+                        parsed.type_tokens(Some(field.syntax().clone()))?
+                    } else {
+                        tokens(field.syntax(), None)
+                    },
                     name,
                     shape,
                 });

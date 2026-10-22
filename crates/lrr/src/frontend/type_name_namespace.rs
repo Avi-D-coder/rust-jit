@@ -33,6 +33,35 @@ pub(crate) struct SourceTypeOwner<'a> {
 fn fault(code: &'static str, message: &str) -> Diagnostic {
     Diagnostic::new(code, message.into())
 }
+/// The namespace-membership census a Type lookup may read. A certified module
+/// answer never does, so the lexical census is only fetched (built once per
+/// input epoch) when a legacy answer needs the complete source universe.
+#[derive(Clone, Copy)]
+pub(crate) enum NamespaceStamps<'a> {
+    Given(&'a BTreeMap<InputKey, Digest>),
+    Lexical,
+}
+enum StampsRef<'a> {
+    Borrowed(&'a BTreeMap<InputKey, Digest>),
+    Shared(std::sync::Arc<BTreeMap<InputKey, Digest>>),
+}
+impl std::ops::Deref for StampsRef<'_> {
+    type Target = BTreeMap<InputKey, Digest>;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Borrowed(stamps) => stamps,
+            Self::Shared(stamps) => stamps,
+        }
+    }
+}
+impl NamespaceStamps<'_> {
+    fn resolve(&self, db: &Database) -> Result<StampsRef<'_>, Diagnostic> {
+        match self {
+            Self::Given(stamps) => Ok(StampsRef::Borrowed(stamps)),
+            Self::Lexical => Ok(StampsRef::Shared(db.lexical_namespace_stamps()?)),
+        }
+    }
+}
 pub(crate) fn require_primitive_name(
     db: &mut Database,
     declaration: SourceTypeOwner<'_>,
@@ -64,7 +93,13 @@ pub(crate) fn require_selected_name(
             "Type authority needs a completed selected lookup",
         ));
     }
-    let actual = lookup_name(db, declaration, sources, stamps, written_name)?;
+    let actual = lookup_name(
+        db,
+        declaration,
+        sources,
+        NamespaceStamps::Given(stamps),
+        written_name,
+    )?;
     if actual != *expected {
         return Err(fault(
             "LRR-E-CALL-CONTEXT",
@@ -105,11 +140,13 @@ pub(crate) fn lookup_declaration_name(
             written_name,
         )
     } else {
-        let stamps = match db.lexical_namespace_stamps() {
-            Ok(stamps) => stamps,
-            Err(error) => return QueryPoll::Ready(Err(error)),
-        };
-        QueryPoll::Ready(lookup_name(db, declaration, sources, &stamps, written_name))
+        QueryPoll::Ready(lookup_name(
+            db,
+            declaration,
+            sources,
+            NamespaceStamps::Lexical,
+            written_name,
+        ))
     }
 }
 
@@ -476,7 +513,7 @@ pub(crate) fn lookup_name(
     db: &mut Database,
     declaration: SourceTypeOwner<'_>,
     sources: &[&PreparedSourceView],
-    stamps: &BTreeMap<InputKey, Digest>,
+    stamps: NamespaceStamps<'_>,
     written_name: &str,
 ) -> Result<NameLookup, Diagnostic> {
     let missing = || {
@@ -604,6 +641,7 @@ pub(crate) fn lookup_name(
     }
     // Legacy unsealed/local-rib evidence below still needs its complete source
     // universe. Certified module answers above never construct that census.
+    let stamps = stamps.resolve(db)?;
     let mut captured_count = 0usize;
     for key in stamps.keys() {
         let InputKey::CapturedSource(location) = key else {

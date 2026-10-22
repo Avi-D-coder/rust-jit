@@ -275,17 +275,21 @@ impl EnteredMacroIndex<'_> {
                 && context.source().index().body() == index.body()
                 && context.source().index().profile() == index.profile()
         });
+        // An admitted body context carries its own body index: a body generated
+        // by a macro defined in another edition (a library macro) has that
+        // edition's profile, which the owning source's profile never names. An
+        // original outline body must match the source's profile exactly.
         if handle.key() != self.body
             || index.body() != &self.body
-            || index.profile() != &expected.outline.parse.profile
             || !(admitted
-                || self
-                    .parent
-                    .view
-                    .outline()
-                    .items
-                    .iter()
-                    .any(|item| item.body.as_ref() == Some(handle)))
+                || (index.profile() == &expected.outline.parse.profile
+                    && self
+                        .parent
+                        .view
+                        .outline()
+                        .items
+                        .iter()
+                        .any(|item| item.body.as_ref() == Some(handle))))
         {
             return Err(error("local pattern index owning body/profile differs"));
         }
@@ -1235,6 +1239,11 @@ impl SourceLocalIndex<'_> {
                 }
             })
             .ok_or_else(|| error("ordinary lookup position outside entered scopes"))?;
+        // A path keyword roots a module path; no item, import, generic or
+        // local binding is ever named `crate` or `super`.
+        if matches!(site.name, "crate" | "super") {
+            return Ok(PrefixResolution::ModuleTail);
+        }
         let name = MacroName::local(site.name, edition)?;
         if let Some(header) = header {
             if let Some(parameter) =

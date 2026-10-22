@@ -10,6 +10,12 @@ pub enum Result<T, E> {
 }
 
 impl<T, E> Result<T, E> {
+    // `<Result<T, E> as Try>::Output`, stated for the interpreter's static
+    // `expr?` typing (never called). Not part of the real `Result`.
+    #[doc(hidden)]
+    pub fn __try_output(self) -> T {
+        core::intrinsics::lrr_unsupported("Result::__try_output")
+    }
     pub const fn is_ok(&self) -> bool {
         match self {
             Result::Ok(_) => true,
@@ -218,6 +224,32 @@ impl<T: crate::cmp::PartialOrd, E: crate::cmp::PartialOrd> crate::cmp::PartialOr
             (Result::Err(a), Result::Err(b)) => a.partial_cmp(b),
             (Result::Ok(_), Result::Err(_)) => Option::Some(crate::cmp::Ordering::Less),
             (Result::Err(_), Result::Ok(_)) => Option::Some(crate::cmp::Ordering::Greater),
+        }
+    }
+}
+
+// `?` on a `Result`: `Err(e)` short-circuits with the residual
+// `Result<Infallible, E>`, and the enclosing function's `FromResidual` impl
+// converts the error through `From`.
+impl<T, E> crate::ops::Try for Result<T, E> {
+    type Output = T;
+    type Residual = Result<crate::convert::Infallible, E>;
+    fn from_output(output: T) -> Self {
+        Result::Ok(output)
+    }
+    fn branch(self) -> crate::ops::ControlFlow<Result<crate::convert::Infallible, E>, T> {
+        match self {
+            Result::Ok(value) => crate::ops::ControlFlow::Continue(value),
+            Result::Err(error) => crate::ops::ControlFlow::Break(Result::Err(error)),
+        }
+    }
+}
+impl<T, E, F: crate::convert::From<E>> crate::ops::FromResidual<Result<crate::convert::Infallible, E>>
+    for Result<T, F>
+{
+    fn from_residual(residual: Result<crate::convert::Infallible, E>) -> Self {
+        match residual {
+            Result::Err(error) => Result::Err(crate::convert::From::from(error)),
         }
     }
 }

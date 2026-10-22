@@ -141,6 +141,8 @@ pub(crate) struct ModulePaths {
     bytes: usize,
     weak_bytes: usize,
     imported_aliases: usize,
+    /// Changes accepted by this registry (see `MacroNamespaces::epoch`).
+    epoch: u64,
 }
 pub(crate) enum Resolution {
     Known(MacroPath),
@@ -161,6 +163,9 @@ fn origin(path: &ModulePath) -> ScopeKey {
     }
 }
 impl ModulePaths {
+    pub(crate) fn change_count(&self) -> u64 {
+        self.epoch
+    }
     fn charge(&mut self, path: &ModulePath) -> Result<(), Diagnostic> {
         self.bytes = self
             .bytes
@@ -209,6 +214,7 @@ impl ModulePaths {
                 _ => Err(error("conflicting module declaration provenance")),
             };
         }
+        self.epoch = self.epoch.wrapping_add(1);
         self.charge(&path)?;
         self.charge_visibility(&visibility)?;
         self.bindings.insert(path, Binding::Declared(visibility));
@@ -231,6 +237,7 @@ impl ModulePaths {
             let Some(Binding::Alias(old)) = self.bindings.get_mut(&path) else {
                 return Err(error("extern prelude alias changed during publication"));
             };
+            self.epoch = self.epoch.wrapping_add(1);
             old.visibility = visibility;
             return Ok(());
         }
@@ -275,6 +282,7 @@ impl ModulePaths {
                 .checked_add(name.len() + std::mem::size_of::<String>())
                 .ok_or_else(|| error("module origin metadata budget exceeded"))?;
         }
+        self.epoch = self.epoch.wrapping_add(1);
         self.bindings.insert(
             path,
             Binding::Alias(Alias {
@@ -367,6 +375,7 @@ impl ModulePaths {
             .bytes
             .checked_add(added)
             .ok_or_else(|| error("imported module alias metadata budget exceeded"))?;
+        self.epoch = self.epoch.wrapping_add(1);
         let alias = Alias {
             target,
             canonical,
@@ -483,6 +492,7 @@ impl ModulePaths {
         self.charge(&path)?;
         self.charge(&target)?;
         self.charge_visibility(&visibility)?;
+        self.epoch = self.epoch.wrapping_add(1);
         self.weak_bytes = self
             .weak_bytes
             .checked_add(self.bytes - before)
@@ -501,6 +511,9 @@ impl ModulePaths {
             .checked_sub(self.weak_bytes)
             .ok_or_else(|| error("glob module quota accounting mismatch"))?;
         self.weak_bytes = 0;
+        if !self.weak.is_empty() {
+            self.epoch = self.epoch.wrapping_add(1);
+        }
         self.weak.clear();
         Ok(())
     }

@@ -123,6 +123,8 @@ impl std::fmt::Debug for LibraryMacros {
     }
 }
 
+/// Library macros of `core` whose bodies are `builtin #` syntax.
+const BUILTIN_SYNTAX_MACROS: &[&str] = &["offset_of", "type_ascribe", "pin"];
 impl LibraryMacros {
     /// Shared per owning profile; parsing the library files happens once.
     pub(crate) fn for_profile(profile: &ProfileIdentity) -> Result<Arc<Self>, Diagnostic> {
@@ -243,6 +245,18 @@ impl LibraryMacros {
                     .iter()
                     .find(|attribute| attribute.name == "rustc_builtin_macro")
                 else {
+                    // Library macros whose body is compiler `builtin # name(..)`
+                    // syntax (the compiler lowers it; nothing in the library
+                    // does) are expanded by the adapter under their own name.
+                    if file.krate == "core"
+                        && item.def_key.item_kind == crate::source::manifest::ItemKind::Macro
+                        && BUILTIN_SYNTAX_MACROS.contains(&item.def_key.declared_name.as_str())
+                    {
+                        builtins.insert(
+                            item.def_key.fingerprint(),
+                            item.def_key.declared_name.clone(),
+                        );
+                    }
                     continue;
                 };
                 // `#[rustc_builtin_macro(core_panic)]` names its expander;

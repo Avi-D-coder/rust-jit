@@ -320,6 +320,32 @@ impl GeneratedCallRequest {
         ));
         Ok(self)
     }
+    /// A generated call of a library `#[rustc_builtin_macro]` the pinned
+    /// adapter expands. `provider` is the consumer source whose configuration
+    /// and physical invocations supply the builtin's call-site facts.
+    pub(crate) fn with_library_builtin(
+        mut self,
+        provider: &super::source_declarative::SourceDeclarative,
+        kind: lrr_expand_adapter::builtin_macros::BuiltinKind,
+        parents: Vec<crate::syntax::origin::ExpansionOrigin>,
+        scope: &crate::syntax::outline::ScopeKey,
+    ) -> Result<Self, Diagnostic> {
+        let input = &self.items.calls()[self.call];
+        self.enclosing = Some(Box::new(
+            provider
+                .generated_builtin_request(
+                    &self.definition,
+                    kind,
+                    self.key.clone(),
+                    &input.input,
+                    input.site,
+                    &parents,
+                    scope,
+                )?
+                .with_origin_parents(parents)?,
+        ));
+        Ok(self)
+    }
     pub(crate) fn with_compiler(
         mut self,
         catalog: &crate::frontend::compile_input_catalog::CompileInputCatalog,

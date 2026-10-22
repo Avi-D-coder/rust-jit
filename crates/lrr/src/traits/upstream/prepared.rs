@@ -791,6 +791,8 @@ impl CandidateIndex {
         Ok(index)
     }
 }
+/// The reason a root records when a goal named a trait outside its demanded set.
+pub(super) const MISSING_TRAIT_INDEX: &str = "actual source trait index is missing";
 #[derive(Default)]
 pub(super) struct ImplBucket {
     constructors: ty::data_structures::HashMap<SimplifiedType<DefinitionId>, Vec<DefinitionId>>,
@@ -1661,7 +1663,13 @@ impl<'cx> PreparedProvider<'cx> {
             .expect("pinned candidate indexes must be ready before selection")
             .traits
             .get(&id)
-            .expect("actual source trait index is missing")
+            .unwrap_or_else(|| {
+                // A goal named a trait the root did not demand: withhold its
+                // impls and record it, so the root demands it and runs again
+                // (callbacks never discover source themselves).
+                self.blocked.borrow_mut().push((id, MISSING_TRAIT_INDEX.to_string()));
+                Box::leak(Box::new(ImplBucket::default()))
+            })
     }
     fn data(self) -> &'cx PreparedFacts<'cx> {
         self.facts

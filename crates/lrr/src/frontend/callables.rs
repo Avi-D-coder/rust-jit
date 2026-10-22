@@ -35,7 +35,6 @@ pub(crate) mod entered_module;
 mod type_relative;
 #[path = "callables_anchored.rs"]
 mod anchored;
-pub(crate) use anchored::explicit_argument_term;
 
 #[derive(Debug, Clone)]
 pub struct SourceCallable {
@@ -747,7 +746,8 @@ impl<'a> CallResolver<'a> {
         let resolved = (|| -> Result<Option<(Result<Digest, super::member_index::BuiltinSelf>, Option<Digest>, &str)>, Diagnostic> {
             let (ty, trait_key, name) =
                 if let Some((ty, tr, rest)) = split_qualified_anchor(spelled) {
-                    if rest.contains("::") {
+                    // A reference anchor names no associated constant.
+                    if rest.contains("::") || ty.starts_with('&') {
                         return Ok(None);
                     }
                     let (absolute, segments) = segments_of(ty)?;

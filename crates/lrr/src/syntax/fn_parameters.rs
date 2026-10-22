@@ -78,6 +78,27 @@ impl ParsedFile {
     /// Content identity of the body whose block is `block`: the block alone,
     /// or for a pattern function its parameter list and block.
     pub(crate) fn fn_body_identity(&self, block: &SyntaxNode) -> Result<Digest, Diagnostic> {
+        // Every call re-reads the whole body (text copy or token walk and hash)
+        // and node-phase entry asks for it once per phase, so identify a node of
+        // this immutable tree once. All callers pass nodes of `self`'s tree.
+        let extent = block.text_range();
+        let key = (
+            u32::from(extent.start()),
+            u32::from(extent.end()),
+            block.kind() as u16,
+        );
+        if let Ok(known) = self.body_identities.lock()
+            && let Some(identity) = known.get(&key)
+        {
+            return Ok(*identity);
+        }
+        let identity = self.fn_body_identity_uncached(block)?;
+        if let Ok(mut known) = self.body_identities.lock() {
+            known.insert(key, identity);
+        }
+        Ok(identity)
+    }
+    fn fn_body_identity_uncached(&self, block: &SyntaxNode) -> Result<Digest, Diagnostic> {
         let Some(list) = pattern_list(block) else {
             return self.body_content_identity(block);
         };
@@ -192,6 +213,34 @@ mod tests {
         assert_eq!(index.parameter_owner(), None);
         assert_ne!(index.scopes()[0].kind, ScopeKind::Parameters);
         assert_eq!(index.nodes()[0].range.start, 0);
+    }
+
+    #[test]
+    fn body_identity_is_computed_once_per_node_and_equals_the_uncached_digest() {
+        for (source, name) in [
+            ("fn f(x: i32) -> i32 { let y = x + 1; y * 2 }", "f"),
+            ("fn f((a, b): (i32, i32)) -> i32 { a + b }", "f"),
+        ] {
+            let (parsed, handle, _) = indexed(source, name);
+            let root = parsed.entered_body_root(&handle).unwrap();
+            let uncached = parsed.fn_body_identity_uncached(&root).unwrap();
+            // Entry verified the handle's recorded identity, and every later
+            // phase asks again: all answers are the same stored digest.
+            assert_eq!(handle.body_hash, uncached, "{source}");
+            let stored = parsed.body_identities.lock().unwrap().len();
+            assert_eq!(stored, 1, "{source}");
+            for _ in 0..8 {
+                assert_eq!(parsed.fn_body_identity(&root).unwrap(), uncached);
+                assert_eq!(parsed.entered_body_root(&handle).unwrap(), root);
+            }
+            assert_eq!(parsed.body_identities.lock().unwrap().len(), stored);
+        }
+        // Distinct bodies of one file keep distinct identities.
+        let (parsed, first, _) = indexed("fn a() -> i32 { 1 } fn b() -> i32 { 2 }", "a");
+        let (_, second, _) = indexed("fn a() -> i32 { 1 } fn b() -> i32 { 2 }", "b");
+        let one = parsed.entered_body_root(&first).unwrap();
+        assert_eq!(parsed.fn_body_identity(&one).unwrap(), first.body_hash);
+        assert_ne!(first.body_hash, second.body_hash);
     }
 
     #[test]

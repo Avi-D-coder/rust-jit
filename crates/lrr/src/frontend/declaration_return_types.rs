@@ -160,7 +160,9 @@ impl PreparedSourceLocalPlan {
             return QueryPoll::Ready(Err(error("return Type outside actual declaration")));
         }
         checked!(add(0, signature.header.estimated_bytes()));
-        let syntax = tokens(ty.syntax(), None);
+        // The signature spells a generated `$crate` root with the crate its
+        // hygiene selects; the actual annotation is compared in that spelling.
+        let syntax = checked!(parsed.type_tokens(Some(ty.syntax().clone())));
         if syntax != signature.result {
             return QueryPoll::Ready(Err(error("return Type actual annotation recipe differs")));
         }

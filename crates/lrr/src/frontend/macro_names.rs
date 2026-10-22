@@ -158,7 +158,10 @@ impl DeclarationModuleBinding {
             .find(|scope| scope.identity == row.lexical_scope)
             .ok_or_else(|| error("scoped module capture attachment absent"))?
             .kind;
-        let name = MacroName::parse(&row.name, row.name_edition)?;
+        let name = match &row.segment {
+            Some(segment) => super::source_macro_routes::semantic(segment, row.name_edition)?,
+            None => MacroName::parse(&row.name, row.name_edition)?,
+        };
         let mut route_components = super::source_macro_routes::module_names(
             &row.scope.module_path,
             scan.parse().profile.edition,
@@ -470,6 +473,10 @@ pub struct MacroNamespaces {
     implicit_disabled: BTreeSet<ScopeKey>,
     headers: usize,
     edges: usize,
+    /// Count of changes this table accepted. Re-asserting a fact already held
+    /// (the `exists`/same-value early returns) does not advance it; every other
+    /// mutator advances it, so an unchanged count means an unchanged table.
+    epoch: u64,
 }
 fn error(message: &str) -> Diagnostic {
     Diagnostic::new("LRR-E-MACRO-SCOPE", message.into())
@@ -491,6 +498,11 @@ fn admit(current: usize, ceiling: usize) -> Result<usize, Diagnostic> {
         .ok_or_else(|| error("macro namespace index count overflow"))
 }
 impl MacroNamespaces {
+    /// Changes accepted by this table and its module registry; equal counts
+    /// of one table denote the same facts.
+    pub(crate) fn change_count(&self) -> u64 {
+        self.epoch.wrapping_add(self.module_paths.change_count())
+    }
     /// Pure owned fact admission. The coordinator supplies matched source,
     /// generation/context and insertion-scope facts; this never parses/expands.
     /// Repeated facts are idempotent; changed ownership/origin is a conflict.
@@ -498,6 +510,7 @@ impl MacroNamespaces {
         &mut self,
         binding: DeclarationModuleBinding,
     ) -> Result<(), Diagnostic> {
+        self.epoch = self.epoch.wrapping_add(1);
         let amount = binding.metadata_bytes()?;
         super::module_paths::ModulePath::validate_components(&binding.route_components)?;
         binding
@@ -675,6 +688,7 @@ impl MacroNamespaces {
             OriginBindingRef::Named(p) => OriginBinding::Named(p.clone()),
             OriginBindingRef::Glob(p) => OriginBinding::Glob(p.clone()),
         };
+        self.epoch = self.epoch.wrapping_add(1);
         self.binding_origins
             .entry(path.clone())
             .or_default()
@@ -806,6 +820,7 @@ impl MacroNamespaces {
         edition: u16,
         generated: bool,
     ) -> Result<(), Diagnostic> {
+        self.epoch = self.epoch.wrapping_add(1);
         let Some(recipe) = &row.macro_use else {
             return Ok(());
         };
@@ -857,6 +872,7 @@ impl MacroNamespaces {
         unit: Digest,
         producers: &BTreeSet<Digest>,
     ) -> Result<(), Diagnostic> {
+        self.epoch = self.epoch.wrapping_add(1);
         let bytes = producers
             .len()
             .checked_mul(32)
@@ -1065,6 +1081,7 @@ impl MacroNamespaces {
             .checked_add(key.1.as_str().len())
             .and_then(|n| n.checked_add(192))
             .ok_or_else(|| error("compiler global metadata limit"))?;
+        self.epoch = self.epoch.wrapping_add(1);
         self.compiler_globals.insert(key, definition);
         self.compiler_global_bytes = bytes;
         Ok(())
@@ -1081,7 +1098,9 @@ impl MacroNamespaces {
         {
             return Err(error("macro body owner identity conflict"));
         }
-        self.body_owner_pending.insert(definition, producer);
+        if self.body_owner_pending.insert(definition, producer).is_none() {
+            self.epoch = self.epoch.wrapping_add(1);
+        }
         Ok(())
     }
     pub(crate) fn pending_body_owner(&self, definition: Digest) -> Option<Digest> {
@@ -1099,6 +1118,7 @@ impl MacroNamespaces {
         if self.preludes.contains_key(&scope) {
             return Err(error("duplicate macro prelude scope"));
         }
+        self.epoch = self.epoch.wrapping_add(1);
         self.preludes.insert(scope, unit);
         self.prelude_bytes = bytes;
         Ok(())
@@ -1128,6 +1148,7 @@ impl MacroNamespaces {
             .and_then(|n| n.checked_add(64))
             .ok_or_else(|| error("disabled prelude aggregate metadata budget"))?;
         self.prelude_bytes = bytes;
+        self.epoch = self.epoch.wrapping_add(1);
         self.implicit_disabled.insert(scope);
         Ok(())
     }
@@ -1293,6 +1314,7 @@ impl MacroNamespaces {
         if exists {
             return Ok(());
         }
+        self.epoch = self.epoch.wrapping_add(1);
         let binding = self.bindings.entry(path).or_default().in_class_mut(class);
         binding.definitions.insert(definition.clone());
         binding
@@ -1337,6 +1359,7 @@ impl MacroNamespaces {
         if exists {
             return Ok(());
         }
+        self.epoch = self.epoch.wrapping_add(1);
         let binding = self.bindings.entry(path).or_default();
         binding.reexports.insert(target.clone());
         binding
@@ -1377,6 +1400,7 @@ impl MacroNamespaces {
         if exists {
             return Ok(());
         }
+        self.epoch = self.epoch.wrapping_add(1);
         self.glob_reexports
             .entry(path)
             .or_default()
@@ -1392,6 +1416,7 @@ impl MacroNamespaces {
         target: &MacroPath,
         visibility: &VisibilityScope,
     ) -> Result<(), Diagnostic> {
+        self.epoch = self.epoch.wrapping_add(1);
         if let Some(targets) = self.glob_reexports.get_mut(path) {
             if let Some(ranges) = targets.get_mut(target) {
                 if ranges.contains(visibility) {
@@ -1501,6 +1526,7 @@ impl MacroNamespaces {
             return Ok(());
         }
         let count = admit(self.headers, 1_000_000)?;
+        self.epoch = self.epoch.wrapping_add(1);
         self.bindings
             .entry(path)
             .or_default()
@@ -1524,6 +1550,7 @@ impl MacroNamespaces {
             };
         }
         let count = admit(self.edges, 100_000)?;
+        self.epoch = self.epoch.wrapping_add(1);
         self.dependencies.insert(key, provider);
         self.edges = count;
         Ok(())
@@ -1556,6 +1583,7 @@ impl MacroNamespaces {
             .checked_add(128)
             .and_then(|n| n.checked_add(key.1.as_str().len()))
             .ok_or_else(|| error("compiler-injected import metadata limit"))?;
+        self.epoch = self.epoch.wrapping_add(1);
         self.compiler_imports.insert(key, provider);
         self.compiler_import_bytes = bytes;
         Ok(())
@@ -1577,6 +1605,7 @@ impl MacroNamespaces {
         invocation: Digest,
         definitions: Vec<MacroDefinition>,
     ) -> Result<(), Diagnostic> {
+        self.epoch = self.epoch.wrapping_add(1);
         if !self
             .bindings
             .get(&path)
@@ -1631,6 +1660,11 @@ impl MacroNamespaces {
         else {
             return Ok(None);
         };
+        // `crate`, `self` and `super` alone name a module (the crate root, the
+        // current or the parent module), which no item namespace holds.
+        if names.is_empty() {
+            return Ok(None);
+        }
         Ok(Some(MacroPath::new(unit, names)?))
     }
     fn import_reference_scope(

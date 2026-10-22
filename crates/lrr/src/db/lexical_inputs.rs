@@ -13,20 +13,31 @@ impl Database {
     pub(crate) fn lexical_namespace_stamps(
         &self,
     ) -> Result<Arc<BTreeMap<InputKey, Digest>>, Diagnostic> {
+        Ok(self.lexical_namespace_census()?.0)
+    }
+    /// The same shared census with `sum(128 + key.heap_bytes())` over its keys,
+    /// computed once with the census instead of by every retained proof.
+    pub(crate) fn lexical_namespace_census(
+        &self,
+    ) -> Result<(Arc<BTreeMap<InputKey, Digest>>, usize), Diagnostic> {
         if let Ok(cached) = self.lexical_stamps.lock()
-            && let Some((revision, stamps)) = cached.as_ref()
+            && let Some((revision, stamps, key_bytes)) = cached.as_ref()
             && *revision == self.revision
         {
-            return Ok(Arc::clone(stamps));
+            return Ok((Arc::clone(stamps), *key_bytes));
         }
-        let stamps = Arc::new(self.census_lexical_namespace_stamps()?);
+        let (stamps, key_bytes) = self.census_lexical_namespace_stamps()?;
+        let stamps = Arc::new(stamps);
         if let Ok(mut cached) = self.lexical_stamps.lock() {
-            *cached = Some((self.revision, Arc::clone(&stamps)));
+            *cached = Some((self.revision, Arc::clone(&stamps), key_bytes));
         }
-        Ok(stamps)
+        Ok((stamps, key_bytes))
     }
-    fn census_lexical_namespace_stamps(&self) -> Result<BTreeMap<InputKey, Digest>, Diagnostic> {
+    fn census_lexical_namespace_stamps(
+        &self,
+    ) -> Result<(BTreeMap<InputKey, Digest>, usize), Diagnostic> {
         let mut stamps = BTreeMap::new();
+        let mut key_bytes = 0usize;
         let mut bytes = 0usize;
         for (key, row) in &self.inputs {
             if matches!(
@@ -49,9 +60,10 @@ impl Database {
                 )?,
                 key.heap_bytes(),
             )?;
+            key_bytes = key_bytes.saturating_add(128).saturating_add(key.heap_bytes());
             stamps.insert(key.clone(), row.fingerprint);
         }
-        Ok(stamps)
+        Ok((stamps, key_bytes))
     }
     pub(crate) fn lexical_scope_certificate(
         &self,

@@ -31,6 +31,7 @@ mod constant_inputs;
 
 #[path = "source_view_inputs.rs"]
 mod source_view_inputs;
+pub(crate) use source_view_inputs::InputCensus;
 
 #[path = "macro_export_inputs.rs"]
 pub(crate) mod macro_export_inputs;
@@ -202,7 +203,9 @@ pub struct Database {
     generated_namespace_bases: BTreeMap<crate::syntax::outline::ScopeKey, Option<Arc<InputValue>>>,
     generated_member_owners: BTreeMap<crate::syntax::outline::ScopeKey, Digest>,
     /// `lexical_namespace_stamps` of one input revision.
-    lexical_stamps: std::sync::Mutex<Option<(u64, Arc<BTreeMap<InputKey, Digest>>)>>,
+    lexical_stamps: std::sync::Mutex<Option<(u64, Arc<BTreeMap<InputKey, Digest>>, usize)>>,
+    /// `source_view_namespace_census` of one input epoch.
+    source_view_census: std::sync::Mutex<Option<Arc<InputCensus>>>,
     scope_certificates: scope_certificate_index::ScopeCertificateIndex,
     memos: BTreeMap<QueryKey, MemoEntry>,
     revision: u64,
@@ -232,6 +235,7 @@ impl Default for Database {
             generated_namespace_bases: BTreeMap::new(),
             generated_member_owners: BTreeMap::new(),
             lexical_stamps: Default::default(),
+            source_view_census: Default::default(),
             scope_certificates: Default::default(),
             memos: BTreeMap::new(),
             revision: 1,
@@ -1101,6 +1105,11 @@ impl Database {
     /// table.
     pub(crate) fn input_epoch(&self) -> (u64, u64) {
         (self.instance, self.revision)
+    }
+    /// A pure query is recording the inputs it reads. Cached-epoch shortcuts
+    /// must not skip those reads while this holds.
+    pub(crate) fn dependency_collection_active(&self) -> bool {
+        !self.collectors.is_empty()
     }
     pub fn memo(&self, key: &QueryKey) -> Option<&MemoEntry> {
         self.memos.get(key)

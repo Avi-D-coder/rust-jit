@@ -412,7 +412,7 @@ impl GuestStore {
                         let kind = if storage.variant.is_some() {
                             algorithm::StructKind::Prefixed { size: 1, align: 1 }
                         } else {
-                            algorithm::StructKind::Sized
+                            self.struct_kind_of(TypeId(value.type_id))
                         };
                         let layout = algorithm::univariant(
                             &fields,
@@ -486,7 +486,7 @@ impl GuestStore {
                 let kind = if matches!(self.types.descriptor(TypeId(value.type_id)).map(|d|d.key.as_ref()), Ok(TypeKey::Nominal {definition,..}) if definition.item_kind==crate::source::manifest::ItemKind::Enum) {
                     algorithm::StructKind::Prefixed { size: 1, align: 1 }
                 } else {
-                    algorithm::StructKind::Sized
+                    self.struct_kind_of(TypeId(value.type_id))
                 };
                 let placed = algorithm::univariant(
                     &fields,

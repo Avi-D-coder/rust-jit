@@ -199,6 +199,11 @@ pub enum LibraryFunction {
     /// `core::intrinsics::lrr_transmute<Src, Dst>(Src) -> Dst` between types of
     /// equal size that both have a byte image.
     Transmute,
+    /// `core::intrinsics::lrr_offset_of(&str) -> usize`: the byte offset of the
+    /// dotted field path within the enclosing function's first type parameter
+    /// (`mem::offset_of!`, which the adapter lowers to a call of the wrapper
+    /// `core::mem::lrr_offset_of_in::<Container>("a.b.0")`).
+    OffsetOf,
 }
 
 /// (function, owning library crate, path within that crate).
@@ -234,6 +239,13 @@ const ENTRIES: &[(LibraryFunction, &str, &[&str])] = &[
     (LibraryFunction::BeginPanic, "std", &["rt", "begin_panic"]),
     (LibraryFunction::Print, "std", &["io", "_print"]),
     (LibraryFunction::Eprint, "std", &["io", "_eprint"]),
+    // The same stderr write for facade sources, which name closed functions
+    // through `core::` paths (`std::process::Termination` reports an `Err`).
+    (
+        LibraryFunction::Eprint,
+        "core",
+        &["intrinsics", "lrr_eprint"],
+    ),
     (LibraryFunction::MustUse, "alloc", &["__export", "must_use"]),
     (
         LibraryFunction::Unsupported,
@@ -540,6 +552,11 @@ const ENTRIES: &[(LibraryFunction, &str, &[&str])] = &[
         "core",
         &["intrinsics", "lrr_transmute"],
     ),
+    (
+        LibraryFunction::OffsetOf,
+        "core",
+        &["intrinsics", "lrr_offset_of"],
+    ),
 ];
 
 const LIBRARY_EDITION: u16 = 2024;
@@ -617,6 +634,7 @@ impl LibraryFunction {
             Self::DiscriminantValue => 126,
             Self::Zeroed => 127,
             Self::Transmute => 128,
+            Self::OffsetOf => 130,
         }
     }
     const ALL: &'static [Self] = &[
@@ -690,6 +708,7 @@ impl LibraryFunction {
         Self::DiscriminantValue,
         Self::Zeroed,
         Self::Transmute,
+        Self::OffsetOf,
     ];
     /// Number of written arguments of the library signature.
     pub(crate) fn arity(self) -> usize {
@@ -789,6 +808,7 @@ impl LibraryFunction {
                 | Self::DiscriminantValue
                 | Self::Zeroed
                 | Self::Transmute
+                | Self::OffsetOf
         )
     }
 
@@ -799,7 +819,12 @@ impl LibraryFunction {
     /// type of its own (E-R5-012).
     pub(crate) fn type_arguments(self) -> usize {
         match self {
-            Self::SizeOf | Self::AlignOf | Self::NeedsDrop | Self::VariantCount | Self::Zeroed => 1,
+            Self::SizeOf
+            | Self::AlignOf
+            | Self::NeedsDrop
+            | Self::VariantCount
+            | Self::Zeroed
+            | Self::OffsetOf => 1,
             Self::Transmute => 2,
             _ => 0,
         }

@@ -336,6 +336,7 @@ mod tests {
             installed_recipes: 1,
             installed_lrir_bytes: 1,
             output: Default::default(),
+            exit_code: 0,
         })
     }
     #[test]

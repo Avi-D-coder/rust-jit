@@ -23,23 +23,42 @@ pub(crate) enum NamespaceRead {
 }
 pub(crate) struct NamespaceReads {
     enabled: bool,
+    /// Record only the scopes read (in `scopes`), not the certificate rows.
+    scopes_only: bool,
     rows: BTreeSet<NamespaceRead>,
+    scopes: BTreeSet<ScopeKey>,
     bytes: usize,
 }
 impl NamespaceReads {
     pub(crate) fn disabled() -> Self {
         Self {
             enabled: false,
+            scopes_only: false,
             rows: BTreeSet::new(),
+            scopes: BTreeSet::new(),
             bytes: 0,
         }
     }
     pub(crate) fn enabled() -> Self {
         Self {
             enabled: true,
+            scopes_only: false,
             rows: BTreeSet::new(),
+            scopes: BTreeSet::new(),
             bytes: 0,
         }
+    }
+    /// For a caller that needs which scopes were read and nothing else: it
+    /// keeps one entry per scope, without the per-name rows or their cost.
+    pub(crate) fn scopes_only() -> Self {
+        Self {
+            scopes_only: true,
+            ..Self::enabled()
+        }
+    }
+    /// The scopes read so far; only a `scopes_only` recorder keeps them.
+    pub(crate) fn into_scopes(self) -> BTreeSet<ScopeKey> {
+        self.scopes
     }
     pub(crate) fn rows(&self) -> impl Iterator<Item = &NamespaceRead> {
         self.rows.iter()
@@ -67,6 +86,12 @@ impl NamespaceReads {
         if !self.enabled {
             return Ok(());
         }
+        if self.scopes_only {
+            if !self.scopes.contains(scope) {
+                self.scopes.insert(scope.clone());
+            }
+            return Ok(());
+        }
         let heap = scope.heap_bytes();
         self.insert(
             NamespaceRead::Scope {
@@ -81,13 +106,13 @@ impl NamespaceReads {
         namespace: Namespace,
         path: &MacroPath,
     ) -> Result<(), Diagnostic> {
-        if !self.enabled {
+        if !self.enabled || self.scopes_only {
             return Ok(());
         }
         self.components(namespace, path.unit, path.components())
     }
     pub(crate) fn module(&mut self, path: &ModulePath) -> Result<(), Diagnostic> {
-        if !self.enabled {
+        if !self.enabled || self.scopes_only {
             return Ok(());
         }
         self.components(Namespace::Type, path.unit, &path.names)
@@ -133,7 +158,7 @@ impl NamespaceReads {
         scope: &ScopeKey,
         alias: &MacroName,
     ) -> Result<(), Diagnostic> {
-        if !self.enabled {
+        if !self.enabled || self.scopes_only {
             return Ok(());
         }
         self.scope(Namespace::Type, scope)?;

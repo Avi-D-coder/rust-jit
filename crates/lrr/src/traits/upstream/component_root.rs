@@ -11,6 +11,7 @@ use super::super::root_input::{ComponentInput, DeferredRelation, DeferredRelatio
 use crate::traits::term::{RegionTerm, TyTerm};
 use crate::ir::op::PrimitiveType;
 use ty::Interner as _;
+use super::super::model::{AllocateList as _, Arg, Clause};
 
 fn numeric_class(kind: ty::TyKind<Cx<'_>>, bit_or_char: bool) -> bool {
     use ty::TyKind::*;
@@ -41,6 +42,8 @@ impl<'owner, 'cx> Batch<'owner, 'cx> {
 
 enum Fired {
     Relations(Vec<SourceCallRelation>),
+    /// A comparison that is not builtin: the obligation `lhs: PartialEq<rhs>`.
+    Obligation,
     Waiting,
     Hole,
 }
@@ -84,14 +87,48 @@ fn fire<'cx>(
                     site: row.site,
                 }]),
                 ty::TyKind::Infer(ty::InferTy::TyVar(_)) => Fired::Waiting,
-                // An overloaded dereference (`Deref::Target` of a nominal) is
-                // a hole: normalizing it asks the adapter for the ADT's
-                // structural sizedness, which is not prepared (it faults).
+                // `*x` of another type is its `Deref::Target` (a `Box` is a
+                // nominal with the ordinary impl): the owner normalizes it.
+                ty::TyKind::Adt(..) => match &row.projection {
+                    Some(projection) => Fired::Relations(vec![SourceCallRelation {
+                        formal: row.result.clone(),
+                        actual: projection.clone(),
+                        kind: SourceCallRelationKind::Equal,
+                        site: row.site,
+                    }]),
+                    None => Fired::Hole,
+                },
                 _ => Fired::Hole,
             }
         }
-        DeferredRelationKind::Arithmetic | DeferredRelationKind::Comparison => {
+        DeferredRelationKind::Shift => {
+            // Builtin shifts take two integers independently; the result is the
+            // left operand's Type.
+            let mut known = [false, false];
+            for (slot, term) in [&row.first, &row.second].into_iter().enumerate() {
+                known[slot] = match resolved(variables, term) {
+                    Some(resolved) => match resolved.kind() {
+                        ty::TyKind::Infer(ty::InferTy::TyVar(_)) => return Fired::Waiting,
+                        ty::TyKind::Int(_) | ty::TyKind::Uint(_) | ty::TyKind::Infer(ty::InferTy::IntVar(_)) => true,
+                        _ => false,
+                    },
+                    None => matches!(term, TyTerm::Primitive(p) if !matches!(p, PrimitiveType::Bool | PrimitiveType::Char | PrimitiveType::F32 | PrimitiveType::F64 | PrimitiveType::Unit)),
+                };
+            }
+            if known == [true, true] {
+                Fired::Relations(vec![SourceCallRelation {
+                    formal: row.first.clone(),
+                    actual: row.result.clone(),
+                    kind: SourceCallRelationKind::Equal,
+                    site: row.site,
+                }])
+            } else {
+                Fired::Hole
+            }
+        }
+        DeferredRelationKind::Arithmetic | DeferredRelationKind::Comparison | DeferredRelationKind::Compound => {
             let comparison = row.kind == DeferredRelationKind::Comparison;
+            let compound = row.kind == DeferredRelationKind::Compound;
             let mut classes = [None, None];
             for (slot, term) in [&row.first, &row.second].into_iter().enumerate() {
                 classes[slot] = match resolved(variables, term) {
@@ -112,7 +149,7 @@ fn fire<'cx>(
                         kind: SourceCallRelationKind::Equal,
                         site: row.site,
                     }];
-                    if !comparison {
+                    if !comparison && !compound {
                         relations.push(SourceCallRelation {
                             formal: row.first.clone(),
                             actual: row.result.clone(),
@@ -122,6 +159,7 @@ fn fire<'cx>(
                     }
                     Fired::Relations(relations)
                 }
+                [Some(false), _] | [_, Some(false)] if comparison => Fired::Obligation,
                 [Some(false), _] | [_, Some(false)] => Fired::Hole,
                 _ => Fired::Waiting,
             }
@@ -152,9 +190,10 @@ pub(super) fn execute_component(
             .expect("published actual header")
             .span
     });
-    let variables = RootVariables::new(
+    let variables = RootVariables::with_consts(
         &owner,
         packet.variables.iter().map(|(key, kind)| (*key, *kind)),
+        component.const_variables.iter().copied(),
         span,
     )?;
     let mut identity = StableEncoder::new("lrr/v1/component-root-session");
@@ -246,14 +285,28 @@ pub(super) fn execute_component(
     // Structural rows fire as their operand Types resolve.
     let mut waiting: Vec<&DeferredRelation> = component.deferred.iter().collect();
     let mut closed = component.closed;
+    let mut obligations: Vec<&DeferredRelation> = Vec::new();
     loop {
         let mut fired = Vec::new();
         let mut next = Vec::new();
         for row in waiting {
             match fire(&variables, row) {
                 Fired::Relations(relations) => fired.extend(relations),
+                Fired::Obligation => obligations.push(row),
                 Fired::Waiting => next.push(row),
-                Fired::Hole => closed = false,
+                Fired::Hole => {
+                    if std::env::var_os("LRR_SCR_DEBUG").is_some() {
+                        eprintln!(
+                            "SCR-DEBUG hole {:?} first={:?}/{:?} second={:?}/{:?}",
+                            row.kind,
+                            row.first,
+                            resolved(&variables, &row.first).map(|t| format!("{:?}", t.kind())),
+                            row.second,
+                            resolved(&variables, &row.second).map(|t| format!("{:?}", t.kind())),
+                        );
+                    }
+                    closed = false
+                }
             }
         }
         waiting = next;
@@ -261,6 +314,19 @@ pub(super) fn execute_component(
             break;
         }
         settled = batch!(&fired);
+    }
+    if (!waiting.is_empty() || ambiguous) && std::env::var_os("LRR_SCR_DEBUG").is_some() {
+        eprintln!("SCR-DEBUG not closed: waiting={} ambiguous={ambiguous}", waiting.len());
+        for row in &waiting {
+            eprintln!(
+                "SCR-DEBUG waiting {:?} first={:?}/{:?} second={:?}/{:?}",
+                row.kind,
+                row.first,
+                resolved(&variables, &row.first).map(|t| format!("{:?}", t.kind())),
+                row.second,
+                resolved(&variables, &row.second).map(|t| format!("{:?}", t.kind())),
+            );
+        }
     }
     if !waiting.is_empty() || ambiguous {
         closed = false;
@@ -280,7 +346,7 @@ pub(super) fn execute_component(
             Ok(value) => value,
             Err(why) => return Ok(held("site-clauses", why)),
         };
-        let site_application = match base.site(layouts, configuration, site.callee, site.signature, &site.parameters) {
+        let site_application = match base.site(layouts, configuration, site.callee, site.signature, &site.parameters, &site.constants) {
             Ok(value) => value,
             Err(why) => return Ok(held("site-application", format!("{why:?}"))),
         };
@@ -315,6 +381,42 @@ pub(super) fn execute_component(
         return Ok(held("relevant-candidate-closure", &*promote));
     }
     let mut fulfillment = FulfillmentContext::new(&owner);
+    // Comparisons that are not builtin scalar operations: `lhs: PartialEq<rhs>`.
+    if !obligations.is_empty() {
+        let Some(trait_key) = component.eq_trait else {
+            return Ok(held("operator-obligation", "core::cmp::PartialEq is not declared"));
+        };
+        let Some(&definition) = layouts.type_bindings().definitions.get(&trait_key) else {
+            return Ok(held("operator-obligation", "PartialEq identity is absent from the prepared world"));
+        };
+        for (index, row) in obligations.iter().enumerate() {
+            let encode = |term: &TyTerm| {
+                super::super::source_terms::encode_root_type(&owner, &variables, configuration, layouts.type_bindings(), term)
+            };
+            let (Ok(lhs), Ok(rhs)) = (encode(&row.first), encode(&row.second)) else {
+                return Ok(held("operator-obligation", "operand Type is not encodable"));
+            };
+            let trait_ref = ty::TraitRef::new_from_args(
+                cx,
+                definition,
+                cx.list(vec![Arg::Type(lhs), Arg::Type(rhs)]),
+            );
+            let clause = Clause::new(
+                cx,
+                ty::Binder::dummy(ty::ClauseKind::Trait(ty::TraitClause {
+                    trait_ref,
+                    polarity: ty::ClausePolarity::Positive,
+                })),
+            );
+            fulfillment.register_predicate_obligation(PredicateObligation {
+                cause: usize::MAX - index,
+                span: row.site,
+                param_env: base.param_env(),
+                predicate: clause.upcast(cx),
+                recursion_depth: 0,
+            });
+        }
+    }
     for demand in &demands {
         for clause in demand.clauses() {
             // An implied `Sized`/`MetaSized` bound cannot constrain a numeric

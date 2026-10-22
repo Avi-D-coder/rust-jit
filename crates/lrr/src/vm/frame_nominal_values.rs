@@ -112,8 +112,11 @@ impl Frame {
             .get(self.pc.node as usize)
             .and_then(|node| node.value)
             .ok_or_else(|| invalid("value path result slot absent"))?;
+        let diverging_fallback = self.is_try_operand(self.pc.node);
         let args = self.nominal_type_arguments(result, &bound, stated, explicit, store)?
-            .into_iter().collect::<Option<Vec<_>>>()
+            .into_iter()
+            .map(|arg| arg.or(diverging_fallback.then_some(TypeId(1))))
+            .collect::<Option<Vec<_>>>()
             .ok_or_else(|| Diagnostic::new(
                 "LRR-E-TYPE-CONTEXT",
                 "generic unit variant requires its type context".into(),
@@ -161,6 +164,22 @@ impl Frame {
         store.initialize(cell, ticket)?;
         let source = self.constructed_source(ty, store);
         self.set_source_view(destination, source)
+    }
+    /// Whether node `site` is the operand of a `?`: `Err(e)?` and `None?` leave
+    /// the `Ok`/`Some` Type to no constraint but the `?` desugaring's
+    /// diverging `Break` arm, which rustc's diverging fallback makes `()`.
+    fn is_try_operand(&self, site: u32) -> bool {
+        self.body
+            .nodes()
+            .get(site as usize)
+            .and_then(|node| node.parent)
+            .and_then(|parent| self.body.nodes().get(parent.0 as usize))
+            .is_some_and(|parent| {
+                parent.role
+                    == crate::syntax::body_index::NodeRole::Expression(
+                        crate::syntax::body_index::ExpressionKind::Try,
+                    )
+            })
     }
     /// One seed operation for nominal values, argument hints and call sealing.
     /// Source selection is already complete; only activation descriptors live here.
@@ -348,8 +367,10 @@ impl Frame {
             cells.push(cell);
             types.push(expected);
         }
+        let diverging_fallback = self.is_try_operand(site);
         let args = args
             .into_iter()
+            .map(|arg| arg.or(diverging_fallback.then_some(TypeId(1))))
             .collect::<Option<Vec<_>>>()
             .ok_or_else(|| {
                 Diagnostic::new(

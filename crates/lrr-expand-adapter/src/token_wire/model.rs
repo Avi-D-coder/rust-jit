@@ -425,8 +425,16 @@ impl TokenForest {
         for span in &spans {
             add_text(&mut source_text, &span.source.path)?;
         }
-        contexts.sort_by_cached_key(ContextRecord::key);
-        spans.sort_by_cached_key(SpanRecord::key);
+        // Each record is hashed once: the sort's keys become the forest's key
+        // indexes (`validate` would otherwise hash every record again).
+        let mut keyed_contexts: Vec<(Key, ContextRecord)> =
+            contexts.drain(..).map(|c| (c.key(), c)).collect();
+        let mut keyed_spans: Vec<(Key, SpanRecord)> =
+            spans.drain(..).map(|s| (s.key(), s)).collect();
+        keyed_contexts.sort_by(|a, b| a.0.cmp(&b.0));
+        keyed_spans.sort_by(|a, b| a.0.cmp(&b.0));
+        let (context_keys, contexts): (Vec<_>, Vec<_>) = keyed_contexts.into_iter().unzip();
+        let (span_keys, spans): (Vec<_>, Vec<_>) = keyed_spans.into_iter().unzip();
         let f = Self {
             schema: 2,
             roots,
@@ -436,6 +444,8 @@ impl TokenForest {
             context_keys: ContextKeyIndex::default(),
             validated: ValidatedFlag::default(),
         };
+        let _ = f.span_keys.0.set(span_keys);
+        let _ = f.context_keys.0.set(context_keys);
         f.validate()?;
         Ok(f)
     }
@@ -444,7 +454,7 @@ impl TokenForest {
     /// key-ordered store is. Nothing is re-hashed or re-sorted; `validate`
     /// still rejects duplicate or misordered rows. The caller vouches that each
     /// key is its record's key.
-    pub(crate) fn new_keyed(
+    pub fn new_keyed(
         roots: Vec<TokenTree>,
         contexts: Vec<(Key, ContextRecord)>,
         spans: Vec<(Key, SpanRecord)>,
@@ -839,32 +849,21 @@ mod codec {
         for c in &f.contexts {
             write_context(c, w)?;
         }
-        let contexts: BTreeMap<_, _> = f
-            .contexts
-            .iter()
-            .enumerate()
-            .map(|(i, c)| (c.key(), i))
-            .collect();
+        // The tables are key-ordered and validated, so a key's table position
+        // is its index; the forest's cached keys avoid hashing every record.
+        let context_keys = f.context_keys();
         w.count(f.spans.len())?;
         for s in &f.spans {
-            let index = *contexts
-                .get(&s.context)
-                .ok_or_else(|| error("unregistered context"))?;
+            let index = context_keys
+                .binary_search(&s.context)
+                .map_err(|_| error("unregistered context"))?;
             write_span(s, index, w)?;
         }
-        let spans: BTreeMap<_, _> = f
-            .spans
-            .iter()
-            .enumerate()
-            .map(|(i, s)| (s.key(), i))
-            .collect();
         w.count(f.roots.len())?;
         let mut stack: Vec<_> = f.roots.iter().rev().collect();
         while let Some(t) = stack.pop() {
             let index = |key: &Key| {
-                spans
-                    .get(key)
-                    .copied()
+                f.span_position(key)
                     .ok_or_else(|| error("unregistered span"))
             };
             match t {
@@ -1113,6 +1112,7 @@ mod codec {
                 edition,
             });
         }
+        let context_keys: Vec<Key> = contexts.iter().map(ContextRecord::key).collect();
         let n = r.count(114)?;
         let mut spans = Vec::new();
         spans
@@ -1125,10 +1125,9 @@ mod codec {
             let start = r.u32()?;
             let end = r.u32()?;
             let index = usize::try_from(r.u32()?).map_err(|_| error("invalid context index"))?;
-            let context = contexts
+            let context = *context_keys
                 .get(index)
-                .ok_or_else(|| error("unknown context index"))?
-                .key();
+                .ok_or_else(|| error("unknown context index"))?;
             let edition = r.edition()?;
             let origin = r.key()?;
             spans.push(SpanRecord {
@@ -1152,13 +1151,15 @@ mod codec {
         }
         let cache = SpanKeyIndex::default();
         let _ = cache.0.set(span_keys);
+        let context_cache = ContextKeyIndex::default();
+        let _ = context_cache.0.set(context_keys);
         let f = TokenForest {
             schema: 2,
             roots,
             contexts,
             spans,
             span_keys: cache,
-            context_keys: ContextKeyIndex::default(),
+            context_keys: context_cache,
             validated: ValidatedFlag::default(),
         };
         f.validate()?;

@@ -35,6 +35,7 @@ impl RunMachine {
                 )),
                 CallContinuation::DropWitness(_)
                 | CallContinuation::Operator
+                | CallContinuation::Termination
                 | CallContinuation::Format { .. }
                 | CallContinuation::Initializer { .. } => None,
             };
@@ -53,6 +54,10 @@ impl RunMachine {
                 ) =>
                 {
                     self.admit_initializer_return(db, &suspended, ticket)
+                }
+                // `__lrr_report` returns the status `i32`, checked at its end.
+                None if matches!(suspended.continuation, CallContinuation::Termination) => {
+                    Ok(())
                 }
                 None => self.admit_drop_witness_return(db, &suspended, ticket),
                 Some((site_action, same_body, resume, result)) => (|| {
@@ -85,8 +90,12 @@ impl RunMachine {
                 ));
             }
             // Preserve the current supported root-summary admission before any
-            // cleanup; detachment/publication happens only after cleanup.
-            summary(value)?;
+            // cleanup; detachment/publication happens only after cleanup. A
+            // non-scalar value (`main() -> Result<..>`) is reported by
+            // `Termination` once the frame's cleanup is done.
+            if !self.root_value_is_aggregate(value) {
+                summary(value)?;
+            }
             None
         };
         self.returning = Some(ReturnContinuation {
@@ -137,6 +146,9 @@ impl RunMachine {
                     .resume_operator_call(suspended, active.ticket)
                     .map(|()| None);
             }
+            if matches!(suspended.continuation, CallContinuation::Termination) {
+                return self.finish_termination(suspended, active.ticket).map(Some);
+            }
             if matches!(suspended.continuation, CallContinuation::Format { .. }) {
                 return self
                     .resume_format_call(suspended, active.ticket)
@@ -156,7 +168,16 @@ impl RunMachine {
             self.frame.set_source_view(result, source_result)?;
             return Ok(None);
         }
-        let value = summary(self.store.peek_ticket(active.ticket)?)?;
+        let repr = self.store.peek_ticket(active.ticket)?;
+        let value = match summary(repr) {
+            Ok(value) => value,
+            // The frame's cleanup is done: `Termination` reports the value.
+            Err(refusal) if self.root_value_is_aggregate(repr) => {
+                self.termination = Some((active.ticket, refusal));
+                return Ok(None);
+            }
+            Err(refusal) => return Err(refusal),
+        };
         self.store.discard(active.ticket)?;
         Ok(Some(RunReport {
             live_edition: self.frame.body.profile().edition,
@@ -168,6 +189,7 @@ impl RunMachine {
             installed_recipes: self.installed.len(),
             installed_lrir_bytes: self.installed.metadata_bytes(),
             output: std::mem::take(&mut self.output),
+            exit_code: 0,
         }))
     }
 }

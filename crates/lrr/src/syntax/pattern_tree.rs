@@ -1218,6 +1218,74 @@ impl PatternTree {
         })
     }
 }
+impl PatternTree {
+    /// The `Continue(val)` arm pattern of rustc's `?` lowering, over each
+    /// `Try::branch` result: `val` is the part the matcher stages in the `?`
+    /// expression's own value slot (as a destructuring assignment stages a
+    /// leaf's part in its place's slot). `Continue` is the lang item
+    /// `ControlFlow::Continue`, spelled as its absolute core path (never the
+    /// caller's); the `Break(r)` arm is the complement of this one test.
+    pub(crate) fn build_try(
+        parsed: &ParsedFile,
+        body: &BodyHandle,
+        index: &BodyIndex,
+        owner: &ast::TryExpr,
+    ) -> Result<Self, Diagnostic> {
+        let local_items = LocalItems::default();
+        let mut builder = Builder {
+            parsed,
+            body,
+            index,
+            local_items: &local_items,
+            names: Vec::new(),
+        };
+        let id = id_for(index, body, owner.syntax())?;
+        let token = owner
+            .syntax()
+            .first_token()
+            .ok_or_else(|| error("try expression has no written token"))?;
+        let edition = parsed.token_edition(crate::syntax::ast_adapter::range(token.text_range()))?;
+        let slot = builder.slot(CONTROL_FLOW_CONTINUE_LANG_PATH, NameForm::Tuple)?;
+        let value = PatternNode::Binding {
+            occurrence: id,
+            binding: Some(id),
+            by_reference: false,
+            mutable: false,
+            edition,
+            name: None,
+            subpattern: None,
+        };
+        let root = PatternNode::Constructor {
+            slot,
+            form: ConstructorForm::Tuple {
+                items: Box::new([value]),
+                rest: None,
+            },
+        };
+        let mut encoder = StableEncoder::new("lrr/v1/try-pattern-tree");
+        encoder.record(index.body());
+        encoder.u32(id.0);
+        root.encode(&mut encoder);
+        encoder.sequence(&builder.names, |e, name| name.encode(e));
+        let bytes = std::mem::size_of::<Self>()
+            .saturating_add(root.heap_bytes())
+            .saturating_add(builder.names.iter().fold(0usize, |bytes, name| {
+                bytes
+                    .saturating_add(std::mem::size_of::<PatternName>())
+                    .saturating_add(name.spelling.capacity())
+            }));
+        Ok(Self {
+            pattern: id,
+            names: builder.names.into_boxed_slice(),
+            root,
+            identity: encoder.finish(),
+            bytes,
+        })
+    }
+}
+/// The lang item `ControlFlow::Continue` of `?` lowering, spelled like the
+/// `for` loop's `Option::Some`.
+pub(crate) const CONTROL_FLOW_CONTINUE_LANG_PATH: &str = "::core::ops::ControlFlow::Continue";
 /// The lang item `Option::Some` of `for` lowering. Resolution falls back to
 /// the same path through `std` where `core` is not nameable (Rust 2015
 /// crates name only their injected `std` from the crate root).

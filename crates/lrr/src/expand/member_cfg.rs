@@ -63,7 +63,7 @@ fn filter_members(
             }
         }
     }
-    let spans: BTreeMap<_, _> = outer.spans().iter().map(|s| (s.key(), s)).collect();
+    let spans: BTreeMap<_, _> = outer.span_keys().iter().copied().zip(outer.spans()).collect();
     let mut seen = BTreeSet::new();
     let roots = rewrite(
         outer.roots(),
@@ -79,7 +79,8 @@ fn filter_members(
     if roots.len() != 1 {
         return Err(fault("derive input needs one source root"));
     }
-    let rebuilt = TokenForest::new(roots, outer.contexts().to_vec(), outer.spans().to_vec())
+    let rebuilt = outer
+        .with_roots(roots)
         .map_err(|e| fault(&e.to_string()))?;
     prune_tree(&rebuilt, &rebuilt.roots()[0])
 }

@@ -122,6 +122,21 @@ struct ForPlan {
     body: NodeId,
     next: PcKey,
 }
+/// `OPERAND?`: rustc's `match Try::branch(OPERAND) { Continue(val) => val,
+/// Break(residual) => return FromResidual::from_residual(residual) }`. The
+/// `Try::branch` call, the `Continue(val)` test (its part staged in the
+/// expression's own value slot) and the early return are the ordinary call
+/// boundary, the one pattern transaction and the ordinary return control.
+#[derive(Debug)]
+struct TryPlan {
+    id: NodeId,
+    operand: NodeId,
+    continues: Result<Arc<PatternTree>, Diagnostic>,
+    /// The enclosing function's (or closure body's) result slot: the expected
+    /// type of the `FromResidual` call, as of a written `return`.
+    result: SlotId,
+    next: PcKey,
+}
 /// A call frame's parameters: each binds from its staged call argument, a
 /// plain closure identifier directly and every other pattern (`|&x|`,
 /// `|(a, b)|`, and a function's `fn f((a, b): T)`) through the shared
@@ -173,6 +188,7 @@ enum Prepared {
     Assign(AssignPlan),
     Condition(ConditionPlan),
     For(ForPlan),
+    Try(TryPlan),
     Closure(ClosurePlan),
     Refused(Diagnostic),
     Disabled(Box<VerifiedRecipe>),
@@ -222,8 +238,12 @@ impl PatternSourcePlan {
             Prepared::Condition(plan) => vec![&plan.pattern],
             Prepared::For(plan) => vec![&plan.pattern],
             Prepared::Closure(plan) => plan.pattern_roots(),
-            // An assignee's leaves are places, not bindings: no local is introduced.
-            Prepared::Assign(_) | Prepared::Refused(_) | Prepared::Disabled(_) => Vec::new(),
+            // An assignee's leaves are places, not bindings: no local is
+            // introduced; a `?` expression's `val` is its own value slot.
+            Prepared::Assign(_)
+            | Prepared::Try(_)
+            | Prepared::Refused(_)
+            | Prepared::Disabled(_) => Vec::new(),
         }
     }
     /// Retained products for ownership observation; refused roots own no tree.
@@ -248,7 +268,9 @@ impl PatternSourcePlan {
             .get(key.node as usize)
             .ok_or_else(|| error("pattern phase node absent"))?;
         let owner = |node: &crate::syntax::body_index::StructuralNode| match node.role {
-            NodeRole::Expression(ExpressionKind::Match | ExpressionKind::For) => true,
+            NodeRole::Expression(
+                ExpressionKind::Match | ExpressionKind::For | ExpressionKind::Try,
+            ) => true,
             NodeRole::Expression(ExpressionKind::Other) => {
                 node.clause_scope.is_some() || node.pattern_statement
             }
@@ -392,6 +414,7 @@ impl Lowering<'_> {
             Prepared::Assign(plan) => self.lower_assign(plan, key),
             Prepared::Condition(plan) => self.lower_condition(plan, key),
             Prepared::For(plan) => self.lower_for(plan, key),
+            Prepared::Try(plan) => self.lower_try(plan, key),
             Prepared::Closure(plan) => self.lower_closure(plan, key),
             Prepared::Disabled(recipe) if key == owner => Ok(recipe.as_ref().clone()),
             Prepared::Disabled(_) => Err(unsupported(
@@ -880,6 +903,163 @@ impl Lowering<'_> {
             }
         }
     }
+    /// `OPERAND?` (see `TryPlan`). Phases: Entry prepares the `Try::branch`
+    /// call and evaluates the operand; its continuation (operand 0) seals the
+    /// call; the call's result (Commit) is matched against `Continue(val)`:
+    /// the `Continue` arm (operand 1) commits `val` into the expression's
+    /// value; the `Break` arm extracts the residual (operands 2, 3: prepare
+    /// and seal), calls `FromResidual::from_residual` (operands 4, 5; its
+    /// `Self` is the expected function result) and returns the call's result
+    /// (operand 6) through the ordinary return control.
+    fn lower_try(&self, plan: &TryPlan, key: &PcKey) -> Result<VerifiedRecipe, Diagnostic> {
+        let index = self.index;
+        let owner = plan.id;
+        if NodeId(key.node) != owner {
+            return Err(unsupported("try phase is outside its owner"));
+        }
+        let node = &index.nodes()[owner.0 as usize];
+        let [Some(flow), Some(residual)] = node.runtime_temporaries else {
+            return Err(error("try temporaries absent"));
+        };
+        let test = self.test_slot(owner)?;
+        let value = self.value(owner)?;
+        let operand = self.value(plan.operand)?;
+        let pattern = |operation| Op::Pattern { operation };
+        let paths = crate::syntax::constructors::try_call_paths(&self.parsed.profile);
+        let site = crate::ir::recipe::CallSiteId(owner.0);
+        let phase = |n: u16| index.pc(owner, Phase::Operand(n));
+        let [_, break_argument, residual_argument] = node.runtime_scalar_slots[..] else {
+            return Err(error("try argument slots absent"));
+        };
+        // A call over an already-evaluated value: its fresh argument slot
+        // takes the call's hints first (the prepare step), then the value
+        // moves into it; the next phase advances and seals the call.
+        let prepare = |name: &String, source: SlotId, argument: SlotId, next: PcKey, mut ops: Vec<Op>| {
+            ops.extend([
+                Op::CallPrepare {
+                    site,
+                    name: name.clone(),
+                    explicit: Vec::new(),
+                    arguments: vec![argument],
+                },
+                Op::ResultTransfer {
+                    source,
+                    destination: argument,
+                },
+            ]);
+            self.emit(key, ops, RecipeExit::Next(next))
+        };
+        let seal = |name: &String, argument: SlotId, resume: PcKey, result: SlotId| {
+            self.emit(
+                key,
+                vec![
+                    Op::CallAdvance { site, argument: 0 },
+                    Op::CallSeal {
+                        site,
+                        name: name.clone(),
+                        explicit: Vec::new(),
+                        arguments: vec![argument],
+                    },
+                ],
+                RecipeExit::Call { site, resume, result },
+            )
+        };
+        match Phase::from_code(key.phase) {
+            Phase::Entry => self.emit(
+                key,
+                vec![Op::CallPrepare {
+                    site,
+                    name: paths.branch.clone(),
+                    explicit: Vec::new(),
+                    arguments: vec![operand],
+                }],
+                RecipeExit::Next(index.pc(plan.operand, Phase::Entry)?),
+            ),
+            Phase::Operand(0) => self.emit(
+                key,
+                vec![
+                    Op::CallAdvance { site, argument: 0 },
+                    Op::CallSeal {
+                        site,
+                        name: paths.branch.clone(),
+                        explicit: Vec::new(),
+                        arguments: vec![operand],
+                    },
+                ],
+                RecipeExit::Call {
+                    site,
+                    resume: index.pc(owner, Phase::Commit)?,
+                    result: flow,
+                },
+            ),
+            Phase::Commit => self.emit(
+                key,
+                vec![
+                    pattern(PatternOperation::Open {
+                        owner,
+                        source: flow,
+                    }),
+                    pattern(PatternOperation::Test {
+                        owner,
+                        tree: plan.continues.clone()?,
+                        result: test,
+                        retry: false,
+                    }),
+                ],
+                RecipeExit::Branch {
+                    condition: test,
+                    yes: phase(1)?,
+                    no: phase(2)?,
+                },
+            ),
+            // `Continue(val) => val`.
+            Phase::Operand(1) => self.emit(
+                key,
+                vec![
+                    Op::Discard { source: test },
+                    pattern(PatternOperation::Commit { owner }),
+                    pattern(PatternOperation::Close { owner }),
+                ],
+                RecipeExit::Next(plan.next.clone()),
+            ),
+            // `Break(residual)`: the residual leaves the matched `ControlFlow`;
+            // the returned value takes the enclosing result's expected type, as
+            // a written `return`'s operand does (before any storage exists).
+            Phase::Operand(2) => prepare(
+                &paths.break_residual,
+                flow,
+                break_argument,
+                phase(3)?,
+                vec![
+                    Op::Discard { source: test },
+                    pattern(PatternOperation::Close { owner }),
+                    Op::NumericHint {
+                        parent: plan.result,
+                        child: value,
+                        left: None,
+                        operator: None,
+                    },
+                ],
+            ),
+            Phase::Operand(3) => seal(&paths.break_residual, break_argument, phase(4)?, residual),
+            // `return FromResidual::from_residual(residual)`: its `Self` is
+            // the expected result of the enclosing function or closure.
+            Phase::Operand(4) => prepare(
+                &paths.from_residual,
+                residual,
+                residual_argument,
+                phase(5)?,
+                vec![],
+            ),
+            Phase::Operand(5) => seal(&paths.from_residual, residual_argument, phase(6)?, value),
+            Phase::Operand(6) => self.emit(
+                key,
+                vec![],
+                RecipeExit::Control(crate::ir::recipe::ControlRecipe::Return { value }),
+            ),
+            _ => Err(unsupported("invalid try phase")),
+        }
+    }
     fn lower_for(&self, plan: &ForPlan, key: &PcKey) -> Result<VerifiedRecipe, Diagnostic> {
         let index = self.index;
         let owner = plan.id;
@@ -1280,7 +1460,35 @@ impl ParsedFile {
         }
         let local_items = LocalItems::collect(self, body)?;
         Ok(
-            if let Some(expression) = ast::MatchExpr::cast(syntax.clone()) {
+            if let Some(expression) = ast::TryExpr::cast(syntax.clone()) {
+                let Some(operand) = expression.expr() else {
+                    return Ok(Prepared::Refused(unsupported("try operand absent")));
+                };
+                let continues = match PatternTree::build_try(self, body, index, &expression) {
+                    Ok(tree) => Ok(Arc::new(tree)),
+                    Err(error) if error.code == "LRR-E-UNSUPPORTED" => Err(error),
+                    Err(error) => return Err(error),
+                };
+                // `return` in a closure returns the closure body's value.
+                let result = match super::closure_thunk::enclosing_closure(&syntax) {
+                    Some(closure) => closure
+                        .body()
+                        .map(|closure_body| id_for(index, body, closure_body.syntax()))
+                        .transpose()?
+                        .and_then(|id| index.nodes()[id.0 as usize].value)
+                        .ok_or_else(|| error("closure body value absent"))?,
+                    None => index.nodes()[0]
+                        .value
+                        .ok_or_else(|| error("function result slot absent"))?,
+                };
+                Prepared::Try(TryPlan {
+                    id: NodeId(owner.node),
+                    operand: id_for(index, body, operand.syntax())?,
+                    continues,
+                    result,
+                    next: return_pc(index, body, expression.syntax())?,
+                })
+            } else if let Some(expression) = ast::MatchExpr::cast(syntax.clone()) {
                 match self.match_plan(body, index, &local_items, &expression)? {
                     Ok(plan) => Prepared::Match(plan),
                     Err(refused) => Prepared::Refused(refused),
@@ -1773,8 +1981,12 @@ impl PatternSourcePlan {
             Prepared::Condition(plan) => vec![&plan.pattern],
             Prepared::For(plan) => vec![&plan.pattern],
             Prepared::Closure(plan) => plan.pattern_roots(),
-            // An assignee's leaves are places, not bindings: no local is introduced.
-            Prepared::Assign(_) | Prepared::Refused(_) | Prepared::Disabled(_) => Vec::new(),
+            // An assignee's leaves are places, not bindings: no local is
+            // introduced; a `?` expression's `val` is its own value slot.
+            Prepared::Assign(_)
+            | Prepared::Try(_)
+            | Prepared::Refused(_)
+            | Prepared::Disabled(_) => Vec::new(),
         };
         let mut bytes = std::mem::size_of::<Self>();
         encoder.sequence(&roots, |e, root| {

@@ -121,6 +121,10 @@ pub struct ParsedFile {
             std::sync::Arc<super::declaration_scope_plan::DeclarationScopePlan>,
         >,
     >,
+    /// `fn_body_identity` of already verified body nodes, keyed by the node's
+    /// range and kind. The tree is immutable, so the identity is computed once.
+    pub(super) body_identities:
+        std::sync::Mutex<std::collections::BTreeMap<(u32, u32, u16), Digest>>,
     token_contexts: Option<Vec<TokenContext>>,
     pinned_hygiene: Option<std::sync::Arc<crate::frontend::hygiene::HygieneFacts>>,
     retained_syntax: Option<retained::RetainedSyntax>,
@@ -214,6 +218,7 @@ impl ParsedFile {
             parsed,
             estimated_bytes,
             declaration_plans: Default::default(),
+            body_identities: Default::default(),
             token_contexts: None,
             pinned_hygiene: None,
             generated_origin: None,
@@ -295,6 +300,7 @@ impl ParsedFile {
             parsed,
             estimated_bytes,
             declaration_plans: Default::default(),
+            body_identities: Default::default(),
             token_contexts: None,
             pinned_hygiene: None,
             generated_origin: Some(items.record().descriptor().fingerprint()),
@@ -388,6 +394,7 @@ impl ParsedFile {
             parsed,
             estimated_bytes,
             declaration_plans: Default::default(),
+            body_identities: Default::default(),
             token_contexts: None,
             pinned_hygiene: None,
             generated_origin: Some(identity),

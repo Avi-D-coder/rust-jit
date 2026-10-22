@@ -182,7 +182,10 @@ impl<'a> Component<'a> {
                 None => None,
             },
             FactKind::Borrow => match fact.operand(0) {
-                Some(inner) => ready!(self.expression_type(db, inner)).map(borrowed),
+                // `&mut e` is an exclusive reference: a generic field or
+                // argument the borrow feeds is bound to `&mut T`.
+                Some(inner) => ready!(self.expression_type(db, inner))
+                    .map(|inner| TyTerm::Ref(RegionTerm::Static, fact.flag(), Box::new(inner))),
                 None => None,
             },
             FactKind::RawBorrow => match fact.operand(0) {
@@ -799,13 +802,28 @@ impl<'a> Component<'a> {
         ) else {
             return QueryPoll::Ready(Ok(None));
         };
-        let Some(receiver) = ready!(self.expression_type(db, receiver)) else {
+        let Some(receiver_type) = ready!(self.expression_type(db, receiver)) else {
             return QueryPoll::Ready(Ok(None));
         };
+        self.method_for_receiver(db, Some(receiver), &receiver_type, name)
+    }
+    /// The method the dispatcher's probe selects for a receiver of the static
+    /// Type `receiver` (`receiver_node` is the receiver expression when the
+    /// receiver is an unsuffixed literal). Shared by the legacy static Type of
+    /// the receiver expression and by a receiver Type the pinned owner has
+    /// resolved (`rows`).
+    pub(super) fn method_for_receiver(
+        &mut self,
+        db: &mut Database,
+        receiver_node: Option<NodeId>,
+        receiver: &TyTerm,
+        name: &str,
+    ) -> QueryPoll<Option<Digest>> {
+        let receiver = receiver.clone();
         // An unsuffixed literal receiver (`3.b()`): the method of the one
         // trait its family implements that provides `name`.
         if receiver == open()
-            && let Some(receiver_node) = fact.operand(0)
+            && let Some(receiver_node) = receiver_node
         {
             let name = name.to_owned();
             return self.numeric_receiver_method(db, receiver_node, &name);

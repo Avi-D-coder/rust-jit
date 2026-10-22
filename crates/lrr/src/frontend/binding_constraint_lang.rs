@@ -27,7 +27,7 @@ macro_rules! ready {
 impl Component<'_> {
     /// The function a language-item call calls (`None` after deferring on the
     /// missing selection).
-    fn lang_function(&mut self, db: &mut Database, node: NodeId) -> QueryPoll<Option<Digest>> {
+    pub(super) fn lang_function(&mut self, db: &mut Database, node: NodeId) -> QueryPoll<Option<Digest>> {
         let Some(environment) = ready!(self.environment(db)) else {
             self.defer(node, ConstraintDemand::ModuleEnvironment);
             return QueryPoll::Ready(Ok(None));

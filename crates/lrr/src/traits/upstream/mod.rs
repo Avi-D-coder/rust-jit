@@ -11,6 +11,7 @@ pub(crate) mod source_variance_queries;
 pub(crate) mod source_impl_associated;
 pub(crate) mod source_declaration_clauses;
 mod generic_clauses;
+mod source_adt_sizedness;
 mod root_variables;
 mod root_relations;
 mod root_response;

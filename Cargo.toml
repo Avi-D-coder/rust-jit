@@ -101,6 +101,23 @@ opt-level = 3
 [profile.dev.package."rustc-hash"]
 opt-level = 3
 
+# Fast-running interpreter binary for validation runs (not day-to-day
+# iteration, which stays on the quick-to-compile `dev` profile). It optimizes
+# `lrr`, the expand adapter and the vendored solver crates while keeping debug
+# assertions and overflow checks, so behaviour matches `dev`:
+#   cargo +1.99.0 build --offline --locked --profile fast -p lrr --bin lrr
+# writes target/fast/lrr (a separate subdirectory of the shared target). The
+# `[profile.dev.package.*]` overrides above are inherited (heavy pure
+# dependencies stay at opt-level 3). Measured on the interpreter: opt-level 2
+# runs about 20% fewer instructions than 1; 3 and a lower codegen-units gave no
+# further gain.
+[profile.fast]
+inherits = "dev"
+opt-level = 2
+debug = false
+debug-assertions = true
+overflow-checks = true
+
 [patch.crates-io]
 cranelift-jit = { path = "vendor/cranelift-jit" }
 ra_ap_parser = { path = "vendor/ra-ap-parser" }

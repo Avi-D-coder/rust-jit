@@ -356,30 +356,35 @@ fn with_sites(
     target.registry.validate().map_err(wire)?;
     let mut spans = input.spans().to_vec();
     let mut contexts = input.contexts().to_vec();
+    // Stable keys of the rows gathered so far, hashed once per record (the
+    // forests cache their own).
+    let mut span_keys: std::collections::BTreeSet<Key> = input.span_keys().iter().copied().collect();
+    let mut context_keys: std::collections::BTreeSet<Key> =
+        input.context_keys().iter().copied().collect();
     for key in [target.definition_site, target.call_site, target.mixed_site] {
-        if spans.iter().any(|span| span.key() == key) {
+        if span_keys.contains(&key) {
             continue;
         }
         let span = target
             .registry
-            .spans()
-            .iter()
-            .find(|span| span.key() == key)
+            .span_by_key(&key)
             .ok_or_else(|| fault("resolved item site has no owned span record"))?;
         let mut context = Some(span.context);
         while let Some(key) = context {
-            if contexts.iter().any(|record| record.key() == key) {
+            if context_keys.contains(&key) {
                 break;
             }
-            let record = target
+            let position = target
                 .registry
-                .contexts()
-                .iter()
-                .find(|record| record.key() == key)
-                .ok_or_else(|| fault("resolved item site has no owned context record"))?;
+                .context_keys()
+                .binary_search(&key)
+                .map_err(|_| fault("resolved item site has no owned context record"))?;
+            let record = &target.registry.contexts()[position];
             context = record.parent;
+            context_keys.insert(key);
             contexts.push(record.clone());
         }
+        span_keys.insert(key);
         spans.push(span.clone());
     }
     TokenForest::new(input.roots().to_vec(), contexts, spans).map_err(wire)

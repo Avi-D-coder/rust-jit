@@ -156,11 +156,21 @@ impl CompletedSourceSyntax {
                 continue;
             }
             for header in output.headers() {
-                if header.kind == crate::expand::generated_items::GeneratedHeaderKind::Function
-                    && calls
+                // A macro-generated `const`/`static` initializer is a body like a
+                // function's: its nested calls attach through the same admission.
+                // Its header recipe spans the whole item, so any call inside it
+                // is in the initializer; a function's body follows its header.
+                use crate::expand::generated_items::GeneratedHeaderKind as Kind;
+                let bears = match header.kind {
+                    Kind::Function => calls
                         .iter()
-                        .any(|call| header.header_end <= call.start && call.end <= header.end)
-                {
+                        .any(|call| header.header_end <= call.start && call.end <= header.end),
+                    Kind::Const | Kind::Static => calls
+                        .iter()
+                        .any(|call| header.start <= call.start && call.end <= header.end),
+                    _ => false,
+                };
+                if bears {
                     found.push(header.key.fingerprint());
                 }
             }

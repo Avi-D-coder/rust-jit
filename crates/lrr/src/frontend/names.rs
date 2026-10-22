@@ -345,6 +345,26 @@ pub struct NameNamespaces {
     import_fixed_point: Option<(u64, ImportResolution)>,
     /// Key of the macro-route graph facts this graph last received.
     route_install_key: Option<Digest>,
+    /// Advances on every change an import resolution can observe, except the
+    /// edits of a generated producer frontier, which `frontier_log` records.
+    /// Idempotent re-installation of a fact the graph already holds changes
+    /// nothing, so equal epochs of one graph denote equal import structure.
+    structure_epoch: u64,
+    /// Scope of each generated producer frontier edit, in order.
+    frontier_log: Vec<ScopeKey>,
+    /// The last complete import resolution while it remains valid.
+    import_memo: Option<ImportMemo>,
+}
+/// A complete resolution of every import of a graph, retained with what it
+/// depended on: the whole import structure (`structure_epoch`) and the
+/// producer frontiers of the scopes its path walks read. Frontier edits
+/// elsewhere (`frontier_log` past `log_len`) cannot change it.
+#[derive(Clone)]
+struct ImportMemo {
+    structure_epoch: u64,
+    log_len: usize,
+    frontier_scopes: std::collections::BTreeSet<ScopeKey>,
+    result: ImportResolution,
 }
 /// Facts shared while certifying many scopes of one unchanged graph (see
 /// `NameNamespaces::certified_scope_in`): the member-name universe per
@@ -413,6 +433,45 @@ pub struct EnumVariantDefinition {
     pub name: String,
 }
 impl NameNamespaces {
+    /// A change to graph state that an import resolution can observe.
+    fn changed(&mut self) {
+        self.import_generation = self.import_generation.wrapping_add(1);
+        self.structure_epoch = self.structure_epoch.wrapping_add(1);
+    }
+    /// An edit of the producer frontier at `scope`: a new graph state, but one
+    /// that only resolutions which read that frontier can observe.
+    fn frontier_changed(&mut self, scope: &ScopeKey) {
+        self.import_generation = self.import_generation.wrapping_add(1);
+        self.frontier_log.push(scope.clone());
+    }
+    fn table_changes(&self) -> u64 {
+        self.values
+            .change_count()
+            .wrapping_add(self.types.change_count())
+            .wrapping_add(self.macros.change_count())
+    }
+    /// A table mutation that records a change only when a table accepted one.
+    /// A failed mutation may have stopped part-way, so it counts as a change.
+    fn counted<T>(
+        &mut self,
+        mutate: impl FnOnce(&mut Self) -> Result<T, Diagnostic>,
+    ) -> Result<T, Diagnostic> {
+        let before = self.table_changes();
+        let result = mutate(self);
+        if result.is_err() || self.table_changes() != before {
+            self.changed();
+        }
+        result
+    }
+    /// Mutable table access for a caller that accounts for its own changes
+    /// (through `counted`); `table_mut` is the conservative form.
+    fn table_counted(&mut self, namespace: Namespace) -> &mut MacroNamespaces {
+        match namespace {
+            Namespace::Value => &mut self.values,
+            Namespace::Type => &mut self.types,
+            Namespace::Macro => &mut self.macros,
+        }
+    }
     /// Select an enum variant member by the identity a namespace lookup returned.
     pub(crate) fn enum_variant(&self, identity: Digest) -> Option<&EnumVariantDefinition> {
         self.enum_variants.get(&identity)
@@ -492,6 +551,7 @@ impl NameNamespaces {
         visibility: VisibilityScope,
         class: NameBindingClass,
     ) -> Result<ScopeKey, Diagnostic> {
+        self.changed();
         if class != NameBindingClass::Root {
             return Err(Diagnostic::new(
                 "LRR-E-NAME-CONTEXT",
@@ -518,6 +578,7 @@ impl NameNamespaces {
         enumeration: Digest,
         name: &str,
     ) -> Result<(), Diagnostic> {
+        self.changed();
         if identity != crate::syntax::outline::variant_identity(enumeration, name) {
             return Err(Diagnostic::new(
                 "LRR-E-EXPANSION-CONFLICT",
@@ -647,7 +708,7 @@ impl NameNamespaces {
         &mut self,
         identities: &std::collections::BTreeSet<Digest>,
     ) {
-        self.import_generation = self.import_generation.wrapping_add(1);
+        self.changed();
         for table in [&mut self.values, &mut self.types, &mut self.macros] {
             for bindings in table.bindings.values_mut() {
                 bindings
@@ -665,7 +726,7 @@ impl NameNamespaces {
         outline: &crate::syntax::outline::Outline,
         identity: Digest,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
+        self.changed();
         if self.source_proofs.get(&Self::source_key(outline)) != Some(&Self::source_proof(outline))
             || !self.ordinary_definitions.contains(&identity)
         {
@@ -726,7 +787,7 @@ impl NameNamespaces {
         &mut self,
         outline: &crate::syntax::outline::Outline,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
+        self.changed();
         if outline.root_scope.module_path.is_empty() {
             return Err(Diagnostic::new(
                 "LRR-E-CATALOG-INCOMPLETE",
@@ -739,7 +800,7 @@ impl NameNamespaces {
         &mut self,
         outlines: &[&crate::syntax::outline::Outline],
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
+        self.changed();
         use crate::source::manifest::ItemKind;
         let fault = |message: &str| Diagnostic::new("LRR-E-SOURCE-LIMIT", message.into());
         let graph = self;
@@ -955,23 +1016,26 @@ impl NameNamespaces {
         alias: MacroName,
         provider: Digest,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
-        for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
-            self.table_mut(namespace)
-                .dependency(consumer, alias.clone(), provider)?;
-        }
-        Ok(())
+        self.counted(|graph| {
+            for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
+                graph
+                    .table_counted(namespace)
+                    .dependency(consumer, alias.clone(), provider)?;
+            }
+            Ok(())
+        })
     }
     pub(crate) fn install_compiler_injection(
         &mut self,
         catalog: &super::compile_input_catalog::CompileInputCatalog,
         source: &crate::source::changes::PreparedSourceView,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
-        for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
-            catalog.install_injected_import(self.table_mut(namespace), source)?;
-        }
-        Ok(())
+        self.counted(|graph| {
+            for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
+                catalog.install_injected_import(graph.table_counted(namespace), source)?;
+            }
+            Ok(())
+        })
     }
     /// rustc's standard prelude for a crate whose root source receives the
     /// compiler-injected `std`/`core` import: the owning edition's
@@ -983,7 +1047,6 @@ impl NameNamespaces {
         catalog: &super::compile_input_catalog::CompileInputCatalog,
         source: &crate::source::changes::PreparedSourceView,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
         let Some(import) = catalog.injected_import(source)? else {
             return Ok(());
         };
@@ -1031,15 +1094,20 @@ impl NameNamespaces {
                 "one crate has conflicting standard preludes".into(),
             ));
         }
-        self.standard_preludes.insert(consumer, scope);
+        if self.standard_preludes.insert(consumer, scope.clone()).as_ref() != Some(&scope) {
+            self.changed();
+        }
         Ok(())
     }
     pub(crate) fn disable_compiler_prelude(&mut self, scope: ScopeKey) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
-        for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
-            self.table_mut(namespace).disable_implicit(scope.clone())?;
-        }
-        Ok(())
+        self.counted(|graph| {
+            for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
+                graph
+                    .table_counted(namespace)
+                    .disable_implicit(scope.clone())?;
+            }
+            Ok(())
+        })
     }
     /// Cargo-selected dependency rename, supplied by the project unit graph.
     pub fn dependency(
@@ -1049,7 +1117,15 @@ impl NameNamespaces {
         provider: Digest,
         edition: u16,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
+        self.counted(|graph| graph.dependency_uncounted(consumer, alias, provider, edition))
+    }
+    fn dependency_uncounted(
+        &mut self,
+        consumer: Digest,
+        alias: &str,
+        provider: Digest,
+        edition: u16,
+    ) -> Result<(), Diagnostic> {
         let name = MacroName::parse(alias, edition)?;
         let path = NamePath::new(consumer, vec![name.clone()])?;
         let target = super::module_paths::ModulePath {
@@ -1068,7 +1144,7 @@ impl NameNamespaces {
                 names: vec![name.clone()],
             });
         for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
-            self.table_mut(namespace)
+            self.table_counted(namespace)
                 .dependency(consumer, name.clone(), provider)?;
             // A disclosed local module shadows the extern prelude name.
             if !self
@@ -1079,7 +1155,7 @@ impl NameNamespaces {
                     names: vec![name.clone()],
                 })
             {
-                self.table_mut(namespace).module_paths.alias(
+                self.table_counted(namespace).module_paths.alias(
                     super::module_paths::ModulePath {
                         unit: consumer,
                         names: vec![name.clone()],
@@ -1089,8 +1165,11 @@ impl NameNamespaces {
                 )?;
             }
         }
-        if install {
-            self.module_aliases.entry(path).or_insert(target);
+        if install
+            && let std::collections::btree_map::Entry::Vacant(slot) = self.module_aliases.entry(path)
+        {
+            slot.insert(target);
+            self.changed();
         }
         Ok(())
     }
@@ -1100,7 +1179,13 @@ impl NameNamespaces {
         row: &super::source_macro_routes::ExternAlias,
         edition: u16,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
+        self.counted(|graph| graph.extern_alias_uncounted(row, edition))
+    }
+    fn extern_alias_uncounted(
+        &mut self,
+        row: &super::source_macro_routes::ExternAlias,
+        edition: u16,
+    ) -> Result<(), Diagnostic> {
         let Some(alias_name) = &row.name else {
             return Ok(());
         };
@@ -1162,7 +1247,7 @@ impl NameNamespaces {
                 });
         let visibility = VisibilityScope::for_declaration(&row.visibility, &row.scope, edition)?;
         for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
-            self.table_mut(namespace)
+            self.table_counted(namespace)
                 .module_paths
                 .explicit_extern_alias(
                     super::module_paths::ModulePath {
@@ -1174,7 +1259,9 @@ impl NameNamespaces {
                     prelude,
                 )?;
         }
-        self.module_aliases.insert(path, target);
+        if self.module_aliases.insert(path, target.clone()).as_ref() != Some(&target) {
+            self.changed();
+        }
         Ok(())
     }
     pub fn declare_module(
@@ -1184,7 +1271,15 @@ impl NameNamespaces {
         edition: u16,
         visibility: VisibilityScope,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
+        self.counted(|graph| graph.declare_module_uncounted(unit, components, edition, visibility))
+    }
+    fn declare_module_uncounted(
+        &mut self,
+        unit: Digest,
+        components: &[&str],
+        edition: u16,
+        visibility: VisibilityScope,
+    ) -> Result<(), Diagnostic> {
         let names = components
             .iter()
             .map(|s| owned_name(s, edition))
@@ -1192,7 +1287,7 @@ impl NameNamespaces {
         super::module_paths::ModulePath::validate_components(&names)?;
         let path = super::module_paths::ModulePath { unit, names };
         for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
-            self.table_mut(namespace)
+            self.table_counted(namespace)
                 .module_paths
                 .declare(path.clone(), visibility.clone())?;
         }
@@ -1206,7 +1301,7 @@ impl NameNamespaces {
         }
     }
     fn table_mut(&mut self, namespace: Namespace) -> &mut MacroNamespaces {
-        self.import_generation = self.import_generation.wrapping_add(1);
+        self.changed();
         match namespace {
             Namespace::Value => &mut self.values,
             Namespace::Type => &mut self.types,
@@ -1219,7 +1314,6 @@ impl NameNamespaces {
         definition: NameDefinition,
         visibility: VisibilityScope,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
         self.define_in_class(path, definition, visibility, NameBindingClass::Root)
     }
     fn define_in_class(
@@ -1229,23 +1323,32 @@ impl NameNamespaces {
         visibility: VisibilityScope,
         class: NameBindingClass,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
         let namespace = definition.namespace;
         let identity = definition.identity;
-        self.table_mut(definition.namespace)
-            .define_visible_in_class(
-                path,
-                MacroDefinition {
-                    identity: definition.identity,
-                    defining_unit: definition.defining_unit,
-                    definition_edition: definition.definition_edition,
-                },
-                visibility.clone(),
-                None,
-                class,
-            )?;
-        self.visibility.insert((namespace, identity), visibility);
-        Ok(())
+        self.counted(|graph| {
+            graph
+                .table_counted(definition.namespace)
+                .define_visible_in_class(
+                    path,
+                    MacroDefinition {
+                        identity: definition.identity,
+                        defining_unit: definition.defining_unit,
+                        definition_edition: definition.definition_edition,
+                    },
+                    visibility.clone(),
+                    None,
+                    class,
+                )?;
+            if graph
+                .visibility
+                .insert((namespace, identity), visibility.clone())
+                .as_ref()
+                != Some(&visibility)
+            {
+                graph.changed();
+            }
+            Ok(())
+        })
     }
     /// Source facts only. Current use/scope publication is a separate owner.
     pub(crate) fn declared_item_name(
@@ -1274,7 +1377,7 @@ impl NameNamespaces {
                 "local declaration requires ordinary body-source publication".into(),
             ));
         }
-        self.import_generation = self.import_generation.wrapping_add(1);
+        self.changed();
         // ModulePaths currently certifies root-class prefixes. Retaining a
         // declaration in another class does not certify descendants there.
         if module && declaration.class() != NameBindingClass::Root {
@@ -1347,7 +1450,7 @@ impl NameNamespaces {
         definition: NameDefinition,
         visibility: VisibilityScope,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
+        self.changed();
         if definition.namespace != Namespace::Type || definition.defining_unit != path.unit {
             return Err(Diagnostic::new(
                 "LRR-E-CATALOG-INCOMPLETE",
@@ -1382,14 +1485,20 @@ impl NameNamespaces {
         target: NamePath,
         visibility: VisibilityScope,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
-        self.table_mut(namespace)
-            .reexport_visible(path.clone(), target.clone(), visibility)?;
-        self.links
-            .entry((namespace, path))
-            .or_default()
-            .insert(target);
-        Ok(())
+        self.counted(|graph| {
+            graph
+                .table_counted(namespace)
+                .reexport_visible(path.clone(), target.clone(), visibility)?;
+            if graph
+                .links
+                .entry((namespace, path))
+                .or_default()
+                .insert(target)
+            {
+                graph.changed();
+            }
+            Ok(())
+        })
     }
     /// Exact resolved macro facet; value/type facets still run through ordinary imports.
     pub(crate) fn macro_import_facet(
@@ -1397,7 +1506,6 @@ impl NameNamespaces {
         import: &crate::syntax::imports::SourceImport,
         definition: NameDefinition,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
         let id = Self::import_identity(import);
         if definition.namespace != Namespace::Macro
             || self.imports.get(&id).map(|r| &r.0) != Some(import)
@@ -1417,7 +1525,9 @@ impl NameNamespaces {
                 "macro import facet changed in one discovery".into(),
             ));
         }
-        self.macro_import_facets.insert(id, definition);
+        if self.macro_import_facets.insert(id, definition).is_none() {
+            self.changed();
+        }
         Ok(())
     }
     fn retain_named_module_route(
@@ -1425,7 +1535,6 @@ impl NameNamespaces {
         destination: NamePath,
         target: super::module_paths::ModulePath,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
         if self
             .named_module_links
             .get(&destination)
@@ -1433,6 +1542,7 @@ impl NameNamespaces {
         {
             return Ok(());
         }
+        self.changed();
         let fail = || {
             Diagnostic::new(
                 "LRR-E-SOURCE-LIMIT",
@@ -1465,6 +1575,24 @@ impl NameNamespaces {
     }
     /// Resolve named item and disclosed module imports. Other forms retain a frontier.
     pub fn resolve_named_imports(&mut self) -> Result<ImportResolution, Diagnostic> {
+        self.resolve_named_imports_observed(&mut reads::NamespaceReads::disabled())
+    }
+    /// `resolve_named_imports`, recording in `reads` the producer-frontier
+    /// scopes its path walks consult. The run changes the import structure
+    /// only when a table accepts a module alias it did not hold.
+    fn resolve_named_imports_observed(
+        &mut self,
+        reads: &mut reads::NamespaceReads,
+    ) -> Result<ImportResolution, Diagnostic> {
+        self.counted(|graph| graph.resolve_named_imports_uncounted(reads))
+    }
+    fn resolve_named_imports_uncounted(
+        &mut self,
+        reads: &mut reads::NamespaceReads,
+    ) -> Result<ImportResolution, Diagnostic> {
+        // A run may rewrite derived state (anonymous records, deferred
+        // imports, frontier membership of resolved imports): a new graph
+        // state, though not a change of the structure it resolves.
         self.import_generation = self.import_generation.wrapping_add(1);
         let _span = crate::core::timing::Span::enter(|| "names resolve_named_imports".into());
         use crate::syntax::imports::ImportKind;
@@ -1514,7 +1642,7 @@ impl NameNamespaces {
                         *edition,
                     )?;
                     for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
-                        self.table_mut(namespace).module_paths.imported_alias(
+                        self.table_counted(namespace).module_paths.imported_alias(
                             super::module_paths::ModulePath {
                                 unit: destination.unit,
                                 names: names.clone(),
@@ -1609,7 +1737,7 @@ impl NameNamespaces {
                         "ordinary module alias work limit".into(),
                     ))?;
                 if self
-                    .producer_frontier(Namespace::Type, target, true)?
+                    .producer_frontier_observed(Namespace::Type, target, true, reads)?
                     .is_some()
                 {
                     continue;
@@ -1646,7 +1774,7 @@ impl NameNamespaces {
                         names: destination.components().to_vec(),
                     };
                     for namespace in [Namespace::Value, Namespace::Type, Namespace::Macro] {
-                        self.table_mut(namespace).module_paths.imported_alias(
+                        self.table_counted(namespace).module_paths.imported_alias(
                             destination_module.clone(),
                             target_module.clone(),
                             visibility.clone(),
@@ -1724,7 +1852,10 @@ impl NameNamespaces {
                     ready = true;
                     continue;
                 }
-                if self.producer_frontier(namespace, target, true)?.is_some() {
+                if self
+                    .producer_frontier_observed(namespace, target, true, reads)?
+                    .is_some()
+                {
                     pending = true;
                     continue;
                 }
@@ -1965,15 +2096,89 @@ impl NameNamespaces {
         {
             return Ok(result.clone());
         }
-        let result = self.resolve_imports_fixed_point()?;
-        self.import_fixed_point = Some((self.import_generation, result.clone()));
+        if let Some(result) = self.retained_resolution() {
+            self.import_fixed_point = Some((self.import_generation, result.clone()));
+            return Ok(result);
+        }
+        let (result, inert) = self.resolve_imports_fixed_point()?;
+        // A resolution whose last round still changed the import structure
+        // is not known to be a fixed point; the next call resolves again.
+        self.import_fixed_point = inert.then(|| (self.import_generation, result.clone()));
         Ok(result)
     }
-    fn resolve_imports_fixed_point(&mut self) -> Result<ImportResolution, Diagnostic> {
+    /// The last complete resolution, when nothing it depended on has changed
+    /// since: the import structure is the same (idempotent re-installation of
+    /// known facts does not count) and no producer-frontier edit touched a
+    /// scope its path walks read. Re-running the fixed point from the same
+    /// structure would repeat every lookup to the same outcomes.
+    fn retained_resolution(&mut self) -> Option<ImportResolution> {
+        let memo = self.import_memo.as_mut()?;
+        if memo.structure_epoch != self.structure_epoch {
+            return None;
+        }
+        let edits = self.frontier_log.get(memo.log_len..)?;
+        if edits.iter().any(|scope| memo.frontier_scopes.contains(scope)) {
+            return None;
+        }
+        memo.log_len = self.frontier_log.len();
+        let retained = memo.result.clone();
+        static VERIFY: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        if *VERIFY.get_or_init(|| std::env::var_os("LRR_VERIFY_IMPORT_MEMO").is_some()) {
+            self.verify_retained(&retained);
+        }
+        Some(retained)
+    }
+    /// `LRR_VERIFY_IMPORT_MEMO`: re-resolve a copy of the graph from scratch
+    /// on every retained answer and abort if the resolution, the import state
+    /// or the import structure differs.
+    fn verify_retained(&self, retained: &ImportResolution) {
+        let mut fresh = self.clone();
+        fresh.import_memo = None;
+        fresh.import_fixed_point = None;
+        let (state, epoch) = (fresh.import_state(), fresh.structure_epoch);
+        let same = match fresh.resolve_imports_fixed_point() {
+            Ok((full, _)) => {
+                format!("{full:?}") == format!("{retained:?}")
+                    && fresh.import_state() == state
+                    && fresh.structure_epoch == epoch
+            }
+            Err(_) => false,
+        };
+        if !same {
+            eprintln!("LRR-E-INTERNAL retained import resolution differs from a fresh computation");
+            std::process::abort();
+        }
+    }
+    /// Whether a complete resolution is simple enough to retain: every import
+    /// is a plain named import and resolved, and no glob state exists, so a
+    /// repeat run would only re-establish what the graph already holds.
+    fn retainable(&self, result: &ImportResolution) -> bool {
+        result.pending.is_empty()
+            && result.missing.is_empty()
+            && result.inaccessible.is_empty()
+            && result.ambiguous.is_empty()
+            && self.deferred_imports.is_empty()
+            && self.anonymous.is_empty()
+            && self.manual_globs.is_empty()
+            && self.source_glob_items.is_empty()
+            && self.source_glob_modules.is_empty()
+            && self.glob_module_links.is_empty()
+            && self.all_named_imports()
+    }
+    fn all_named_imports(&self) -> bool {
+        self.imports.values().all(|(import, _)| {
+            matches!(import.kind, crate::syntax::imports::ImportKind::Named { .. })
+        })
+    }
+    /// The converged resolution, and whether its last round left the import
+    /// structure unchanged (so another run from this state would repeat it).
+    fn resolve_imports_fixed_point(&mut self) -> Result<(ImportResolution, bool), Diagnostic> {
         let _span = crate::core::timing::Span::enter(|| "names resolve_imports".into());
+        self.import_memo = None;
         let mut work = 0usize;
         loop {
             let before = self.import_state();
+            let structure_before = self.structure_epoch;
             work = work
                 .checked_add(self.imports.len().max(1))
                 .ok_or(Diagnostic::new(
@@ -1988,13 +2193,36 @@ impl NameNamespaces {
                     .or_default()
                     .insert(*id);
             }
-            let result = self.resolve_imports_round(&mut work)?;
+            // Frontier scopes are observed only for a resolution that could be
+            // retained.
+            let mut reads = if self.all_named_imports() {
+                reads::NamespaceReads::scopes_only()
+            } else {
+                reads::NamespaceReads::disabled()
+            };
+            let result = self.resolve_imports_round(&mut work, &mut reads)?;
             if self.import_state() == before {
-                return Ok(result);
+                // A final round that changed nothing it could observe proves
+                // the graph a fixed point of the whole resolution.
+                let inert = self.structure_epoch == structure_before;
+                if inert && self.retainable(&result) {
+                    let frontier_scopes = reads.into_scopes();
+                    self.import_memo = Some(ImportMemo {
+                        structure_epoch: self.structure_epoch,
+                        log_len: self.frontier_log.len(),
+                        frontier_scopes,
+                        result: result.clone(),
+                    });
+                }
+                return Ok((result, inert));
             }
         }
     }
-    fn resolve_imports_round(&mut self, work: &mut usize) -> Result<ImportResolution, Diagnostic> {
+    fn resolve_imports_round(
+        &mut self,
+        work: &mut usize,
+        reads: &mut reads::NamespaceReads,
+    ) -> Result<ImportResolution, Diagnostic> {
         use super::module_paths::ModuleResolution;
         use crate::syntax::imports::ImportKind;
         // Publish symbolic named edges and disclosed module aliases before
@@ -2010,7 +2238,7 @@ impl NameNamespaces {
             && self.source_glob_items.is_empty()
             && self.source_glob_modules.is_empty()
             && self.glob_module_links.is_empty();
-        let named = self.resolve_named_imports();
+        let named = self.resolve_named_imports_observed(reads);
         self.candidate_globs.clear();
         let named = named?;
         // Without any glob import or previously published glob edge, the glob
@@ -2322,7 +2550,7 @@ impl NameNamespaces {
         producer: Digest,
         child: ScopeKey,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
+        self.changed();
         if child.owner.is_some()
             || child.module_path.is_empty()
             || !self.frontiers.values().any(|ids| ids.contains(&producer))
@@ -2588,7 +2816,7 @@ impl NameNamespaces {
         target: NamePath,
         visibility: VisibilityScope,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
+        self.changed();
         let edge = (namespace, path.clone(), target.clone(), visibility.clone());
         let mut planned_bytes = self.manual_glob_bytes;
         if !self.manual_globs.contains(&edge) {
@@ -2639,7 +2867,7 @@ impl NameNamespaces {
         import: crate::syntax::imports::SourceImport,
         edition: u16,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
+        self.changed();
         let fail = || {
             Diagnostic::new(
                 "LRR-E-DISCOVERY-LIMIT",
@@ -2716,7 +2944,6 @@ impl NameNamespaces {
         scope: ScopeKey,
         producer: Digest,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
         if self
             .frontiers
             .get(&scope)
@@ -2737,14 +2964,18 @@ impl NameNamespaces {
             .ok_or_else(fail)?;
         // Frontiers are keyed by the complete lexical ScopeKey, including a
         // local owner. This does not publish a declaration as a module name.
+        self.frontier_changed(&scope);
         self.frontiers.entry(scope).or_default().insert(producer);
         self.generated_frontier_bytes = bytes;
         Ok(())
     }
     pub(crate) fn release_generated_frontier(&mut self, scope: &ScopeKey, producer: Digest) {
-        self.import_generation = self.import_generation.wrapping_add(1);
-        if let Some(frontiers) = self.frontiers.get_mut(scope) {
-            frontiers.remove(&producer);
+        if self
+            .frontiers
+            .get_mut(scope)
+            .is_some_and(|frontiers| frontiers.remove(&producer))
+        {
+            self.frontier_changed(scope);
         }
         // Charged cumulative integration work remains bounded across removals.
     }
@@ -2754,7 +2985,7 @@ impl NameNamespaces {
         path: NamePath,
         producer: Digest,
     ) -> Result<(), Diagnostic> {
-        self.import_generation = self.import_generation.wrapping_add(1);
+        self.changed();
         self.table_mut(namespace).pending(path, producer)
     }
     pub fn lookup_import_module(
@@ -3564,6 +3795,10 @@ mod module_frontier_tests {
 #[cfg(test)]
 #[path = "names_import_ambiguity_tests.rs"]
 mod names_import_ambiguity_tests;
+
+#[cfg(test)]
+#[path = "names_import_memo_tests.rs"]
+mod names_import_memo_tests;
 
 #[cfg(test)]
 #[path = "names_scoped_candidates_tests.rs"]

@@ -49,6 +49,12 @@ pub struct ClosedReferenceParameter {
     epoch: u64,
     source_revision: u64,
     inputs: Arc<BTreeMap<InputKey, Digest>>,
+    /// `sum(128 + key.heap_bytes())` over `inputs`, fixed with the census.
+    inputs_bytes: usize,
+    /// Input epoch at which the current census last equalled `inputs`; a
+    /// retained proof checked again in an unchanged epoch need not compare
+    /// the two maps entry by entry. Clones share it.
+    inputs_checked: Arc<crate::db::memo::CheckedRevision>,
 }
 /// The database's current expansion epoch (`0` before any begins).
 pub(super) fn expansion_epoch(db: &mut Database) -> u64 {
@@ -92,7 +98,7 @@ impl ClosedReferenceParameter {
                 return Err(invalid("reference pointee source authority is not current"));
             }
         };
-        let inputs = db.lexical_namespace_stamps()?;
+        let (inputs, inputs_bytes) = db.lexical_namespace_census()?;
         let region = match syntax.lifetime() {
             Some("'static") => {
                 return Err(fault(
@@ -140,6 +146,8 @@ impl ClosedReferenceParameter {
             epoch,
             source_revision: db.source_revision(),
             inputs,
+            inputs_bytes,
+            inputs_checked: Default::default(),
         };
         Ok(Some(Arc::new(proof)))
     }
@@ -168,9 +176,18 @@ impl ClosedReferenceParameter {
             || self.signature != callee.signature().fingerprint()
             || self.epoch != epoch
             || self.source_revision != db.source_revision()
-            || db.lexical_namespace_stamps()? != self.inputs
         {
             return Err(invalid("reference parameter source world changed"));
+        }
+        // The census of one input epoch is a shared map, so an unchanged
+        // epoch is a pointer comparison; a changed one is compared entry by
+        // entry once and remembered for that epoch.
+        if !self.inputs_checked.is_current(db) {
+            let current = db.lexical_namespace_stamps()?;
+            if current != self.inputs {
+                return Err(invalid("reference parameter source world changed"));
+            }
+            self.inputs_checked.record(db);
         }
         Ok(())
     }
@@ -197,7 +214,7 @@ impl ClosedReferenceParameter {
         })
     }
     pub fn allocated_bytes(&self) -> Result<usize, Diagnostic> {
-        let mut bytes = std::mem::size_of::<Self>()
+        std::mem::size_of::<Self>()
             .checked_add(self.source.heap_bytes().ok_or_else(limit)?)
             .and_then(|n| {
                 self.pointee
@@ -205,14 +222,8 @@ impl ClosedReferenceParameter {
                     .ok()
                     .and_then(|m| n.checked_add(m))
             })
-            .ok_or_else(limit)?;
-        for key in self.inputs.keys() {
-            bytes = bytes
-                .checked_add(128)
-                .and_then(|n| n.checked_add(key.heap_bytes()))
-                .ok_or_else(limit)?;
-        }
-        Ok(bytes)
+            .and_then(|n| n.checked_add(self.inputs_bytes))
+            .ok_or_else(limit)
     }
 }
 /// Immutable source preparation is query-owned; Type and caller authority are
@@ -898,6 +909,50 @@ mod tests {
             _ => panic!("shadowed source name cannot mint primitive reference"),
         }
     }
+    #[test]
+    fn retained_reference_proof_compares_the_census_once_per_epoch_and_never_masks_a_change() {
+        let (mut db, source, graph) = source(ORIGINAL, 2024);
+        let callee = callable(&mut db, &source, &graph, "takes_two");
+        let QueryPoll::Ready(Ok(ArgumentHintPreparation::Ready(hints))) =
+            prepare_argument_hint(&mut db, &callee, &graph, &[&source], 0)
+        else {
+            panic!()
+        };
+        let proof = hints[0].closed_reference.as_ref().unwrap();
+        // The census byte count fixed at capture is the per-key sum every
+        // `allocated_bytes` call used to recompute.
+        assert_eq!(
+            proof.inputs_bytes,
+            proof.inputs.keys().map(|key| 128 + key.heap_bytes()).sum::<usize>()
+        );
+        proof.require_current(&mut db, &callee).unwrap();
+        assert!(proof.inputs_checked.is_current(&db));
+        // A write that leaves the namespace-membership census equal (a source
+        // blob row is not a member) raises the revision: the retained proof is
+        // compared entry by entry once, then remembered for the new epoch.
+        let blob = SourceBlob::new(b"fn unrelated() {}".to_vec()).unwrap();
+        db.write_control_input_for_test(
+            InputKey::SourceBlob(blob.content()),
+            Some(InputValue::SourceBlob(blob)),
+        );
+        assert!(!proof.inputs_checked.is_current(&db));
+        assert!(!Arc::ptr_eq(&db.lexical_namespace_stamps().unwrap(), &proof.inputs));
+        proof.require_current(&mut db, &callee).unwrap();
+        assert!(proof.inputs_checked.is_current(&db));
+        proof.require_current(&mut db, &callee).unwrap();
+        // A membership change after a remembered agreement is still refused.
+        db.write_control_input_for_test(
+            InputKey::CompileEnv("member".into()),
+            Some(InputValue::CompileEnv("1".into())),
+        );
+        assert!(!proof.inputs_checked.is_current(&db));
+        assert_eq!(
+            proof.require_current(&mut db, &callee).unwrap_err().message,
+            "reference parameter source world changed"
+        );
+        assert!(!proof.inputs_checked.is_current(&db));
+    }
+
     #[test]
     fn genuine_reference_hint_rejects_public_hint_tamper_and_epoch_change() {
         let (mut db, source, graph) = source(ORIGINAL, 2024);

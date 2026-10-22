@@ -65,6 +65,11 @@ pub enum ExpressionKind {
     /// (`a..=b` is `RangeInclusive::new(a, b)`), lowered as an ordinary
     /// call of that function.
     LangCall,
+    /// `expr?`: rustc's `match Try::branch(expr) { Continue(v) => v,
+    /// Break(r) => return FromResidual::from_residual(r) }`. The node owns
+    /// the one pattern transaction over the `Try::branch` result and runs
+    /// its early return through the ordinary return control.
+    Try,
 }
 impl ExpressionKind {
     fn tag(self) -> u32 {
@@ -90,6 +95,7 @@ impl ExpressionKind {
             Self::Other => 18,
             Self::Borrow => 19,
             Self::LangCall => 20,
+            Self::Try => 21,
         }
     }
 }
@@ -242,8 +248,237 @@ pub struct BodyIndex {
     constructor_guards: Vec<(SlotId, NodeId)>,
     slots: u32,
     estimated_bytes: usize,
+    /// Derived once from the final structure and never encoded: the static
+    /// lexical home of every slot and the slots/nodes each scope owns, so a
+    /// frame creates its slots and a scope exit visits only its own owners.
+    slot_statics: Vec<SlotStatic>,
+    scope_slots: ScopeMembers,
+    scope_nodes: ScopeMembers,
+}
+/// The frame-independent facts of one slot, fixed by the indexed body.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) struct SlotStatic {
+    /// The lexical scope whose exit retires the slot. Slots no node claims
+    /// belong to the root scope.
+    pub(crate) scope: ScopeId,
+    /// The node whose temporary-extension annotation is conditional on its
+    /// constructor frontier resolving as constructors.
+    pub(crate) conditional_extension: Option<NodeId>,
+}
+/// Members (slot ordinals or node ordinals) grouped by lexical scope, each
+/// group in ascending order; cleanup walks a group from its end.
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
+pub(crate) struct ScopeMembers {
+    /// `starts[scope]..starts[scope + 1]` delimits that scope's group.
+    starts: Vec<u32>,
+    members: Vec<u32>,
+}
+impl ScopeMembers {
+    fn group(scopes: usize, owners: impl Iterator<Item = (u32, ScopeId)> + Clone) -> Self {
+        let mut starts = vec![0u32; scopes + 1];
+        for (_, scope) in owners.clone() {
+            starts[scope.0 as usize + 1] += 1;
+        }
+        for scope in 0..scopes {
+            starts[scope + 1] += starts[scope];
+        }
+        let mut next = starts[..scopes].to_vec();
+        let mut members = vec![0u32; starts[scopes] as usize];
+        for (member, scope) in owners {
+            let at = &mut next[scope.0 as usize];
+            members[*at as usize] = member;
+            *at += 1;
+        }
+        Self { starts, members }
+    }
+    /// Ascending members of `scope`; empty for an absent scope.
+    pub(crate) fn of(&self, scope: ScopeId) -> &[u32] {
+        let scope = scope.0 as usize;
+        match (self.starts.get(scope), self.starts.get(scope + 1)) {
+            (Some(&start), Some(&end)) => &self.members[start as usize..end as usize],
+            _ => &[],
+        }
+    }
+    fn bytes(&self) -> Option<usize> {
+        self.starts
+            .capacity()
+            .checked_add(self.members.capacity())?
+            .checked_mul(std::mem::size_of::<u32>())
+    }
 }
 impl BodyIndex {
+    /// The static slot facts: scope of every slot and conditional extension
+    /// owner. This is the one computation of a slot's lexical home.
+    fn derive_slot_statics(&self) -> Result<Vec<SlotStatic>, Diagnostic> {
+        let mut statics = Vec::new();
+        statics
+            .try_reserve_exact(self.slots as usize)
+            .map_err(|_| limit("slot scope table allocation"))?;
+        statics.resize(
+            self.slots as usize,
+            SlotStatic {
+                scope: ScopeId(0),
+                conditional_extension: None,
+            },
+        );
+        let set = |statics: &mut Vec<SlotStatic>, slot: SlotId, scope: ScopeId| {
+            statics
+                .get_mut(slot.0 as usize)
+                .map(|entry| entry.scope = scope)
+                .ok_or_else(|| fault("slot scope owner absent"))
+        };
+        for node in &self.nodes {
+            // Control/block results are consumed after their entered scope
+            // leaves. Their value and its temporary place share that outer
+            // continuation scope; inner bindings keep their indexed scopes.
+            let result_scope = if matches!(
+                node.role,
+                NodeRole::Expression(
+                    ExpressionKind::Block
+                        | ExpressionKind::Const
+                        | ExpressionKind::While
+                        | ExpressionKind::Loop
+                        | ExpressionKind::For
+                )
+            ) {
+                self.scopes
+                    .get(node.scope.0 as usize)
+                    .ok_or_else(|| fault("node scope absent"))?
+                    .parent
+                    .unwrap_or(node.scope)
+            } else {
+                node.scope
+            };
+            if let Some(id) = node.value {
+                if node
+                    .extended_to
+                    .as_ref()
+                    .is_some_and(|extension| !extension.constructors.is_empty())
+                {
+                    statics
+                        .get_mut(id.0 as usize)
+                        .ok_or_else(|| fault("slot scope owner absent"))?
+                        .conditional_extension = Some(node.id);
+                }
+                // A block's result belongs to its enclosing expression scope.
+                // Inner temporaries and bindings remain in the entered block.
+                let scope = if let Some(extension) = node
+                    .extended_to
+                    .as_ref()
+                    .filter(|e| e.constructors.is_empty())
+                {
+                    extension.scope
+                } else if let Some(clause) = node.boolean_scope.or(node.clause_scope) {
+                    self.scopes
+                        .get(clause.0 as usize)
+                        .ok_or_else(|| fault("clause scope absent"))?
+                        .parent
+                        .unwrap_or(node.scope)
+                } else {
+                    result_scope
+                };
+                set(&mut statics, id, scope)?;
+            }
+            for (ordinal, id) in node.runtime_temporaries.into_iter().enumerate() {
+                let Some(id) = id else { continue };
+                // An initialized ref pattern moves this short-lived reference
+                // result into its block-owned binding. Its referent independently
+                // follows the indexed extending-pattern annotation above.
+                let scope = if node.role == NodeRole::Statement {
+                    node.statement_scope.unwrap_or(node.scope)
+                } else if node.role == NodeRole::Expression(ExpressionKind::For) && ordinal == 1 {
+                    // A `for` iteration's `next` result lives for one iteration.
+                    node.condition_scope.unwrap_or(node.scope)
+                } else if let Some(closure) = node.closure_scope {
+                    // A closure's pattern-parameter test lives in its own frame.
+                    closure
+                } else {
+                    node.scope
+                };
+                set(&mut statics, id, scope)?;
+                let place = SlotId(
+                    id.0.checked_add(1)
+                        .ok_or_else(|| fault("runtime temporary place slot overflow"))?,
+                );
+                if self.slot_kind(place)? != SlotKind::Place {
+                    return Err(fault("runtime temporary lacks its reserved place pair"));
+                }
+                set(&mut statics, place, scope)?;
+            }
+            // A closure's parameter staging slots belong to its own frame.
+            let scalar_scope = node.closure_scope.unwrap_or(node.scope);
+            for id in &node.runtime_scalar_slots {
+                set(&mut statics, *id, scalar_scope)?;
+                let place = SlotId(
+                    id.0.checked_add(1)
+                        .ok_or_else(|| fault("runtime scalar place slot overflow"))?,
+                );
+                if self.slot_kind(place)? != SlotKind::Place {
+                    return Err(fault("runtime scalar lacks its reserved place pair"));
+                }
+                set(&mut statics, place, scalar_scope)?;
+            }
+            if let Some(id) = node.constructor_guard {
+                set(&mut statics, id, node.scope)?;
+            }
+            if let Some(id) = node.place {
+                set(&mut statics, id, result_scope)?;
+            }
+        }
+        Ok(statics)
+    }
+    /// The one-time derivation of the per-scope owner groups (after all nodes
+    /// and administrative slots are final).
+    fn derive_scope_tables(&mut self, budget: usize) -> Result<(), Diagnostic> {
+        let statics = self.derive_slot_statics()?;
+        let scopes = self.scopes.len();
+        for owner in statics
+            .iter()
+            .map(|entry| entry.scope)
+            .chain(self.nodes.iter().map(|node| node.scope))
+        {
+            if owner.0 as usize >= scopes {
+                return Err(fault("scope owner outside the indexed scopes"));
+            }
+        }
+        let scope_slots = ScopeMembers::group(
+            scopes,
+            statics
+                .iter()
+                .enumerate()
+                .map(|(slot, entry)| (slot as u32, entry.scope)),
+        );
+        let scope_nodes = ScopeMembers::group(
+            scopes,
+            self.nodes
+                .iter()
+                .map(|node| (node.id.0, node.scope)),
+        );
+        let bytes = statics
+            .capacity()
+            .checked_mul(std::mem::size_of::<SlotStatic>())
+            .and_then(|bytes| bytes.checked_add(scope_slots.bytes()?))
+            .and_then(|bytes| bytes.checked_add(scope_nodes.bytes()?))
+            .ok_or_else(|| limit("scope owner metadata overflow"))?;
+        charge(&mut self.estimated_bytes, bytes, budget)?;
+        self.slot_statics = statics;
+        self.scope_slots = scope_slots;
+        self.scope_nodes = scope_nodes;
+        Ok(())
+    }
+    /// The static facts of every slot, indexed by slot ordinal.
+    pub(crate) fn slot_statics(&self) -> &[SlotStatic] {
+        &self.slot_statics
+    }
+    /// The slots a scope exit visits for `scope`, ascending (walk from the end).
+    pub(crate) fn scope_slots(&self, scope: ScopeId) -> &[u32] {
+        self.scope_slots.of(scope)
+    }
+    /// The nodes (binding candidates) a scope exit visits for `scope`,
+    /// ascending (walk from the end).
+    pub(crate) fn scope_nodes(&self, scope: ScopeId) -> &[u32] {
+        self.scope_nodes.of(scope)
+    }
     pub(crate) fn semantic_identity(&self) -> crate::core::digest::Digest {
         self.semantic_identity
     }
@@ -371,6 +606,11 @@ impl BodyIndex {
             },
         )
     }
+    /// Every constructor guard slot with its constructor node, ascending by
+    /// slot. Only guard slots ever hold an active construction.
+    pub(crate) fn constructor_guards(&self) -> &[(SlotId, NodeId)] {
+        &self.constructor_guards
+    }
     pub fn constructor_node(&self, guard: SlotId) -> Result<&StructuralNode, Diagnostic> {
         let ordinal = self
             .constructor_guards
@@ -427,6 +667,7 @@ impl BodyIndex {
             && !(node.role == NodeRole::Expression(ExpressionKind::Macro)
                 && (n == 0 || n < node.runtime_scalar_phases)
                 && node.runtime_temporaries[0].is_some())
+            && !(node.role == NodeRole::Expression(ExpressionKind::Try) && n < TRY_PHASES)
         {
             return Err(fault("structural operand phase absent"));
         }
@@ -568,6 +809,11 @@ fn negative_integer_literal(expr: &ast::Expr) -> bool {
         if literal.token().kind() == ra_ap_syntax::SyntaxKind::INT_NUMBER)
 }
 
+/// The `?` node's operand-numbered phases: after the operand (`Try::branch`
+/// call), the `Continue` and `Break` arms, the `Break` value extraction, the
+/// `FromResidual::from_residual` call and the return.
+pub(crate) const TRY_PHASES: u16 = 7;
+
 fn expression_kind(expr: &ast::Expr) -> ExpressionKind {
     match expr {
         ast::Expr::BlockExpr(b) => {
@@ -599,6 +845,7 @@ fn expression_kind(expr: &ast::Expr) -> ExpressionKind {
         ast::Expr::RangeExpr(range) if super::constructors::range_inclusive_bounds(range).is_some() => {
             ExpressionKind::LangCall
         }
+        ast::Expr::TryExpr(_) => ExpressionKind::Try,
         _ => ExpressionKind::Other,
     }
 }
@@ -686,6 +933,9 @@ impl ParsedFile {
             constructor_guards: Vec::new(),
             slots: 0,
             estimated_bytes: cfg_bytes,
+            slot_statics: Vec::new(),
+            scope_slots: ScopeMembers::default(),
+            scope_nodes: ScopeMembers::default(),
         };
         charge(
             &mut index.estimated_bytes,
@@ -1336,6 +1586,17 @@ impl ParsedFile {
                 let slots = [Some(SlotId(index.slots)), Some(SlotId(index.slots + 2))];
                 index.slots = next;
                 slots
+            } else if kind == Some(ExpressionKind::Try) {
+                // The `Try::branch` result the pattern transaction matches and
+                // the `Break` residual (the Bool test slot is the first scalar slot).
+                let next = index
+                    .slots
+                    .checked_add(4)
+                    .filter(|n| *n <= limits.slots)
+                    .ok_or_else(|| limit("try temporary slot budget"))?;
+                let slots = [Some(SlotId(index.slots)), Some(SlotId(index.slots + 2))];
+                index.slots = next;
+                slots
             } else if kind == Some(ExpressionKind::Macro) {
                 let next = index
                     .slots
@@ -1482,6 +1743,18 @@ impl ParsedFile {
                     }
                     index.slots = next;
                     (slots, phases as u16)
+                } else if kind == Some(ExpressionKind::Try) {
+                    // The pattern transaction's Bool test result and the fresh
+                    // argument slots of the `Break` arm's two calls (a call's
+                    // arguments take their hints before they are written).
+                    let next = index
+                        .slots
+                        .checked_add(6)
+                        .filter(|n| *n <= limits.slots)
+                        .ok_or_else(|| limit("try test slot budget"))?;
+                    let slots = (0..3).map(|offset| SlotId(index.slots + offset * 2)).collect();
+                    index.slots = next;
+                    (slots, 0)
                 } else if parameter_owner {
                     // One staging value slot (with its place pair) per written
                     // parameter, owned by the function's parameter scope.
@@ -1802,6 +2075,7 @@ impl ParsedFile {
             limits.metadata_bytes,
         )?;
         index.pattern_bindings = bindings;
+        index.derive_scope_tables(limits.metadata_bytes)?;
         index.semantic_identity = index.fingerprint();
         Ok(index)
     }

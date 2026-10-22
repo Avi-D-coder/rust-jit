@@ -190,16 +190,22 @@ impl ParsedFile {
         let (segments, absolute, mut bytes) = owned_path(path, definition_unit)?;
         let mut modules = Vec::new();
         let mut executable = false;
+        let mut in_module = false;
         for parent in call.syntax().ancestors() {
-            executable |= ast::Fn::can_cast(parent.kind())
-                || ast::ClosureExpr::can_cast(parent.kind())
-                || ast::BlockExpr::can_cast(parent.kind());
+            // A function body enclosing a module declared in it is not the
+            // executable context of what is written inside that module.
+            executable |= !in_module
+                && (ast::Fn::can_cast(parent.kind())
+                    || ast::ClosureExpr::can_cast(parent.kind())
+                    || ast::BlockExpr::can_cast(parent.kind()));
             if let Some(module) = ast::Module::cast(parent) {
+                in_module = true;
                 let name = module
                     .name()
                     .ok_or_else(|| error("macro invocation module name is missing"))?;
                 let name = semantic_name(&name.syntax().text().to_string())
                     .ok_or_else(|| error("invalid macro invocation module name"))?;
+                let name = super::outline::module_segment(&module, &name);
                 bytes = bytes
                     .checked_add(name.len())
                     .ok_or_else(|| error("macro invocation metadata exceeded"))?;
@@ -385,6 +391,7 @@ impl ParsedFile {
         let mut owner = None;
         let mut executable = false;
         let mut container = false;
+        let mut in_module = false;
         for parent in meta.syntax().ancestors() {
             if !owner_seen && ast::Item::can_cast(parent.kind()) {
                 owner_seen = true;
@@ -394,17 +401,20 @@ impl ParsedFile {
             container |= ast::RecordField::can_cast(parent.kind())
                 || ast::TupleField::can_cast(parent.kind())
                 || ast::Variant::can_cast(parent.kind());
-            executable |= ast::BlockExpr::can_cast(parent.kind())
-                || ast::ClosureExpr::can_cast(parent.kind())
-                || (owner_seen && ast::Fn::can_cast(parent.kind()));
+            executable |= !in_module
+                && (ast::BlockExpr::can_cast(parent.kind())
+                    || ast::ClosureExpr::can_cast(parent.kind())
+                    || (owner_seen && ast::Fn::can_cast(parent.kind())));
             container |= owner_seen
                 && (ast::Trait::can_cast(parent.kind()) || ast::Impl::can_cast(parent.kind()));
             if let Some(module) = ast::Module::cast(parent) {
+                in_module = true;
                 let name = module
                     .name()
                     .ok_or_else(|| error("attribute enclosing module name is missing"))?;
                 let name = semantic_name(&name.syntax().text().to_string())
                     .ok_or_else(|| error("invalid attribute enclosing module"))?;
+                let name = super::outline::module_segment(&module, &name);
                 bytes = bytes
                     .checked_add(name.len())
                     .ok_or_else(|| error("attribute path metadata limit"))?;

@@ -125,6 +125,30 @@ impl Frame {
         };
         store.pending_construction_args(active.guard)
     }
+    /// A sized Type whose only coercion-bound parts are trait-object pointees
+    /// behind a generic holder or a reference (`Box<dyn T>`, `&dyn T`).
+    fn sized_object_holder(written: &WrittenType) -> bool {
+        fn holds_object(written: &WrittenType) -> bool {
+            match written {
+                WrittenType::Dyn(_) => true,
+                WrittenType::Generic { args, .. } => args.iter().any(holds_object),
+                WrittenType::Ref { target, .. } => holds_object(target),
+                _ => false,
+            }
+        }
+        fn sized_parts(written: &WrittenType) -> bool {
+            match written {
+                WrittenType::Generic { args, .. } => {
+                    args.iter().all(|arg| matches!(arg, WrittenType::Dyn(_)) || sized_parts(arg))
+                }
+                WrittenType::Ref { target, .. } => {
+                    matches!(target.as_ref(), WrittenType::Dyn(_)) || sized_parts(target)
+                }
+                other => other.coercion_free(),
+            }
+        }
+        holds_object(written) && sized_parts(written)
+    }
     /// The exact descriptor of `written` under the fixed arguments, when no
     /// part of it is open.
     fn partial_exact(
@@ -162,7 +186,18 @@ impl Frame {
             .try_reserve_exact(args.len())
             .map_err(|_| crate::runtime::arena::resource())?;
         for arg in args {
-            seeded.push(Self::partial_exact(arg, &fixed, store)?);
+            let exact = match Self::partial_exact(arg, &fixed, store)? {
+                Some(exact) => Some(exact),
+                // A sized holder of a trait object (`Box<dyn Error>`) written
+                // as the constructor's own type argument is that exact Type:
+                // the value it holds keeps its concrete runtime Type, which a
+                // declared `dyn` position admits.
+                None if Self::sized_object_holder(arg) => {
+                    arg.materialize_with(store, &|index| fixed.get(index as usize).copied().flatten())?
+                }
+                None => None,
+            };
+            seeded.push(exact);
         }
         Ok(Some(seeded))
     }

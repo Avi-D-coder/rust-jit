@@ -176,7 +176,7 @@ fn lookup_name_inner(
     let context = rows.context();
     let body = rows.body().ok_or_else(missing)?;
     if unit.key != *parse
-        || signature.header.profile != unit.key.profile
+        || signature.header.profile != rows.current_parse().profile
         || context.scope != signature.scope
         || signature.scope.owner.is_some()
         || definition.crate_key != signature.scope.crate_key
@@ -618,7 +618,7 @@ fn lookup_declaration_inner(
     };
     let context = rows.context();
     if unit.key != *parse
-        || declaration.header.profile != unit.key.profile
+        || declaration.header.profile != rows.current_parse().profile
         || &context.scope != declaration.scope
         || (declaration.scope.owner.is_some() && associated_scope.is_none())
         || associated_scope.is_some_and(|scope| {
@@ -650,11 +650,34 @@ fn lookup_declaration_inner(
         .ok_or_else(missing)?;
     let header_range =
         crate::syntax::spans::SourceRange::checked(header.header_start, header.header_end)?;
-    let selected_range = selected_range.unwrap_or(header_range);
-    if !header_range.contains(selected_range) {
-        return Err(missing());
-    }
-    let origins = unit.items.project_source_spans(selected_range)?;
+    let origins = match selected_range {
+        Some(selected_range) => {
+            if !header_range.contains(selected_range) {
+                return Err(missing());
+            }
+            unit.items.project_source_spans(selected_range)?
+        }
+        // No parser-selected token: the obligation is the written name's own
+        // occurrences. The rest of the header (keywords, other names) cannot
+        // shadow it, and a library macro's template tokens there carry
+        // provenance this primitive-name admission does not constrain.
+        None => {
+            let mut origins: Vec<&crate::syntax::token_wire::SpanRecord> = Vec::new();
+            let occurrences = written_name_ranges(unit.items.text(), header_range, written_name);
+            for range in &occurrences {
+                for origin in unit.items.project_source_spans(*range)? {
+                    if !origins.iter().any(|known| std::ptr::eq(*known, origin)) {
+                        origins.push(origin);
+                    }
+                }
+            }
+            if occurrences.is_empty() {
+                unit.items.project_source_spans(header_range)?
+            } else {
+                origins
+            }
+        }
+    };
     if origins.is_empty() {
         return Err(missing());
     }
@@ -712,6 +735,34 @@ fn lookup_declaration_inner(
         &actual,
     )?;
     Ok(actual)
+}
+
+/// Whole-identifier occurrences of `name` in `text[within]`.
+fn written_name_ranges(
+    text: &str,
+    within: crate::syntax::spans::SourceRange,
+    name: &str,
+) -> Vec<crate::syntax::spans::SourceRange> {
+    let Some(window) = text.get(within.start as usize..within.end as usize) else {
+        return Vec::new();
+    };
+    let identifier = |c: char| c.is_alphanumeric() || c == '_';
+    let mut found = Vec::new();
+    for (at, _) in window.match_indices(name) {
+        let before = window[..at].chars().next_back();
+        let after = window[at + name.len()..].chars().next();
+        if before.is_some_and(identifier) || after.is_some_and(identifier) {
+            continue;
+        }
+        let Some(start) = u32::try_from(at).ok().and_then(|n| within.start.checked_add(n)) else {
+            continue;
+        };
+        let Some(end) = u32::try_from(name.len()).ok().and_then(|n| start.checked_add(n)) else {
+            continue;
+        };
+        found.push(crate::syntax::spans::SourceRange { start, end });
+    }
+    found
 }
 
 fn edition_year(edition: crate::syntax::token_wire::Edition) -> u16 {

@@ -145,6 +145,84 @@ pub trait FromResidual<R> {
     fn from_residual(residual: R) -> Self;
 }
 
+// `Residual<O>`: the `Try` type whose residual is `Self` and whose output is `O`
+// (`Option<Infallible>` with output `T` is `Option<T>`).
+pub trait Residual<O> {
+    type TryType: Try<Output = O, Residual = Self>;
+}
+impl<T> Residual<T> for crate::option::Option<crate::convert::Infallible> {
+    type TryType = crate::option::Option<T>;
+}
+impl<T, E> Residual<T> for crate::result::Result<crate::convert::Infallible, E> {
+    type TryType = crate::result::Result<T, E>;
+}
+impl<B, C> Residual<C> for ControlFlow<B, crate::convert::Infallible> {
+    type TryType = ControlFlow<B, C>;
+}
+
+impl<B, C> ControlFlow<B, C> {
+    pub fn is_break(&self) -> bool {
+        match self {
+            ControlFlow::Break(_) => true,
+            ControlFlow::Continue(_) => false,
+        }
+    }
+    pub fn is_continue(&self) -> bool {
+        match self {
+            ControlFlow::Break(_) => false,
+            ControlFlow::Continue(_) => true,
+        }
+    }
+    pub fn break_value(self) -> crate::option::Option<B> {
+        match self {
+            ControlFlow::Break(b) => crate::option::Option::Some(b),
+            ControlFlow::Continue(_) => crate::option::Option::None,
+        }
+    }
+    pub fn continue_value(self) -> crate::option::Option<C> {
+        match self {
+            ControlFlow::Break(_) => crate::option::Option::None,
+            ControlFlow::Continue(c) => crate::option::Option::Some(c),
+        }
+    }
+    // `<ControlFlow<B, C> as Try>::Output`, stated for the interpreter's static
+    // `expr?` typing (never called). Not part of the real `ControlFlow`.
+    #[doc(hidden)]
+    pub fn __try_output(self) -> C {
+        crate::intrinsics::lrr_unsupported("ControlFlow::__try_output")
+    }
+    // The residual of `expr?`'s `Break(residual)` arm, which the lowering has
+    // already matched. Not part of the real `core::ops::ControlFlow`.
+    #[doc(hidden)]
+    pub fn __try_break_residual(self) -> B {
+        match self {
+            ControlFlow::Break(b) => b,
+            ControlFlow::Continue(_) => loop {},
+        }
+    }
+}
+// `?` on a `ControlFlow`: the residual keeps the break value.
+impl<B, C> Try for ControlFlow<B, C> {
+    type Output = C;
+    type Residual = ControlFlow<B, crate::convert::Infallible>;
+    fn from_output(output: C) -> Self {
+        ControlFlow::Continue(output)
+    }
+    fn branch(self) -> ControlFlow<ControlFlow<B, crate::convert::Infallible>, C> {
+        match self {
+            ControlFlow::Continue(c) => ControlFlow::Continue(c),
+            ControlFlow::Break(b) => ControlFlow::Break(ControlFlow::Break(b)),
+        }
+    }
+}
+impl<B, C> FromResidual<ControlFlow<B, crate::convert::Infallible>> for ControlFlow<B, C> {
+    fn from_residual(residual: ControlFlow<B, crate::convert::Infallible>) -> Self {
+        match residual {
+            ControlFlow::Break(b) => ControlFlow::Break(b),
+        }
+    }
+}
+
 pub enum CoroutineState<Y, R> {
     Yielded(Y),
     Complete(R),

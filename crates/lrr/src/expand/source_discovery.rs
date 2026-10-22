@@ -9036,6 +9036,7 @@ impl SourceDiscovery {
                     .map(|(id, proof)| (*id, proof.clone()))
                     .collect(),
                 scope,
+                payload_digest: Default::default(),
             };
         if let Some(plan) = &self.impl_catalog_plan {
             publication.impl_catalog = Some(plan.complete(self, &mut publication, db)?);

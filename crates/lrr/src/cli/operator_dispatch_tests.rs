@@ -459,3 +459,62 @@ fn main() {
         "Some(Equal) Equal true true false\n",
     );
 }
+
+#[test]
+fn unsuffixed_literal_arguments_take_the_selected_impls_parameter_type() {
+    // A literal behind `&` or as a receiver has no Type until the impl is
+    // known: the receiver's unique impl fixes a provided body's `Rhs`
+    // (`a.ne(&3)`), a written literal rules impls out before it is evaluated
+    // (`c.add(&7)`), and a literal `Self` argument takes its fallback.
+    prints(
+        "literal-arguments",
+        "use std::cmp::{PartialEq, PartialOrd};
+use std::ops::Add;
+struct M(i32);
+impl PartialEq<i32> for M { fn eq(&self, o: &i32) -> bool { self.0 == *o } }
+impl PartialEq<M> for M { fn eq(&self, o: &M) -> bool { self.0 == o.0 } }
+fn main() {
+    let a: i32 = 6;
+    let c: i64 = 6;
+    let x = 5;
+    let m = M(3);
+    println!(\"{} {} {} {}\", a.ne(&3), x.lt(&6), 1.lt(&2), PartialOrd::lt(&1, &2));
+    println!(\"{} {} {}\", c.add(&7), Add::add(c, &7), <i32 as PartialOrd>::lt(&1, &2));
+    println!(\"{} {} {}\", m.ne(&4), m.eq(&3), m.ne(&M(4)));
+}
+",
+        "true true true true\n13 13 true\ntrue true true\n",
+    );
+}
+
+#[test]
+fn qualified_paths_with_trait_arguments_reference_anchors_and_function_values() {
+    // The impl index retains each impl's written trait arguments: they select
+    // a zero-argument call (`<u32 as Make<u16>>::make()`), fix a provided
+    // body's `Rhs` (`<i32 as PartialOrd<i32>>::lt(&1, &2)`), and name the impl
+    // of a reference anchor and of a function item value.
+    prints(
+        "qualified-values",
+        "use std::cmp::PartialOrd;
+use std::ops::{Add, Mul};
+trait Make<A> { fn make() -> u32; }
+impl Make<u8> for u32 { fn make() -> u32 { 1 } }
+impl Make<u16> for u32 { fn make() -> u32 { 2 } }
+struct S;
+impl S { fn double(x: i32) -> i32 { x * 2 } }
+fn apply<F: Fn(i32, i32) -> i32>(f: F, a: i32, b: i32) -> i32 { f(a, b) }
+fn addref<'a, T>(a: &'a T, b: &'a T) -> T where &'a T: Add<&'a T, Output = T> {
+    <&'a T as Add<&'a T>>::add(a, b)
+}
+fn main() {
+    let a: i32 = 6;
+    println!(\"{} {}\", <u32 as Make<u16>>::make(), <u32 as Make<u8>>::make());
+    println!(\"{} {}\", <i32 as PartialOrd<i32>>::lt(&1, &2), <&i32 as Mul<i32>>::mul(&a, 7));
+    let z = <i32 as Mul>::mul;
+    println!(\"{} {} {}\", z(6, 7), apply(<i32 as Add>::add, 1, 2), apply(|x, y| S::double(x) + y, 1, 1));
+    println!(\"{} {}\", addref(&3i64, &4i64), (S::double)(4));
+}
+",
+        "2 1\ntrue 42\n42 3 3\n7 8\n",
+    );
+}

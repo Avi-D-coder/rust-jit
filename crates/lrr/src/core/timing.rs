@@ -50,6 +50,22 @@ impl Drop for Span {
                 return;
             };
             let inclusive = start.elapsed();
+            if name.starts_with("stage ") {
+                // Developer-only: wall-clock stage boundaries, for correlating
+                // an external memory timeline with the stage that produced it.
+                static ORIGIN: OnceLock<Instant> = OnceLock::new();
+                let origin = *ORIGIN.get_or_init(|| start);
+                let unix_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.as_millis());
+                eprintln!(
+                    "LRR_STAGE end_ms={:.0} dur_ms={:.0} unix_ms={} {}",
+                    origin.elapsed().as_secs_f64() * 1e3,
+                    inclusive.as_secs_f64() * 1e3,
+                    unix_ms,
+                    name
+                );
+            }
             if let Some(parent) = totals.stack.last_mut() {
                 parent.2 += inclusive;
             }

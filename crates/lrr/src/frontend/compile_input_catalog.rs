@@ -350,6 +350,13 @@ impl CompileInputCatalog {
                     .ok_or_else(|| fault("library builtin derive definition absent"))?;
                 globals.push((MacroName::parse(name, self.edition)?, definition));
             }
+            // The unstable placeholder macros the standard preludes re-export
+            // from `core::macros::builtin` (`pub use ...::type_ascribe`).
+            for name in ["type_ascribe"] {
+                if let Some(definition) = library.resolve_path("core", &["macros", "builtin", name]) {
+                    globals.push((MacroName::parse(name, self.edition)?, definition));
+                }
+            }
             return Ok(globals);
         }
         let runtime =

@@ -14,7 +14,7 @@ use crate::{
     db::{
         dependency::{DependencyStamp, InputKey, InputValue},
         key::QueryKey,
-        memo::{Database, PreparedInputGuard},
+        memo::{CheckedRevision, Database, InputCensus, PreparedInputGuard},
         poll::QueryPoll,
         provider::SyntaxProvider,
         value::QueryValue,
@@ -65,7 +65,102 @@ pub struct NormalizedDeferredReturn {
     source: PrimitiveType,
     descriptor: TypeId,
     written_hint: Option<PrimitiveType>,
-    dependencies: Box<[DependencyStamp]>,
+    dependencies: DeferredDependencies,
+    /// Input epoch at which `dependencies` last agreed with the published
+    /// inputs; clones share it (the stamps are immutable).
+    checked: Arc<CheckedRevision>,
+}
+/// Dependency stamps of a normalized return certificate.
+#[derive(Debug, Clone)]
+enum DeferredDependencies {
+    /// Explicit sorted, deduplicated stamps.
+    Stamps(Box<[DependencyStamp]>),
+    /// The complete published input census of one input epoch, shared by every
+    /// certificate minted at that epoch rather than copied per certificate.
+    Census(Arc<InputCensus>),
+}
+impl DeferredDependencies {
+    fn is_empty(&self) -> bool {
+        match self {
+            Self::Stamps(stamps) => stamps.is_empty(),
+            Self::Census(census) => census.stamps().is_empty(),
+        }
+    }
+    /// Strictly ascending, as `sort_unstable` + `dedup` produce. A census is a
+    /// key-ordered map with unique keys.
+    fn is_strictly_sorted(&self) -> bool {
+        match self {
+            Self::Stamps(stamps) => stamps.windows(2).all(|pair| pair[0] < pair[1]),
+            Self::Census(_) => true,
+        }
+    }
+    fn stamp_bytes(&self) -> Option<usize> {
+        match self {
+            Self::Stamps(stamps) => stamps.iter().try_fold(0usize, |bytes, stamp| {
+                bytes
+                    .checked_add(std::mem::size_of::<DependencyStamp>())?
+                    .checked_add(stamp.heap_bytes())
+            }),
+            Self::Census(census) => Some(census.stamp_bytes()),
+        }
+    }
+    /// The recorded stamps still equal the current ones. Cached published
+    /// fingerprints are compared; nothing is re-encoded, pinned or recorded
+    /// unless a pure query is collecting dependencies.
+    fn require_current(&self, db: &mut Database) -> Result<(), Diagnostic> {
+        let collecting = db.dependency_collection_active();
+        let stale = || {
+            fault(
+                "LRR-E-CALL-CONTEXT",
+                "normalized deferred return source dependency changed",
+            )
+        };
+        match self {
+            Self::Census(census) if !collecting => {
+                for (key, expected) in census.stamps() {
+                    if db.published_input(key).map(|(_, fp)| fp) != Some(*expected) {
+                        return Err(stale());
+                    }
+                }
+                Ok(())
+            }
+            Self::Census(census) => {
+                for (key, expected) in census.stamps() {
+                    if db.input(key).map(|value| value.fingerprint()) != Some(*expected) {
+                        return Err(stale());
+                    }
+                }
+                Ok(())
+            }
+            Self::Stamps(stamps) => {
+                for stamp in stamps.iter() {
+                    let current = match stamp {
+                        DependencyStamp::Input { key, .. } if !collecting => {
+                            db.published_input(key).map(|(_, fingerprint)| fingerprint)
+                        }
+                        DependencyStamp::Input { key, .. } => {
+                            db.input(key).map(|value| value.fingerprint())
+                        }
+                        DependencyStamp::Query { key, .. } => {
+                            match db.fetch(&SyntaxProvider, key.clone()) {
+                                QueryPoll::Ready(Ok(value)) => Some(value.fingerprint),
+                                QueryPoll::Ready(Err(e)) => return Err(e),
+                                QueryPoll::NeedInput(_) => None,
+                            }
+                        }
+                    };
+                    let expected = match stamp {
+                        DependencyStamp::Input { fingerprint, .. }
+                        | DependencyStamp::Query { fingerprint, .. } => *fingerprint,
+                    };
+                    if current != Some(expected) {
+                        return Err(stale());
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
 }
 #[derive(Debug, Clone)]
 enum DeferredReturnOrigin {
@@ -185,7 +280,8 @@ impl NormalizedDeferredReturn {
             source,
             descriptor,
             written_hint,
-            dependencies: dependencies.into_boxed_slice(),
+            dependencies: DeferredDependencies::Stamps(dependencies.into_boxed_slice()),
+            checked: Default::default(),
         })
     }
     /// Retain the same owning primitive namespace decision used by ordinary
@@ -223,26 +319,17 @@ impl NormalizedDeferredReturn {
                 "primitive result namespace certificate differs",
             ));
         }
-        let stamps = db.source_view_namespace_stamps()?;
-        // The coordinator already checks the full input census at100k rows and
-        //32MiB.4096 below bounds captured sources, not their derived input rows:
-        // one valid module contributes several independent source/scope facts.
-        // Keep every fingerprint; do not truncate the namespace to fit a source count.
-        if stamps.is_empty() {
+        // Every published fingerprint is kept (the namespace is never truncated
+        // to fit a count), as one census per input epoch shared by every
+        // certificate minted there, not copied per call.
+        let census = db.source_view_namespace_census()?;
+        if census.stamps().is_empty() {
             return Err(fault(
                 "LRR-E-METADATA-LIMIT",
                 "primitive result namespace dependency count",
             ));
         }
-        Self::require_primitive_namespace(db, signature, sources, &stamps)?;
-        let mut dependencies = Vec::new();
-        dependencies
-            .try_reserve_exact(stamps.len())
-            .map_err(|_| crate::runtime::arena::resource())?;
-        for (key, fingerprint) in stamps {
-            dependencies.push(DependencyStamp::Input { key, fingerprint });
-        }
-        dependencies.sort_unstable();
+        Self::require_primitive_namespace(db, signature, sources, census.stamps())?;
         let proof = Self {
             definition: signature.definition,
             signature: signature.fingerprint(),
@@ -252,7 +339,8 @@ impl NormalizedDeferredReturn {
             source,
             descriptor: primitive_runtime_id(source)?,
             written_hint: printed_primitive_hint(&signature.result[0].text),
-            dependencies: dependencies.into_boxed_slice(),
+            dependencies: DeferredDependencies::Census(census),
+            checked: Default::default(),
         };
         Ok(proof)
     }
@@ -358,7 +446,8 @@ impl NormalizedDeferredReturn {
             source,
             descriptor: primitive_runtime_id(source)?,
             written_hint: printed_primitive_hint(&signature.result[0].text),
-            dependencies: Box::new([]),
+            dependencies: DeferredDependencies::Stamps(Box::new([])),
+            checked: Default::default(),
         };
         Ok(certificate)
     }
@@ -435,7 +524,8 @@ impl NormalizedDeferredReturn {
             source,
             descriptor: primitive_runtime_id(source)?,
             written_hint: printed_primitive_hint(&signature.result[0].text),
-            dependencies: dependencies.into_boxed_slice(),
+            dependencies: DeferredDependencies::Stamps(dependencies.into_boxed_slice()),
+            checked: Default::default(),
         };
         Ok(certificate)
     }
@@ -455,7 +545,7 @@ impl NormalizedDeferredReturn {
             || primitive_runtime_id(self.source)? != self.descriptor
             || self.dependencies.is_empty()
                 && !matches!(self.origin, DeferredReturnOrigin::DeclaredGoal { .. })
-            || self.dependencies.windows(2).any(|p| p[0] >= p[1])
+            || !self.dependencies.is_strictly_sorted()
         {
             return Err(fault(
                 "LRR-E-CALL-CONTEXT",
@@ -567,29 +657,21 @@ impl NormalizedDeferredReturn {
                 "normalized deferred return publication is stale",
             ));
         }
-        for stamp in self.dependencies.iter() {
-            let current = match stamp {
-                DependencyStamp::Input { key, .. } => {
-                    db.input(key).map(|value| value.fingerprint())
-                }
-                DependencyStamp::Query { key, .. } => {
-                    match db.fetch(&SyntaxProvider, key.clone()) {
-                        QueryPoll::Ready(Ok(value)) => Some(value.fingerprint),
-                        QueryPoll::Ready(Err(e)) => return Err(e),
-                        QueryPoll::NeedInput(_) => None,
-                    }
-                }
-            };
-            let expected = match stamp {
-                DependencyStamp::Input { fingerprint, .. }
-                | DependencyStamp::Query { fingerprint, .. } => *fingerprint,
-            };
-            if current != Some(expected) {
-                return Err(fault(
-                    "LRR-E-CALL-CONTEXT",
-                    "normalized deferred return source dependency changed",
-                ));
-            }
+        // An unchanged input epoch is an unchanged input table: a census
+        // minted at this epoch holds by construction, and a stamp set that
+        // already agreed at this epoch still does. Inside a pure query every
+        // read must still be recorded, so that path always compares.
+        let collecting = db.dependency_collection_active();
+        if !collecting
+            && (self.checked.is_current(db)
+                || matches!(&self.dependencies,
+                    DeferredDependencies::Census(census) if census.epoch() == db.input_epoch()))
+        {
+            return Ok(());
+        }
+        self.dependencies.require_current(db)?;
+        if !collecting {
+            self.checked.record(db);
         }
         Ok(())
     }
@@ -621,14 +703,9 @@ impl NormalizedDeferredReturn {
                 .len()
                 .checked_mul(std::mem::size_of::<PrimitiveType>())?,
         };
-        self.dependencies.iter().try_fold(
-            std::mem::size_of::<Self>().checked_add(extra)?,
-            |bytes, stamp| {
-                bytes
-                    .checked_add(std::mem::size_of::<DependencyStamp>())?
-                    .checked_add(stamp.heap_bytes())
-            },
-        )
+        std::mem::size_of::<Self>()
+            .checked_add(extra)?
+            .checked_add(self.dependencies.stamp_bytes()?)
     }
 }
 impl StableEncode for NormalizedDeferredReturn {
@@ -659,7 +736,16 @@ impl StableEncode for NormalizedDeferredReturn {
         e.u32(self.source.tag());
         e.u32(self.descriptor.0);
         e.option(&self.written_hint, |e, p| e.u32(p.tag()));
-        e.sequence(&self.dependencies, |e, s| e.record(s));
+        match &self.dependencies {
+            DeferredDependencies::Stamps(stamps) => {
+                e.u32(0);
+                e.sequence(stamps, |e, s| e.record(s));
+            }
+            DeferredDependencies::Census(census) => {
+                e.u32(1);
+                e.digest(census.fingerprint());
+            }
+        }
     }
 }
 /// Lexical thunk identity only; this never resolves a name or admits a source type.
@@ -2563,6 +2649,120 @@ mod primitive_namespace_authority_tests {
             )
             .is_err()
         );
+    }
+
+    fn mint(
+        db: &mut Database,
+        view: &PreparedSourceView,
+        graph: &NameNamespaces,
+        callee: &SourceCallable,
+    ) -> PreparedCallContracts {
+        let QueryPoll::Ready(Ok(ContractPreparation::Ready(packet))) =
+            prepare_contracts(db, callee, graph, &[view], &[], None, &[])
+        else {
+            panic!("genuine primitive proof absent")
+        };
+        packet
+    }
+    fn census_of(packet: &PreparedCallContracts) -> &Arc<InputCensus> {
+        match &packet
+            .normalized_deferred_return
+            .as_ref()
+            .expect("primitive certificate")
+            .dependencies
+        {
+            DeferredDependencies::Census(census) => census,
+            DeferredDependencies::Stamps(_) => panic!("primitive certificate holds no census"),
+        }
+    }
+    fn control(text: &str) -> InputKey {
+        InputKey::CompileEnv(text.into())
+    }
+    fn control_value(text: &str) -> Option<InputValue> {
+        Some(InputValue::CompileEnv(text.into()))
+    }
+
+    #[test]
+    fn primitive_certificates_of_one_input_epoch_share_a_single_census() {
+        // Many items would make a per-call census grow; the certificates of
+        // every call at an unchanged epoch share the one built census.
+        for items in [8usize, 400] {
+            let mut text = String::from("fn main(){chosen();}fn chosen()->u32{42u32}");
+            for index in 0..items {
+                text.push_str(&format!("fn unrelated_{index}()->u32{{{index}u32}}"));
+            }
+            let (mut db, view, graph, callee) = world(&text, 2024, true);
+            let first = mint(&mut db, &view, &graph, &callee);
+            let built = db.cached_source_view_census_epoch();
+            assert_eq!(built, Some(db.input_epoch()));
+            // The shared census is exactly the published table's fingerprints.
+            assert_eq!(&db.source_view_namespace_stamps().unwrap(), census_of(&first).stamps());
+            for (key, fingerprint) in census_of(&first).stamps() {
+                assert_eq!(db.published_input(key).map(|(_, f)| f), Some(*fingerprint));
+            }
+            for _ in 0..16 {
+                let again = mint(&mut db, &view, &graph, &callee);
+                assert!(Arc::ptr_eq(census_of(&first), census_of(&again)));
+                assert!(GenericEnv::capture_current(&mut db, &callee, &again).is_ok());
+            }
+            assert_eq!(db.cached_source_view_census_epoch(), built);
+        }
+    }
+
+    #[test]
+    fn primitive_certificate_follows_relevant_publication_and_ignores_unrelated_additions() {
+        let (mut db, view, graph, callee) =
+            world("fn main(){chosen();}fn chosen()->u32{42u32}", 2024, true);
+        db.write_control_input_for_test(control("watched"), control_value("1"));
+        let packet = mint(&mut db, &view, &graph, &callee);
+        let certificate = packet.normalized_deferred_return.as_ref().unwrap();
+        let minted_at = db.input_epoch();
+        assert_eq!(census_of(&packet).epoch(), minted_at);
+        certificate.require_current_inherited(&mut db, &callee).unwrap();
+        certificate.require_current(&mut db, &callee).unwrap();
+
+        // An unrelated addition raises the revision. The ordinary guard demands
+        // a new mint, as before; the inherited guard compares its recorded
+        // stamps (cached published fingerprints) and still holds, without
+        // building another census.
+        db.write_control_input_for_test(control("unrelated"), control_value("1"));
+        assert_ne!(db.input_epoch(), minted_at);
+        assert_eq!(
+            certificate
+                .require_current(&mut db, &callee)
+                .unwrap_err()
+                .message,
+            "normalized deferred return publication is stale"
+        );
+        certificate.require_current_inherited(&mut db, &callee).unwrap();
+        // The agreement is remembered for this epoch, not for later ones.
+        certificate.require_current_inherited(&mut db, &callee).unwrap();
+        assert_eq!(db.cached_source_view_census_epoch(), Some(minted_at));
+
+        // A relevant change after a remembered agreement is still caught.
+        db.write_control_input_for_test(control("watched"), control_value("2"));
+        assert_eq!(
+            certificate
+                .require_current_inherited(&mut db, &callee)
+                .unwrap_err()
+                .message,
+            "normalized deferred return source dependency changed"
+        );
+        // So is withdrawal, and restoring the old value restores agreement.
+        db.write_control_input_for_test(control("watched"), None);
+        assert!(certificate.require_current_inherited(&mut db, &callee).is_err());
+        db.write_control_input_for_test(control("watched"), control_value("1"));
+        certificate.require_current_inherited(&mut db, &callee).unwrap();
+
+        // A fresh mint at the new epoch is current for the ordinary guard.
+        let fresh = mint(&mut db, &view, &graph, &callee);
+        assert!(!Arc::ptr_eq(census_of(&packet), census_of(&fresh)));
+        fresh
+            .normalized_deferred_return
+            .as_ref()
+            .unwrap()
+            .require_current(&mut db, &callee)
+            .unwrap();
     }
 
     #[test]

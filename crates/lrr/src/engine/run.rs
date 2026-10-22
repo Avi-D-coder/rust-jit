@@ -63,6 +63,8 @@ mod discarded_numeric_tests;
 mod drop_inventory;
 #[path = "run_drop_witness.rs"]
 mod drop_witness;
+#[path = "run_termination.rs"]
+mod termination;
 #[cfg(test)]
 #[path = "run_drop_witness_tests.rs"]
 mod drop_witness_tests;
@@ -137,8 +139,12 @@ pub(crate) mod source_preparation;
 #[cfg(test)]
 #[path = "run_temporaries.rs"]
 mod temporaries;
+#[path = "run_early_selection.rs"]
+mod early_selection;
 #[path = "run_trait_calls.rs"]
 mod trait_calls;
+#[path = "run_trait_parameters.rs"]
+mod trait_parameters;
 #[path = "run_panic.rs"]
 mod unwinding;
 #[path = "run_value_calls.rs"]
@@ -192,6 +198,13 @@ pub struct RunReport {
     /// Guest `std::io::_print`/`_eprint` output, in order.
     #[serde(skip_serializing_if = "GuestOutput::is_empty")]
     pub output: GuestOutput,
+    /// The process status `main`'s `Termination::report` chose (`Err` from a
+    /// `Result`-returning `main` is 1); 0, and then absent, otherwise.
+    #[serde(skip_serializing_if = "is_zero_status")]
+    pub exit_code: i32,
+}
+fn is_zero_status(status: &i32) -> bool {
+    *status == 0
 }
 #[derive(Debug, Serialize)]
 pub struct PanicReport {
@@ -297,6 +310,9 @@ enum CallContinuation {
     /// A `format_args!` placeholder's trait `fmt`: its output buffer becomes
     /// the placeholder's text in the caller's suspended format operation.
     Format { sink: usize },
+    /// The program entry's `std::process::__lrr_report(main())`: its status
+    /// ends the run (rustc's `lang_start`).
+    Termination,
     /// A `const`/`static` initializer demanded by the caller's `ValuePath`.
     Initializer {
         identity: crate::core::digest::Digest,
@@ -310,6 +326,7 @@ impl SuspendedCall {
             CallContinuation::Site { action, .. } => Some(*action),
             CallContinuation::DropWitness(_)
             | CallContinuation::Operator
+            | CallContinuation::Termination
             | CallContinuation::Format { .. }
             | CallContinuation::Initializer { .. } => None,
         }
@@ -489,6 +506,12 @@ pub struct RunMachine {
     format_sinks: format_calls::FormatSinks,
     /// A `ValuePath`'s demanded `const`/`static` initializer (E-R5-007).
     initializer_demand: Option<initializers::InitializerDemand>,
+    /// The value `main` returned when it is not a scalar, awaiting
+    /// `Termination::report` (with the summary refusal it replaces).
+    termination: Option<(crate::runtime::cell::TicketId, Diagnostic)>,
+    /// Whether the entry function's definition environment (its declared
+    /// result Type) was installed on the root frame.
+    root_context_prepared: bool,
     /// Evaluated constants copied on each use, with their returned views.
     const_cells: BTreeMap<crate::core::digest::Digest, initializers::StoredConstant>,
     /// A constant's value evaluated for the one use at this PC.
@@ -513,9 +536,17 @@ pub struct RunMachine {
         Option<Arc<owner_arguments::OwnerArguments>>,
     >,
     /// The impl function selected among impls of one trait that differ by
-    /// the trait's arguments, per (call site, reached argument Types).
-    argument_selections:
-        BTreeMap<(PcKey, Vec<Option<crate::runtime::shape::TypeId>>), crate::core::digest::Digest>,
+    /// the trait's arguments, per (call site, reached argument Types, expected
+    /// Self): a generic body's `From::from(e)` selects by the instantiation's
+    /// own result Type as well as its argument.
+    argument_selections: BTreeMap<
+        (
+            PcKey,
+            Vec<Option<crate::runtime::shape::TypeId>>,
+            Option<crate::traits::term::TyTerm>,
+        ),
+        crate::core::digest::Digest,
+    >,
     /// Source callables of member functions the impl index selected
     /// (methods, trait-path and operator impls), by definition identity.
     member_callees: BTreeMap<crate::core::digest::Digest, Arc<SourceCallable>>,
@@ -608,6 +639,8 @@ impl RunMachine {
                 format_entries: BTreeMap::new(),
                 format_sinks: Default::default(),
                 initializer_demand: None,
+                termination: None,
+                root_context_prepared: false,
                 const_cells: BTreeMap::new(),
                 initialized_values: BTreeMap::new(),
                 static_slots: 0,
@@ -1222,6 +1255,67 @@ impl RunMachine {
                             descriptor,
                         },
                     ));
+                    // The anchor trait's written Type arguments
+                    // (`<i32 as PartialOrd<i32>>::lt`) bind the provided body's
+                    // inherited trait parameters in order.
+                    let layout = callee.signature().generic_source_layout;
+                    let trait_parameters = callee
+                        .signature()
+                        .generics
+                        .iter()
+                        .skip(layout.map_or(0, |layout| layout.own as usize))
+                        .take(layout.map_or(0, |layout| layout.inherited as usize))
+                        .filter(|parameter| {
+                            parameter.kind == crate::syntax::signatures::GenericKind::Type
+                        });
+                    let trait_parameters: Vec<_> = trait_parameters.collect();
+                    for (parameter, argument) in
+                        trait_parameters.iter().zip(qualifier.trait_arguments())
+                    {
+                        let Some(argument) = argument else {
+                            continue;
+                        };
+                        if explicit.iter().any(|(ordinal, _)| *ordinal == parameter.ordinal) {
+                            continue;
+                        }
+                        let descriptor = match argument.descriptor(&self.frame, &mut self.store) {
+                            Ok(descriptor) => descriptor,
+                            Err(error) => return QueryPoll::Ready(Err(error)),
+                        };
+                        explicit.push((
+                            parameter.ordinal,
+                            ArgumentType {
+                                source: self.frame.bound_view(argument.source(), &self.store),
+                                descriptor,
+                            },
+                        ));
+                    }
+                    // Trait parameters the written arguments leave open take what
+                    // every impl of the trait for this Self agrees on.
+                    let reached_self = self.frame.bound_view(source.source(), &self.store);
+                    if let Some(self_type) = methods::probe_bucket(&reached_self) {
+                        let literals = match self.written_literals(
+                            db,
+                            self.frame.pc().node,
+                            &callee,
+                            argument_slots.len(),
+                        ) {
+                            QueryPoll::Ready(Ok(literals)) => literals,
+                            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                        };
+                        match trait_parameters::agreed_trait_bindings(
+                            self.members.as_ref(),
+                            &mut self.store,
+                            &callee,
+                            self_type,
+                            &explicit,
+                            &literals,
+                        ) {
+                            Ok(agreed) => explicit.extend(agreed),
+                            Err(error) => return QueryPoll::Ready(Err(error)),
+                        }
+                    }
                 } else if qualifier.pending().is_some() && !qualifier.permits_trait_self_inference()
                 {
                     return QueryPoll::Ready(Err(call_fault(
@@ -2775,6 +2869,14 @@ impl RunMachine {
             ));
         }
 
+        match self.prepare_root_context(db) {
+            QueryPoll::Ready(Ok(())) => {}
+            QueryPoll::Ready(Err(error)) => {
+                self.terminal = true;
+                return RunPoll::Fault(error);
+            }
+            QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+        }
         if self.terminal {
             return RunPoll::Fault(Diagnostic::new(
                 "LRR-E-INTERNAL-IR",
@@ -2812,6 +2914,18 @@ impl RunMachine {
             // method before this frame continues.
             if self.frame.operator_demanded() {
                 match self.enter_operator_call(db) {
+                    QueryPoll::Ready(Ok(())) => continue,
+                    QueryPoll::Ready(Err(error)) => {
+                        self.terminal = true;
+                        return RunPoll::Fault(error);
+                    }
+                    QueryPoll::NeedInput(input) => return RunPoll::NeedInput(input),
+                }
+            }
+            // `main` returned a value `Termination` reports: the entry calls
+            // `std::process::__lrr_report` on it before the run ends.
+            if self.termination.is_some() {
+                match self.enter_termination(db) {
                     QueryPoll::Ready(Ok(())) => continue,
                     QueryPoll::Ready(Err(error)) => {
                         self.terminal = true;
@@ -3398,9 +3512,9 @@ impl RunMachine {
                                     continue;
                                 }
                                 QueryPoll::Ready(Ok(Some(
-                                    trait_calls::TraitPathCall::Selected(callee),
-                                ))) => match self.prepare_selected_argument_call(
-                                    db, callee, &explicit, &arguments,
+                                    trait_calls::TraitPathCall::Selected(callee, bound),
+                                ))) => match self.prepare_selected_argument_call_with(
+                                    db, callee, &explicit, bound, &arguments,
                                 ) {
                                     QueryPoll::Ready(Ok(call)) => {
                                         self.pending_bytes =
@@ -3730,9 +3844,9 @@ impl RunMachine {
                             } else if explicit.is_empty() {
                                 match self.trait_path_call(db, site.0, &name, &arguments) {
                                     QueryPoll::Ready(Ok(Some(
-                                        trait_calls::TraitPathCall::Selected(callee),
-                                    ))) => match self.prepare_selected_argument_call(
-                                        db, callee, &explicit, &arguments,
+                                        trait_calls::TraitPathCall::Selected(callee, bound),
+                                    ))) => match self.prepare_selected_argument_call_with(
+                                        db, callee, &explicit, bound, &arguments,
                                     ) {
                                         QueryPoll::Ready(Ok(call)) => {
                                             self.pending_bytes =

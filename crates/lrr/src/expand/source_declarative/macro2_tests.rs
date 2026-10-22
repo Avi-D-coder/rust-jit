@@ -251,7 +251,7 @@ fn marked_context<'a>(forest: &'a TokenForest, name: &str) -> &'a wire::ContextR
         .unwrap()
 }
 fn adapter_for(request: &SourceDeclarativeRequest) -> DeclarativeMacro {
-    let DeclarativeBody::Macro2 { arguments, body } = &request.body else {
+    let DeclarativeBody::Macro2 { arguments, body, .. } = &request.body else {
         panic!("actual macro2 dialect absent")
     };
     DeclarativeMacro::new_macro2(arguments.clone(), body.clone()).unwrap()
@@ -298,6 +298,7 @@ fn unchanged_reexport_main_call_uses_exact_macro_member_all_editions() {
         let DeclarativeBody::Macro2 {
             arguments: Some(arguments),
             body,
+            ..
         } = &request.body
         else {
             panic!("exact original simple declaration groups absent")

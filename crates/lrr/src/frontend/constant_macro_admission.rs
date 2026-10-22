@@ -302,7 +302,7 @@ impl CurrentConstantMacroProof {
     }
     fn revalidate(&self, db: &Database, source: &PreparedSourceView) -> Result<(), Diagnostic> {
         if source.selection() != &self.selection
-            || db.source_view_namespace_stamps()? != self.stamps
+            || db.source_view_namespace_census()?.stamps() != &self.stamps
         {
             return Err(fault("constant macro source/input membership changed"));
         }

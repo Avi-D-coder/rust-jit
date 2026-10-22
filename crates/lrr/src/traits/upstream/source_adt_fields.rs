@@ -225,6 +225,22 @@ impl PreparedAdtSourceFields {
         }
         Ok(variants)
     }
+    /// One source term (a sizedness constraint over this declaration's own
+    /// parameters) through the same encoder and bindings as its fields.
+    pub(super) fn encode_term<'cx>(&self, cx: Cx<'cx>, configuration: &PreparedSolverConfiguration, term: &TyTerm)
+        -> Result<super::model::Ty<'cx, prepared::PreparedProvider<'cx>>, SourceAdtFieldsPending> {
+        let bindings = self.bindings()?;
+        let InputValue::DiscoverySeal(catalog) = bindings.catalog.as_ref() else { unreachable!("captured ADT catalog") };
+        if catalog.seal.key() != self.key.inventory
+            || configuration.source() != catalog.impl_catalog.as_ref().expect("checked source catalog").root()
+            || cx.services().source_world() != catalog.seal.fingerprint()
+            || !bindings.definitions.contains_key(&self.key.definition)
+        {
+            return Err(SourceAdtFieldsPending::SourceDefinition);
+        }
+        super::source_terms::encode_declared(cx, configuration, bindings.type_bindings(), term)
+            .map_err(SourceAdtFieldsPending::Source)
+    }
     pub(super) fn materialize<'cx>(&self, cx: Cx<'cx>, configuration: &PreparedSolverConfiguration)
         -> Result<&'cx [AdtVariant<'cx, prepared::PreparedProvider<'cx>>], SourceAdtFieldsPending> {
         let variants = self.encode(cx, configuration)?.into_iter().map(|variant| AdtVariant {

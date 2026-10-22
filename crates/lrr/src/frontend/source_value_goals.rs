@@ -565,13 +565,11 @@ pub fn prepare(db: &mut Database, body: &BodyKey, node: NodeId) -> QueryPoll<Ent
             goal.type_namespace = false;
             qualified(db, goal, &expression)
         }
-        ValueContinuation::Declaration { foreign: true, .. } => {
-            goal.needs(ValueGoalDemand::PathAdjustment)
-        }
-        ValueContinuation::Declaration {
-            selected,
-            foreign: false,
-        } => selected_declaration(db, goal, selected),
+        // An item selected by a token of another edition (macro output from a
+        // library crate: the key declared by `thread_local!`, its block-local
+        // `const`/`static`) is the declaration the hygienic lookup found; the
+        // declaration's own source and profile are joined in `declaration`.
+        ValueContinuation::Declaration { selected, .. } => selected_declaration(db, goal, selected),
         ValueContinuation::Module {
             name,
             raw,
@@ -808,11 +806,18 @@ pub fn prepare_lexical(
                 || crate::syntax::parse::ParsedFile::is_self_type_path(&path)
             {
                 goal.qualified_path = true;
-                // `root::a::b` whose root a block-level `use` may bind: the
+                // `root::a::b` whose root a block-level `use` may bind, or
+                // `module::item` whose root a block's inline module names: the
                 // path continues from that binding.
                 if checked!(source
                     .parsed()
                     .deep_root_import_may_bind(&path, source.index().cfg()))
+                    || checked!(crate::syntax::parse::ParsedFile::block_module_root(
+                        &path,
+                        source.parsed().edition,
+                        source.index().cfg()
+                    ))
+                    .is_some()
                 {
                     goal.qualified_path = false;
                     return deep_lexical(db, goal, &path, Namespace::Value, false);
@@ -1044,7 +1049,15 @@ fn deep_lexical(
     let plan = Arc::clone(&goal.plan);
     let source = plan.context().source();
     let (root, _) = plan.entered.local_hygiene();
-    let Some(root_name) = crate::syntax::parse::ParsedFile::deep_lexical_root(path) else {
+    let Some(root_name) = crate::syntax::parse::ParsedFile::deep_lexical_root(path).or_else(|| {
+        crate::syntax::parse::ParsedFile::block_module_root(
+            path,
+            source.parsed().edition,
+            source.index().cfg(),
+        )
+        .ok()
+        .flatten()
+    }) else {
         return goal.needs(ValueGoalDemand::PathAdjustment);
     };
     let name_range = range(root_name.syntax().text_range());
@@ -1379,7 +1392,6 @@ fn complete_module(
 
     let foreign = edition != plan.entered.parent.source().outline.parse.profile.edition;
     match lookup.clone() {
-        NameLookup::Defined(_) if foreign => goal.needs(ValueGoalDemand::PathAdjustment),
         NameLookup::Defined(selected) => selected_declaration(db, goal, selected),
         lookup => complete_lexical_lookup(db, goal, lookup, foreign, name_range),
     }

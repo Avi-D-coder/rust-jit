@@ -820,6 +820,18 @@ fn execute(
                 answer,
             )?)?))
         }
+        LibraryFunction::OffsetOf => {
+            let [ty] = type_arguments else {
+                return Err(facade_fault("offset_of lacks its container type argument"));
+            };
+            let path = store.str_reference_contents(argument()?)?;
+            let steps: Vec<&str> = path.split('.').collect();
+            let offset = store.offset_of_path(*ty, &steps)?;
+            Ok(FacadeOutcome::Value(store.ticket(ValueRepr::unsigned(
+                crate::runtime::shape::TypeId(13),
+                offset,
+            )?)?))
+        }
         LibraryFunction::NeedsDrop => {
             let [ty] = type_arguments else {
                 return Err(facade_fault("needs_drop lacks its type argument"));

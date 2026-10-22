@@ -280,6 +280,7 @@ impl ParsedFile {
         key: &PcKey,
         syntax: SyntaxNode,
         captures: Option<(&[ClosureCapture], &[crate::ir::op::CapturePatternUse])>,
+        result: Option<&super::let_annotations::LetAnnotation>,
     ) -> Result<VerifiedRecipe, Diagnostic> {
         let id = NodeId(key.node);
         let node = &index.nodes()[key.node as usize];
@@ -357,6 +358,23 @@ impl ParsedFile {
                             writable: pattern.mut_token().is_some(),
                         });
                     }
+                }
+                // The written `-> T` the entered Type service selected is the
+                // expected Type of the body's value (as a function's declared
+                // result is of its body), before any of it is evaluated.
+                if let Some(ty) = closure.ret_type().and_then(|ret| ret.ty())
+                    && let Some(result) = result.filter(|result| {
+                        result.range == crate::syntax::ast_adapter::range(ty.syntax().text_range())
+                    })
+                {
+                    operations.push(Op::SetHint {
+                        child: index.nodes()[body_id.0 as usize]
+                            .value
+                            .ok_or_else(|| error("closure body value absent"))?,
+                        hint: crate::ir::op::HintRecipe::Written(std::sync::Arc::clone(
+                            &result.written,
+                        )),
+                    });
                 }
                 draft(
                     index,

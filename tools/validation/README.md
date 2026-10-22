@@ -90,6 +90,49 @@ reference. Its selected report does not complete a suite, diagnostic, JIT or
 release gate. Its existing harness bounds and missing contract adapters remain
 separate limitations; this housekeeping change does not certify their compliance.
 
+## Fast interpreter binary for validation runs
+
+The `dev` profile compiles `lrr` at opt-level 0, so even `fn main(){}` spends
+about five seconds of CPU in source preparation and a runtime batch is several
+times slower than it needs to be. For validation runs (the maintained harness,
+`tools/validation/regress_retained.sh`, selection batches) use the separate
+`fast` profile, which optimizes `lrr`, `lrr-expand-adapter` and the vendored
+solver crates (`opt-level = 2`; the heavy pure dependencies keep their
+`[profile.dev.package.*]` opt-level 3) and keeps `debug-assertions` and
+`overflow-checks`, so behaviour matches `dev`. Keep `dev` for day-to-day edit and
+build: the `fast` build is a separate subdirectory of the shared target
+(`target/fast`), takes minutes cold (run it in the background) and rebuilds
+incrementally.
+
+```sh
+cargo +1.99.0 build --offline --locked --profile fast -p lrr --bin lrr
+LRR_EMBEDDED_FACADE=1 python3 tools/rustc_checkout_runtime.py --lrr target/fast/lrr --source-digester target/debug/examples/lrr_source_digests --report-dir <new directory> --case <original>
+tools/validation/regress_retained.sh target/fast/lrr
+```
+
+The harness takes any binary path and records its SHA-256, so a `fast` binary is
+an ordinary receipt; build it from the fingerprinted source like any other.
+Measured on one frozen source snapshot built both ways (user CPU seconds and
+instructions retired, minimum of three runs, `LRR_EMBEDDED_FACADE=1`, edition
+2021; October 21, 2026, aarch64-apple-darwin, loaded host):
+
+| Program | `dev` | `fast` | CPU ratio |
+| --- | --- | --- | --- |
+| `fn main(){}` | 5.41 s, 53.1 G | 1.74 s, 20.8 G | 3.1x |
+| `for i in 0..40u64 { sum += i; }` | 6.95 s, 64.8 G | 2.61 s, 24.8 G | 2.7x |
+| 80 `add(a, b)` calls in a `while` loop | 8.03 s, 58.8 G | 2.40 s, 22.8 G | 3.3x |
+| `tests/ui/union/union-generic-rpass.rs` | 15.55 s, 113.8 G | 5.19 s, 47.8 G | 3.0x |
+
+That is about 3x less CPU time and 2.4-2.6x fewer instructions. `opt-level = 1`
+gave 2.4-2.6x CPU; `opt-level = 3` and `codegen-units = 16` gave nothing beyond
+`opt-level = 2`. Results are identical to `dev`: `regress_retained.sh` printed the
+same 32 PASS lines for both binaries, and 175 of 176 unchanged upstream programs
+(the round-3 selection plus every `drop/` and `moves/` run-pass program) produced
+identical status, exit code, program output and opcode counters; the 176th,
+`moves/move-3-unique.rs`, completes under `fast` but exceeded the 400 s per-run
+limit of that comparison under `dev`. This is a speed and equivalence
+observation for the tooling, not an acceptance result.
+
 ## Cleanup and historical recipes
 
 After recording a terminal outcome and concise evidence, remove generated fixture

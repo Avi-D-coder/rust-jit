@@ -463,9 +463,31 @@ fn require_origin(
             && selection.outline.parse.content.0 == origin.source.content.0
             && selection.path.as_str() == origin.source.path
     });
-    let source = candidates
-        .next()
-        .ok_or_else(|| fault("entered source token original source owner absent"))?;
+    let Some(source) = candidates.next() else {
+        // The token belongs to a library crate's source (a library macro's
+        // template): it is not an entered original source. Its hygiene root
+        // above already names the defining unit of the token; when its bytes
+        // are a published blob the written name is also joined to the actual
+        // token text.
+        let Some(blob) = db.input(&InputKey::SourceBlob(Digest(origin.source.content.0))) else {
+            return Ok(());
+        };
+        let InputValue::SourceBlob(blob) = blob.as_ref() else {
+            return Err(fault("entered source token source bytes variant differs"));
+        };
+        let text = blob
+            .text()?
+            .get(origin.start as usize..origin.end as usize)
+            .ok_or_else(|| fault("entered source token original source range differs"))?;
+        if crate::frontend::names::owned_name(text, edition(origin.edition))?.as_str()
+            != crate::frontend::names::owned_name(written, parsed.token_edition(range)?)?.as_str()
+        {
+            return Err(fault(
+                "entered source selector differs from its actual original token",
+            ));
+        }
+        return Ok(());
+    };
     if candidates.next().is_some() {
         return Err(fault(
             "entered source token original source owner ambiguous",
@@ -710,24 +732,36 @@ fn capture_inner(
                     .scope
                     .module_path
                     .starts_with(&generated.scope.module_path)
-                || selected.item_kind != crate::source::manifest::ItemKind::Function
+                || !matches!(
+                    selected.item_kind,
+                    crate::source::manifest::ItemKind::Function
+                        | crate::source::manifest::ItemKind::Constant
+                        | crate::source::manifest::ItemKind::Static
+                )
             {
                 return Err(fault(
                     "entered source retained generated declaration rows differ",
                 ));
             }
-            let signature = match db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(definition))
-            {
-                QueryPoll::Ready(Ok(value)) => value,
-                QueryPoll::Ready(Err(error)) => return Err(error),
-                QueryPoll::NeedInput(request) => return Ok(QueryPoll::NeedInput(request)),
-            };
-            if !matches!(signature.value.as_ref(), QueryValue::FunctionSignature(signature)
-                if signature.definition == definition && signature.header == *header && signature.scope == declaration.scope)
-            {
-                return Err(fault(
-                    "entered source retained generated signature proof differs",
-                ));
+            if selected.item_kind == crate::source::manifest::ItemKind::Function {
+                let signature =
+                    match db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(definition)) {
+                        QueryPoll::Ready(Ok(value)) => value,
+                        QueryPoll::Ready(Err(error)) => return Err(error),
+                        QueryPoll::NeedInput(request) => return Ok(QueryPoll::NeedInput(request)),
+                    };
+                if !matches!(signature.value.as_ref(), QueryValue::FunctionSignature(signature)
+                    if signature.definition == definition && signature.header == *header && signature.scope == declaration.scope)
+                {
+                    return Err(fault(
+                        "entered source retained generated signature proof differs",
+                    ));
+                }
+            } else {
+                // A macro-generated `const`/`static` initializer: the ordinary
+                // declaration parser proves the header/initializer pair, as for
+                // the unit's own publication.
+                parsed.initializer_parameters(header, declaration, handle)?;
             }
             // Like its unit's own publication, the generated declaration has
             // no original module owner; its macro boundary is the unit's.

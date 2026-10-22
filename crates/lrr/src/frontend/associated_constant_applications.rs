@@ -86,9 +86,21 @@ impl AssociatedConstPathOccurrence {
     }
     fn qualifier_has_arguments(&self) -> bool {
         let qualifier = self.qualifier.syntax().text_range();
-        self.arguments
-            .iter()
-            .any(|argument| qualifier.contains_range(argument.syntax.syntax().text_range()))
+        // The Type arguments of an anchor's trait (`<T as Tr<A>>`) apply to the
+        // trait, not to the Self Type the qualifier selects.
+        let anchor_trait = self
+            .qualifier
+            .segment()
+            .and_then(|segment| match segment.kind() {
+                Some(ast::PathSegmentKind::Type { trait_ref, .. }) => {
+                    trait_ref.map(|path| path.syntax().text_range())
+                }
+                _ => None,
+            });
+        self.arguments.iter().any(|argument| {
+            let at = argument.syntax.syntax().text_range();
+            qualifier.contains_range(at) && !anchor_trait.is_some_and(|tr| tr.contains_range(at))
+        })
     }
     pub(crate) fn fingerprint(&self) -> Digest {
         self.fingerprint
@@ -237,6 +249,10 @@ pub struct PreparedAssociatedItemQualifier {
     plan: Arc<PreparedSourceLocalPlan>,
     occurrence: Option<AssociatedConstPathOccurrence>,
     source: Option<crate::frontend::explicit_type_arguments::ExplicitType>,
+    /// The Type arguments written on an anchor's trait (`<T as Tr<A, B>>`),
+    /// each selected at its own indexed Type occurrence; `None` for an
+    /// argument no Type is selected for.
+    trait_arguments: Vec<Option<crate::frontend::explicit_type_arguments::ExplicitType>>,
     trait_qualifier: Option<Digest>,
     member_traits: Option<Box<[SourceTraitBound]>>,
 }
@@ -295,6 +311,11 @@ impl PreparedAssociatedItemQualifier {
     pub(crate) fn source(&self) -> Option<&crate::frontend::explicit_type_arguments::ExplicitType> {
         self.source.as_ref()
     }
+    pub(crate) fn trait_arguments(
+        &self,
+    ) -> &[Option<crate::frontend::explicit_type_arguments::ExplicitType>] {
+        &self.trait_arguments
+    }
     pub(crate) fn member(&self) -> Option<&ast::NameRef> {
         self.occurrence
             .as_ref()
@@ -328,6 +349,22 @@ impl PreparedAssociatedItemQualifier {
                     .as_ref()
                     .map_or(Some(0), |source| source.heap_bytes().ok())?,
             )?
+            .checked_add(
+                self.trait_arguments
+                    .iter()
+                    .try_fold(
+                        self.trait_arguments
+                            .capacity()
+                            .checked_mul(std::mem::size_of::<Option<crate::frontend::explicit_type_arguments::ExplicitType>>())?,
+                        |bytes, argument| {
+                            bytes.checked_add(
+                                argument
+                                    .as_ref()
+                                    .map_or(Some(0), |argument| argument.heap_bytes().ok())?,
+                            )
+                        },
+                    )?,
+            )?
             .checked_add(self.member_traits.as_ref().map_or(Some(0), |bounds| {
                 let mut bytes = bounds
                     .len()
@@ -354,6 +391,9 @@ impl StableEncode for PreparedAssociatedItemQualifier {
         e.digest(self.plan.source_identity());
         e.option(&self.occurrence, |e, occurrence| e.record(occurrence));
         e.option(&self.source, |e, source| e.record(source));
+        e.sequence(&self.trait_arguments, |e, argument| {
+            e.option(argument, |e, argument| e.record(argument))
+        });
         e.option(&self.trait_qualifier, |e, identity| e.digest(*identity));
         e.option(&self.member_traits, |e, bounds| {
             e.sequence(bounds.as_ref(), |e, bound| {
@@ -395,6 +435,7 @@ pub(crate) fn prepare(
     let mut source = None;
     let mut trait_qualifier = None;
     let mut anchor_traits = None;
+    let mut trait_arguments = Vec::new();
     if let Some(occurrence) = &occurrence {
         // Full argument application is a separate source goal. Retain every
         // actual occurrence instead of erasing unsupported Const/Region kinds
@@ -436,6 +477,46 @@ pub(crate) fn prepare(
                     // anchor; TypeAnchor::path_type alone could select the
                     // first child instead when the self Type is a path too.
                     let mut selected_trait = None;
+                    // Each written Type argument of the trait is selected at its
+                    // own indexed occurrence (lifetimes and consts take no slot).
+                    let written_arguments: Vec<Option<ast::Type>> = trait_ref
+                        .as_ref()
+                        .and_then(|ty| ty.path())
+                        .and_then(|path| path.segment())
+                        .and_then(|segment| ast::HasGenericArgs::generic_arg_list(&segment))
+                        .into_iter()
+                        .flat_map(|list| list.generic_args().collect::<Vec<_>>())
+                        .filter_map(|argument| match argument {
+                            ast::GenericArg::TypeArg(argument) => Some(argument.ty()),
+                            _ => None,
+                        })
+                        .collect();
+                    for written in written_arguments {
+                        let selected = match written {
+                            Some(ty) => match indexed_type_site(&plan, &ty) {
+                                Ok(Some(site)) => polled!(
+                                    crate::frontend::explicit_type_arguments::select_argument(
+                                        db,
+                                        &plan,
+                                        key,
+                                        &site,
+                                        range(ty.syntax().text_range())
+                                    )
+                                )
+                                .map(|selected| selected.source),
+                                Ok(None) => None,
+                                Err(error) => return QueryPoll::Ready(Err(error)),
+                            },
+                            None => None,
+                        };
+                        trait_arguments.push(selected);
+                    }
+                    let trait_ref_has_arguments = trait_ref
+                        .as_ref()
+                        .and_then(|ty| ty.path())
+                        .and_then(|path| path.segment())
+                        .and_then(|segment| ast::HasGenericArgs::generic_arg_list(&segment))
+                        .is_some();
                     if let Some(trait_ref) = trait_ref {
                         let ty = ast::Type::PathType(trait_ref.clone());
                         if let Some(site) = match indexed_type_site(&plan, &ty) {
@@ -460,7 +541,11 @@ pub(crate) fn prepare(
                             anchor_traits = Some(context.into_boxed_slice());
                         }
                     }
-                    if selected_trait.is_none() {
+                    // A trait written with Type arguments (`<T as Tr<A>>`) names its
+                    // identity through the full application goal, not here; the
+                    // anchor's Self Type is the qualifier's own either way.
+                    let trait_with_arguments = trait_ref_has_arguments;
+                    if selected_trait.is_none() && !trait_with_arguments {
                         source = None;
                     }
                 }
@@ -482,6 +567,7 @@ pub(crate) fn prepare(
         plan,
         occurrence,
         source,
+        trait_arguments,
         trait_qualifier,
         member_traits,
     }))

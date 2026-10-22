@@ -740,6 +740,139 @@ pub(crate) fn enum_variants(
     }
     Ok(result)
 }
+/// The module-path segment of a module declaration. A module written as an
+/// item statement of a block (a function, closure or constant body) is nameable
+/// only there, so it is a module of the enclosing *module* under a segment no
+/// source can spell, unique to the declaration: its items, impls, nested modules
+/// and imports then follow the one module route, `self`/`super`/`crate` included
+/// (rustc's `super` skips the anonymous block module). The block's own name for
+/// it is a lexical alias bound by `entered_macros` (an import of this segment).
+///
+/// The segment carries the declaration's ordinal among the file's inline block
+/// modules in source order, not a byte offset: attaching the expansion of a
+/// macro call in a body shifts every later offset, and the assembled tree's
+/// declarations are paired with the original outline's by identity.
+pub(crate) fn module_segment(module: &ast::Module, semantic: &str) -> String {
+    if !is_block_module(module) {
+        return semantic.to_owned();
+    }
+    let root = module
+        .syntax()
+        .ancestors()
+        .last()
+        .unwrap_or_else(|| module.syntax().clone());
+    let ordinal = root
+        .descendants()
+        .filter_map(ast::Module::cast)
+        .filter(|other| other.item_list().is_some() && is_block_module(other))
+        .take_while(|other| other.syntax() != module.syntax())
+        .count();
+    format!("__lrr_block_{ordinal}_{semantic}")
+}
+/// A module declared in a block. Only an inline module is hoisted: an
+/// out-of-line `mod x;` has no items to publish here.
+pub(crate) fn is_block_module(module: &ast::Module) -> bool {
+    module
+        .syntax()
+        .parent()
+        .is_some_and(|parent| ast::StmtList::can_cast(parent.kind()))
+}
+/// The inline modules declared in blocks of an executable body, outermost
+/// first and in source order. A module's own items are not searched: they are
+/// walked when the hoisted module is processed as a module.
+pub(crate) fn block_modules(body: &SyntaxNode, cfg: &CfgSet) -> Result<Vec<ast::Module>, Diagnostic> {
+    use ra_ap_syntax::WalkEvent;
+    let mut found = Vec::new();
+    let mut walk = body.preorder();
+    while let Some(event) = walk.next() {
+        let WalkEvent::Enter(node) = event else {
+            continue;
+        };
+        if ast::TokenTree::can_cast(node.kind()) {
+            walk.skip_subtree();
+            continue;
+        }
+        let Some(module) = ast::Module::cast(node) else {
+            continue;
+        };
+        walk.skip_subtree();
+        if module.item_list().is_none() || !is_block_module(&module) {
+            continue;
+        }
+        let (enabled, _) = attributes(&ast::Item::Module(module.clone()), cfg)?;
+        if enabled {
+            found.push(module);
+        }
+    }
+    Ok(found)
+}
+/// A block's `use` whose first segment is the name of a module declared in an
+/// enclosing block (Rust 2018+ uniform paths) names that block's hoisted module
+/// (`module_segment`): the leaves' first segment becomes `self::<segment>`. The
+/// nearest binder in the Type namespace decides, and the search ends at the
+/// nearest enclosing module: an item list does not see the lexical scope of the
+/// block that contains it.
+pub(crate) fn bind_block_module_roots(
+    import: &ast::Use,
+    leaves: &mut [super::imports::SourceImport],
+    edition: u16,
+    cfg: &CfgSet,
+) -> Result<(), Diagnostic> {
+    use super::imports::ImportSegment;
+    if edition < 2018 {
+        return Ok(());
+    }
+    for leaf in leaves.iter_mut() {
+        if leaf.absolute {
+            continue;
+        }
+        let Some(ImportSegment::Name(first)) = leaf.path.first() else {
+            continue;
+        };
+        let Some(wanted) = super::ast_adapter::semantic_name(first) else {
+            continue;
+        };
+        let named = |name: Option<ast::Name>| {
+            name.and_then(|name| super::ast_adapter::semantic_name(name.text().as_ref()))
+                .is_some_and(|name| name == wanted)
+        };
+        let mut bound = None;
+        'search: for ancestor in import.syntax().ancestors() {
+            if ast::ItemList::can_cast(ancestor.kind()) {
+                break;
+            }
+            let Some(list) = ast::StmtList::cast(ancestor) else {
+                continue;
+            };
+            for statement in list.statements() {
+                let ast::Stmt::Item(item) = statement else {
+                    continue;
+                };
+                let (declared, module) = match &item {
+                    ast::Item::Module(module) => (named(module.name()), module.item_list().is_some()),
+                    ast::Item::Struct(item) => (named(item.name()), false),
+                    ast::Item::Enum(item) => (named(item.name()), false),
+                    ast::Item::Union(item) => (named(item.name()), false),
+                    ast::Item::Trait(item) => (named(item.name()), false),
+                    ast::Item::TypeAlias(item) => (named(item.name()), false),
+                    _ => continue,
+                };
+                if !declared || !attributes(&item, cfg)?.0 {
+                    continue;
+                }
+                if module && let ast::Item::Module(module) = item {
+                    bound = Some(module_segment(&module, &wanted));
+                }
+                break 'search;
+            }
+        }
+        if let Some(segment) = bound {
+            leaf.path
+                .splice(0..1, [ImportSegment::SelfModule, ImportSegment::Name(segment)]);
+        }
+    }
+    Ok(())
+}
 pub(crate) fn visibility(node: &SyntaxNode) -> Visibility {
     let Some(vis) = node.children().find_map(ast::Visibility::cast) else {
         return Visibility::Private;
@@ -1378,12 +1511,18 @@ impl ParsedFile {
                     }
                 };
             let name = match name {
-                Some(n) => super::ast_adapter::semantic_name(&n).ok_or_else(|| {
-                    fault(
-                        "LRR-E-SOURCE-LIMIT",
-                        "semantic declaration name limit exceeded",
-                    )
-                })?,
+                Some(n) => {
+                    let semantic = super::ast_adapter::semantic_name(&n).ok_or_else(|| {
+                        fault(
+                            "LRR-E-SOURCE-LIMIT",
+                            "semantic declaration name limit exceeded",
+                        )
+                    })?;
+                    match &item {
+                        ast::Item::Module(module) => module_segment(module, &semantic),
+                        _ => semantic,
+                    }
+                }
                 None if index_name => {
                     outline
                         .scopes
@@ -1538,6 +1677,23 @@ impl ParsedFile {
                     kind: BlockerKind::Attribute,
                     syntax: header.fingerprint(),
                 });
+            }
+            // Modules written in the executable body's blocks are modules of
+            // the enclosing module (see `module_segment`); an associated
+            // function's body belongs to the module that holds its container.
+            if let Some(body) = &executable {
+                let mut hoisted = block_modules(body, cfg)?;
+                hoisted.reverse();
+                let module_scope = ScopeKey {
+                    crate_key,
+                    module_path: scope.module_path.clone(),
+                    owner: None,
+                };
+                stack.extend(
+                    hoisted
+                        .into_iter()
+                        .map(|module| (ast::Item::Module(module), module_scope.clone(), Vec::new())),
+                );
             }
             let body = if let Some(body) = executable {
                 Some(BodyHandle {

@@ -118,7 +118,12 @@ pub struct ScannedMacroDefinition {
 #[derive(Clone, Debug)]
 pub struct ScannedModule {
     pub identity: Digest,
+    /// The exact source spelling of the module's name.
     pub name: String,
+    /// The module-path segment of a module declared in a block
+    /// (`outline::module_segment`); `None` for every other module, whose
+    /// segment is its name.
+    pub segment: Option<String>,
     pub name_range: SourceRange,
     /// Validated token-context edition; original sources use their recorded edition.
     pub name_edition: u16,
@@ -456,6 +461,11 @@ fn lexical_context(
                     "declaration module name is invalid".into(),
                 )
             })?;
+            let name = if module.item_list().is_some() {
+                super::outline::module_segment(&module, &name)
+            } else {
+                name
+            };
             scope
                 .module_path
                 .try_reserve_exact(1)
@@ -463,7 +473,16 @@ fn lexical_context(
             scope.module_path.push(name);
         }
     }
-    for ancestor in ancestors.iter().rev() {
+    // Namespace ownership stops at a module boundary: a function enclosing a
+    // module declared in its body owns nothing inside that module (its items
+    // are module items of the hoisted module, `outline::module_segment`).
+    let innermost_module = ancestors.iter().position(|ancestor| {
+        ast::Module::cast(ancestor.clone()).is_some_and(|module| module.name().is_some())
+    });
+    for (position, ancestor) in ancestors.iter().enumerate().rev() {
+        if innermost_module.is_some_and(|module| position > module) {
+            continue;
+        }
         if ast::Fn::can_cast(ancestor.kind()) {
             let selected = range(ancestor.text_range());
             let key = (selected.start, selected.end, scope.fingerprint());
@@ -791,12 +810,17 @@ impl ParsedFile {
                 budget.charge(name.text().len())?;
                 let spelling = name.text().to_string();
                 let name_edition = self.token_edition(range(name.syntax().text_range()))?;
-                super::ast_adapter::macro_name(&spelling, name_edition).ok_or_else(|| {
+                let semantic = super::ast_adapter::macro_name(&spelling, name_edition).ok_or_else(|| {
                     Diagnostic::new(
                         "LRR-E-SOURCE-NAME",
                         "module declaration name is invalid".into(),
                     )
                 })?;
+                // A module declared in a block lives in the enclosing module
+                // under its hoisted segment (`outline::module_segment`).
+                let segment = (item.item_list().is_some()
+                    && super::outline::is_block_module(&item))
+                .then(|| super::outline::module_segment(&item, &semantic));
                 let body = item.item_list().map(|list| list.syntax().text_range());
                 let header = budget.tokens(&node, body)?;
                 let (mut scope, containers) = lexical_context(&node, &scan.scope, &mut budget)?;
@@ -822,6 +846,7 @@ impl ParsedFile {
                 scan.modules.push(ScannedModule {
                     identity: source_identity(&scan, selected, 5),
                     name: spelling,
+                    segment,
                     name_range: range(name.syntax().text_range()),
                     name_edition,
                     range: selected,
@@ -839,13 +864,14 @@ impl ParsedFile {
                 let identity = source_identity(&scan, selected, 4);
                 let (scope, _) = lexical_context(&node, &scan.scope, &mut budget)?;
                 let mut import_budget = super::imports::ImportBudget::default();
-                let leaves = super::imports::collect(
+                let mut leaves = super::imports::collect(
                     &item,
                     &scope,
                     identity,
                     &super::outline::Visibility::Private,
                     &mut import_budget,
                 )?;
+                super::outline::bind_block_module_roots(&item, &mut leaves, self.edition, cfg)?;
                 scan.imports
                     .len()
                     .checked_add(leaves.len())

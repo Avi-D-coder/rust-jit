@@ -26,6 +26,10 @@ pub struct InstalledRecipes {
     /// Installed metadata observation only; no LRIR budget (E-R5-006).
     bytes: usize,
     by_pc: BTreeMap<PcKey, RecipeId>,
+    /// The same PC -> recipe mapping, hashed: the per-dispatch membership and
+    /// resolution lookups use it, while the ordered map above serves the
+    /// range queries of call renewal. Both change only in `install_ready`.
+    lookup: rustc_hash::FxHashMap<PcKey, RecipeId>,
     entries: Vec<InstalledRecipe>,
 }
 fn fault(code: &'static str, message: &str) -> Diagnostic {
@@ -38,6 +42,7 @@ impl InstalledRecipes {
             source_revision,
             bytes: 0,
             by_pc: BTreeMap::new(),
+            lookup: Default::default(),
             entries: Vec::new(),
         })
     }
@@ -89,9 +94,10 @@ impl InstalledRecipes {
                 "installed PC table belongs to another source publication",
             ));
         }
-        let recipe = self.get(id)?;
+        let entry = self.entry(id)?;
+        let recipe = entry.recipe.as_ref();
         recipe.revalidate_namespace(db)?;
-        if let Some(constructor) = &self.entry(id)?.constructor {
+        if let Some(constructor) = &entry.constructor {
             constructor.inputs.require_current(db)?;
         }
         Ok(recipe)
@@ -216,13 +222,13 @@ impl InstalledRecipes {
                 "installed source call publication differs",
             ));
         }
-        let Some(id) = self.by_pc.get(pc) else {
+        let Some(id) = self.lookup.get(pc) else {
             return Ok(None);
         };
         Ok(self.get(*id)?.source_call())
     }
     pub(crate) fn contains_pc(&self, key: &PcKey) -> bool {
-        self.by_pc.contains_key(key)
+        self.lookup.contains_key(key)
     }
     pub fn resolve(&mut self, db: &mut Database, key: PcKey) -> QueryPoll<RecipeId> {
         if db.source_revision() != self.source_revision {
@@ -231,10 +237,16 @@ impl InstalledRecipes {
                 "installed PC table belongs to another source publication",
             )));
         }
-        if let Some(id) = self.by_pc.get(&key).copied() {
-            // A reached inference root this constructor's preparation ran (and
-            // the input publication it requested) can supersede the guard the
-            // installed constructor captured without changing what it answers.
+        if let Some(id) = self.lookup.get(&key).copied() {
+            // A current recipe (the hot case) is checked once. A reached
+            // inference root this constructor's preparation ran (and the input
+            // publication it requested) can supersede the guard the installed
+            // constructor captured without changing what it answers: renew it.
+            match self.get_current(db, id) {
+                Ok(_) => return QueryPoll::Ready(Ok(id)),
+                Err(error) if error.prepared_input_change.is_some() => {}
+                Err(error) => return QueryPoll::Ready(Err(error)),
+            }
             match self.renew_installed(db, id, &key) {
                 QueryPoll::Ready(Ok(())) => {}
                 QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -406,6 +418,7 @@ impl InstalledRecipes {
             constructor,
             enum_casts,
         });
+        self.lookup.insert(key.clone(), id);
         self.by_pc.insert(key, id);
         self.bytes = bytes;
         Ok(id)

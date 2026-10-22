@@ -250,7 +250,12 @@ pub fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<QualifiedTypeObserva
         if identifier.raw_context().is_some_and(|actual| actual != raw) {
             return QueryPoll::Ready(Err(error("qualified Type retained token context differs")));
         }
-        if identifier.edition() != plan.entered.parent.source().outline.parse.profile.edition {
+        // A path rooted at a `$crate` token resolves from that definition crate's
+        // root through ordinary module members, whatever edition spelled its
+        // segments (a library macro's output in a source of another edition).
+        if defining_root.is_none()
+            && identifier.edition() != plan.entered.parent.source().outline.parse.profile.edition
+        {
             // The legacy ordinary path kernel takes one owning source edition;
             // mixed-origin path segment editions need its pinned adjustment join.
             return proof.pending(QualifiedTypeDemand::PathAdjustment);
@@ -287,6 +292,17 @@ pub fn prepare(db: &mut Database, key: &PcKey) -> QueryPoll<QualifiedTypeObserva
     if defining_root.is_some() && parts.len() == 1 {
         // The crate root alone names a module, not a completed source Type.
         return proof.pending(QualifiedTypeDemand::PathAdjustment);
+    }
+    // A path of only keywords (`crate`, `self`, `super`, `super::super`) names
+    // a module, never a declared Type: the owner of `crate::f()` or
+    // `super::f()` is the module route's, with no Type declaration to certify.
+    if parts
+        .iter()
+        .all(|part| !matches!(part, ImportSegment::Name(_)))
+    {
+        proof.lookup = Some(NameLookup::Absent);
+        proof.reads = path_identity.finish();
+        return QueryPoll::Ready(proof.finish());
     }
     let last_name = checked!(crate::frontend::names::owned_name(
         last.name(),

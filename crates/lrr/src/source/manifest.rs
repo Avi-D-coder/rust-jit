@@ -132,7 +132,7 @@ impl StableEncode for DefKey {
         e.u32(self.duplicate_ordinal);
     }
 }
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct BodyKey {
     pub definition: Digest,
     pub exact_body_bytes: Digest,
@@ -144,7 +144,7 @@ impl StableEncode for BodyKey {
         e.digest(self.exact_body_bytes);
     }
 }
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct PcKey {
     pub body: BodyKey,
     pub node: u32,

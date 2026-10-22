@@ -50,6 +50,8 @@ pub(crate) fn pattern_owner_test_slot(body: &BodyIndex, owner: NodeId) -> Option
             node.runtime_temporaries[0]
         }
         NodeRole::Expression(ExpressionKind::For) => node.value,
+        // `?` owns the transaction over its `Try::branch` result.
+        NodeRole::Expression(ExpressionKind::Try) => node.runtime_scalar_slots.first().copied(),
         NodeRole::Expression(ExpressionKind::Closure) if node.pattern_statement => {
             node.runtime_temporaries[0]
         }
@@ -88,6 +90,15 @@ fn pattern_step(
         {
             if key.node != owner.0 || selected.runtime_temporaries[1] != Some(*source) {
                 return Err(invalid("for pattern source differs from its next result"));
+            }
+        }
+        // `?` matches its `Try::branch` result.
+        PatternOperation::Open { source, .. }
+            if selected.role
+                == NodeRole::Expression(crate::syntax::body_index::ExpressionKind::Try) =>
+        {
+            if key.node != owner.0 || selected.runtime_temporaries[0] != Some(*source) {
+                return Err(invalid("try pattern source differs from its branch result"));
             }
         }
         // A closure's pattern parameters match their staged call arguments.
@@ -137,6 +148,10 @@ fn pattern_step(
             if *result != test
                 || body.nodes().get(tree.pattern().0 as usize).is_none_or(|node| {
                     node.role != NodeRole::Pattern
+                        && selected.role
+                            != NodeRole::Expression(
+                                crate::syntax::body_index::ExpressionKind::Try,
+                            )
                         && !(selected.pattern_statement
                             && selected.role
                                 == NodeRole::Expression(
@@ -1804,6 +1819,19 @@ fn verify_inner(
                                 crate::syntax::body_index::ExpressionKind::MethodCall,
                             )
                             && name.starts_with('.'))
+                        // `expr?`: its three lang-item calls.
+                        && !(node.role
+                            == crate::syntax::body_index::NodeRole::Expression(
+                                crate::syntax::body_index::ExpressionKind::Try,
+                            )
+                            && {
+                                let paths = crate::syntax::constructors::try_call_paths(
+                                    body.profile(),
+                                );
+                                *name == paths.branch
+                                    || *name == paths.break_residual
+                                    || *name == paths.from_residual
+                            })
                         // A language-item call (`a..=b`): the call of its
                         // item's path.
                         && !(node.role

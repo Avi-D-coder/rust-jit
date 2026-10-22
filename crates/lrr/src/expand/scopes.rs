@@ -11,8 +11,26 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// A validated identifier spelling. Equal spellings share one immutable
 /// allocation, so names and the paths built from them clone cheaply.
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct MacroName(std::sync::Arc<str>);
+/// Lexicographic by spelling, as the derived order was. Names resolve through
+/// one shared allocation per spelling, and the paths ordered in the namespace
+/// B-trees share long equal prefixes, so equal components are the common
+/// comparison; the pointer test settles them without reading either string.
+impl Ord for MacroName {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if std::sync::Arc::ptr_eq(&self.0, &other.0) {
+            std::cmp::Ordering::Equal
+        } else {
+            self.0.cmp(&other.0)
+        }
+    }
+}
+impl PartialOrd for MacroName {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
 impl MacroName {
     pub fn parse(text: &str, edition: u16) -> Result<Self, Diagnostic> {
         ast_adapter::shared_macro_name(text, edition)

@@ -50,6 +50,8 @@ pub mod string_literal;
 pub(crate) mod value_call_thunk;
 #[path = "value_paths.rs"]
 mod value_paths;
+#[path = "anchor_types.rs"]
+mod anchor_types;
 
 #[derive(Default, Clone, Copy)]
 struct EnteredAdmissions<'a> {
@@ -1525,10 +1527,30 @@ impl ParsedFile {
                 if !statement_cfg(statement.syntax(), cfg)?.0 {
                     continue;
                 }
-                if let ast::Stmt::Item(ast::Item::Use(item)) = statement
-                    && super::imports::may_bind_name(&item, &wanted, self.edition, &mut budget)?
-                {
-                    return Ok(true);
+                match statement {
+                    ast::Stmt::Item(ast::Item::Use(item))
+                        if super::imports::may_bind_name(
+                            &item,
+                            &wanted,
+                            self.edition,
+                            &mut budget,
+                        )? =>
+                    {
+                        return Ok(true);
+                    }
+                    // A block's inline module is bound by the block's lexical
+                    // alias of its hoisted module (`outline::module_segment`),
+                    // an import row like a `use` of that module.
+                    ast::Stmt::Item(ast::Item::Module(module))
+                        if module.item_list().is_some()
+                            && module.name().is_some_and(|module| {
+                                MacroName::parse(module.text(), self.edition)
+                                    .is_ok_and(|module| module == wanted)
+                            }) =>
+                    {
+                        return Ok(true);
+                    }
+                    _ => {}
                 }
             }
         }
@@ -2668,7 +2690,9 @@ impl ParsedFile {
                 unsupported("let pattern requires a top-level if/while condition clause")
             }
             SyntaxKind::CALL_EXPR => self.initial_call_thunk(body, index, key, syntax, call),
-            SyntaxKind::CLOSURE_EXPR => self.closure_thunk(body, index, key, syntax, closure_captures),
+            SyntaxKind::CLOSURE_EXPR => {
+                self.closure_thunk(body, index, key, syntax, closure_captures, let_annotation)
+            }
             SyntaxKind::FORMAT_ARGS_EXPR => {
                 self.initial_format_args_thunk(body, index, key, syntax)
             }
@@ -3392,16 +3416,13 @@ impl ParsedFile {
                             type_ref,
                             trait_ref,
                         }) if cursor.qualifier().is_none() => {
-                            let Some(ty) = type_ref.and_then(|ty| match ty {
-                                ast::Type::PathType(path) => path.path(),
-                                _ => None,
-                            }) else {
+                            let Some(ty) = type_ref else {
                                 return unsupported(
                                     "qualified callee anchor requires structural type integration",
                                 );
                             };
                             let Some(ty) =
-                                self.anchor_spelling(&ty, path.syntax(), index.cfg(), true)?
+                                self.anchor_type_spelling(&ty, path.syntax(), index.cfg(), true)?
                             else {
                                 return unsupported(
                                     "qualified callee anchor requires further type integration",
@@ -3526,12 +3547,6 @@ impl ParsedFile {
                                         })
                                     }
                                     ast::Stmt::Item(ast::Item::Static(item)) if !qualified => {
-                                        item.name().is_some_and(|n| {
-                                            MacroName::parse(n.text(), self.edition).ok()
-                                                == target_name
-                                        })
-                                    }
-                                    ast::Stmt::Item(ast::Item::Module(item)) if qualified => {
                                         item.name().is_some_and(|n| {
                                             MacroName::parse(n.text(), self.edition).ok()
                                                 == target_name

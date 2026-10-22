@@ -37,8 +37,10 @@ pub(super) enum SelectionArgument {
 
 /// How a trait-path call proceeds at its first call opcode.
 pub(super) enum TraitPathCall {
-    /// The self type is known: the selected impl function.
-    Selected(Arc<SourceCallable>),
+    /// The self type is known: the selected impl function, and the callee
+    /// generic Types the classification already fixed (a provided body's
+    /// `Self` of a literal `Self` argument).
+    Selected(Arc<SourceCallable>, Vec<(u32, ArgumentType)>),
     /// The self argument selects the impl once it is evaluated.
     Deferred {
         declaration: crate::core::digest::Digest,
@@ -184,7 +186,7 @@ impl RunMachine {
         if self.ordinary_call_paths.contains(&key) {
             return QueryPoll::Ready(Ok(None));
         }
-        let classified = self.classify_trait_path_call(db, name, arguments);
+        let classified = self.classify_trait_path_call(db, site, name, arguments);
         if matches!(classified, QueryPoll::Ready(Ok(None))) {
             self.ordinary_call_paths.insert(key);
         }
@@ -193,6 +195,7 @@ impl RunMachine {
     fn classify_trait_path_call(
         &mut self,
         db: &mut Database,
+        site: u32,
         name: &str,
         arguments: &[SlotId],
     ) -> QueryPoll<Option<TraitPathCall>> {
@@ -240,6 +243,18 @@ impl RunMachine {
         // trait body's implicit `Self` included) is its reached binding,
         // before any same-named module type.
         let owner = self_written.or(trait_written.filter(|prefix| !prefix.contains("::")));
+        // `<&T as Trait>::f` / `<&mut T as Trait>::f`: a reference to the
+        // generic parameter, whose reached binding is the referent.
+        let (reference, owner) = match owner {
+            Some(written) if written.starts_with('&') => {
+                let referent = written[1..].trim_start();
+                match referent.strip_prefix("mut ") {
+                    Some(referent) => (Some(true), Some(referent.trim_start())),
+                    None => (Some(false), Some(referent)),
+                }
+            }
+            owner => (None, owner),
+        };
         let generic = match owner {
             Some(owner) if !owner.contains("::") => poll!(self.generic_binding(db, owner)),
             _ => None,
@@ -257,6 +272,19 @@ impl RunMachine {
                     return QueryPoll::Ready(Ok(None));
                 }
                 return match poll!(resolver.anchored_alternatives(db, caller, name)) {
+                    // A literal argument rules impls out before it is evaluated.
+                    Some(found)
+                        if let Some(function) = poll!(self.early_alternative(
+                            db,
+                            site,
+                            &found.functions,
+                            arguments,
+                            0
+                        )) =>
+                    {
+                        self.member_callee(db, function)
+                            .map(|callee| Some(TraitPathCall::Selected(callee, Vec::new())))
+                    }
                     Some(found) => self.alternatives_call(
                         db,
                         found.trait_key,
@@ -264,7 +292,6 @@ impl RunMachine {
                         function,
                         found.functions,
                         found.self_term,
-                        &found.explicit_arguments,
                         arguments,
                     ),
                     None => QueryPoll::Ready(Ok(None)),
@@ -274,7 +301,9 @@ impl RunMachine {
                 return QueryPoll::Ready(Ok(None));
             };
             return match poll!(resolver.written_trait(db, caller, tr)) {
-                Some(trait_key) => self.trait_function_call(db, trait_key, function, name, arguments),
+                Some(trait_key) => {
+                    self.trait_function_call(db, site, trait_key, function, name, arguments)
+                }
                 // `Type::f(args)` whose type has several impls of one trait
                 // that differ by the trait's arguments (`u64::from(x)`):
                 // the evaluated arguments select the impl.
@@ -311,7 +340,6 @@ impl RunMachine {
                                     arguments: arguments.to_vec(),
                                     alternatives: functions,
                                     result_self: self_term.filter(|_| returns_self),
-                                    expected: Vec::new(),
                                 },
                             })))
                         }
@@ -321,9 +349,13 @@ impl RunMachine {
                 None => QueryPoll::Ready(Ok(None)),
             };
         };
-        let self_type = match self.reached_self_type(binding) {
+        let referent = match self.reached_self_type(binding) {
             Ok(self_type) => self_type,
             Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let self_type = match reference {
+            Some(mutable) => Err(BuiltinSelf::Reference(mutable)),
+            None => referent,
         };
         let candidates = match trait_written.filter(|_| self_written.is_some()) {
             // `<T as Trait>::f`: the named trait's impl for the binding.
@@ -334,8 +366,23 @@ impl RunMachine {
                         format!("qualified call path `{name}` names no trait"),
                     )));
                 };
-                members
-                    .trait_method(self_type, trait_key, function)
+                let mut impls = members.trait_method(self_type, trait_key, function);
+                // `impl .. for &U`: the referent selects among the reference
+                // impls; an impl naming it wins over one generic in it.
+                if reference.is_some() && impls.len() > 1 {
+                    let exact: Vec<_> = impls
+                        .iter()
+                        .filter(|(implementation, _)| implementation.self_pointee == Some(referent))
+                        .cloned()
+                        .collect();
+                    let generic: Vec<_> = impls
+                        .iter()
+                        .filter(|(implementation, _)| implementation.self_pointee.is_none())
+                        .cloned()
+                        .collect();
+                    impls = if exact.is_empty() { generic } else { exact };
+                }
+                impls
                     .into_iter()
                     .map(|(_, function)| function)
                     .collect::<Vec<_>>()
@@ -398,7 +445,7 @@ impl RunMachine {
                     QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                     QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
                 };
-                let result_self = if returns_self && !has_self_parameter {
+                let result_self = if returns_self && !has_self_parameter && reference.is_none() {
                     self.store.descriptor_source_term(binding)
                 } else {
                     None
@@ -421,7 +468,6 @@ impl RunMachine {
                         arguments: arguments.to_vec(),
                         alternatives: candidates,
                         result_self,
-                        expected: Vec::new(),
                     },
                 })));
             }
@@ -435,16 +481,13 @@ impl RunMachine {
             }
         };
         self.member_callee(db, selected)
-            .map(|callee| Some(TraitPathCall::Selected(callee)))
+            .map(|callee| Some(TraitPathCall::Selected(callee, Vec::new())))
     }
     /// A call to a function several impls of one trait provide, differing only
     /// by the trait's arguments: it starts against the trait's `declaration`
     /// and the evaluated arguments select the impl (`select_by_arguments`).
     /// `self_term` is the written Self when it is a closed primitive, which
     /// every accepted impl of a bare-`Self` result must produce.
-    /// `explicit_arguments` are the Type arguments written on the trait
-    /// (`<i32 as Mul<&i32>>`): where one is a plain primitive (or reference
-    /// to one) it fixes the declared parameters written in terms of it.
     #[allow(clippy::too_many_arguments)]
     fn alternatives_call(
         &mut self,
@@ -454,29 +497,18 @@ impl RunMachine {
         function: &str,
         alternatives: Vec<crate::core::digest::Digest>,
         self_term: Option<crate::traits::term::TyTerm>,
-        explicit_arguments: &[String],
         arguments: &[SlotId],
     ) -> QueryPoll<Option<TraitPathCall>> {
-        let (returns_self, expected) =
-            match db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(declaration)) {
-                QueryPoll::Ready(Ok(value)) => match value.value.as_ref() {
-                    QueryValue::FunctionSignature(signature) => (
-                        self_parameter(&signature.result) == Some(false),
-                        match explicit_parameter_types(
-                            signature,
-                            declaration,
-                            explicit_arguments,
-                            self_term.as_ref(),
-                        ) {
-                            Ok(expected) => expected,
-                            Err(error) => return QueryPoll::Ready(Err(error)),
-                        },
-                    ),
-                    _ => (false, Vec::new()),
-                },
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-            };
+        let returns_self = match db.fetch(&SyntaxProvider, QueryKey::FunctionSignature(declaration)) {
+            QueryPoll::Ready(Ok(value)) => match value.value.as_ref() {
+                QueryValue::FunctionSignature(signature) => {
+                    self_parameter(&signature.result) == Some(false)
+                }
+                _ => false,
+            },
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
         let Some(last) = arguments.len().checked_sub(1) else {
             return QueryPoll::Ready(Ok(None));
         };
@@ -496,7 +528,6 @@ impl RunMachine {
                 arguments: arguments.to_vec(),
                 alternatives,
                 result_self: self_term.filter(|_| returns_self),
-                expected,
             },
         })))
     }
@@ -506,6 +537,7 @@ impl RunMachine {
     fn trait_function_call(
         &mut self,
         db: &mut Database,
+        site: u32,
         trait_key: crate::core::digest::Digest,
         function: &str,
         name: &str,
@@ -566,6 +598,91 @@ impl RunMachine {
                 if !prepared.cacheable {
                     return QueryPoll::Ready(Err(call_fault("trait parameter goal is not retained")));
                 }
+                // The Self argument written as an unsuffixed literal
+                // (`PartialOrd::lt(&1, &2)`) is an integer (float) variable no
+                // earlier argument constrains: its Type is rustc's fallback.
+                let literal_self = match self.written_literal_argument(db, site, ordinal as usize) {
+                    QueryPoll::Ready(Ok(literal)) => literal,
+                    QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                    QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                };
+                if let Some((integer, _)) = literal_self {
+                    use crate::ir::op::PrimitiveType as P;
+                    let primitive = if integer { P::I32 } else { P::F64 };
+                    let self_type = Err(BuiltinSelf::Primitive(primitive));
+                    let mut functions = Vec::new();
+                    for (_, candidate) in members.trait_method(self_type, trait_key, function) {
+                        if !functions.contains(&candidate) {
+                            functions.push(candidate);
+                        }
+                    }
+                    match functions.as_slice() {
+                        [] => {}
+                        [_] => {
+                            let callee = match self.select_trait_impl_function(
+                                db, self_type, trait_key, function, name,
+                            ) {
+                                QueryPoll::Ready(Ok(callee)) => callee,
+                                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                            };
+                            let bound = match self.literal_self_binding(
+                                db,
+                                site,
+                                &callee,
+                                primitive,
+                                arguments.len(),
+                            ) {
+                                QueryPoll::Ready(Ok(bound)) => bound,
+                                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                            };
+                            return QueryPoll::Ready(Ok(Some(TraitPathCall::Selected(callee, bound))));
+                        }
+                        _ => {
+                            let early = match self.early_alternative(
+                                db, site, &functions, arguments, 0,
+                            ) {
+                                QueryPoll::Ready(Ok(early)) => early,
+                                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                            };
+                            return match early {
+                                Some(function) => match self.member_callee(db, function) {
+                                    QueryPoll::Ready(Ok(callee)) => {
+                                        let bound = match self.literal_self_binding(
+                                            db,
+                                            site,
+                                            &callee,
+                                            primitive,
+                                            arguments.len(),
+                                        ) {
+                                            QueryPoll::Ready(Ok(bound)) => bound,
+                                            QueryPoll::Ready(Err(error)) => {
+                                                return QueryPoll::Ready(Err(error));
+                                            }
+                                            QueryPoll::NeedInput(input) => {
+                                                return QueryPoll::NeedInput(input);
+                                            }
+                                        };
+                                        QueryPoll::Ready(Ok(Some(TraitPathCall::Selected(callee, bound))))
+                                    }
+                                    QueryPoll::Ready(Err(error)) => QueryPoll::Ready(Err(error)),
+                                    QueryPoll::NeedInput(input) => QueryPoll::NeedInput(input),
+                                },
+                                None => self.alternatives_call(
+                                    db,
+                                    trait_key,
+                                    declaration,
+                                    function,
+                                    functions,
+                                    Some(crate::traits::term::TyTerm::Primitive(primitive)),
+                                    arguments,
+                                ),
+                            };
+                        }
+                    }
+                }
                 let guard = match db.prepare_input_guard(&SyntaxProvider, &key, prepared.fingerprint) {
                     QueryPoll::Ready(Ok(guard)) => Arc::new(guard),
                     QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
@@ -586,7 +703,6 @@ impl RunMachine {
                         arguments: arguments.to_vec(),
                         alternatives: Vec::new(),
                         result_self: None,
-                        expected: Vec::new(),
                     },
                 })));
             }
@@ -613,8 +729,91 @@ impl RunMachine {
             Ok(self_type) => self_type,
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
+        // A direct impl alongside an applicable blanket impl of the same trait
+        // that differs only by the trait's arguments (`From<ParseIntError> for
+        // MyErr` and the reflexive `impl<T> From<T> for T`, which `?` on an
+        // `MyErr` result selects): the evaluated arguments select the impl.
+        if !arguments.is_empty() {
+            let mut candidates: Vec<crate::core::digest::Digest> = members
+                .trait_method(self_type, trait_key, function)
+                .into_iter()
+                .map(|(_, function)| function)
+                .collect();
+            for blanket in members.blanket_candidates(self_type, function) {
+                if !candidates.contains(&blanket)
+                    && members.same_trait_of(&[blanket]) == Some(trait_key)
+                {
+                    candidates.push(blanket);
+                }
+            }
+            if candidates.len() > 1 && members.same_trait_of(&candidates) == Some(trait_key) {
+                let last = match u32::try_from(arguments.len() - 1) {
+                    Ok(ordinal) => ordinal,
+                    Err(_) => return QueryPoll::Ready(Err(call_fault("argument ordinal overflow"))),
+                };
+                return QueryPoll::Ready(Ok(Some(TraitPathCall::Deferred {
+                    declaration,
+                    call: DeferredTraitCall {
+                        trait_key,
+                        name: function.to_owned(),
+                        // Selected once the last argument is evaluated.
+                        self_ordinal: last,
+                        self_type: None,
+                        arguments: arguments.to_vec(),
+                        alternatives: candidates,
+                        result_self: self.store.descriptor_source_term(expected.descriptor),
+                    },
+                })));
+            }
+        }
         self.select_trait_impl_function(db, self_type, trait_key, function, name)
-            .map(|callee| Some(TraitPathCall::Selected(callee)))
+            .map(|callee| Some(TraitPathCall::Selected(callee, Vec::new())))
+    }
+    /// A trait-provided body's `Self` generic bound to a primitive (the
+    /// fallback Type of a literal `Self` argument), and the trait parameters
+    /// every impl for that primitive agrees on.
+    fn literal_self_binding(
+        &mut self,
+        db: &mut Database,
+        site: u32,
+        callee: &SourceCallable,
+        primitive: crate::ir::op::PrimitiveType,
+        argument_count: usize,
+    ) -> QueryPoll<Vec<(u32, ArgumentType)>> {
+        let Some(parameter) = callee.signature().generics.iter().find(|parameter| {
+            parameter.name == "Self"
+                && parameter.kind == crate::syntax::signatures::GenericKind::Type
+        }) else {
+            return QueryPoll::Ready(Ok(Vec::new()));
+        };
+        let descriptor = match crate::frontend::call_contracts::primitive_runtime_id(primitive) {
+            Ok(descriptor) => descriptor,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let mut bound = vec![(
+            parameter.ordinal,
+            ArgumentType {
+                source: crate::traits::term::TyTerm::Primitive(primitive),
+                descriptor,
+            },
+        )];
+        let literals = match self.written_literals(db, site, callee, argument_count) {
+            QueryPoll::Ready(Ok(literals)) => literals,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        match super::trait_parameters::agreed_trait_bindings(
+            self.members.as_ref(),
+            &mut self.store,
+            callee,
+            Err(BuiltinSelf::Primitive(primitive)),
+            &bound,
+            &literals,
+        ) {
+            Ok(agreed) => bound.extend(agreed),
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        }
+        QueryPoll::Ready(Ok(bound))
     }
     /// `<self_type as Trait>::function` through the member index.
     fn select_trait_impl_function(
@@ -684,6 +883,9 @@ impl RunMachine {
         let Some(deferred) = self.frame.trait_calls.get(&identity).cloned() else {
             return QueryPoll::Ready(Err(call_fault("deferred trait call record absent")));
         };
+        // The reached Self's member-index type, once a trait-path call's self
+        // argument has fixed it.
+        let mut reached_self = None;
         let callee = if deferred.alternatives.is_empty() {
             let ordinal = deferred.self_ordinal as usize;
             let reached = (|| -> Result<TypeId, Diagnostic> {
@@ -745,6 +947,7 @@ impl RunMachine {
                 Ok(self_type) => self_type,
                 Err(error) => return QueryPoll::Ready(Err(error)),
             };
+            reached_self = Some(self_type);
             // Several impls of the trait for the self type, differing by the
             // trait's arguments (`PartialEq<[U]>` and `PartialEq<Vec<U>>` of
             // `[T]`): the later arguments select once they are evaluated.
@@ -763,6 +966,31 @@ impl RunMachine {
                 None => None,
             };
             if let Some(functions) = several {
+                // A later argument written as an unsuffixed literal rules impls
+                // out before it is evaluated: one survivor is the call's impl,
+                // and its parameter Types hint the arguments still to come.
+                let early = if evaluated < deferred.arguments.len() {
+                    match self.early_alternative(
+                        db,
+                        site,
+                        &functions,
+                        &deferred.arguments,
+                        evaluated,
+                    ) {
+                        QueryPoll::Ready(Ok(early)) => early,
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    }
+                } else {
+                    None
+                };
+                if let Some(function) = early {
+                    match self.member_callee(db, function) {
+                        QueryPoll::Ready(Ok(callee)) => callee,
+                        QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+                        QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+                    }
+                } else {
                 if evaluated < deferred.arguments.len() {
                     // Not selectable yet: wait for the last argument.
                     let record = self
@@ -812,6 +1040,7 @@ impl RunMachine {
                     QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
                     QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
                 }
+                }
             } else {
                 match self.select_trait_impl_function(
                     db,
@@ -839,41 +1068,10 @@ impl RunMachine {
                     Err(error) => return QueryPoll::Ready(Err(error)),
                 }
             }
-            // The trait's explicit arguments fix the declared parameters an
-            // argument still unresolved (an unsuffixed literal) could not
-            // select by itself (`<u64 as Shl<u8>>::shl(1, 3)`).
-            for (ordinal, term) in &deferred.expected {
-                use crate::{ir::op::PrimitiveType as P, traits::term::TyTerm};
-                let Some(view) = views.get_mut(*ordinal) else {
-                    continue;
-                };
-                let fits = |integer: bool, term: &TyTerm| match term {
-                    TyTerm::Primitive(P::F32 | P::F64) => !integer,
-                    TyTerm::Primitive(
-                        P::Unit | P::Bool | P::Char,
-                    ) => false,
-                    TyTerm::Primitive(_) => integer,
-                    _ => false,
-                };
-                let applies = match &*view {
-                    SelectionArgument::Unknown => true,
-                    SelectionArgument::Literal {
-                        integer,
-                        behind_reference: false,
-                    } => fits(*integer, term),
-                    SelectionArgument::Literal {
-                        integer,
-                        behind_reference: true,
-                    } => matches!(term, TyTerm::Ref(_, false, referent) if fits(*integer, referent)),
-                    SelectionArgument::Type(_) => false,
-                };
-                if applies {
-                    *view = SelectionArgument::Type(term.clone());
-                }
-            }
-            // The selection is fixed per (site, reached argument Types);
-            // an unresolved literal argument is part of the key as `None`.
-            let key = (self.frame.pc().clone(), types);
+            // The selection is fixed per (site, reached argument Types,
+            // expected Self); an unresolved literal argument is part of the
+            // key as `None`.
+            let key = (self.frame.pc().clone(), types, deferred.result_self.clone());
             let function = match self.argument_selections.get(&key) {
                 Some(function) => *function,
                 None => {
@@ -907,12 +1105,39 @@ impl RunMachine {
                 QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
             }
         };
-        let selected =
-            match self.selected_after_arguments(db, callee, &deferred.arguments, evaluated) {
-                QueryPoll::Ready(Ok(selected)) => selected,
-                QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
-                QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
-            };
+        // A trait-provided body's trait parameters (`Rhs`) every impl for the
+        // reached Self agrees on, fixed before the arguments still to come.
+        let literals = match self.written_literals(db, site, &callee, deferred.arguments.len()) {
+            QueryPoll::Ready(Ok(literals)) => literals,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
+        let agreed = match reached_self {
+            Some(self_type) => super::trait_parameters::agreed_trait_bindings(
+                self.members.as_ref(),
+                &mut self.store,
+                &callee,
+                self_type,
+                &[],
+                &literals,
+            ),
+            None => Ok(Vec::new()),
+        };
+        let agreed = match agreed {
+            Ok(agreed) => agreed,
+            Err(error) => return QueryPoll::Ready(Err(error)),
+        };
+        let selected = match self.selected_after_arguments(
+            db,
+            callee,
+            agreed,
+            &deferred.arguments,
+            evaluated,
+        ) {
+            QueryPoll::Ready(Ok(selected)) => selected,
+            QueryPoll::Ready(Err(error)) => return QueryPoll::Ready(Err(error)),
+            QueryPoll::NeedInput(input) => return QueryPoll::NeedInput(input),
+        };
         self.pending_bytes = self.pending_bytes.saturating_add(selected.bytes);
         self.pending.insert(identity, selected);
         self.frame.trait_calls.remove(&identity);
@@ -969,6 +1194,18 @@ impl RunMachine {
         candidates: &[crate::core::digest::Digest],
         arguments: &[SelectionArgument],
         result_self: Option<&crate::traits::term::TyTerm>,
+    ) -> QueryPoll<Option<crate::core::digest::Digest>> {
+        self.select_by_arguments_with(db, candidates, arguments, result_self, true)
+    }
+    /// `select_by_arguments`; with `fallback` false, several impls accepting an
+    /// unresolved literal select nothing (a later argument may still decide).
+    pub(super) fn select_by_arguments_with(
+        &mut self,
+        db: &mut Database,
+        candidates: &[crate::core::digest::Digest],
+        arguments: &[SelectionArgument],
+        result_self: Option<&crate::traits::term::TyTerm>,
+        fallback_allowed: bool,
     ) -> QueryPoll<Option<crate::core::digest::Digest>> {
         use crate::{ir::op::PrimitiveType as P, traits::term::TyTerm};
         // Each accepting impl, and whether every unresolved literal it
@@ -1066,6 +1303,10 @@ impl RunMachine {
         }
         QueryPoll::Ready(Ok(match accepted.as_slice() {
             [(function, _)] => Some(*function),
+            several if !fallback_allowed => {
+                let _ = several;
+                None
+            }
             // Several accept an unresolved literal: the fallback type's.
             several => {
                 let mut by_fallback = several.iter().filter(|(_, fallback)| *fallback);
@@ -1091,6 +1332,7 @@ impl RunMachine {
         &mut self,
         db: &mut Database,
         callee: Arc<SourceCallable>,
+        explicit: Vec<(u32, ArgumentType)>,
         arguments: &[SlotId],
         evaluated: usize,
     ) -> QueryPoll<SelectedArgumentCall> {
@@ -1156,7 +1398,7 @@ impl RunMachine {
             Err(error) => return QueryPoll::Ready(Err(error)),
         };
         for hint in &mut hints {
-            argument_hints::apply_context(hint, &callee, &[], result_hint.as_ref());
+            argument_hints::apply_context(hint, &callee, &explicit, result_hint.as_ref());
         }
         // The impl was selected after its arguments were evaluated (no
         // parameter hint existed then): an argument still an unconstrained
@@ -1203,7 +1445,7 @@ impl RunMachine {
         }
         QueryPoll::Ready(Ok(SelectedArgumentCall {
             callee,
-            explicit: Vec::new(),
+            explicit,
             typed: None,
             owner_application: None,
             hints,
@@ -1217,65 +1459,4 @@ impl RunMachine {
             bytes,
         }))
     }
-}
-
-/// The declared parameter Types a qualified call's explicit trait arguments
-/// fix: each declared parameter written in terms of a trait Type parameter
-/// (`rhs: Rhs`, `other: &Rhs`) with that parameter replaced by the written
-/// argument, when the argument is a plain primitive (or reference to one) and
-/// the result is a closed Type. Arguments of other shapes constrain nothing
-/// (the call's own arguments select the impl).
-fn explicit_parameter_types(
-    signature: &crate::syntax::signatures::FunctionSignature,
-    declaration: crate::core::digest::Digest,
-    explicit: &[String],
-    self_term: Option<&crate::traits::term::TyTerm>,
-) -> Result<Vec<(usize, crate::traits::term::TyTerm)>, Diagnostic> {
-    use crate::{
-        syntax::signatures::GenericKind,
-        traits::{
-            subst::Substitution,
-            term::{GenericArg, ParamKey},
-        },
-    };
-    let (Some(layout), false) = (signature.generic_source_layout, explicit.is_empty()) else {
-        return Ok(Vec::new());
-    };
-    let inherited = signature
-        .generics
-        .iter()
-        .skip(layout.own as usize)
-        .take(layout.inherited as usize)
-        .filter(|parameter| parameter.kind == GenericKind::Type);
-    let mut substitution = Substitution::default();
-    let mut fixed = false;
-    for (parameter, written) in inherited.zip(explicit) {
-        let Some(term) =
-            crate::frontend::callables::explicit_argument_term(written, self_term)
-        else {
-            continue;
-        };
-        substitution.insert(
-            ParamKey {
-                definition: declaration,
-                ordinal: parameter.ordinal,
-            },
-            GenericArg::Type(term),
-        )?;
-        fixed = true;
-    }
-    if !fixed {
-        return Ok(Vec::new());
-    }
-    let mut expected = Vec::new();
-    for (ordinal, parameter) in signature.parameters.iter().enumerate() {
-        let Some(declared) = &parameter.symbolic else {
-            continue;
-        };
-        let applied = substitution.apply(declared)?;
-        if &applied != declared && crate::frontend::call_contracts::closed_term(&applied) {
-            expected.push((ordinal, applied));
-        }
-    }
-    Ok(expected)
 }

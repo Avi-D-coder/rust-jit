@@ -72,6 +72,8 @@ mod pattern_publication_frame;
 mod scope_cleanup_frame;
 #[path = "frame_temporary_scopes.rs"]
 mod temporary_scope_frame;
+#[path = "frame_termination.rs"]
+mod termination_frame;
 use crate::core::digest::StableEncode;
 use crate::{
     core::diagnostic::Diagnostic,
@@ -332,10 +334,6 @@ pub(crate) struct DeferredTraitCall {
     /// impl's result must unify with (rejects the blanket `From<T> for T`
     /// when the argument is not a `u64`).
     pub(crate) result_self: Option<crate::traits::term::TyTerm>,
-    /// A qualified call's explicit trait arguments (`<i32 as Mul<&i32>>::mul`)
-    /// as the declared parameter Types they fix: an argument still unresolved
-    /// (an unsuffixed literal) is selected against these.
-    pub(crate) expected: Vec<(usize, crate::traits::term::TyTerm)>,
 }
 /// Actual immutable declared parameter observation, retained across argument
 /// effects and suspension with its relevant source dependencies.
@@ -506,118 +504,27 @@ impl Frame {
             crate::ir::pc::NodeId(entry.node),
             crate::ir::pc::Phase::from_code(entry.phase),
         )?;
+        // Slot lexical homes are fixed by the indexed body: copy the retained
+        // table instead of walking every node for every call.
+        let statics = body.slot_statics();
+        if statics.len() != body.slot_count() as usize {
+            return Err(invalid("body slot table differs from its slot count"));
+        }
         let mut slots = Vec::new();
         slots
-            .try_reserve_exact(body.slot_count() as usize)
+            .try_reserve_exact(statics.len())
             .map_err(|_| invalid("frame slot allocation failed"))?;
-        for _ in 0..body.slot_count() {
-            slots.push(Slot {
-                cell: None,
-                hint: None,
-                strict_hint: true,
-                scope: ScopeId(0),
-                source: None,
-                conditional_extension: None,
-                construction: None,
-                place: None,
-                expects_reference: None,
-            });
-        }
-        for node in body.nodes() {
-            // Control/block results are consumed after their entered scope
-            // leaves. Their value and its temporary place share that outer
-            // continuation scope; inner bindings keep their indexed scopes.
-            let result_scope = if matches!(
-                node.role,
-                crate::syntax::body_index::NodeRole::Expression(
-                    crate::syntax::body_index::ExpressionKind::Block
-                        | crate::syntax::body_index::ExpressionKind::Const
-                        | crate::syntax::body_index::ExpressionKind::While
-                        | crate::syntax::body_index::ExpressionKind::Loop
-                        | crate::syntax::body_index::ExpressionKind::For
-                )
-            ) {
-                body.scopes()[node.scope.0 as usize]
-                    .parent
-                    .unwrap_or(node.scope)
-            } else {
-                node.scope
-            };
-            if let Some(id) = node.value {
-                if node
-                    .extended_to
-                    .as_ref()
-                    .is_some_and(|extension| !extension.constructors.is_empty())
-                {
-                    slots[id.0 as usize].conditional_extension = Some(node.id);
-                }
-                // A block's result belongs to its enclosing expression scope.
-                // Inner temporaries and bindings remain in the entered block.
-                slots[id.0 as usize].scope = if let Some(extension) = node
-                    .extended_to
-                    .as_ref()
-                    .filter(|e| e.constructors.is_empty())
-                {
-                    extension.scope
-                } else if let Some(clause) = node.boolean_scope.or(node.clause_scope) {
-                    body.scopes()[clause.0 as usize]
-                        .parent
-                        .unwrap_or(node.scope)
-                } else {
-                    result_scope
-                };
-            }
-            for (ordinal, id) in node.runtime_temporaries.into_iter().enumerate() {
-                let Some(id) = id else { continue };
-                // An initialized ref pattern moves this short-lived reference
-                // result into its block-owned binding. Its referent independently
-                // follows the indexed extending-pattern annotation above.
-                let scope = if node.role == crate::syntax::body_index::NodeRole::Statement {
-                    node.statement_scope.unwrap_or(node.scope)
-                } else if node.role
-                    == crate::syntax::body_index::NodeRole::Expression(
-                        crate::syntax::body_index::ExpressionKind::For,
-                    )
-                    && ordinal == 1
-                {
-                    // A `for` iteration's `next` result lives for one iteration.
-                    node.condition_scope.unwrap_or(node.scope)
-                } else if let Some(closure) = node.closure_scope {
-                    // A closure's pattern-parameter test lives in its own frame.
-                    closure
-                } else {
-                    node.scope
-                };
-                slots[id.0 as usize].scope = scope;
-                let place = SlotId(
-                    id.0.checked_add(1)
-                        .ok_or_else(|| invalid("runtime temporary place slot overflow"))?,
-                );
-                if body.slot_kind(place)? != SlotKind::Place {
-                    return Err(invalid("runtime temporary lacks its reserved place pair"));
-                }
-                slots[place.0 as usize].scope = scope;
-            }
-            // A closure's parameter staging slots belong to its own frame.
-            let scalar_scope = node.closure_scope.unwrap_or(node.scope);
-            for id in &node.runtime_scalar_slots {
-                slots[id.0 as usize].scope = scalar_scope;
-                let place = SlotId(
-                    id.0.checked_add(1)
-                        .ok_or_else(|| invalid("runtime scalar place slot overflow"))?,
-                );
-                if body.slot_kind(place)? != SlotKind::Place {
-                    return Err(invalid("runtime scalar lacks its reserved place pair"));
-                }
-                slots[place.0 as usize].scope = scalar_scope;
-            }
-            if let Some(id) = node.constructor_guard {
-                slots[id.0 as usize].scope = node.scope;
-            }
-            if let Some(id) = node.place {
-                slots[id.0 as usize].scope = result_scope;
-            }
-        }
+        slots.extend(statics.iter().map(|home| Slot {
+            cell: None,
+            hint: None,
+            strict_hint: true,
+            scope: home.scope,
+            source: None,
+            conditional_extension: home.conditional_extension,
+            construction: None,
+            place: None,
+            expects_reference: None,
+        }));
         let mut active_scopes = Vec::new();
         active_scopes
             .try_reserve_exact(body.scopes().len())
@@ -954,11 +861,19 @@ impl Frame {
             Some(source @ (TyTerm::Nominal(..) | TyTerm::Tuple(..) | TyTerm::Array(..)))
                 if crate::frontend::call_contracts::closed_term(source) =>
             {
-                if !store
-                    .descriptor_source_term(ty)
-                    .as_ref()
-                    .is_some_and(|actual| actual == source || source.admits_dyn(actual))
-                {
+                // Equality up to region arguments, as `require_borrow_source_target`
+                // compares a closed source: a reached descriptor records no
+                // regions while the call contract's view (`Iter<'_, T>`) lists
+                // them. Type and const arguments still compare exactly.
+                let admitted = store.descriptor_source_term(ty).is_some_and(|actual| {
+                    actual == *source
+                        || source.admits_dyn(&actual)
+                        || {
+                            let declared = crate::frontend::signature_subst::erase_regions(source);
+                            declared == actual || declared.admits_dyn(&actual)
+                        }
+                });
+                if !admitted {
                     return Err(Diagnostic::new(
                         "LRR-E-OWNERSHIP",
                         "parameter descriptor differs from its closed source type".into(),
@@ -1216,6 +1131,11 @@ impl Frame {
                         crate::syntax::body_index::ExpressionKind::MethodCall,
                     )
                     && self.pc.phase == crate::ir::pc::Phase::Commit.code().unwrap_or(u16::MAX))
+                // `expr?` makes its three lang-item calls from distinct phases.
+                || node.role
+                    == crate::syntax::body_index::NodeRole::Expression(
+                        crate::syntax::body_index::ExpressionKind::Try,
+                    )
         }) {
             return Err(invalid(
                 "ordinary call scope witness requires an indexed call",
@@ -5787,11 +5707,10 @@ impl Frame {
         scope: ScopeId,
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
-        for ordinal in (0..self.slots.len()).rev() {
-            if self.slots[ordinal].scope != scope {
-                continue;
-            }
-            let id = SlotId(u32::try_from(ordinal).map_err(|_| invalid("guard slot overflow"))?);
+        let body = Arc::clone(&self.body);
+        for &slot_ordinal in body.scope_slots(scope).iter().rev() {
+            let ordinal = slot_ordinal as usize;
+            let id = SlotId(slot_ordinal);
             while let Some(active) = self.slots[ordinal].construction.as_ref() {
                 if !store.admit_scalar_construction_cleanup(active.guard)? {
                     if self.constructor_cleanup_next(id, store)?.is_some() {
@@ -5910,7 +5829,10 @@ impl Frame {
             .active_scopes
             .iter()
             .position(|active| *active == scope)
-            && self.slots.iter().any(|slot| {
+            // An active construction lives only in a guard slot
+            // (`constructor_slot` gates every start), so visit just those.
+            && self.body.constructor_guards().iter().any(|(guard, _)| {
+                let slot = &self.slots[guard.0 as usize];
                 slot.construction.is_some() && self.active_scopes[position..].contains(&slot.scope)
             })
         {
@@ -5975,10 +5897,14 @@ impl Frame {
         scope: ScopeId,
         store: &mut GuestStore,
     ) -> Result<(), Diagnostic> {
-        for (ordinal, cell) in self.bindings.iter_mut().enumerate().rev() {
-            if self.body.nodes()[ordinal].scope == scope
-                && let Some(id) = *cell
-            {
+        // Only this scope's nodes, descending, as the scope exit visits them.
+        for &ordinal in self.body.scope_nodes(scope).iter().rev() {
+            let ordinal = ordinal as usize;
+            let cell = self
+                .bindings
+                .get_mut(ordinal)
+                .ok_or_else(|| invalid("scope binding ordinal absent"))?;
+            if let Some(id) = *cell {
                 store.admit_discard(id)?;
                 let completed = self
                     .counters
@@ -5994,9 +5920,7 @@ impl Frame {
                 *cell = None;
                 self.counters.cleanup_elements_completed = completed;
             }
-            if self.body.nodes()[ordinal].scope == scope {
-                self.binding_sources[ordinal] = None;
-            }
+            self.binding_sources[ordinal] = None;
         }
         Ok(())
     }
@@ -6021,7 +5945,11 @@ impl Frame {
         }
         // Only the initial scalar/storage inventory is admitted by this VM task.
         // General user Drop dispatch is assigned to the later cleanup tasks.
-        for slot in self.slots.iter_mut().rev().filter(|s| s.scope == scope) {
+        for &ordinal in self.body.scope_slots(scope).iter().rev() {
+            let slot = self
+                .slots
+                .get_mut(ordinal as usize)
+                .ok_or_else(|| invalid("scope slot ordinal absent"))?;
             if let Some(cell) = slot.cell {
                 store.admit_discard(cell)?;
                 let completed = self

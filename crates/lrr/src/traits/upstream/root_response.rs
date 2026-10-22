@@ -95,10 +95,20 @@ pub(super) fn export_root_response<'cx>(
         }
         resolved.insert(key, value);
     }
+    let mut const_representatives = HashMap::new();
+    for key in variables.const_keys() {
+        let value = variables
+            .resolved_const(key)
+            .map_err(RootResponsePending::Owner)?;
+        if matches!(value.kind(), ty::ConstKind::Infer(_)) {
+            const_representatives.entry(value).or_insert(key);
+        }
+    }
     let mut exporter = Exporter {
         cx: variables.context(),
         layouts,
         representatives,
+        const_representatives,
         unresolved: BTreeMap::new(),
     };
     let values = resolved
@@ -115,6 +125,7 @@ struct Exporter<'data, 'cx> {
     cx: Cx<'cx>,
     layouts: &'data SourceGenericLayouts,
     representatives: HashMap<RootTy<'cx>, (InferVarKey, SourceVariableFamily)>,
+    const_representatives: HashMap<ty::Const<Cx<'cx>>, InferVarKey>,
     unresolved: BTreeMap<InferVarKey, SourceVariableFamily>,
 }
 impl<'cx> Exporter<'_, 'cx> {
@@ -160,6 +171,11 @@ impl<'cx> Exporter<'_, 'cx> {
             ty::ConstKind::Param(parameter) => Ok(ConstTerm::Param(
                 self.parameter(parameter, BoundKind::Const)?,
             )),
+            ty::ConstKind::Infer(_) => self
+                .const_representatives
+                .get(&value)
+                .map(|key| ConstTerm::Infer(*key))
+                .ok_or(RootResponsePending::UnknownInference),
             ty::ConstKind::Value(value) => {
                 // Existing portable ConstTerm::Value is the source encoder's
                 // u64 usize scalar, not arbitrary CTFE or signed/ADT values.

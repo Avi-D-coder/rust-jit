@@ -14,6 +14,8 @@ mod callable_value_tests;
 mod drop_witness_tests;
 #[cfg(test)]
 mod macro_generated_definition_tests;
+#[cfg(test)]
+mod library_builtin_macro_tests;
 mod explain;
 #[cfg(test)]
 mod nested_operand_prefix;
@@ -717,6 +719,9 @@ pub fn entry(program: &str) -> i32 {
             }
             let code = if failed || matches!(report, StandaloneOutcome::Panicked(_)) {
                 1
+            } else if let StandaloneOutcome::Completed(report) = &report {
+                // `Termination::report`'s status (`main() -> Err(_)` is 1).
+                report.exit_code
             } else {
                 0
             };

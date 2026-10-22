@@ -203,8 +203,24 @@ pub(crate) fn lookup_pattern_name(
     caller: Digest,
     name: &PatternName,
 ) -> QueryPoll<(PatternName, NameLookup)> {
-    if name.spelling == OPTION_SOME_LANG_PATH {
-        for spelling in [OPTION_SOME_LANG_PATH, "::std::option::Option::Some"] {
+    // A lang item a desugaring names by its absolute core path (`for`'s
+    // `Option::Some`, `?`'s `ControlFlow::Continue`): the same path through
+    // `std` where a Rust 2015 crate cannot name `core`.
+    let lang = if name.spelling == OPTION_SOME_LANG_PATH {
+        Some(([OPTION_SOME_LANG_PATH, "::std::option::Option::Some"], "`for` requires the library's `Option::Some` (core::option)"))
+    } else if name.spelling == crate::syntax::pattern_tree::CONTROL_FLOW_CONTINUE_LANG_PATH {
+        Some((
+            [
+                crate::syntax::pattern_tree::CONTROL_FLOW_CONTINUE_LANG_PATH,
+                "::std::ops::ControlFlow::Continue",
+            ],
+            "`?` requires the library's `ControlFlow::Continue` (core::ops)",
+        ))
+    } else {
+        None
+    };
+    if let Some((spellings, missing)) = lang {
+        for spelling in spellings {
             match resolver.lookup_written(db, caller, spelling, Namespace::Value) {
                 QueryPoll::Ready(Ok(found @ NameLookup::Defined(_))) => {
                     let selected = PatternName {
@@ -222,7 +238,7 @@ pub(crate) fn lookup_pattern_name(
         }
         return QueryPoll::Ready(Err(Diagnostic::new(
             "LRR-E-NAME-MISSING",
-            "`for` requires the library's `Option::Some` (core::option)".into(),
+            missing.into(),
         )));
     }
     let namespace = if matches!(name.form, NameForm::Record(_)) {

@@ -47,7 +47,15 @@ pub(super) enum SourceFactBundlePending {
 }
 struct RetainedQuery {
     value: Arc<QueryValue>,
-    guard: PreparedInputGuard,
+    guard: Arc<PreparedInputGuard>,
+}
+thread_local! {
+    /// The input closure of a query answer, captured once per answer: every
+    /// bundle of a run retains many of the same immutable answers, and a
+    /// capture walks the answer's whole input closure. A cached closure is
+    /// reused only while every input it attests is still current.
+    static CAPTURED_GUARDS: std::cell::RefCell<BTreeMap<(QueryKey, Digest), Arc<PreparedInputGuard>>> =
+        const { std::cell::RefCell::new(BTreeMap::new()) };
 }
 pub(super) struct SourceDefinitionFacts {
     id: DefinitionId,
@@ -101,6 +109,9 @@ impl SourceImplFacts {
 /// exists: callers inspect the demanded query family's existing typed outcome.
 pub(super) struct SourceFactBundle {
     request: SourceFactRequest,
+    /// The declaration demands of the request's input Types (they do not
+    /// include the component-specific inference variables).
+    required: SourceRequirements,
     catalog: Arc<InputValue>,
     membership: Arc<QueryValue>,
     retained: BTreeMap<QueryKey, RetainedQuery>,
@@ -114,6 +125,8 @@ pub(super) struct SourceFactBundle {
     hierarchies: BTreeMap<Digest, Arc<QueryValue>>,
     implementations: BTreeMap<Digest, SourceImplFacts>,
     adts: BTreeMap<Digest, Arc<QueryValue>>,
+    /// A struct's declared field Types: its tail decides its sizedness.
+    adt_fields: BTreeMap<Digest, Arc<QueryValue>>,
     /// Relating two applications of a nominal reads its variances.
     variances: BTreeMap<Digest, Arc<QueryValue>>,
 }
@@ -130,12 +143,91 @@ fn capture(db: &mut Database, retained: &mut BTreeMap<QueryKey, RetainedQuery>, 
     if !outcome.cacheable || !outcome.value.matches(&key) {
         return QueryPoll::Ready(Err(fault("source bundle query is not immutable or its key differs")));
     }
-    let guard = ready!(db.prepare_input_guard(&SyntaxProvider, &key, outcome.fingerprint));
+    // Capturing records the closure's stamps into an active dependency
+    // collector; reuse is only for a capture made outside one.
+    let reusable = !db.dependency_collection_active();
+    let cached = if reusable {
+        CAPTURED_GUARDS.with(|cache| cache.borrow().get(&(key.clone(), outcome.fingerprint)).cloned())
+    } else {
+        None
+    };
+    let guard = match cached.filter(|guard| guard.require_current(db).is_ok()) {
+        Some(guard) => guard,
+        None => {
+            let guard = Arc::new(ready!(db.prepare_input_guard(&SyntaxProvider, &key, outcome.fingerprint)));
+            if reusable {
+                CAPTURED_GUARDS.with(|cache| {
+                    cache.borrow_mut().insert((key.clone(), outcome.fingerprint), Arc::clone(&guard));
+                });
+            }
+            guard
+        }
+    };
     let value = Arc::clone(&outcome.value);
     retained.insert(key, RetainedQuery { value: outcome.value, guard });
     QueryPoll::Ready(Ok(value))
 }
+thread_local! {
+    /// The most recent bundles: a component's request is usually covered by the
+    /// bundle an earlier component of the same body demanded.
+    static RECENT_BUNDLES: std::cell::RefCell<Vec<Arc<SourceFactBundle>>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+const RECENT_BUNDLE_LIMIT: usize = 16;
 impl SourceFactBundle {
+    /// The bundle of `request`: a retained bundle of the same catalog, caller
+    /// and callee whose demands include every demand of `request` (a superset
+    /// holds every fact `request` reads), else a freshly prepared one. The
+    /// reused bundle is still current, or it is not reused.
+    pub(super) fn prepare_cached(
+        db: &mut Database,
+        catalog: Arc<InputValue>,
+        request: SourceFactRequest,
+    ) -> QueryPoll<Arc<Self>> {
+        let mut required = SourceRequirements::new();
+        for ty in &request.input_types { require_type(&mut required, ty); }
+        let reusable = RECENT_BUNDLES.with(|recent| {
+            recent
+                .borrow()
+                .iter()
+                .find(|bundle| {
+                    Arc::ptr_eq(&bundle.catalog, &catalog)
+                        && bundle.request.caller == request.caller
+                        && bundle.request.callee == request.callee
+                        && request.extra_callees.is_subset(&bundle.request.extra_callees)
+                        && request.traits.is_subset(&bundle.request.traits)
+                        && bundle.required.covers(&required)
+                })
+                .cloned()
+        });
+        if let Some(bundle) = reusable {
+            if bundle.require_current(db).is_ok() {
+                return QueryPoll::Ready(Ok(bundle));
+            }
+            RECENT_BUNDLES.with(|recent| recent.borrow_mut().retain(|kept| !Arc::ptr_eq(kept, &bundle)));
+        }
+        QueryPoll::Ready(Ok(Arc::new(ready!(Self::prepare(db, Arc::clone(&catalog), request)))))
+    }
+    /// Retain a bundle whose facts a root has accepted, for the next
+    /// component of the same body to reuse.
+    pub(super) fn remember(bundle: &Arc<Self>) {
+        RECENT_BUNDLES.with(|recent| {
+            let mut recent = recent.borrow_mut();
+            // The new bundle supersedes the retained ones it covers.
+            recent.retain(|kept| {
+                !(Arc::ptr_eq(&kept.catalog, &bundle.catalog)
+                    && kept.request.caller == bundle.request.caller
+                    && kept.request.callee == bundle.request.callee
+                    && kept.request.extra_callees.is_subset(&bundle.request.extra_callees)
+                    && kept.request.traits.is_subset(&bundle.request.traits)
+                    && bundle.required.covers(&kept.required))
+            });
+            recent.push(Arc::clone(bundle));
+            if recent.len() > RECENT_BUNDLE_LIMIT {
+                recent.remove(0);
+            }
+        });
+    }
     pub(super) fn prepare(db: &mut Database, catalog: Arc<InputValue>, mut request: SourceFactRequest) -> QueryPoll<Self> {
         let InputValue::DiscoverySeal(publication) = catalog.as_ref() else {
             return QueryPoll::Ready(Err(fault("source bundle catalog input differs")));
@@ -159,7 +251,7 @@ impl SourceFactBundle {
         }
         let mut required = SourceRequirements::new();
         for ty in &request.input_types { require_type(&mut required, ty); }
-        let input_bindings = ready!(SourceBindings::prepare(db, Arc::clone(&catalog), required));
+        let input_bindings = ready!(SourceBindings::prepare(db, Arc::clone(&catalog), required.clone()));
         // Pinned normalization first probes the projected item's actual parent
         // trait, including its complete relevant-impl bucket. A declaration
         // identity alone cannot certify that bucket, even when it is empty.
@@ -170,10 +262,10 @@ impl SourceFactBundle {
         pending_definitions.extend(request.extra_callees.iter().copied());
         pending_definitions.extend(request.traits.iter().copied());
         pending_definitions.extend(input_bindings.definitions.keys().copied());
-        let mut result = Self { request, catalog, membership, retained, input_bindings,
+        let mut result = Self { request, required, catalog, membership, retained, input_bindings,
             definitions: BTreeMap::new(), traits: BTreeMap::new(), associated_types: BTreeMap::new(),
             aliases: BTreeMap::new(), clauses: BTreeMap::new(),
-            own_clauses: BTreeMap::new(), hierarchies: BTreeMap::new(), implementations: BTreeMap::new(), adts: BTreeMap::new(),
+            own_clauses: BTreeMap::new(), hierarchies: BTreeMap::new(), implementations: BTreeMap::new(), adts: BTreeMap::new(), adt_fields: BTreeMap::new(),
             variances: BTreeMap::new() };
         // Membership supplies every candidate. Type/where-clause availability
         // never deletes an actual member of a demanded bucket.
@@ -266,6 +358,21 @@ impl SourceFactBundle {
                         inventory: inventory.clone(), definition, fields: false,
                     }))));
                     result.adts.insert(definition, adt);
+                    // A struct is `Sized` iff its tail field Type is: retain the
+                    // declared fields and demand the nominals along the tail.
+                    if role == DefinitionHeaderRole::Struct {
+                        let fields_key = super::source_adt_fields::AdtSourceFieldsKey { inventory: inventory.clone(), definition };
+                        let fields = ready!(capture(db, &mut result.retained, QueryKey::AdtSourceFields(Box::new(fields_key))));
+                        if let QueryValue::AdtSourceFields(plan) = fields.as_ref()
+                            && plan.pending().is_none()
+                        {
+                            let last = plan.field_count(0).checked_sub(1);
+                            if let Some(tail) = last.and_then(|last| plan.field_term(0, last)) {
+                                pending_definitions.extend(tail_nominals(tail));
+                            }
+                        }
+                        result.adt_fields.insert(definition, fields);
+                    }
                     let variance = ready!(capture(db, &mut result.retained, QueryKey::SourceVarianceQueries(Box::new(key.clone()))));
                     result.variances.insert(definition, variance);
                 }
@@ -395,6 +502,15 @@ impl SourceFactBundle {
         let QueryValue::SourceVarianceQueries(plan) = self.variances.get(&definition)?.as_ref() else { unreachable!("retained variance queries") };
         Some(plan)
     }
+    /// A struct's declared field plan (for its sizedness tail).
+    pub(super) fn adt_source_fields(&self, definition: Digest) -> Option<&super::source_adt_fields::PreparedAdtSourceFields> {
+        let QueryValue::AdtSourceFields(plan) = self.adt_fields.get(&definition)?.as_ref() else { unreachable!("retained ADT fields") };
+        Some(plan)
+    }
+    pub(super) fn adt(&self, definition: Digest) -> Option<&PreparedSourceAdtFacts> {
+        let QueryValue::SourceAdtFacts(plan) = self.adts.get(&definition)?.as_ref() else { unreachable!("retained ADT declaration") };
+        Some(plan.as_ref())
+    }
     pub(super) fn adts(&self) -> impl Iterator<Item = (Digest, &PreparedSourceAdtFacts)> {
         self.adts.iter().map(|(definition, value)| {
             let QueryValue::SourceAdtFacts(plan) = value.as_ref() else { unreachable!("retained ADT declaration") }; (*definition, plan.as_ref())
@@ -441,5 +557,30 @@ impl SourceFactBundle {
         }
         Ok(())
     }
+}
+/// The nominal declarations a tail Type's sizedness may read (the tail itself
+/// and the tails of tuples and generic arguments substituted into a tail).
+fn tail_nominals(tail: &TyTerm) -> Vec<Digest> {
+    use crate::traits::term::GenericArg;
+    let mut found = Vec::new();
+    let mut work = vec![tail];
+    while let Some(term) = work.pop() {
+        match term {
+            TyTerm::Nominal(identity, arguments) => {
+                // A raw pointer is a reserved nominal identity, not a declaration.
+                if crate::traits::pointer_terms::as_raw_pointer(term).is_none() {
+                    found.push(*identity);
+                }
+                for argument in arguments {
+                    if let GenericArg::Type(inner) = argument {
+                        work.push(inner);
+                    }
+                }
+            }
+            TyTerm::Tuple(members) => work.extend(members.last()),
+            _ => {}
+        }
+    }
+    found
 }
 fn fault(message: &str) -> Diagnostic { Diagnostic::new("LRR-E-UPSTREAM-SOLVER-INPUT", message.into()) }

@@ -369,6 +369,15 @@ impl Constructed {
                 .any(|(index, _)| *index == position)
         })
     }
+    /// Whether the constructor was selected through a retained source
+    /// application (a type alias or `Self` applied to arguments).
+    pub(super) fn has_application(&self) -> bool {
+        self.application.is_some()
+    }
+    /// Declaration field `field`'s Type under the nominal Type's arguments.
+    pub(super) fn field_under(&self, field: u32, args: &[GenericArg]) -> Option<TyTerm> {
+        self.fields.get(field as usize)?.under(args)
+    }
     /// The type-parameter positions inside declaration field `field`.
     pub(super) fn field_parameters(&self, field: u32) -> Vec<(u32, Vec<Step>)> {
         self.fields

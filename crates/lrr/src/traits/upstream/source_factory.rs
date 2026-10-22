@@ -349,9 +349,16 @@ pub(super) fn materialize<'cx>(
     for (source, plan) in bundle.adts() {
         let id = bundle.definition_id(source).ok_or_else(|| fault("ADT definition absent"))?;
         match (plan.encode(cx, configuration), plan.source_variants()) {
-            (Ok(info), Ok(source_variants)) => {
+            (Ok(mut info), Ok(source_variants)) => {
                 if plan.definition_id().map_err(|why| fault(&format!("ADT identity unavailable: {why:?}")))? != id {
                     return Err(fault("ADT source identity differs"));
+                }
+                match adt_sizedness(cx, configuration, bundle, source, plan.domain()) {
+                    Ok((sized, meta_sized)) => {
+                        info.sized = QueryFact::Known(sized);
+                        info.meta_sized = QueryFact::Known(meta_sized);
+                    }
+                    Err(why) => hold(&mut unprepared, source, "adt_sizedness", why),
                 }
                 adts.insert(id, AdtFacts { info, source_variants, unsizing: QueryFact::Unprepared });
             }
@@ -365,6 +372,69 @@ pub(super) fn materialize<'cx>(
             QueryFact::Unprepared, QueryFact::Unprepared, BTreeMap::new(), BTreeMap::new()),
         unprepared,
     })
+}
+
+/// A source ADT's `Sized` and `MetaSized` constraints (rustc's
+/// `adt_sizedness_constraint`): `None` when the ADT is unconditionally so,
+/// else the Type that must be. Computed from the retained declared tails.
+fn adt_sizedness<'cx>(
+    cx: Cx<'cx>,
+    configuration: &PreparedSolverConfiguration,
+    bundle: &SourceFactBundle,
+    source: Digest,
+    domain: super::source_adt_facts::SourceAdtDomain,
+) -> Result<(Option<super::model::Ty<'cx, prepared::PreparedProvider<'cx>>>, Option<super::model::Ty<'cx, prepared::PreparedProvider<'cx>>>), String> {
+    use super::source_adt_facts::SourceAdtDomain;
+    use super::source_adt_sizedness::{AdtShape, constraint_for_ty};
+    use crate::traits::term::ParamKey;
+    use ty::solve::SizedTraitKind;
+    let SourceAdtDomain::Nominal(kind) = domain else {
+        return Err("not a nominal declaration".into());
+    };
+    if kind != super::model::AdtKind::Struct {
+        return Ok((None, None));
+    }
+    let fields = bundle.adt_source_fields(source).ok_or("struct field plan not retained")?;
+    if let Some(why) = fields.pending() {
+        return Err(format!("field plan pending: {why:?}"));
+    }
+    let tail_of = |plan: &super::source_adt_fields::PreparedAdtSourceFields| {
+        plan.field_count(0).checked_sub(1).and_then(|last| plan.field_term(0, last).cloned())
+    };
+    let shape = |identity: Digest| -> Option<AdtShape> {
+        match bundle.adt(identity)?.domain() {
+            SourceAdtDomain::Nominal(super::model::AdtKind::Struct) => {
+                let plan = bundle.adt_source_fields(identity)?;
+                if plan.pending().is_some() {
+                    return None;
+                }
+                Some(AdtShape::Struct {
+                    tail: tail_of(plan),
+                    parameters: plan
+                        .type_parameter_ordinals()
+                        .into_iter()
+                        .map(|ordinal| ParamKey { definition: identity, ordinal })
+                        .collect(),
+                })
+            }
+            SourceAdtDomain::Nominal(_) => Some(AdtShape::Fieldless),
+            _ => None,
+        }
+    };
+    let Some(tail) = tail_of(fields) else {
+        return Ok((None, None));
+    };
+    let mut constraints = [None, None];
+    for (slot, sizedness) in [SizedTraitKind::Sized, SizedTraitKind::MetaSized].into_iter().enumerate() {
+        let constraint = constraint_for_ty(sizedness, &tail, &shape, &mut vec![source])
+            .map_err(|identity| format!("nominal {identity:?} in the tail has no retained declaration"))?;
+        constraints[slot] = match constraint {
+            Some(term) => Some(fields.encode_term(cx, configuration, &term).map_err(|why| format!("{why:?}"))?),
+            None => None,
+        };
+    }
+    let [sized, meta_sized] = constraints;
+    Ok((sized, meta_sized))
 }
 
 /// Per-definition Q76 classification is complete even when the declaration is

@@ -77,6 +77,20 @@ pub(super) fn capture(
         .iter()
         .map(|item| (item.def_key.fingerprint(), item))
         .collect::<BTreeMap<_, _>>();
+    // A block module that only an expansion wrote is hoisted by the assembled
+    // tree's outline (`outline::module_segment`) and has no original
+    // declaration to anchor; it is not part of the original inventory.
+    let mut normalized = normalized;
+    normalized.items.retain(|item| {
+        source_items.contains_key(&item.def_key.fingerprint())
+            || !(item.def_key.item_kind == crate::source::manifest::ItemKind::Module
+                && item.def_key.declared_name.starts_with("__lrr_block_")
+                || item
+                    .def_key
+                    .module_path
+                    .iter()
+                    .any(|segment| segment.starts_with("__lrr_block_")))
+    });
     if source_items.len() != original.items.len() || normalized.items.len() != original.items.len()
     {
         return Err(fault(

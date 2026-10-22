@@ -501,6 +501,9 @@ enum DeclarativeBody {
     Macro2 {
         arguments: Option<TokenForest>,
         body: TokenForest,
+        /// `#[rustc_macro_transparency]` of the definition, when present; it
+        /// replaces the dialect's default (opaque) transparency.
+        transparency: Option<wire::Transparency>,
     },
     Procedural(std::sync::Arc<crate::service::function_macro_requests::PreparedFunctionRequest>),
     OwnedGenerated(
@@ -600,6 +603,7 @@ fn builtin_call_site_in_source(
         module_path,
         cfg: active,
         crate_names,
+        located: true,
     })
 }
 /// Actual source producer generation includes the pinned backend and the
@@ -860,8 +864,34 @@ fn original_definition_body(
         crate::syntax::macro_calls::MacroDefinitionDialect::Macro2 => DeclarativeBody::Macro2 {
             arguments: shape.arguments().map(|r| group(forest, r)).transpose()?,
             body,
+            transparency: declared_transparency(source, selected),
         },
     })
+}
+/// rustc's `#[rustc_macro_transparency = "..."]` on a macro definition
+/// (`rustc_resolve::macros::...` reads `sym::rustc_macro_transparency`):
+/// `transparent`, `semiopaque` (`macro_rules`-like) or `opaque`.
+fn declared_transparency(
+    source: &PreparedSourceView,
+    selected: SourceRange,
+) -> Option<wire::Transparency> {
+    let item = source
+        .outline()
+        .items
+        .iter()
+        .find(|item| item.declaration_span == selected)?;
+    let attribute = item
+        .header
+        .attributes
+        .iter()
+        .find(|attribute| attribute.name == "rustc_macro_transparency")?;
+    let text: String = attribute.tokens.iter().map(|t| t.text.as_str()).collect();
+    match text.split('"').nth(1)? {
+        "transparent" => Some(wire::Transparency::Transparent),
+        "semiopaque" | "semitransparent" => Some(wire::Transparency::SemiTransparent),
+        "opaque" => Some(wire::Transparency::Opaque),
+        _ => None,
+    }
 }
 
 impl SourceDeclarative {
@@ -1913,18 +1943,17 @@ impl SourceDeclarative {
             parents: Vec::new(),
         })
     }
-    pub(crate) fn generated_request(
-        &self,
+    /// The definition, key and call site of a generated call agree.
+    fn check_generated_call(
         definition: &crate::expand::scopes::MacroDefinition,
-        key: ExpansionKey,
+        key: &ExpansionKey,
         input: &crate::syntax::token_wire::TokenForest,
         site: crate::syntax::token_wire::Key,
-    ) -> Result<SourceDeclarativeRequest, Diagnostic> {
-        if self.index.definition(definition.identity) != Some(definition)
-            || key.macro_identity
-                != (MacroIdentity::Declaration {
-                    definition: definition.identity,
-                })
+    ) -> Result<(), Diagnostic> {
+        if key.macro_identity
+            != (MacroIdentity::Declaration {
+                definition: definition.identity,
+            })
             || key.definition_edition != definition.definition_edition
             || key.input_tokens
                 != Digest::of_bytes(&input.encode().map_err(|e| fault(e.code, &e.message))?)
@@ -1953,7 +1982,72 @@ impl SourceDeclarative {
                 "generated enclosing site context/edition differs",
             ));
         }
-        key.validate()?;
+        key.validate()
+    }
+    /// A generated item-position call of a library `#[rustc_builtin_macro]`
+    /// the adapter expands (`cfg_select!`, `compile_error!`, ...). This source
+    /// is the consumer: its configuration, crate names and edition are the
+    /// call's facts, and the outermost expansion's physical invocation in this
+    /// file is the call site `line!`-like builtins observe, exactly as for an
+    /// original-source call. `scope` is the module the generated call sits in.
+    pub(crate) fn generated_builtin_request(
+        &self,
+        definition: &crate::expand::scopes::MacroDefinition,
+        kind: lrr_expand_adapter::builtin_macros::BuiltinKind,
+        key: ExpansionKey,
+        input: &crate::syntax::token_wire::TokenForest,
+        site: crate::syntax::token_wire::Key,
+        parents: &[crate::syntax::origin::ExpansionOrigin],
+        scope: &crate::syntax::outline::ScopeKey,
+    ) -> Result<SourceDeclarativeRequest, Diagnostic> {
+        Self::check_generated_call(definition, &key, input, site)?;
+        let selection = self.source.selection();
+        let here = |origin: &crate::syntax::origin::SourceOrigin| {
+            origin.source.unit.0 == selection.outline.crate_key.0
+                && origin.source.content.0 == selection.outline.parse.content.0
+                && origin.source.path == selection.path.as_str()
+        };
+        let outermost = parents
+            .first()
+            .and_then(|parent| parent.invocation.as_ref())
+            .filter(|origin| here(origin));
+        let mut facts = builtin_call_site(
+            &self.source,
+            outermost.map_or(0, |origin| origin.range.start),
+            key.call_edition,
+            scope,
+        )?;
+        facts.located = outermost.is_some();
+        let wire = input.encode().map_err(|e| fault(e.code, &e.message))?;
+        let input = TokenForest::decode(&wire).map_err(adapter)?;
+        let origin =
+            self.original_failure_origin(definition.identity, key.invocation, &input, Key(site.0))?;
+        Ok(SourceDeclarativeRequest {
+            key,
+            body: DeclarativeBody::Builtin {
+                kind,
+                facts: std::sync::Arc::new(facts),
+            },
+            input,
+            site: Key(site.0),
+            origin: Some(origin),
+            owner: definition.defining_unit,
+        })
+    }
+    pub(crate) fn generated_request(
+        &self,
+        definition: &crate::expand::scopes::MacroDefinition,
+        key: ExpansionKey,
+        input: &crate::syntax::token_wire::TokenForest,
+        site: crate::syntax::token_wire::Key,
+    ) -> Result<SourceDeclarativeRequest, Diagnostic> {
+        if self.index.definition(definition.identity) != Some(definition) {
+            return Err(fault(
+                "LRR-E-EXPANSION-INPUT",
+                "generated enclosing definition/key differs",
+            ));
+        }
+        Self::check_generated_call(definition, &key, input, site)?;
         let generated = self.generated.get(&definition.identity).cloned();
         let body = if let Some(catalog) = generated {
             DeclarativeBody::Generated {
@@ -3515,7 +3609,7 @@ impl SourceDeclarative {
         )))
     }
     /// The adapter builtin for a library `#[rustc_builtin_macro]` definition.
-    fn library_builtin(
+    pub(crate) fn library_builtin(
         &self,
         definition: &crate::expand::scopes::MacroDefinition,
     ) -> Option<lrr_expand_adapter::builtin_macros::BuiltinKind> {
@@ -4077,13 +4171,25 @@ impl SourceDeclarative {
             .context
             .0,
         );
-        let body = match body_range {
-            Some(range) => Some(
+        let body = match (self.library_builtin(&definition), body_range) {
+            // A library `#[rustc_builtin_macro]` (or `builtin #` syntax macro)
+            // called in item position is expanded by the adapter, with the
+            // call site's facts, exactly as in a body.
+            (Some(kind), _) => Some(DeclarativeBody::Builtin {
+                kind,
+                facts: std::sync::Arc::new(builtin_call_site(
+                    &self.source,
+                    call.range.start,
+                    selection.outline.parse.profile.edition,
+                    &call.scope,
+                )?),
+            }),
+            (None, Some(range)) => Some(
                 source_owner
                     .expect("captured definition range owner")
                     .original_definition_body(range)?,
             ),
-            None => generated.map(|catalog| DeclarativeBody::Generated {
+            (None, None) => generated.map(|catalog| DeclarativeBody::Generated {
                 catalog,
                 definition: definition.identity,
             }),
@@ -4808,8 +4914,16 @@ impl SourceDeclarativeRequest {
     }
 
     pub fn expand(&self) -> Result<ExpansionRecord, Diagnostic> {
+        let mut declared = None;
         let (body, arguments) = match &self.body {
-            DeclarativeBody::Macro2 { arguments, body } => (body, Some(arguments)),
+            DeclarativeBody::Macro2 {
+                arguments,
+                body,
+                transparency,
+            } => {
+                declared = *transparency;
+                (body, Some(arguments))
+            }
             DeclarativeBody::Procedural(_) => {
                 return Err(fault(
                     "LRR-E-MACRO-PERMISSION",
@@ -4917,7 +5031,7 @@ impl SourceDeclarativeRequest {
         };
         let definition = DeclarativeMacro::shared(arguments, body).map_err(adapter)?;
         let (result, _) = definition
-            .expand_hygienic_with_limits(
+            .expand_hygienic_with_transparency(
                 &self.input,
                 self.site,
                 DeclarativeSite {
@@ -4925,6 +5039,7 @@ impl SourceDeclarativeRequest {
                     defining_unit: Key(self.owner.0),
                     definition_edition: edition(self.key.definition_edition)?,
                 },
+                declared,
                 usize::MAX,
                 usize::MAX,
             )

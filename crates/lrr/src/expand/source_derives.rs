@@ -648,9 +648,7 @@ impl SourceHelperScope {
                 .checked_add(256)
                 .ok_or_else(|| fault("source helper receipt metadata limit"))?;
             let context = forest
-                .spans()
-                .iter()
-                .find(|span| span.key() == *site)
+                .span_by_key(site)
                 .ok_or_else(|| fault("source helper introduction span absent"))?
                 .context;
             for name in row.helpers() {

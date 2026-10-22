@@ -464,6 +464,57 @@ impl ParsedFile {
                         AttributeClass::TransformUnsupported | AttributeClass::Derive
                     )
                 });
+                // A module declared in this block is a module of the enclosing
+                // module (`outline::module_segment`); the block names it through
+                // a lexical alias, exactly as `use self::<segment> as <name>;`
+                // would, so every path rooted at it follows the import route.
+                if let ast::Item::Module(module) = &item
+                    && !transform
+                    && module.item_list().is_some()
+                {
+                    let name = module
+                        .name()
+                        .ok_or_else(|| error("body module name boundary is missing"))?;
+                    let semantic = super::ast_adapter::semantic_name(name.text().as_ref())
+                        .ok_or_else(|| error("body module declaration name limit exceeded"))?;
+                    let mut e = StableEncoder::new("lrr/v2/body-module-import");
+                    e.digest(body.def_key);
+                    e.u32(scope);
+                    e.u64(
+                        u64::try_from(facts.imports.len())
+                            .map_err(|_| error("body import occurrence overflow"))?,
+                    );
+                    e.string(&semantic);
+                    facts
+                        .imports
+                        .try_reserve(1)
+                        .map_err(|_| error("body import allocation failed"))?;
+                    facts.imports.push(BodyImport {
+                        scope,
+                        at: u64::from(range(node.text_range()).start),
+                        source: super::imports::SourceImport {
+                            identity: e.finish(),
+                            leaf_ordinal: 0,
+                            scope: import_scope.clone(),
+                            range: range(node.text_range()),
+                            path: vec![
+                                super::imports::ImportSegment::SelfModule,
+                                super::imports::ImportSegment::Name(
+                                    super::outline::module_segment(module, &semantic),
+                                ),
+                            ],
+                            absolute: false,
+                            // The written spelling (a raw identifier keeps
+                            // its `r#`), as a `use .. as` alias is retained.
+                            kind: super::imports::ImportKind::Named {
+                                alias: Some(name.text().to_string()),
+                            },
+                            visibility: super::outline::Visibility::Private,
+                        },
+                        attribute_input: None,
+                    });
+                    continue;
+                }
                 let mut attribute_input = None;
                 if transform
                     || matches!(item, ast::Item::MacroCall(_)) && item_or_statement_macro(&node)
@@ -567,13 +618,14 @@ impl ParsedFile {
                             .map_err(|_| error("body import occurrence overflow"))?,
                     );
                     e.sequence(&tokens(&node, None), |e, t| e.record(t));
-                    let rows = super::imports::collect(
+                    let mut rows = super::imports::collect(
                         import,
                         &import_scope,
                         e.finish(),
                         &super::outline::visibility(&node),
                         &mut import_budget,
                     )?;
+                    super::outline::bind_block_module_roots(import, &mut rows, self.edition, cfg)?;
                     facts
                         .imports
                         .len()

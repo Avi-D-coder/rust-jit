@@ -58,6 +58,12 @@ pub(crate) struct LibraryLayout {
 pub(crate) struct DeclarationFacts {
     pub kind: NominalKind,
     pub repr: Repr,
+    /// Declared field names of the first variant (`None`: positional).
+    pub field_names: Vec<Option<String>>,
+    /// The last declared field is typed by a `?Sized` parameter, so the struct
+    /// is laid out as `StructKind::MaybeUnsized` whatever it is instantiated
+    /// with (rustc decides from the declared type).
+    pub maybe_unsized_tail: bool,
     /// Declared field types per variant (a struct has one variant).
     pub variants: Vec<Vec<NominalFieldType>>,
     /// Discriminant value per variant (enums).
@@ -221,7 +227,7 @@ impl GuestStore {
             }
             TypeKey::Tuple(members) => {
                 let members = self.layouts_of(members)?;
-                Ok(algorithm::univariant(&members, &Repr::default(), StructKind::Sized).layout)
+                Ok(algorithm::univariant(&members, &Repr::default(), StructKind::MaybeUnsized).layout)
             }
             TypeKey::Callable {
                 captures, borrowed, ..
@@ -335,7 +341,11 @@ impl GuestStore {
             NominalKind::Struct => algorithm::univariant(
                 variants.first().map_or(&[][..], Vec::as_slice),
                 &declaration.repr,
-                StructKind::Sized,
+                if declaration.maybe_unsized_tail {
+                    StructKind::MaybeUnsized
+                } else {
+                    StructKind::Sized
+                },
             )
             .layout,
             NominalKind::Union => algorithm::union_layout(
@@ -693,10 +703,172 @@ impl GuestStore {
         Some(members.clone())
     }
 
+    /// The byte offset of a dotted field path (`a.b.0`) from a tuple or struct
+    /// (`mem::offset_of!`). Each step names a field of the current aggregate by
+    /// declared name or position; the offsets are the layout algorithm's own,
+    /// so they agree with `size_of`, field reads and byte images. A trailing
+    /// unsized field (a slice, `str`, `dyn` or an aggregate ending in one) keeps
+    /// the last position and starts at its alignment.
+    pub(crate) fn offset_of_path(&self, ty: TypeId, path: &[&str]) -> Result<u64, Diagnostic> {
+        let mut current = ty;
+        let mut total = 0u64;
+        for step in path {
+            let (members, names, offsets) = self.field_placement(current)?;
+            let index = match step.parse::<usize>() {
+                Ok(position) if names.get(position).is_some_and(Option::is_none) => position,
+                _ => names
+                    .iter()
+                    .position(|name| name.as_deref() == Some(*step))
+                    .ok_or_else(|| {
+                        layout_fault(format!("`offset_of!` field `{step}` is not a field of the type"))
+                    })?,
+            };
+            total = total
+                .checked_add(offsets[index])
+                .ok_or_else(invalid)?;
+            current = members[index];
+        }
+        Ok(total)
+    }
+
+    /// Members, field names and byte offsets of a tuple or struct.
+    fn field_placement(
+        &self,
+        ty: TypeId,
+    ) -> Result<(Vec<TypeId>, Vec<Option<String>>, Vec<u64>), Diagnostic> {
+        let key = Arc::clone(&self.types.descriptor(ty)?.key);
+        match key.as_ref() {
+            TypeKey::Tuple(members) => {
+                let offsets =
+                    self.placement_offsets(members, &Repr::default(), StructKind::MaybeUnsized)?;
+                Ok((members.to_vec(), vec![None; members.len()], offsets))
+            }
+            TypeKey::Nominal { .. } => {
+                let (declaration, instance) = self.declaration_of(ty)?;
+                if declaration.library.is_some_and(|library| {
+                    !matches!(library.shape, LibraryShape::Fields { .. })
+                }) || declaration.kind == NominalKind::Enum
+                {
+                    return Err(layout_fault(
+                        "`offset_of!` needs a struct, union or tuple container".into(),
+                    ));
+                }
+                let instance = instance.ok_or_else(invalid)?;
+                let [members] = instance.as_slice() else {
+                    return Err(invalid());
+                };
+                let names = if declaration.field_names.len() == members.len() {
+                    declaration.field_names.clone()
+                } else {
+                    vec![None; members.len()]
+                };
+                let offsets = if declaration.kind == NominalKind::Union {
+                    vec![0; members.len()]
+                } else {
+                    self.placement_offsets(
+                        members,
+                        &declaration.repr,
+                        if declaration.maybe_unsized_tail {
+                            StructKind::MaybeUnsized
+                        } else {
+                            StructKind::Sized
+                        },
+                    )?
+                };
+                Ok((members.clone(), names, offsets))
+            }
+            _ => Err(layout_fault(
+                "`offset_of!` needs a struct, union or tuple container".into(),
+            )),
+        }
+    }
+
+    /// Offsets of `members` laid out as one aggregate, with an unsized last
+    /// member kept last (rustc `StructKind::MaybeUnsized`).
+    fn placement_offsets(
+        &self,
+        members: &[TypeId],
+        repr: &Repr,
+        kind: StructKind,
+    ) -> Result<Vec<u64>, Diagnostic> {
+        let unsized_tail = match members.split_last() {
+            Some((last, rest)) => self.unsized_alignment(*last)?.map(|align| (rest, align)),
+            None => None,
+        };
+        let Some((prefix, tail_align)) = unsized_tail else {
+            let layouts = self.layouts_of(members)?;
+            return Ok(algorithm::univariant(&layouts, repr, kind).offsets);
+        };
+        let layouts = self.layouts_of(prefix)?;
+        let mut offsets = algorithm::univariant(&layouts, repr, StructKind::Sized).offsets;
+        let end = offsets
+            .iter()
+            .zip(&layouts)
+            .map(|(offset, layout)| offset.saturating_add(layout.size))
+            .max()
+            .unwrap_or(0);
+        let align = repr.packed.map_or(tail_align, |pack| tail_align.min(pack));
+        offsets.push(algorithm::align_up(end, align));
+        Ok(offsets)
+    }
+
+    /// The alignment of a dynamically sized type (`None` for a sized one): a
+    /// slice has its element's, `str` and `dyn` 1, and an aggregate ending in
+    /// such a field the strictest of its sized prefix and that field.
+    fn unsized_alignment(&self, ty: TypeId) -> Result<Option<u64>, Diagnostic> {
+        if primitive(ty).is_ok_and(|scalar| matches!(scalar, Primitive::Str)) {
+            return Ok(Some(1));
+        }
+        let key = Arc::clone(&self.types.descriptor(ty)?.key);
+        let aggregate = |members: &[TypeId], repr: &Repr| -> Result<Option<u64>, Diagnostic> {
+            let Some((last, rest)) = members.split_last() else {
+                return Ok(None);
+            };
+            let Some(tail) = self.unsized_alignment(*last)? else {
+                return Ok(None);
+            };
+            let prefix = algorithm::univariant(&self.layouts_of(rest)?, repr, StructKind::Sized);
+            Ok(Some(prefix.layout.align.max(tail).max(repr.align.unwrap_or(1))))
+        };
+        match key.as_ref() {
+            TypeKey::Slice { element } => Ok(Some(self.layout_of(*element)?.align)),
+            TypeKey::Dyn { .. } => Ok(Some(1)),
+            TypeKey::Tuple(members) => aggregate(members, &Repr::default()),
+            TypeKey::Nominal { .. } => {
+                let Ok((declaration, Some(instance))) = self.declaration_of(ty) else {
+                    return Ok(None);
+                };
+                match instance.as_slice() {
+                    [members] if declaration.kind == NominalKind::Struct => {
+                        aggregate(members, &declaration.repr)
+                    }
+                    _ => Ok(None),
+                }
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// How a struct or tuple of this type is placed: a tuple, or a struct whose
+    /// last declared field is a `?Sized` parameter, keeps that last field last.
+    pub(super) fn struct_kind_of(&self, ty: TypeId) -> StructKind {
+        match self.types.descriptor(ty).map(|descriptor| descriptor.key.as_ref()) {
+            Ok(TypeKey::Tuple(_)) => StructKind::MaybeUnsized,
+            Ok(TypeKey::Nominal { .. })
+                if self
+                    .declaration_of(ty)
+                    .is_ok_and(|(declaration, _)| declaration.maybe_unsized_tail) =>
+            {
+                StructKind::MaybeUnsized
+            }
+            _ => StructKind::Sized,
+        }
+    }
+
     /// Byte offsets of the members of a plain tuple.
     fn tuple_offsets(&self, members: &[TypeId]) -> Result<Vec<u64>, Diagnostic> {
         let layouts = self.layouts_of(members)?;
-        Ok(algorithm::univariant(&layouts, &Repr::default(), StructKind::Sized).offsets)
+        Ok(algorithm::univariant(&layouts, &Repr::default(), StructKind::MaybeUnsized).offsets)
     }
 
     /// Field contracts and placement from the same prepared declaration used
@@ -712,7 +884,13 @@ impl GuestStore {
         let instance = instance.ok_or_else(invalid)?;
         let [members] = instance.as_slice() else { return Err(invalid()); };
         let placement = algorithm::univariant(
-            &self.layouts_of(members)?, &declaration.repr, StructKind::Sized,
+            &self.layouts_of(members)?,
+            &declaration.repr,
+            if declaration.maybe_unsized_tail {
+                StructKind::MaybeUnsized
+            } else {
+                StructKind::Sized
+            },
         );
         Ok(Some((members.clone(), placement.offsets)))
     }

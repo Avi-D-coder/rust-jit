@@ -194,7 +194,7 @@ impl DeclarativeMacro {
         token_limit: usize,
         byte_limit: usize,
     ) -> Result<(Result<Expansion, MacroFailure>, TranscriptionStats), AdapterError> {
-        self.expand_impl(input, call_site, None, token_limit, byte_limit)
+        self.expand_impl(input, call_site, None, None, token_limit, byte_limit)
     }
     /// Hygienic runtime entry: the source index supplies the exact expansion
     /// identity and definition owner. Legacy matcher fixtures use the unmarked
@@ -207,13 +207,29 @@ impl DeclarativeMacro {
         token_limit: usize,
         byte_limit: usize,
     ) -> Result<(Result<Expansion, MacroFailure>, TranscriptionStats), AdapterError> {
-        self.expand_impl(input, call_site, Some(site), token_limit, byte_limit)
+        self.expand_impl(input, call_site, Some(site), None, token_limit, byte_limit)
+    }
+    /// Hygienic entry for a definition carrying `#[rustc_macro_transparency]`:
+    /// the attribute replaces the dialect's default transparency
+    /// (`macro_rules` semi-opaque, `macro` opaque), as rustc's
+    /// `Transparency::fallback` is overridden by the attribute.
+    pub fn expand_hygienic_with_transparency(
+        &self,
+        input: &TokenForest,
+        call_site: Key,
+        site: DeclarativeSite,
+        transparency: Option<crate::token_wire::Transparency>,
+        token_limit: usize,
+        byte_limit: usize,
+    ) -> Result<(Result<Expansion, MacroFailure>, TranscriptionStats), AdapterError> {
+        self.expand_impl(input, call_site, Some(site), transparency, token_limit, byte_limit)
     }
     fn expand_impl(
         &self,
         input: &TokenForest,
         call_site: Key,
         site: Option<DeclarativeSite>,
+        transparency: Option<crate::token_wire::Transparency>,
         token_limit: usize,
         byte_limit: usize,
     ) -> Result<(Result<Expansion, MacroFailure>, TranscriptionStats), AdapterError> {
@@ -229,7 +245,14 @@ impl DeclarativeMacro {
         let mut spans = self.spans.clone();
         let input = spans.import(input)?;
         let marked = site
-            .map(|site| spans.prepare_marks(&self.definition, call_site, site, self.transparency))
+            .map(|site| {
+                spans.prepare_marks(
+                    &self.definition,
+                    call_site,
+                    site,
+                    transparency.unwrap_or(self.transparency),
+                )
+            })
             .transpose()?;
         let call_site = spans.span(call_site)?;
         let wire_error = std::cell::RefCell::new(None);
